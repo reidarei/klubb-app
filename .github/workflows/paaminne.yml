@@ -1,0 +1,26 @@
+# Daglig påminnelsesjobb — kaller /api/cron/paaminne kl. 06:00 UTC.
+# Secret-oppsett (CRON_SECRET og APP_URL): se docs/oppsett.md, seksjon 9.
+
+name: Daglig påminnelse
+
+on:
+  schedule:
+    # Kjører kl. 08:00 norsk sommertid (UTC+2 = 06:00 UTC, vinter: 07:00 norsk)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Kan kjøres manuelt fra GitHub
+
+jobs:
+  paaminne:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send påminnelser
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L \
+            -X POST "${{ secrets.APP_URL }}/api/cron/paaminne" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Påminnelse-endepunktet svarte med HTTP $STATUS"
+            exit 1
+          fi

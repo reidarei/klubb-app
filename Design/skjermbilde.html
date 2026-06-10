@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=500,initial-scale=1">
+<title>Skjermbilde</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: #f5f5f7; font-family: "Inter", system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  .phone-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .phone-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="kilder/ios-frame.jsx"></script>
+<script type="text/babel" src="kilder/themes.jsx"></script>
+<script type="text/babel" src="kilder/ui.jsx"></script>
+<script type="text/babel" src="kilder/screens.jsx"></script>
+<script type="text/babel" src="kilder/edit-screens.jsx"></script>
+<script type="text/babel" src="kilder/detail-screen.jsx"></script>
+<script type="text/babel" src="kilder/settings-members-screens.jsx"></script>
+<script type="text/babel">
+window.DOCK_VARIANT = 'pill';
+
+// Hent ?screen=... og ?mode=fit|device (default device)
+const params = new URLSearchParams(window.location.search);
+const screen = params.get('screen') || 'hjem';
+const mode = params.get('mode') || 'device'; // 'device' = telefon-ramme, 'fit' = auto-høyde uten chrome
+const theme = THEMES['obsidian_classic'];
+
+function ScreenContent({ name }) {
+  if (name === 'hjem') return <HjemSkjerm theme={theme} />;
+  if (name === 'klubbinfo') return <KlubbinfoSkjerm theme={theme} />;
+  if (name === 'kaaringer') return <KaaringerSkjerm theme={theme} />;
+  if (name === 'profil') return <ProfilSkjerm theme={theme} />;
+  if (name === 'rediger-arrangement') return <RedigerArrangementSkjerm theme={theme} />;
+  if (name === 'rediger-profil') return <RedigerProfilSkjerm theme={theme} />;
+  if (name === 'detalj') return <ArrangementDetaljSkjerm theme={theme} />;
+  if (name === 'medlemmer') return <MedlemmerSkjerm theme={theme} />;
+  if (name === 'innstillinger') return <InnstillingerSkjerm theme={theme} />;
+  return null;
+}
+
+function FitView() {
+  // Rendrer hele skjermens innhold i naturlig høyde (ingen scroll, ingen ramme).
+  // 390px bredde som i telefonen — det brukeren ser side-til-side faktisk.
+  return (
+    <div style={{
+      width: 390, minHeight: '100vh',
+      background: theme.bg, position: 'relative',
+      fontFamily: theme.fontBody,
+      margin: '0 auto',
+      WebkitFontSmoothing: 'antialiased',
+    }}>
+      <ThemeTexture variant={theme.texture} />
+      <div style={{ position: 'relative', zIndex: 2 }}>
+        <ScreenContent name={screen} />
+      </div>
+    </div>
+  );
+}
+
+function DeviceView() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: 20, background: '#0a0a0a',
+    }}>
+      <div style={{
+        width: 390,
+        borderRadius: 48, overflow: 'hidden',
+        position: 'relative', background: '#000',
+        boxShadow: '0 40px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06), inset 0 0 0 4px #0a0a0a',
+        fontFamily: theme.fontBody,
+        WebkitFontSmoothing: 'antialiased',
+      }}>
+        <div style={{ position: 'absolute', inset: 0, background: theme.bg }}>
+          <ThemeTexture variant={theme.texture} />
+        </div>
+        <div style={{
+          position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+          width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+        }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+          <IOSStatusBar dark={true} />
+        </div>
+        {/* Auto-høyde: ingen scroll, hele skjermen synlig */}
+        <div style={{
+          position: 'relative', zIndex: 2,
+          paddingTop: 60, paddingBottom: 110,
+        }}>
+          <ScreenContent name={screen} />
+        </div>
+        <BottomNav theme={theme} active={screen} onNavigate={() => {}} />
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+          height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+          paddingBottom: 8, pointerEvents: 'none',
+        }}>
+          <div style={{ width: 139, height: 5, borderRadius: 100, background: 'rgba(255,255,255,0.5)' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  mode === 'fit' ? <FitView /> : <DeviceView />
+);
+</script>
+</body>
+</html>

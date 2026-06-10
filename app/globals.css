@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  /* Bakgrunn — Obsidian, men løftet for bedre kontrast og mer pust.
+   * Endret 2026-05-01: --bg løftet fra #060608 til #0e0f13 (~3 lyshet),
+   * elevated-flatene gjort tydelig lysere og mer opake så kort separerer
+   * klart fra bakgrunnen. Bevarer kjølig blåsvart karakter. */
+  --bg: #0e0f13;
+  --bg-gradient:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(100, 80, 195, 0.09) 0%, transparent 60%),
+    linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
+  --bg-elevated: rgba(40, 42, 50, 0.95);
+  --bg-elevated-2: rgba(54, 56, 64, 0.97);
+
+  /* Kantlinjer — boostet så kort/skiller faktisk synes mot ny base */
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.26);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  /* Tekst — kontrastløftet 2026-05-01 (runde 3). Tertiary ytterligere
+   * løftet fra #b0b4be til #c0c4cc nå som bakgrunnen er lysere; samlet
+   * hierarki holder seg pent men puster mer. */
+  --text-primary: #f5f5f7;
+  --text-secondary: #dadce2;
+  --text-tertiary: #c0c4cc;
+
+  /* Aksent — kremgul, ikke gull */
+  --accent: #e8d9b5;
+  --accent-soft: rgba(232, 217, 181, 0.16);
+  --accent-hot: #f5e8c8;
+
+  /* Semantisk */
+  --success: #7cc99a;
+  --success-soft: rgba(110, 170, 120, 0.14);
+  --success-border: rgba(110, 170, 120, 0.34);
+  --danger: #d97a6c;
+  --danger-alt: #e87060;
+  --danger-soft: rgba(200, 90, 80, 0.14);
+  --danger-border: rgba(200, 90, 80, 0.34);
+  --warning: #e8a96b;
+  --warning-soft: rgba(230, 160, 100, 0.14);
+  --warning-border: rgba(230, 160, 100, 0.34);
+
+  /* Fonter */
+  --font-display: var(--font-instrument), Georgia, serif;
+  --font-body: var(--font-inter), -apple-system, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* Layout — sticky topp-header-høyde (uten safe-area). Eksponert som
+   * CSS-variabel så andre sticky-elementer (f.eks. VinnerBanner) kan
+   * stikke seg riktig under headeren i stedet for å havne bak. */
+  --top-header-h: 60px;
+
+  /* Form */
+  --radius: 18px;
+  --radius-card: 14px;
+  --radius-small: 12px;
+  --radius-pill: 999px;
+
+  /* Blur */
+  --blur-card: blur(24px) saturate(160%);
+  --blur-nav: blur(40px) saturate(200%) brightness(1.1);
+  --blur-glass: blur(16px);
+
+  /* Bakoverkompatible aliaser — fjernes etter hvert som komponenter skrives om */
+  --bg-tertiary: var(--bg-elevated-2);
+  --accent-subtle: var(--accent-soft);
+  --success-subtle: var(--success-soft);
+  --destructive: var(--danger);
+  --destructive-subtle: var(--danger-soft);
+}
+
+html, body {
+  background: var(--bg);
+}
+/* overflow-x: clip på html + body hindrer at iOS Safari lar sidene bli
+ * bredere enn viewporten når f.eks. backdrop-filter/shadows stikker ut —
+ * uten dette oppfører `position: fixed` seg buggy og dokken "svømmer"
+ * oppover under scroll. Returrert fra commit 9064c6d etter at den falt
+ * ut i Obsidian-redesignet. */
+html {
+  overflow-x: clip;
+}
+body {
+  overflow-x: clip;
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+/* Skjul scrollbar */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+/* Sidetransisjon */
+@keyframes page-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-fadein 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Vis slett-knapp på chat-boble ved hover/fokus */
+.chat-boble:hover .chat-slett-knapp,
+.chat-boble:focus-within .chat-slett-knapp {
+  opacity: 1 !important;
+}
+
+/* Hindre at long-press på chat-meldinger markerer tekst eller åpner iOS-
+   callout (kopier/del-meny). Gjelder hele boble-wrapperen og alle barn. */
+.chat-boble,
+.chat-boble * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Tving portrett-visning. Manifest har allerede orientation:portrait, men
+   iOS Safari i browser-modus ignorerer det. Når enheten er i landskap
+   blokkerer vi appen med et overlay som ber brukeren rotere tilbake. */
+.orientering-overlay {
+  display: none;
+}
+@media screen and (orientation: landscape) and (max-device-width: 932px) {
+  .orientering-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    text-align: center;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+  }
+  body:has(.orientering-overlay) {
+    overflow: hidden;
+  }
+  /* Album-sider og åpen lightbox tillater landskap — bilder ser bedre
+   * ut bredt enn smalt. AlbumLightbox + TillatLandskap setter
+   * `tillat-landskap` på <html>; her overstyrer vi blokkeringen. */
+  html.tillat-landskap .orientering-overlay {
+    display: none !important;
+  }
+  html.tillat-landskap body {
+    overflow: visible !important;
+  }
+}

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440,initial-scale=1">
+<title>Mortensrud Herreklubb — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600&family=DM+Serif+Display&family=Instrument+Serif&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: #f5f5f7; font-family: "Inter", system-ui, sans-serif; min-height: 100vh; }
+  * { box-sizing: border-box; }
+  /* Skjul scrollbars i telefon-skjermer */
+  .phone-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .phone-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="kilder/ios-frame.jsx"></script>
+<script type="text/babel" src="kilder/themes.jsx"></script>
+<script type="text/babel" src="kilder/ui.jsx"></script>
+<script type="text/babel" src="kilder/screens.jsx"></script>
+<script type="text/babel" src="kilder/edit-screens.jsx"></script>
+<script type="text/babel" src="kilder/detail-screen.jsx"></script>
+<script type="text/babel" src="kilder/settings-members-screens.jsx"></script>
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "obsidian_classic",
+  "view": "showcase",
+  "dock": "pill"
+}/*EDITMODE-END*/;
+
+const themeKeys = Object.keys(THEMES);
+
+function Device({ theme, screen, label }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+      <div style={{
+        width: 390, height: 800, borderRadius: 48, overflow: 'hidden',
+        position: 'relative', background: '#000',
+        boxShadow: '0 40px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06), inset 0 0 0 4px #0a0a0a',
+        fontFamily: theme.fontBody,
+        WebkitFontSmoothing: 'antialiased',
+      }}>
+        {/* Temabakgrunn */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: theme.bg,
+        }}>
+          <ThemeTexture variant={theme.texture} />
+        </div>
+
+        {/* Dynamic island */}
+        <div style={{
+          position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+          width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+        }} />
+
+        {/* Status bar */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+          <IOSStatusBar dark={true} />
+        </div>
+
+        {/* Skjerm-innhold */}
+        <div className="phone-scroll" style={{
+          position: 'relative', zIndex: 2,
+          height: '100%', overflowY: 'auto', paddingTop: 60,
+        }}>
+          {screen === 'hjem' && <HjemSkjerm theme={theme} />}
+          {screen === 'klubbinfo' && <KlubbinfoSkjerm theme={theme} />}
+          {screen === 'kaaringer' && <KaaringerSkjerm theme={theme} />}
+          {screen === 'profil' && <ProfilSkjerm theme={theme} />}
+          {screen === 'rediger-arrangement' && <RedigerArrangementSkjerm theme={theme} />}
+          {screen === 'rediger-profil' && <RedigerProfilSkjerm theme={theme} />}
+          {screen === 'detalj' && <ArrangementDetaljSkjerm theme={theme} />}
+          {screen === 'medlemmer' && <MedlemmerSkjerm theme={theme} />}
+          {screen === 'innstillinger' && <InnstillingerSkjerm theme={theme} />}
+        </div>
+
+        {/* Bottom nav */}
+        <BottomNav theme={theme} active={screen} onNavigate={() => {}} />
+
+        {/* Home indicator */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+          height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+          paddingBottom: 8, pointerEvents: 'none',
+        }}>
+          <div style={{ width: 139, height: 5, borderRadius: 100, background: 'rgba(255,255,255,0.5)' }} />
+        </div>
+      </div>
+      {label && (
+        <div style={{
+          fontFamily: '"JetBrains Mono", monospace', fontSize: 11,
+          color: 'rgba(255,255,255,0.5)', letterSpacing: '2px', textTransform: 'uppercase',
+        }}>{label}</div>
+      )}
+    </div>
+  );
+}
+
+// Vis ETT tema på tvers av alle skjermene
+function ThemeShowcase({ themeKey, dock }) {
+  window.DOCK_VARIANT = dock || 'pill';
+  const theme = THEMES[themeKey];
+  const screens = [
+    { id: 'hjem', label: 'Agenda' },
+    { id: 'detalj', label: 'Arrangement' },
+    { id: 'klubbinfo', label: 'Klubbinfo' },
+    { id: 'kaaringer', label: 'Kåringer' },
+    { id: 'profil', label: 'Profil' },
+    { id: 'rediger-arrangement', label: 'Rediger arr.' },
+    { id: 'rediger-profil', label: 'Rediger profil' },
+    { id: 'medlemmer', label: 'Medlemmer' },
+    { id: 'innstillinger', label: 'Innstillinger' },
+  ];
+  return (
+    <div style={{ padding: '60px 40px 80px' }}>
+      <div style={{ maxWidth: 1700, margin: '0 auto' }}>
+        <div style={{ marginBottom: 48, textAlign: 'center' }}>
+          <div style={{
+            fontFamily: '"JetBrains Mono", monospace', fontSize: 11,
+            color: 'rgba(255,255,255,0.45)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: 14,
+          }}>
+            Mortensrud Herreklubb · Redesign
+          </div>
+          <h1 style={{
+            fontFamily: theme.fontDisplay, fontSize: 64, fontWeight: 500,
+            color: '#fff', letterSpacing: '-1px', margin: 0, lineHeight: 1,
+          }}>
+            {theme.name}
+          </h1>
+          <div style={{
+            fontFamily: theme.fontBody, fontSize: 14,
+            color: 'rgba(255,255,255,0.55)', marginTop: 14, letterSpacing: '0.3px',
+          }}>
+            {theme.tagline}
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 40,
+          rowGap: 60,
+          justifyItems: 'center',
+        }}>
+          {screens.map(s => (
+            <Device key={s.id} theme={theme} screen={s.id} label={s.label} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Vis ALLE temaer side om side (bare agenda-skjermen)
+function AllThemesCompare() {
+  return (
+    <div style={{ padding: '60px 40px 80px' }}>
+      <div style={{ maxWidth: 1700, margin: '0 auto' }}>
+        <div style={{ marginBottom: 48, textAlign: 'center' }}>
+          <div style={{
+            fontFamily: '"JetBrains Mono", monospace', fontSize: 11,
+            color: 'rgba(255,255,255,0.45)', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: 14,
+          }}>
+            Fem mørke retninger · én app
+          </div>
+          <h1 style={{
+            fontFamily: '"Cormorant Garamond", serif', fontSize: 64, fontWeight: 500,
+            color: '#fff', letterSpacing: '-1px', margin: 0, lineHeight: 1,
+          }}>
+            Sammenligning
+          </h1>
+          <div style={{
+            fontFamily: 'Inter, sans-serif', fontSize: 14,
+            color: 'rgba(255,255,255,0.55)', marginTop: 14, letterSpacing: '0.3px',
+          }}>
+            Samme agenda, fem ulike visuelle retninger
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: 26,
+          justifyItems: 'center',
+        }}>
+          {themeKeys.map(k => (
+            <Device key={k} theme={THEMES[k]} screen="hjem" label={THEMES[k].name} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tweaks-panel
+function TweaksPanel({ state, setState, visible }) {
+  if (!visible) return null;
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+      background: 'rgba(20,20,22,0.94)',
+      backdropFilter: 'blur(20px) saturate(160%)',
+      border: '0.5px solid rgba(255,255,255,0.1)',
+      borderRadius: 14, padding: 18,
+      width: 260,
+      color: '#f5f5f7', fontFamily: 'Inter, sans-serif',
+      boxShadow: '0 30px 60px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{
+        fontFamily: '"JetBrains Mono", monospace', fontSize: 10,
+        color: 'rgba(255,255,255,0.5)', letterSpacing: '2px',
+        textTransform: 'uppercase', marginBottom: 14,
+      }}>Tweaks</div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>Visning</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {[{ id: 'showcase', lbl: 'Tema' }, { id: 'compare', lbl: 'Alle' }].map(v => (
+            <button key={v.id}
+              onClick={() => { setState({ ...state, view: v.id }); }}
+              style={{
+                padding: '8px 0', borderRadius: 8,
+                border: state.view === v.id ? '0.5px solid rgba(255,255,255,0.35)' : '0.5px solid rgba(255,255,255,0.08)',
+                background: state.view === v.id ? 'rgba(255,255,255,0.08)' : 'transparent',
+                color: state.view === v.id ? '#fff' : 'rgba(255,255,255,0.6)',
+                fontSize: 12, cursor: 'pointer',
+              }}>{v.lbl}</button>
+          ))}
+        </div>
+      </div>
+
+      {state.view === 'showcase' && (
+        <div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>Dock</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 16 }}>
+            {['pill', 'underscore', 'monogram', 'floating'].map(d => (
+              <button key={d} onClick={() => setState({ ...state, dock: d })} style={{
+                padding: '8px 0', borderRadius: 8,
+                border: state.dock === d ? '0.5px solid rgba(255,255,255,0.35)' : '0.5px solid rgba(255,255,255,0.08)',
+                background: state.dock === d ? 'rgba(255,255,255,0.08)' : 'transparent',
+                color: state.dock === d ? '#fff' : 'rgba(255,255,255,0.6)',
+                fontSize: 11, cursor: 'pointer', textTransform: 'capitalize',
+              }}>{d}</button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>Tema</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {themeKeys.map(k => (
+              <button key={k}
+                onClick={() => { setState({ ...state, theme: k }); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 10px', borderRadius: 8,
+                  border: state.theme === k ? '0.5px solid rgba(255,255,255,0.3)' : '0.5px solid rgba(255,255,255,0.06)',
+                  background: state.theme === k ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  color: '#fff', cursor: 'pointer', textAlign: 'left',
+                  fontFamily: 'inherit', fontSize: 13,
+                }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: 4,
+                  background: THEMES[k].bg, border: `1px solid ${THEMES[k].borderStrong}`,
+                  flexShrink: 0,
+                }} />
+                <span>{THEMES[k].name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [state, setStateInternal] = React.useState(TWEAK_DEFAULTS);
+  const [tweaksVisible, setTweaksVisible] = React.useState(false);
+
+  const setState = (s) => {
+    setStateInternal(s);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: s }, '*');
+  };
+
+  React.useEffect(() => {
+    const handler = (ev) => {
+      if (ev.data?.type === '__activate_edit_mode') setTweaksVisible(true);
+      if (ev.data?.type === '__deactivate_edit_mode') setTweaksVisible(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  return (
+    <>
+      {state.view === 'compare'
+        ? <AllThemesCompare />
+        : <ThemeShowcase themeKey={state.theme} dock={state.dock} />}
+      <TweaksPanel state={state} setState={setState} visible={tweaksVisible} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

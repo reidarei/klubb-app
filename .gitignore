@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+tsconfig.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Supabase
+.supabase/
+supabase/.temp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/.screenshots/
+/.cache/
+
+# Messenger-eksport (rådata fra Facebook) — kun ferdig mapping committes
+scripts/data/herreklubben_chat.json
+# Generert av scripts/import-messenger-klubbchat.mjs
+scripts/data/import-rapport.json
+
+# FB-import — generert lokalt, lastes opp til R2
+/scripts/fb-crops/
+/scripts/fb-kalibrer-out/
+/scripts/fb-test-*.png
+/scripts/fb-test-*.mjs
+/scripts/fb-bust-cache.mjs
+/scripts/fb-upload-r2.mjs
+/scripts/fb-fix.mjs
+/scripts/fb-reimport.mjs
+/scripts/fb-kjor.mjs
+/scripts/kjor-migrasjon.mjs
+
+# FB-bilde-import (issue #?) — store kopier av råbilder + genererte HTML-rapporter
+/scripts/fb-bilder-preview/
+/scripts/fb-bilder-r2-upload/
+/scripts/fb-bilder-kommentar-crops/
+/scripts/fb-bilder-pairing.html
+/scripts/fb-bilder-metadata.html
+.vercel
+.env*.local
+
+# init-admin: engangspassord skrevet til fil, må aldri committes
+/init-admin-passord.txt

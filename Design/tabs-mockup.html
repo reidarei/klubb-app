@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8">
+<title>Tabs-navigasjon mockup</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: #2a2a28;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #f4f1ec;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-weight: 500;
+    font-size: 28px;
+    margin: 0 0 8px;
+    letter-spacing: -0.4px;
+  }
+  .undertittel {
+    text-align: center;
+    color: #8a8270;
+    font-size: 13px;
+    margin: 0 0 40px;
+    font-style: italic;
+    max-width: 700px;
+    margin: 0 auto 40px;
+  }
+  .grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    justify-content: center;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .scene {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .scene-tittel {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #c9a961;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .scene-beskrivelse {
+    color: #8a8270;
+    font-size: 12px;
+    text-align: center;
+    max-width: 280px;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .phone {
+    width: 320px;
+    height: 660px;
+    background: #1a1a1a;
+    border-radius: 36px;
+    border: 3px solid #0a0a0a;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .status-bar {
+    height: 28px;
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #f4f1ec;
+    flex-shrink: 0;
+  }
+  .innhold {
+    flex: 1;
+    overflow: hidden;
+    padding: 16px 16px;
+    background: #1a1a1a;
+  }
+  .profil-sirkel {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #c9a961 0%, #8a6f3f 100%);
+    border: 1.5px solid rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a1a1a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+
+  .mono-label {
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    color: #8a8270;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .side-tittel {
+    font-family: Georgia, serif;
+    font-size: 28px;
+    font-weight: 500;
+    margin: 0 0 18px;
+    letter-spacing: -0.4px;
+    color: #f4f1ec;
+    line-height: 1;
+  }
+  .side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 16px;
+  }
+  .fab {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(201,169,97,0.15);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 300;
+    color: #c9a961;
+  }
+  .kort {
+    background: rgba(255,255,255,0.04);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kort-ikon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(201,169,97,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .kort-info { flex: 1; }
+  .kort-dato {
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    color: #8a8270;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .kort-tittel {
+    font-family: Georgia, serif;
+    font-size: 14px;
+    color: #f4f1ec;
+  }
+  .kort-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #5a4a3a, #2a2520);
+    flex-shrink: 0;
+  }
+
+  /* ─── VARIANT 1: Klassiske folder tabs ─── */
+  .v1-header {
+    height: 64px;
+    background: rgba(26,26,26,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 12px 0;
+    flex-shrink: 0;
+    gap: 4px;
+  }
+  .v1-tab {
+    padding: 8px 14px 10px;
+    border-radius: 10px 10px 0 0;
+    background: rgba(255,255,255,0.03);
+    color: #8a8270;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    font-weight: 500;
+    position: relative;
+    bottom: -1px;
+    border: 0.5px solid transparent;
+    border-bottom: 0;
+  }
+  .v1-tab.aktiv {
+    background: #1a1a1a;
+    color: #c9a961;
+    border-color: rgba(255,255,255,0.08);
+    box-shadow: 0 -1px 4px rgba(0,0,0,0.2);
+  }
+  .v1-profil {
+    margin-left: auto;
+    margin-bottom: 8px;
+  }
+
+  /* ─── VARIANT 2: iOS Segmented Control ─── */
+  .v2-header {
+    height: 96px;
+    background: rgba(26,26,26,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px 14px;
+    flex-shrink: 0;
+    gap: 10px;
+  }
+  .v2-toppline {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .v2-segmented {
+    background: rgba(255,255,255,0.06);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 3px;
+    display: flex;
+    gap: 2px;
+  }
+  .v2-segment {
+    flex: 1;
+    text-align: center;
+    padding: 7px 0;
+    border-radius: 8px;
+    color: #8a8270;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .v2-segment.aktiv {
+    background: rgba(201,169,97,0.18);
+    color: #c9a961;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+
+  /* ─── VARIANT 3: Header-integrerte tabs (anbefalt) ─── */
+  .v3-header {
+    height: 56px;
+    background: rgba(26,26,26,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+  .v3-tabs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .v3-tab {
+    padding: 8px 4px;
+    color: #8a8270;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    font-weight: 500;
+    position: relative;
+    transition: color 0.2s;
+  }
+  .v3-tab.aktiv {
+    color: #c9a961;
+  }
+  .v3-tab.aktiv::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 4px;
+    right: 4px;
+    height: 1.5px;
+    background: #c9a961;
+    border-radius: 1px;
+  }
+
+  /* ─── VARIANT 4: Header-integrerte tabs med kun ikoner ─── */
+  .v4-header {
+    height: 56px;
+    background: rgba(26,26,26,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    flex-shrink: 0;
+  }
+  .v4-tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 999px;
+    padding: 4px;
+    border: 0.5px solid rgba(255,255,255,0.06);
+  }
+  .v4-tab {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8a8270;
+    font-size: 16px;
+    transition: all 0.2s;
+  }
+  .v4-tab.aktiv {
+    background: rgba(201,169,97,0.18);
+    color: #c9a961;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .annotations {
+    max-width: 1100px;
+    margin: 60px auto 0;
+    background: rgba(255,255,255,0.03);
+    border: 0.5px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 24px 32px;
+  }
+  .annotations h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+    font-weight: 500;
+    letter-spacing: -0.2px;
+  }
+  .annotations table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    color: #bdb8a8;
+    margin-bottom: 16px;
+  }
+  .annotations th, .annotations td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.06);
+  }
+  .annotations th {
+    color: #f4f1ec;
+    font-weight: 500;
+  }
+  .annotations ul {
+    margin: 0;
+    padding-left: 18px;
+    line-height: 1.6;
+    color: #bdb8a8;
+    font-size: 14px;
+  }
+  .annotations strong { color: #f4f1ec; }
+</style>
+</head>
+<body>
+
+<h1>Folder tabs — fire varianter</h1>
+<p class="undertittel">Sammenligning av tabs-navigasjon i toppen istedenfor hamburger-ekspansjon</p>
+
+<div class="grid">
+
+  <!-- VARIANT 1 — Klassiske folder tabs -->
+  <div class="scene">
+    <div class="scene-tittel">1 · Klassiske folder tabs</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span><span>● ● ● 100%</span></div>
+      <header class="v1-header">
+        <div class="v1-tab aktiv">Agenda</div>
+        <div class="v1-tab">Chat</div>
+        <div class="v1-tab">Klubb</div>
+        <div class="v1-profil"><div class="profil-sirkel">R</div></div>
+      </header>
+      <div class="innhold">
+        <div class="side-header">
+          <div>
+            <div class="mono-label">Siden 2007 · 17 herrer</div>
+            <h1 class="side-tittel">Agenda</h1>
+          </div>
+          <div class="fab">+</div>
+        </div>
+        <div class="kort"><div class="kort-ikon">🥂</div><div class="kort-info"><div class="kort-dato">24. juli</div><div class="kort-tittel">Kenneth fyller 44</div></div><div class="kort-avatar"></div></div>
+        <div class="kort"><div class="kort-ikon">📅</div><div class="kort-info"><div class="kort-dato">15. august · møte</div><div class="kort-tittel">August-møte</div></div></div>
+        <div class="kort"><div class="kort-ikon">🍷</div><div class="kort-info"><div class="kort-dato">11. august</div><div class="kort-tittel">Waldem fyller 26</div></div><div class="kort-avatar"></div></div>
+      </div>
+    </div>
+    <p class="scene-beskrivelse">Aktiv tab har «ør» som visuelt henger sammen med innholdet. Tradisjonell desktop-følelse.</p>
+  </div>
+
+  <!-- VARIANT 2 — iOS Segmented Control -->
+  <div class="scene">
+    <div class="scene-tittel">2 · iOS Segmented Control</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span><span>● ● ● 100%</span></div>
+      <header class="v2-header">
+        <div class="v2-toppline"><div class="profil-sirkel">R</div></div>
+        <div class="v2-segmented">
+          <div class="v2-segment aktiv">Agenda</div>
+          <div class="v2-segment">Chat</div>
+          <div class="v2-segment">Klubb</div>
+        </div>
+      </header>
+      <div class="innhold">
+        <div class="side-header">
+          <div>
+            <div class="mono-label">Siden 2007 · 17 herrer</div>
+            <h1 class="side-tittel">Agenda</h1>
+          </div>
+          <div class="fab">+</div>
+        </div>
+        <div class="kort"><div class="kort-ikon">🥂</div><div class="kort-info"><div class="kort-dato">24. juli</div><div class="kort-tittel">Kenneth fyller 44</div></div><div class="kort-avatar"></div></div>
+        <div class="kort"><div class="kort-ikon">📅</div><div class="kort-info"><div class="kort-dato">15. august · møte</div><div class="kort-tittel">August-møte</div></div></div>
+        <div class="kort"><div class="kort-ikon">🍷</div><div class="kort-info"><div class="kort-dato">11. august</div><div class="kort-tittel">Waldem fyller 26</div></div><div class="kort-avatar"></div></div>
+      </div>
+    </div>
+    <p class="scene-beskrivelse">Pille-segmenter à la iOS. Profil høyere opp som egen rad. Tar ~96 px header-høyde.</p>
+  </div>
+
+  <!-- VARIANT 3 — Header-integrert med tekst -->
+  <div class="scene">
+    <div class="scene-tittel">3 · Inline med tekst (foreslått)</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span><span>● ● ● 100%</span></div>
+      <header class="v3-header">
+        <div class="v3-tabs">
+          <div class="v3-tab aktiv">Agenda</div>
+          <div class="v3-tab">Chat</div>
+          <div class="v3-tab">Klubb</div>
+        </div>
+        <div class="profil-sirkel">R</div>
+      </header>
+      <div class="innhold">
+        <div class="side-header">
+          <div>
+            <div class="mono-label">Siden 2007 · 17 herrer</div>
+            <h1 class="side-tittel">Agenda</h1>
+          </div>
+          <div class="fab">+</div>
+        </div>
+        <div class="kort"><div class="kort-ikon">🥂</div><div class="kort-info"><div class="kort-dato">24. juli</div><div class="kort-tittel">Kenneth fyller 44</div></div><div class="kort-avatar"></div></div>
+        <div class="kort"><div class="kort-ikon">📅</div><div class="kort-info"><div class="kort-dato">15. august · møte</div><div class="kort-tittel">August-møte</div></div></div>
+        <div class="kort"><div class="kort-ikon">🍷</div><div class="kort-info"><div class="kort-dato">11. august</div><div class="kort-tittel">Waldem fyller 26</div></div><div class="kort-avatar"></div></div>
+      </div>
+    </div>
+    <p class="scene-beskrivelse">Tabs inline med gull underline på aktiv. Holder header-høyden på 56 px. Profil høyre. Mest kompakt.</p>
+  </div>
+
+  <!-- VARIANT 4 — Header-integrert med ikoner -->
+  <div class="scene">
+    <div class="scene-tittel">4 · Inline med ikoner (kompakt)</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span><span>● ● ● 100%</span></div>
+      <header class="v4-header">
+        <div class="v4-tabs">
+          <div class="v4-tab aktiv">📅</div>
+          <div class="v4-tab">💬</div>
+          <div class="v4-tab">🏛</div>
+        </div>
+        <div class="profil-sirkel">R</div>
+      </header>
+      <div class="innhold">
+        <div class="side-header">
+          <div>
+            <div class="mono-label">Siden 2007 · 17 herrer</div>
+            <h1 class="side-tittel">Agenda</h1>
+          </div>
+          <div class="fab">+</div>
+        </div>
+        <div class="kort"><div class="kort-ikon">🥂</div><div class="kort-info"><div class="kort-dato">24. juli</div><div class="kort-tittel">Kenneth fyller 44</div></div><div class="kort-avatar"></div></div>
+        <div class="kort"><div class="kort-ikon">📅</div><div class="kort-info"><div class="kort-dato">15. august · møte</div><div class="kort-tittel">August-møte</div></div></div>
+        <div class="kort"><div class="kort-ikon">🍷</div><div class="kort-info"><div class="kort-dato">11. august</div><div class="kort-tittel">Waldem fyller 26</div></div><div class="kort-avatar"></div></div>
+      </div>
+    </div>
+    <p class="scene-beskrivelse">Ikoner i pille-container. Den eldre dock-stilen, men plassert øverst. Mest plass-effektiv.</p>
+  </div>
+
+</div>
+
+<div class="annotations">
+  <h2>Sammenligning</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Variant</th>
+        <th>Header-høyde</th>
+        <th>Plass-bruk</th>
+        <th>Selvinstruerende</th>
+        <th>iPhone SE</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 · Folder tabs</strong></td>
+        <td>~64 px</td>
+        <td>Mye (br + høyde)</td>
+        <td>Høy</td>
+        <td>Trangt</td>
+      </tr>
+      <tr>
+        <td><strong>2 · Segmented</strong></td>
+        <td>~96 px</td>
+        <td>Stor (egen rad for tabs)</td>
+        <td>Høy (iOS-vant)</td>
+        <td>OK</td>
+      </tr>
+      <tr>
+        <td><strong>3 · Inline tekst (foreslått)</strong></td>
+        <td>56 px</td>
+        <td>Liten</td>
+        <td>Medium</td>
+        <td>OK</td>
+      </tr>
+      <tr>
+        <td><strong>4 · Inline ikoner</strong></td>
+        <td>56 px</td>
+        <td>Liten</td>
+        <td>Lavere (krever ikon-tolkning)</td>
+        <td>Bra</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Edge cases (gjelder alle varianter)</h2>
+  <ul>
+    <li><strong>Undersider:</strong> <code>/arrangementer/123</code> markerer Agenda aktiv (path-prefix). <code>/poll/xyz</code> → Agenda. <code>/samtaler/xyz</code> → Chat. <code>/kaaringer</code>, <code>/album</code> → Klubb. <code>/profil</code>, <code>/innstillinger</code> → ingen tab aktiv (profil-sirkel kan ha gul ring når på <code>/profil</code>).</li>
+    <li><strong>Klikk på aktiv tab:</strong> tilbake til root av tab-en (iOS-konvensjon). Eks: står på <code>/arrangementer/123</code>, klikk Agenda → går til <code>/</code>.</li>
+    <li><strong>Pluss-knappen på agenda:</strong> uendret, i agenda-header-blokken under TopHeader.</li>
+    <li><strong>Profil-aktiv-state:</strong> profil-sirkel får gul ring når <code>pathname === '/profil'</code>, akkurat som i dagens TopHeader.</li>
+    <li><strong>Skalering ved flere tabs:</strong> Variant 3 og 4 håndterer 4 tabs greit på iPhone, 5 blir trangt. Variant 1 og 2 har dårligere skalering.</li>
+  </ul>
+
+  <h2>Min anbefaling</h2>
+  <ul>
+    <li><strong>Hovedvalg:</strong> Variant 3 (inline med tekst). Kompakt, kjent fra desktop-faner, matcher Georgia-display-stilen i appens øvrige typografi.</li>
+    <li><strong>Plan B:</strong> Variant 4 (inline ikoner) hvis Reidar foretrekker mer kompakt eller hvis tekst-labels blir for trangt på iPhone SE.</li>
+    <li><strong>Variant 1 og 2</strong> er mer påtrengende — gir mer plass til navigasjon enn nødvendig.</li>
+  </ul>
+</div>
+
+</body>
+</html>
