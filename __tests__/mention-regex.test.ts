@@ -21,17 +21,17 @@ describe('mention-regex', () => {
   })
 
   it('matcher enkeltnavn', () => {
-    expect(parse('@Reidar kommer du?')).toEqual(['reidar'])
+    expect(parse('@Ola kommer du?')).toEqual(['ola'])
   })
 
   it('flerords-navn — fanges som første ord', () => {
-    // «@Reidar Haavik» → matcher `'reidar'`. Inkludes-sjekk i match-
-    // logikken finner profil med navn «Reidar Eik Haavik».
-    expect(parse('@Reidar Haavik kommer du?')).toEqual(['reidar'])
+    // «@Ola Nordmann» → matcher `'ola'`. Inkludes-sjekk i match-
+    // logikken finner profil med navn «Ola Petter Nordmann».
+    expect(parse('@Ola Nordmann kommer du?')).toEqual(['ola'])
   })
 
   it('flere mentions i samme melding', () => {
-    expect(parse('@Reidar og @Michael, hva sier dere?')).toEqual(['reidar', 'michael'])
+    expect(parse('@Ola og @Espen, hva sier dere?')).toEqual(['ola', 'espen'])
   })
 
   it('ingen mention', () => {

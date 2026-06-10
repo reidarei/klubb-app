@@ -7,11 +7,10 @@ import type { Page } from '@playwright/test'
  * skal spec-en kalle `test.skip(!harTestCreds(), ...)` slik at årsaken er
  * tydelig i rapporten.
  *
- * Sett `TEST_PASSORD` i `.env.local` (`TEST_EPOST` har default på reidars
- * bruker — overstyr hvis du vil teste som en annen). Se `e2e/README.md`.
+ * Sett `TEST_EPOST` og `TEST_PASSORD` i `.env.local`. Se `e2e/README.md`.
  */
 
-export const TEST_EPOST = process.env.TEST_EPOST ?? 'reidar.haavik@gmail.com'
+export const TEST_EPOST = process.env.TEST_EPOST ?? ''
 export const TEST_PASSORD = process.env.TEST_PASSORD ?? ''
 
 export function harTestCreds(): boolean {

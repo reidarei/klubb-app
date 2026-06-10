@@ -31,49 +31,49 @@ describe('beregnMentionSøk', () => {
   })
 
   it('returnerer søkeord når @ står på posisjon 0 med tekst', () => {
-    expect(beregnMentionSøk('@rei')).toBe('rei')
+    expect(beregnMentionSøk('@ol')).toBe('ol')
   })
 
   it('siste @ vinner ved flere', () => {
-    expect(beregnMentionSøk('@reidar og @mic')).toBe('mic')
+    expect(beregnMentionSøk('@ola og @esp')).toBe('esp')
   })
 
   it('avbryter ved to mellomrom etter @', () => {
     // brukeren har gått videre uten å velge
-    expect(beregnMentionSøk('hei @reidar  ')).toBeNull()
+    expect(beregnMentionSøk('hei @ola  ')).toBeNull()
   })
 
   it('avbryter ved linjeskift etter @', () => {
-    expect(beregnMentionSøk('hei @reidar\nnoe mer')).toBeNull()
+    expect(beregnMentionSøk('hei @ola\nnoe mer')).toBeNull()
   })
 
   it('aksepterer ett mellomrom (flerords-navn)', () => {
-    expect(beregnMentionSøk('hei @Reidar Eik')).toBe('Reidar Eik')
+    expect(beregnMentionSøk('hei @Ola Petter')).toBe('Ola Petter')
   })
 })
 
 describe('velgMentionTekst', () => {
   it('erstatter siste @… med navn + trailing space', () => {
-    expect(velgMentionTekst('hei @rei', 'Reidar')).toBe('hei @Reidar ')
+    expect(velgMentionTekst('hei @ol', 'Ola')).toBe('hei @Ola ')
   })
 
   it('uendret tekst om ingen @', () => {
-    expect(velgMentionTekst('hei sveis', 'Reidar')).toBe('hei sveis')
+    expect(velgMentionTekst('hei sveis', 'Ola')).toBe('hei sveis')
   })
 
   it('bevarer tekst foran siste @', () => {
-    expect(velgMentionTekst('@reidar og @mic', 'Michael')).toBe('@reidar og @Michael ')
+    expect(velgMentionTekst('@ola og @esp', 'Espen')).toBe('@ola og @Espen ')
   })
 
   it('håndterer flerords-navn (delvis skrevet)', () => {
-    expect(velgMentionTekst('hei @Reidar Eik', 'Reidar Eik Haavik')).toBe('hei @Reidar Eik Haavik ')
+    expect(velgMentionTekst('hei @Ola Petter', 'Ola Petter Nordmann')).toBe('hei @Ola Petter Nordmann ')
   })
 })
 
 describe('lagMentionForslag', () => {
   const profiler: ChatProfil[] = [
-    profil('1', 'Reidar Eik Haavik'),
-    profil('2', 'Michael'),
+    profil('1', 'Ola Petter Nordmann'),
+    profil('2', 'Espen'),
     profil('3', 'Kari Nordmann'),
   ]
 
@@ -116,7 +116,7 @@ describe('lagMentionForslag', () => {
   })
 
   it('filtrerer profiler case-insensitive på navn-substring', () => {
-    const resultat = lagMentionForslag('REI', profiler)
+    const resultat = lagMentionForslag('PET', profiler)
     expect(resultat.map(p => p.id)).toEqual(['1'])
   })
 

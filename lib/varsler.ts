@@ -578,7 +578,7 @@ export type MentionScope =
 // Regex stopper ved space — `@alle andre` matches som `'alle'`, ikke
 // `'alle andre'`. Flerords-navn håndteres fortsatt riktig fordi
 // matching-funksjonen bruker `.includes()` på fullt profilnavn:
-// `@Reidar` treffer «Reidar Eik Haavik», og `@Reidar Haavik` treffer
+// `@Ola` treffer «Ola Petter Nordmann», og `@Ola Nordmann` treffer
 // også (etternavnet blir bare vanlig tekst i meldingen).
 const MENTION_REGEX = /@([\wæøåÆØÅ-]+)/g
 

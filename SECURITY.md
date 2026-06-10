@@ -3,7 +3,8 @@
 ## Rapportere en sårbarhet
 
 Hvis du finner en sikkerhetssårbarhet i klubb-app, ikke opprett et offentlig
-issue. Send i stedet en e-post til **reidar.haavik@gmail.com** med:
+issue. Bruk i stedet GitHubs private sårbarhetsrapportering: gå til
+**Security-fanen → Report a vulnerability** i dette repoet. Inkluder:
 
 - Beskrivelse av sårbarheten og hvor i koden den ligger
 - Steg for å reprodusere (gjerne med eksempel)
