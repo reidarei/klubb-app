@@ -32,28 +32,21 @@ Bare én person kan ha generalsekretær-rollen. Den settes via Klubbinfo → Med
 
 Testmodus begrenser varsel-utsendelse til én bestemt e-postadresse i stedet for alle aktive brukere. Nyttig når du vil teste et oppsett uten å sende til hele klubben.
 
-### Slå på testmodus
+### Slå på/av testmodus
 
-I Supabase Dashboard → SQL-editor:
+Testmodus skrus på og av med en toggle i appen: **Innstillinger → «Testmodus»** (siden er kun synlig for admins). Når togglen er på, sender `sendVarsel()` kun til test-eposten, uansett hvem som faktisk skal varsles.
+
+### Engangsoppsett: sette test-eposten
+
+Togglen styrer bare på/av — selve test-eposten ligger i `beskrivelse`-feltet og må settes én gang via Supabase Dashboard → SQL-editor:
 
 ```sql
 UPDATE varsel_innstillinger
-SET aktiv = true,
-    beskrivelse = 'din@epost.no'
+SET beskrivelse = 'din@epost.no'
 WHERE noekkel = 'test_modus';
 ```
-
-Erstatt `din@epost.no` med e-postadressen varsler skal sendes til. Nå vil `sendVarsel()` kun sende til den adressen, uansett hvem som faktisk skal varsles.
 
 > **Viktig:** e-postadressen må tilhøre en eksisterende profil i `profiles`-tabellen — ellers finner ikke `sendVarsel()` en mottaker og varselet droppes stille uten feilmelding. Bruk gjerne din egen admin-profils e-post under test.
-
-### Slå av testmodus
-
-```sql
-UPDATE varsel_innstillinger
-SET aktiv = false
-WHERE noekkel = 'test_modus';
-```
 
 ### Lokalt utviklingsmiljø
 

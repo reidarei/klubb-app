@@ -34,7 +34,7 @@ const innstillingLabels: Record<string, string> = {
   ønske_ny: 'Nytt innspill (til admin)',
   ønske_lukket: 'Ditt innspill er håndtert',
   // Drift
-  test_modus: 'Testmodus — varsler kun til Reidar',
+  test_modus: 'Testmodus — varsler kun til test-eposten',
 }
 
 // Foretrukket rekkefølge for visning. Noekler som ikke er i lista
