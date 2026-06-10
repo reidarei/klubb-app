@@ -1,15 +1,17 @@
+import { Fragment } from 'react'
 import { createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import VarselToggle from '@/components/VarselToggle'
+import TestEpostVelger from './TestEpostVelger'
 import IssuesListe, { hentAapneIssues } from './IssuesListe'
 import VarselLogg from './VarselLogg'
 import ArrangementmalerAdmin from '@/components/ArrangementmalerAdmin'
 import KaaringMalAdmin from '@/components/KaaringMalAdmin'
 import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
-import { kanAdministrere } from '@/lib/roller'
+import { kanAdministrere, rollerMed } from '@/lib/roller'
 
 const innstillingLabels: Record<string, string> = {
   // Arrangementer
@@ -74,6 +76,7 @@ export default async function Innstillinger() {
     { count: passVentende },
     { count: varselSisteDogn },
     { data: vitalsRader },
+    { data: adminProfiler },
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -99,6 +102,12 @@ export default async function Innstillinger() {
       .gte('opprettet', sjuDagerIso)
       .eq('device_type', 'mobile')
       .limit(5000),
+    admin
+      .from('profiles')
+      .select('navn, epost')
+      .eq('aktiv', true)
+      .in('rolle', rollerMed('kanAdministrere'))
+      .order('navn'),
   ])
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
@@ -291,13 +300,18 @@ export default async function Innstillinger() {
           >
             <div>
               {sortert.map((inn, i, arr) => (
-                <VarselToggle
-                  key={inn.noekkel}
-                  noekkel={inn.noekkel}
-                  aktiv={inn.aktiv}
-                  beskrivelse={innstillingLabels[inn.noekkel] ?? inn.beskrivelse ?? inn.noekkel}
-                  last={i === arr.length - 1}
-                />
+                <Fragment key={inn.noekkel}>
+                  <VarselToggle
+                    noekkel={inn.noekkel}
+                    aktiv={inn.aktiv}
+                    beskrivelse={innstillingLabels[inn.noekkel] ?? inn.beskrivelse ?? inn.noekkel}
+                    last={i === arr.length - 1 || inn.noekkel === 'test_modus'}
+                  />
+                  {/* For test_modus er beskrivelse-feltet selve test-eposten */}
+                  {inn.noekkel === 'test_modus' && (
+                    <TestEpostVelger valgt={inn.beskrivelse} admins={adminProfiler ?? []} />
+                  )}
+                </Fragment>
               ))}
             </div>
           </InnstillingsKort>

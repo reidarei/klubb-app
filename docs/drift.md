@@ -34,19 +34,9 @@ Testmodus begrenser varsel-utsendelse til én bestemt e-postadresse i stedet for
 
 ### Slå på/av testmodus
 
-Testmodus skrus på og av med en toggle i appen: **Innstillinger → «Testmodus»** (siden er kun synlig for admins). Når togglen er på, sender `sendVarsel()` kun til test-eposten, uansett hvem som faktisk skal varsles.
+Testmodus styres i appen: **Innstillinger → «Testmodus»** (siden er kun synlig for admins). Togglen skrur testmodus på/av, og nedtrekkslisten rett under velger hvilken admin som mottar varslene. Når togglen er på, sender `sendVarsel()` kun til den valgte test-eposten, uansett hvem som faktisk skal varsles.
 
-### Engangsoppsett: sette test-eposten
-
-Togglen styrer bare på/av — selve test-eposten ligger i `beskrivelse`-feltet og må settes én gang via Supabase Dashboard → SQL-editor:
-
-```sql
-UPDATE varsel_innstillinger
-SET beskrivelse = 'din@epost.no'
-WHERE noekkel = 'test_modus';
-```
-
-> **Viktig:** e-postadressen må tilhøre en eksisterende profil i `profiles`-tabellen — ellers finner ikke `sendVarsel()` en mottaker og varselet droppes stille uten feilmelding. Bruk gjerne din egen admin-profils e-post under test.
+Bare aktive admin-profiler kan velges som test-mottaker — det garanterer at varsler i testmodus aldri havner hos et vanlig medlem, og at mottakeren alltid finnes i `profiles` (ellers ville varselet droppes stille).
 
 ### Lokalt utviklingsmiljø
 
