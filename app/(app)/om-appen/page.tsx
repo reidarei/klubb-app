@@ -59,7 +59,7 @@ export default function OmAppen() {
         </Avsnitt>
         <Avsnitt overskrift="Tilgangskontroll på databasenivå">
           Hver tabell har egne regler for hvem som kan lese hva. Eksempel:
-          en privatsamtale med Michael er kun synlig for dere to —
+          en privatsamtale med et annet medlem er kun synlig for dere to —
           databasen returnerer ingen rad til andre, selv ikke admin.
         </Avsnitt>
         <Avsnitt overskrift="Passinformasjon">

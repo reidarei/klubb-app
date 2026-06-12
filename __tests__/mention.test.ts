@@ -35,7 +35,7 @@ describe('beregnMentionSøk', () => {
   })
 
   it('siste @ vinner ved flere', () => {
-    expect(beregnMentionSøk('@ola og @esp')).toBe('esp')
+    expect(beregnMentionSøk('@ola og @per')).toBe('per')
   })
 
   it('avbryter ved to mellomrom etter @', () => {
@@ -62,7 +62,7 @@ describe('velgMentionTekst', () => {
   })
 
   it('bevarer tekst foran siste @', () => {
-    expect(velgMentionTekst('@ola og @esp', 'Espen')).toBe('@ola og @Espen ')
+    expect(velgMentionTekst('@ola og @per', 'Per')).toBe('@ola og @Per ')
   })
 
   it('håndterer flerords-navn (delvis skrevet)', () => {
@@ -73,7 +73,7 @@ describe('velgMentionTekst', () => {
 describe('lagMentionForslag', () => {
   const profiler: ChatProfil[] = [
     profil('1', 'Ola Petter Nordmann'),
-    profil('2', 'Espen'),
+    profil('2', 'Per'),
     profil('3', 'Kari Nordmann'),
   ]
 

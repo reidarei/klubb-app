@@ -17,8 +17,8 @@ export const PAAMINNELSE_DAGER = {
   PURRING: 3,
 } as const
 
-// Tilgangsvinduet etter en pass-godkjenning. Reidar har eksplisitt sagt
-// 1 dag — kort vindu reduserer eksponering hvis godkjenneren glemmer å
+// Tilgangsvinduet etter en pass-godkjenning. Bevisst satt til 1 dag —
+// kort vindu reduserer eksponering hvis godkjenneren glemmer å
 // trekke tilbake.
 export const PASS_TILGANG_TIMER = 24
 

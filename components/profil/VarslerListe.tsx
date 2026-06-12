@@ -20,7 +20,7 @@ type Props = {
   /**
    * Totalt antall uleste varsler i DB (også eldre enn de 10 vi henter til
    * listen). Tellingen i tittelen og "Marker alle som lest"-knappen bruker
-   * denne — uten den ville Reidar med 116 uleste eldre + 0 uleste i top 10
+   * denne — uten den ville en bruker med 116 uleste eldre + 0 uleste i top 10
    * sett "Varsler (0 uleste)" og en disabled knapp, men prikken på avataren
    * fortsatt aktiv. Se #207.
    */

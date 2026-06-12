@@ -273,7 +273,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             <>
               {/* Visuell prikk — større og mer "stikker ut" enn chat-tab-prikken
                   fordi avataren er rundt og prikken må konkurrere mot bilde-innholdet.
-                  Se #205 — Reidar ba om mer tydelig versjon. */}
+                  Se #205 — bevisst gjort mer tydelig etter brukertilbakemelding. */}
               <span
                 aria-hidden="true"
                 style={{

@@ -31,7 +31,7 @@ describe('mention-regex', () => {
   })
 
   it('flere mentions i samme melding', () => {
-    expect(parse('@Ola og @Espen, hva sier dere?')).toEqual(['ola', 'espen'])
+    expect(parse('@Ola og @Per, hva sier dere?')).toEqual(['ola', 'per'])
   })
 
   it('ingen mention', () => {
