@@ -6,7 +6,7 @@ import { norskAar } from '@/lib/dato'
 import Icon, { IkonNavn } from '@/components/ui/Icon'
 import { kanAdministrere } from '@/lib/roller'
 import versjon from '@/lib/versjon.json'
-import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2 } from '@/lib/klubb-config'
+import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2, KLUBB_OM_AVSNITT } from '@/lib/klubb-config'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
@@ -224,39 +224,20 @@ export default async function Klubbinfo() {
           Om klubben
           <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
         </div>
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 15,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.55,
-            margin: '0 0 10px',
-          }}
-        >
-          Vi blir gamle og grå, så en syklubb må vi få.
-        </p>
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 15,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.55,
-            margin: '0 0 10px',
-          }}
-        >
-          Her skal verdensproblemer løses og diskuteres av klubbens største besserwissere.
-        </p>
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 15,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.55,
-            margin: 0,
-          }}
-        >
-          Så vel møtt finansakrobater og rikssynsere til månedlige sammenkomster.
-        </p>
+        {KLUBB_OM_AVSNITT.map((avsnitt, i) => (
+          <p
+            key={i}
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 15,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.55,
+              margin: i === KLUBB_OM_AVSNITT.length - 1 ? 0 : '0 0 10px',
+            }}
+          >
+            {avsnitt}
+          </p>
+        ))}
       </div>
 
       {/* Seksjons-label */}
