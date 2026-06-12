@@ -1,4 +1,4 @@
-// Hjelpere for å hente og parse GitHub-issues som herreklubbens «innspill».
+// Hjelpere for å hente og parse GitHub-issues som klubbens «innspill».
 // Filtrerer på `ønske`-label og plukker ut profil_id fra HTML-kommentar i
 // issue-body (samme mønster som webhooken bruker).
 

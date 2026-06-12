@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
       // importere fra lib/, så vi leser process.env direkte her.
       {
         protocol: 'https',
-        hostname: process.env.NEXT_PUBLIC_R2_CUSTOM_DOMAIN ?? 'bilder.mortensrudherreklubb.no',
+        hostname: process.env.NEXT_PUBLIC_R2_CUSTOM_DOMAIN ?? 'bilder.klubb.example.com',
       },
     ],
   },

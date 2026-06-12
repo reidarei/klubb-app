@@ -1,9 +1,9 @@
-// Krever verifisert domene i Resend — sett RESEND_FROM til f.eks. "Herreklubben <noreply@dittdomene.no>"
+// Krever verifisert domene i Resend — sett RESEND_FROM til f.eks. "Klubben <noreply@dittdomene.no>"
 import { KLUBB_NAVN } from './klubb-config'
 const RESEND_API_KEY = process.env.RESEND_API_KEY!
 // Avsender er server-only-konfig (Resend-spesifikk) og holdes derfor her,
 // ikke i klient-trygg klubb-config. Ingen NEXT_PUBLIC_-prefiks.
-const RESEND_FROM = process.env.RESEND_FROM ?? 'Herreklubben <onboarding@resend.dev>'
+const RESEND_FROM = process.env.RESEND_FROM ?? 'Klubben <onboarding@resend.dev>'
 
 export async function sendEpost({ til, emne, html }: { til: string; emne: string; html: string }) {
   try {
@@ -23,7 +23,7 @@ export async function sendEpost({ til, emne, html }: { til: string; emne: string
   }
 }
 
-// Nøytral gull-aksent som gir gjenkjennelig Herreklubb-preg i begge moduser.
+// Nøytral gull-aksent som gir gjenkjennelig klubb-preg i begge moduser.
 // Ellers er malen helt upåvirket av dark/light — klientene inverterer lys-mal
 // automatisk for brukere med dark mode (Apple Mail, Gmail, Outlook).
 const AKSENT = '#d4a853'

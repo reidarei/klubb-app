@@ -1,4 +1,4 @@
-// Validerer miljøvariabler for Herreklubben-appen.
+// Validerer miljøvariabler for klubb-appen.
 // Sjekker format og tilstedeværelse, og rapporterer mangler per nivå.
 //
 // Kjøres: npm run sjekk-miljo  (alias for node --env-file=.env.local scripts/sjekk-miljo.mjs)
@@ -115,7 +115,7 @@ const variabler = [
   { navn: 'R2_ACCOUNT_ID',             nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'Cloudflare konto-ID' },
   { navn: 'R2_ACCESS_KEY_ID',          nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'R2 access key ID (SECRET)' },
   { navn: 'R2_SECRET_ACCESS_KEY',      nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'R2 secret access key (SECRET)' },
-  { navn: 'R2_BUCKET',                 nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'R2 bucket-navn (default: herreklubben-bilder)' },
+  { navn: 'R2_BUCKET',                 nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'R2 bucket-navn (default: klubb-bilder)' },
   { navn: 'R2_JURISDICTION',           nivaa: 'valgfri',   type: 'r2-jurisdiction', beskrivelse: 'R2 jurisdiksjon: default|eu|fedramp' },
   // R2_PUBLIC_URL og NEXT_PUBLIC_R2_PUBLIC_URL håndteres som spesialsjekk under
 
@@ -136,19 +136,19 @@ const variabler = [
   // GitHub
   { navn: 'GITHUB_TOKEN',              nivaa: 'anbefalt',  type: 'github-token', beskrivelse: 'GitHub PAT (ghp_/github_pat_) — innspill-funksjon + bli-utvikler-endepunktet (/api/bli-utvikler) feiler uten' },
   { navn: 'GITHUB_WEBHOOK_SECRET',     nivaa: 'anbefalt',  type: 'streng',   beskrivelse: 'GitHub webhook-hemmelighet — innkommende webhook-validering mangler uten' },
-  { navn: 'NEXT_PUBLIC_GITHUB_REPO',   nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'GitHub-repo for innspill (default: reidarei/Herreklubben)' },
+  { navn: 'NEXT_PUBLIC_GITHUB_REPO',   nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'GitHub-repo for innspill (default: reidarei/klubb-app)' },
   { navn: 'NEXT_PUBLIC_GITHUB_ONSKE_LABEL', nivaa: 'valgfri', type: 'streng', beskrivelse: 'GitHub Issues-label for ønsker (default: ønske)' },
 
   // Base-URL
   { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL override (trengs normalt ikke — utledes fra KLUBB_DOMENE/VERCEL_URL)' },
 
   // Klubbidentitet
-  { navn: 'NEXT_PUBLIC_KLUBB_NAVN',              nivaa: 'valgfri', type: 'streng', beskrivelse: 'Klubbnavn (default: Mortensrud Herreklubb)' },
-  { navn: 'NEXT_PUBLIC_KLUBB_KORTNAVN',          nivaa: 'valgfri', type: 'streng', beskrivelse: 'Kortnavn (default: Herreklubben)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_NAVN',              nivaa: 'valgfri', type: 'streng', beskrivelse: 'Klubbnavn (default: Min Klubb)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_KORTNAVN',          nivaa: 'valgfri', type: 'streng', beskrivelse: 'Kortnavn (default: Klubben)' },
   { navn: 'NEXT_PUBLIC_KLUBB_NAVN_LINJE_1',      nivaa: 'valgfri', type: 'streng', beskrivelse: 'Visningsnavn linje 1' },
   { navn: 'NEXT_PUBLIC_KLUBB_NAVN_LINJE_2',      nivaa: 'valgfri', type: 'streng', beskrivelse: 'Visningsnavn linje 2' },
   { navn: 'NEXT_PUBLIC_KLUBB_BESKRIVELSE',       nivaa: 'valgfri', type: 'streng', beskrivelse: 'Beskrivelse av appen' },
-  { navn: 'NEXT_PUBLIC_KLUBB_DOMENE',            nivaa: 'valgfri', type: 'hostname', beskrivelse: 'Domenenavn (default: mortensrudherreklubb.no)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_DOMENE',            nivaa: 'valgfri', type: 'hostname', beskrivelse: 'Domenenavn (default: klubb.example.com)' },
   { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_AAR',       nivaa: 'valgfri', type: 'pos-int', beskrivelse: 'Stiftelsesår' },
   { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_MAANED',    nivaa: 'valgfri', type: 'maaned',  beskrivelse: 'Stiftelsesmåned (1–12)' },
   { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_DAG',       nivaa: 'valgfri', type: 'dag',     beskrivelse: 'Stiftelsesdag (1–31)' },
@@ -319,7 +319,7 @@ for (const [key, val] of Object.entries(process.env)) {
 // ─── UTSKRIFT ────────────────────────────────────────────────────────────────
 
 console.log('')
-console.log(b('=== Herreklubben — miljøsjekk ==='))
+console.log(b('=== Klubb-app — miljøsjekk ==='))
 console.log('')
 
 if (meldinger.kritisk.length > 0) {

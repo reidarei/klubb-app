@@ -13,7 +13,7 @@ import { AwsClient } from 'aws4fetch'
 const ACCOUNT_ID = process.env.R2_ACCOUNT_ID
 const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
 const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
-const BUCKET = process.env.R2_BUCKET ?? 'herreklubben-bilder'
+const BUCKET = process.env.R2_BUCKET ?? 'klubb-bilder'
 const PUBLIC_URL = process.env.R2_PUBLIC_URL?.replace(/\/$/, '') ?? ''
 
 // R2 har separate endpoints per jurisdiksjon. Hvis bucket og API-token er

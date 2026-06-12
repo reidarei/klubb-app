@@ -244,7 +244,7 @@ export default async function Klubbinfo() {
             margin: '0 0 10px',
           }}
         >
-          Her skal verdensproblemer løses og diskuteres av de største besserwisserne fra Mortensrud.
+          Her skal verdensproblemer løses og diskuteres av klubbens største besserwissere.
         </p>
         <p
           style={{

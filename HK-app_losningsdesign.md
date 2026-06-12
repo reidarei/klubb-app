@@ -1,4 +1,4 @@
-# Mortensrud Herreklubb — Løsningsdesign
+# Klubb-app — Løsningsdesign
 
 > **Status:** Implementert og live på Vercel. Oppdatert 2026-04-15 (varsler, tidshåndtering). Koden er autoritativ — dette dokumentet er referanse.
 
@@ -635,7 +635,7 @@ I redigeringsmodus for tur-arrangementer vises en "Merk som sensurert"-checkbox 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.tittel ?? 'Herreklubben', {
+    self.registration.showNotification(data.tittel ?? 'Klubben', {
       body: data.melding,
       icon: '/icon-192.png',
       data: { url: data.url ?? '/' },
@@ -662,15 +662,17 @@ Web Push fungerer på iOS kun når appen er installert på hjemskjermen (PWA). D
 ```typescript
 // app/manifest.ts
 import type { MetadataRoute } from 'next'
+import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_BESKRIVELSE } from '@/lib/klubb-config'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Mortensrud Herreklubb',
-    short_name: 'Herreklubben',
+    name: KLUBB_NAVN,
+    short_name: KLUBB_KORTNAVN,
+    description: KLUBB_BESKRIVELSE,
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#1a1a2e',  // mørk farge, klubb-tema
+    background_color: '#060608',
+    theme_color: '#060608',
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -735,7 +737,7 @@ SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 
 # Resend (e-post)
 RESEND_API_KEY=<resend-api-key>
-RESEND_FROM_EMAIL=herreklubben@<domene>
+RESEND_FROM_EMAIL=noreply@<domene>
 
 # Web Push (VAPID)
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=<vapid-public-key>

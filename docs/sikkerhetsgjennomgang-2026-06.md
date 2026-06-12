@@ -1,4 +1,4 @@
-# Sikkerhetsgjennomgang — Mortensrud Herreklubb-appen
+# Sikkerhetsgjennomgang — klubb-appen
 
 **Dato:** 2026-06-10
 **Kontekst:** Forberedelse til open source-publisering (issue #296, OS-fase 5). Lisens: MIT. Publisering skjer i nytt, rent repo uten historikk.
@@ -90,6 +90,6 @@ Tre pakker er lisensiert under Mozilla Public License 2.0: `web-push`, `lightnin
 
 ### Merknad: UNLICENSED
 
-`herreklubben@3.2.0` — det er selve dette prosjektet som rapporteres av `license-checker` (leser sin egen `package.json`). Ikke en ekstern avhengighet.
+`klubb-app@3.2.0` — det er selve dette prosjektet som rapporteres av `license-checker` (leser sin egen `package.json`). Ikke en ekstern avhengighet.
 
 **Konklusjon:** Ingen avhengigheter med GPL, AGPL eller andre venstrehånds-copyleft-lisenser som ville kontaminert prosjektets MIT-lisensiering. Alle avhengigheter er kompatible med publisering under MIT.

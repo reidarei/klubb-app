@@ -44,7 +44,7 @@ export const KJENT_PROD_SUPABASE_URL = 'https://tdlfswmxezjdnxcbbiwn.supabase.co
 // GitHub-repo som backer «innspill»-funksjonen. Issues med label
 // GITHUB_ONSKE_LABEL behandles som brukerønsker.
 export const GITHUB_REPO =
-  process.env.NEXT_PUBLIC_GITHUB_REPO ?? 'reidarei/Herreklubben'
+  process.env.NEXT_PUBLIC_GITHUB_REPO ?? 'reidarei/klubb-app'
 export const GITHUB_ONSKE_LABEL =
   process.env.NEXT_PUBLIC_GITHUB_ONSKE_LABEL ?? 'ønske'
 

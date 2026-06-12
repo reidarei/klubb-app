@@ -1,32 +1,31 @@
-# Mortensrud Herreklubb — brukerbehov og use cases
+# Klubb-app — brukerbehov og use cases
 
 > Status: **Spesifikasjon låst.** Klar for fase 2 — løsningsdesign.
 
 ## Kontekst
 
-Mortensrud Herreklubb er en gruppe på ca. 17 venner som i dag bruker Facebook til å
-koordinere aktivitetene i klubben.
+Klubben er en gruppe på ca. 17 venner som bruker Facebook til å
+koordinere aktivitetene.
 
 Det er hovedsakelig tre typer arrangementer:
-1. "Møte": Bi-månedlige møter som middager og sosiale samlinger
-2. "Herreklubbtur"/"tur": Årlige turer/weekendopphold som kalles herreklubbtur, eller hurratur
+1. "Møte": Møter som middager og sosiale samlinger
+2. "Klubbtur"/"tur": Årlige turer/weekendopphold
 3. "Julebord": Årlig julebord (datamessig et desember-møte med eget navn)
 
 Det går på rundgang hvem som er ansvarlig for å arrangere disse, neste års ansvarlige bestemmes på julebordet.
 
 Facebook har flere svakheter for dette formålet: dårlig oversikt over hvem som faktisk kommer, vanskelig
-å finne gamle arrangementer, støyende feed, og det faktum at mange av klubbens medlemmer begynner å forlate Facebook.
+å finne gamle arrangementer, støyende feed, og det faktum at mange medlemmer begynner å forlate Facebook.
 
 Målet er å bygge en liten, privat webapp som erstatter Facebook-gruppen for klubbens
 kjerne-arbeidsflyter. Appen skal føles som et naturlig sted å "sjekke hva som skjer"
 fra mobilen, og skal eies og driftes av klubben selv.
 
-I tillegg bruker herreklubben andre kanaler som skal bestå:
+Klubben bruker også andre kanaler som skal bestå:
 - En gruppesnap for kommunikasjon og deling av bilder, og 
 - Det opprettes også av og til en egen signal-chat for turer
 
-Prosjektmappen inneholder i dag en plan.md og en arkitekturskisse i `CLAUDE.md`
-(Next.js 15 App Router + Supabase + PWA). Ingen kode er skrevet ennå.
+Arkitektur: **Next.js 15 App Router + Supabase + PWA**. Se `CLAUDE.md` for detaljer.
 
 ## Roller
 
@@ -69,8 +68,8 @@ selvregistrering.
 
 ## Arrangementtyper som må støttes
 
-- **Møte** — 6 per år, annenhver måned. De fem første heter "januar-februar", "mars-april", "mai-juni", "august-september" og "oktober-november". Den sjette heter "julebord" (i desember). Enkelt-kveld, én lokasjon. Datamessig er julebord et møte, bare med sitt eget navn.
-- **Tur** — Én gang i året. Weekendopphold, ofte utenlands, flerdags, med ekstra felter (se UC-3.2).
+- **Møte** — Regelmessige møter. Enkelt-kveld, én lokasjon.
+- **Klubbtur** — Én gang i året. Weekendopphold, ofte utenlands, flerdags, med ekstra felter (se UC-3.2).
 
 ## Scope for versjon 1
 

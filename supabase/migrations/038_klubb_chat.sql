@@ -1,4 +1,4 @@
--- Klubb-chat: én felles kronologisk tråd for hele herreklubben.
+-- Klubb-chat: én felles kronologisk tråd for hele klubben.
 -- Speiler strukturen i arrangement_chat, men uten arrangement_id — dette er
 -- "klubb-scope". Egen tabell (ikke scope-kolonne på arrangement_chat) for
 -- å holde RLS og realtime-filtre enkle.

@@ -62,7 +62,7 @@ npm install
 ## 3. Cloudflare R2
 
 1. Logg inn på [dash.cloudflare.com](https://dash.cloudflare.com) → R2.
-2. Opprett ny bucket (f.eks. `herreklubben-bilder`).
+2. Opprett ny bucket (f.eks. `klubb-bilder`).
 3. Aktiver «Public access» på bucketen (bilder hentes direkte av klienten).
 4. Opprett API-token med «Object Read & Write»-tilgang for bucketen.
 5. Kopier: `Account ID`, `Access Key ID`, `Secret Access Key`, `Public URL`.

@@ -5,7 +5,7 @@ import ChatAutoScrollScript from '@/components/chat/ChatAutoScrollScript'
 import { kanAdministrere } from '@/lib/roller'
 import { markerChatSett } from '@/lib/actions/ulest'
 
-// Klubb-chat: én felles kronologisk tråd for hele herreklubben.
+// Klubb-chat: én felles kronologisk tråd for hele klubben.
 // Initial-last er siste 30 meldinger (i desc-rekkefølge fra DB, reversert til
 // ascending for UI). «Vis eldre»-knappen i felleskomponenten henter flere.
 export default async function KlubbChatSide() {

@@ -1,8 +1,8 @@
-# Herreklubben-appen
+# Klubb-app
 
 > **This project is intentionally in Norwegian** — UI text, code identifiers, table/column names, commit messages, and documentation are all in Norwegian. It was built for a Norwegian-speaking private club and is published as-is. English speakers are welcome to use it, but localisation is out of scope for this repository.
 
-Privat web-app for vennegjenger som vil ha et felles sted for arrangementspåmelding, klubbchat og kåringer — uten å være avhengig av Facebook. Referanse-instans: [mortensrudherreklubb.no](https://mortensrudherreklubb.no).
+Privat web-app for vennegjenger som vil ha et felles sted for arrangementspåmelding, klubbchat og kåringer — uten å være avhengig av Facebook.
 
 Appen er bygget med kraftig AI-assistanse (Claude Code, Anthropic). README-en dekker både hva som er gjennomtenkt og hva som er pragmatiske snarveier — se [Kritisk vurdering](#kritisk-vurdering) nederst.
 
@@ -60,8 +60,8 @@ Skjermbilder kommer — anonymiserte versjoner under arbeid.
 | E-post | Resend |
 | Push | Web Push (VAPID) via `web-push` |
 | Cron | GitHub Actions (`paaminne.yml`, daglig 06:00 UTC) |
-| Hosting | Vercel (Hobby), region Dublin (referanse-instans) |
-| Domene | Valgfritt — referanse-instans bruker Domeneshop |
+| Hosting | Vercel (Hobby) |
+| Domene | Valgfritt — konfigureres via env-vars |
 
 286 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~100 nummererte SQL-migrasjoner.
 

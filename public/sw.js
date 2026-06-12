@@ -11,8 +11,8 @@
 // PAGE_CACHE er versjonert fordi HTML ikke er innholdshashet — nye builds
 // kan ha samme URL men forskjellig output.
 const CACHE_VERSION = 'V3.2.26'
-const STATIC_CACHE = 'herreklubben-static'
-const PAGE_CACHE = `herreklubben-pages-${CACHE_VERSION}`
+const STATIC_CACHE = 'klubb-static'
+const PAGE_CACHE = `klubb-pages-${CACHE_VERSION}`
 
 // Begrens hvor mange HTML-sider som caches — Cache API har ingen LRU,
 // så vi rydder eksplisitt fra eldste når vi går over grensen.
