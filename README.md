@@ -43,7 +43,15 @@ Appen er bygget med kraftig AI-assistanse (Claude Code, Anthropic). README-en de
 
 ## Skjermbilder
 
-Skjermbilder kommer — anonymiserte versjoner under arbeid.
+Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
+
+| Agenda | Arrangement | Medlemmer |
+|---|---|---|
+| ![Agenda](docs/skjermbilder/agenda.png) | ![Arrangement](docs/skjermbilder/arrangement.png) | ![Medlemmer](docs/skjermbilder/medlemmer.png) |
+
+| Klubbinfo | Kåringer | Profil |
+|---|---|---|
+| ![Klubbinfo](docs/skjermbilder/klubbinfo.png) | ![Kåringer](docs/skjermbilder/kaaringer.png) | ![Profil](docs/skjermbilder/profil.png) |
 
 ---
 
