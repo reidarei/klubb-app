@@ -23,8 +23,8 @@ export const BASE_URL = getBaseUrl()
 // Kontakt-epost for VAPID push-tjenestene (Apple/Google). Brukes ikke til
 // å sende epost — kun metadata slik at push-tjenester kan kontakte oss
 // ved misbruk eller tekniske problemer. Må være reell og nåbar.
-export const VAPID_CONTACT_EMAIL =
-  process.env.VAPID_CONTACT_EMAIL ?? 'reidar.haavik@gmail.com'
+// Ingen default — settes per instans (lib/push.ts feiler tydelig uten).
+export const VAPID_CONTACT_EMAIL = process.env.VAPID_CONTACT_EMAIL ?? ''
 
 // Cloudflare R2 public URL — hvor bilder kan hentes via CDN. Kun
 // public-delen eksponeres her; access keys og bucket-navn leses i lib/r2.ts.

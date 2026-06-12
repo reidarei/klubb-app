@@ -5,6 +5,11 @@ let initialisert = false
 
 function init() {
   if (initialisert) return
+  if (!VAPID_CONTACT_EMAIL) {
+    throw new Error(
+      'VAPID_CONTACT_EMAIL mangler — push-varsler krever en kontakt-epost (se docs/klubb-tilpasning.md)'
+    )
+  }
   webpush.setVapidDetails(
     `mailto:${VAPID_CONTACT_EMAIL}`,
     process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,

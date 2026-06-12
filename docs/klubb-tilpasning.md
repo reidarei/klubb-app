@@ -118,7 +118,7 @@ Utover klubbidentiteten i seksjon 1 har `lib/config.ts` flere verdier med hardko
 | Env-var | Default i koden | Hva den styrer | Når må den settes? |
 |---|---|---|---|
 | `NEXT_PUBLIC_BASE_URL` | Auto: `VERCEL_URL`, ellers `https://mortensrudherreklubb.no` i prod, ellers `http://localhost:3000` | Absolutte URL-er i push-/e-postvarsler, ICS-filer, GitHub-webhook-lenker | Sett til din prod-URL hvis du ikke vil arve referanse-defaulten i prod. På Vercel arves `VERCEL_URL` automatisk for preview-deploys. |
-| `VAPID_CONTACT_EMAIL` | `reidar.haavik@gmail.com` | Kontakt-e-post i VAPID-headere — push-tjenester (Apple/Google) bruker den ved misbruk eller tekniske problemer. Ingen e-post sendes via denne — kun metadata. | **Må settes** for din instans. Bruk en e-post du faktisk leser. |
+| `VAPID_CONTACT_EMAIL` | *(ingen — push feiler med tydelig melding uten)* | Kontakt-e-post i VAPID-headere — push-tjenester (Apple/Google) bruker den ved misbruk eller tekniske problemer. Ingen e-post sendes via denne — kun metadata. | **Må settes** for din instans. Bruk en e-post du faktisk leser. |
 | `NEXT_PUBLIC_GITHUB_REPO` | `reidarei/Herreklubben` | Hvilket GitHub-repo «innspill»-funksjonen leser issues fra | Sett til ditt eget repo (`brukernavn/reponavn`) hvis du bruker innspill-funksjonen. |
 | `NEXT_PUBLIC_GITHUB_ONSKE_LABEL` | `ønske` | Hvilken issue-label som regnes som brukerønske | Bytt hvis du vil bruke en annen label-konvensjon. |
 | `NEXT_PUBLIC_R2_PUBLIC_URL` (eller `R2_PUBLIC_URL`) | `''` (tom) | Public CDN-URL hvor bilder hentes fra (`https://<din-pub-id>.r2.dev` eller custom domain) | **Må settes** — bilder vises ikke uten. |

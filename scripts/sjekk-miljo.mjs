@@ -122,10 +122,9 @@ const variabler = [
   // VAPID
   { navn: 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', nivaa: 'kritisk', type: 'vapid-public',  beskrivelse: 'VAPID offentlig nøkkel (base64url, ~87 tegn)' },
   { navn: 'VAPID_PRIVATE_KEY',          nivaa: 'kritisk',   type: 'vapid-private', beskrivelse: 'VAPID privat nøkkel (base64url, 43–44 tegn, SECRET)' },
-  // Anbefalt fordi defaulten i lib/config.ts er kildeklubbens egen kontakt-epost.
-  // Ved fork: push-tjenester (Apple/Google) skal kunne nå klubbens egen kontakt,
-  // ikke en annens. Vi skriker ⚠ men blokkerer ikke.
-  { navn: 'VAPID_CONTACT_EMAIL',        nivaa: 'anbefalt',  type: 'epost',    beskrivelse: 'Kontakt-epost for push-tjenester — bør settes per klubb (default er kildeklubbens kontakt)' },
+  // Ingen default i lib/config.ts — push-utsendelse feiler med tydelig melding
+  // uten denne. Anbefalt (ikke kritisk) fordi appen ellers fungerer uten push.
+  { navn: 'VAPID_CONTACT_EMAIL',        nivaa: 'anbefalt',  type: 'epost',    beskrivelse: 'Kontakt-epost for push-tjenester — kreves for push-varsler (ingen default)' },
 
   // Resend
   { navn: 'RESEND_API_KEY',            nivaa: 'anbefalt',  type: 'resend-key', beskrivelse: 'Resend API-nøkkel (re_...) — e-postvarsler mangler uten' },
