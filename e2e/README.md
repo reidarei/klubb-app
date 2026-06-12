@@ -1,6 +1,6 @@
 # e2e-tester (Playwright)
 
-Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server. Brukes også til å fange visuelle baselines under redesign.
+Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server.
 
 ## Førstegangs-oppsett
 
@@ -20,13 +20,11 @@ Mangler en av dem, skipper alle spec-er med en tydelig melding. Det betyr ingen 
 npx playwright test
 
 # Én spec
-npx playwright test e2e/visuell.spec.ts
+npx playwright test e2e/poll.spec.ts
 
 # Dev-server kjører på en annen port enn 3000
 PLAYWRIGHT_BASE_URL=http://localhost:3002 npx playwright test
 ```
-
-Skjermbilder havner i `.screenshots/<fase>/` — visuell.spec.ts skriver også en `rapport.html` side-ved-side med designreferansene under `Design/skjermbilder/`.
 
 ## Når Playwright IKKE er riktig verktøy
 
