@@ -2,7 +2,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil } from '@/lib/auth-cache'
-import { kjorPaaminnelser } from '@/lib/actions/paaminnelser'
 import { revalidatePath } from 'next/cache'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { naa } from '@/lib/dato'
@@ -42,13 +41,4 @@ export async function oppdaterTestEpost(epost: string) {
     .eq('noekkel', 'test_modus')
 
   revalidatePath('/innstillinger')
-}
-
-export async function kjorPaaminnerManuelt(): Promise<boolean> {
-  const profil = await getProfil()
-  if (!kanAdministrere(profil?.rolle)) return false
-
-  const admin = createAdminClient()
-  await kjorPaaminnelser(admin)
-  return true
 }
