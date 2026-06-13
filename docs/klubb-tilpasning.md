@@ -21,6 +21,7 @@ Alle klubb-spesifikke tekstverdier samles i `lib/klubb-config.ts`. Verdiene lese
 | `NEXT_PUBLIC_KLUBB_STIFTET_DAG` | `1` | Stiftelsesdag (1–31) | `17` |
 | `NEXT_PUBLIC_KLUBB_STED` | `Oslo` | Stiftelsessted, vises på klubbinfo-siden | `Frogner` |
 | `NEXT_PUBLIC_KLUBB_OM` | generisk plassholder | «Om klubben»-avsnittene på klubbinfo-siden. Flere avsnitt separeres med `\|` | `Stiftet over en pils.\|Vi møtes hver måned.` |
+| `NEXT_PUBLIC_KLUBB_MEDLEMMER_TITTEL` | `Medlemmene` | Overskrift på medlemslisten | `Gutta` |
 | `NEXT_PUBLIC_ROLLE_TITTEL_GENERALSEKRETAER` | `Generalsekretær` | Visningsnavn for den særegne rollen med gul glød. Rolle-koden i DB (`generalsekretaer`) endres ikke. | `Æresmedlem` |
 
 Sett disse i `.env.local` lokalt og som Vercel Environment Variables i produksjon.

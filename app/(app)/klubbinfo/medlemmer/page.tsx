@@ -4,6 +4,7 @@ import { getProfil } from '@/lib/auth-cache'
 import MedlemmerListe from './MedlemmerListe'
 import { kanAdministrere } from '@/lib/roller'
 import { norskAar } from '@/lib/dato'
+import { KLUBB_MEDLEMMER_TITTEL } from '@/lib/klubb-config'
 
 type Deltagelse = {
   id: string
@@ -106,7 +107,7 @@ export default async function Medlemmer() {
             margin: 0,
           }}
         >
-          Herrene
+          {KLUBB_MEDLEMMER_TITTEL}
         </h2>
         <div
           style={{

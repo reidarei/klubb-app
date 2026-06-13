@@ -46,6 +46,10 @@ export const KLUBB_OM_AVSNITT: readonly string[] = process.env.NEXT_PUBLIC_KLUBB
       'Skriv klubbens egen historie her via NEXT_PUBLIC_KLUBB_OM.',
     ]
 
+// Overskrift på medlemslisten (/klubbinfo/medlemmer).
+export const KLUBB_MEDLEMMER_TITTEL =
+  process.env.NEXT_PUBLIC_KLUBB_MEDLEMMER_TITTEL ?? 'Medlemmene'
+
 // Tittel-streng for generalsekretær-rollen i UI. Rolle-koden i DB
 // («generalsekretaer») endres ikke — kun visningsnavnet kan overstyres.
 export const ROLLE_TITTEL_GENERALSEKRETAER =
