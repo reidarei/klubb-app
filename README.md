@@ -1,6 +1,6 @@
 # Klubb-app
 
-> **This project is intentionally in Norwegian** — UI text, code identifiers, table/column names, commit messages, and documentation are all in Norwegian. It was built for a Norwegian-speaking private club and is published as-is. English speakers are welcome to use it, but localisation is out of scope for this repository.
+> **This project is intentionally in Norwegian** — UI text, code identifiers, table/column names, commit messages, and documentation are all in Norwegian. It was built for a Norwegian-speaking private club and is published as-is. You're welcome to fork it and translate it for your own club.
 
 Privat web-app for vennegjenger som vil ha et felles sted for arrangementspåmelding, klubbchat og kåringer — uten å være avhengig av Facebook.
 
@@ -338,4 +338,4 @@ For en privat klubb på 15–20 medlemmer er dette overkill. For en kommersiell 
 
 ## Lisens
 
-MIT. LICENSE-filen legges inn ved publisering i det nye repoet (OS-fase 6).
+MIT — se [LICENSE](LICENSE).
