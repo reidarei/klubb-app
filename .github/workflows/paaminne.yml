@@ -1,12 +1,17 @@
 # Daglig påminnelsesjobb — kaller /api/cron/paaminne kl. 06:00 UTC.
 # Secret-oppsett (CRON_SECRET og APP_URL): se docs/oppsett.md, seksjon 9.
+#
+# MERK: schedule-triggeren er bevisst kommentert ut i template-repoet. Uten
+# secretene APP_URL/CRON_SECRET feiler jobben hver natt og spammer eieren med
+# feil-eposter. Når du har satt opp secretene (docs/oppsett.md §9), fjern
+# kommentaren på schedule-linjene under for å aktivere den daglige påminnelsen.
 
 name: Daglig påminnelse
 
 on:
-  schedule:
-    # Kjører kl. 08:00 norsk sommertid (UTC+2 = 06:00 UTC, vinter: 07:00 norsk)
-    - cron: '0 6 * * *'
+  # schedule:
+  #   # Kjører kl. 08:00 norsk sommertid (UTC+2 = 06:00 UTC, vinter: 07:00 norsk)
+  #   - cron: '0 6 * * *'
   workflow_dispatch: # Kan kjøres manuelt fra GitHub
 
 jobs:

@@ -13,7 +13,7 @@ Denne guiden beskriver hvordan du setter opp en ny instans av appen fra bunnen a
 | **Cloudflare R2** | Bildelagring (S3-kompatibel, CDN) | dash.cloudflare.com |
 | **Resend** | Transaksjonell e-post | resend.com |
 | **VAPID-nøkler** | Web Push (push-varsler) | genereres lokalt |
-| **GitHub Actions-cron** | Daglig påminnelsesjobb | `.github/workflows/paaminne.yml` (allerede i repoet) |
+| **GitHub Actions-cron** | Daglig påminnelsesjobb | `.github/workflows/paaminne.yml` (i repoet, men `schedule` er av som standard — se §9) |
 
 ---
 
@@ -150,16 +150,24 @@ Mismatch eller manglende verdi gir `401` fra `/api/cron/paaminne`.
 
 ---
 
-## 9. GitHub Actions-secrets
+## 9. GitHub Actions-secrets og aktivering av cron
 
-For at daglig påminnelsesjobb (`.github/workflows/paaminne.yml`) skal virke:
+Daglig påminnelsesjobb (`.github/workflows/paaminne.yml`) ligger i repoet, men den
+planlagte kjøringen (`schedule`) er **bevisst skrudd av som standard**. Grunnen er
+at en tom `APP_URL`/`CRON_SECRET` får jobben til å feile hver natt og spamme deg
+med feil-eposter før instansen er satt opp. Aktiver den i to steg:
+
+**1. Legg inn secretene** (Settings → Secrets and variables → Actions):
 
 | Secret | Verdi |
 |---|---|
 | `CRON_SECRET` | Samme som Vercel env-var `CRON_SECRET` |
 | `APP_URL` | Prod-URL uten trailing slash, f.eks. `https://din-klubb.example.com` |
 
-Se `.github/workflows/paaminne.yml` for secret-oppsett-referanse.
+**2. Skru på `schedule`-triggeren:** Åpne `.github/workflows/paaminne.yml` og fjern
+`#`-kommentaren foran `schedule:`-linjene. Push til `main`. Fra da kjører jobben
+kl. 06:00 UTC hver dag. Du kan når som helst teste manuelt via Actions →
+«Daglig påminnelse» → «Run workflow» (fungerer uavhengig av `schedule`).
 
 ---
 
