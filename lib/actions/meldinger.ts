@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { ensureInnlogget } from '@/lib/auth'
 import { sendVarsel } from '@/lib/varsler'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { BASE_URL } from '@/lib/config'
 import { INNLEGG_MAKS_LENGDE, INNLEGG_MIN_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
 
@@ -98,6 +99,10 @@ export async function opprettMelding(input: {
     type: 'melding-ny',
   }).catch(console.error)
 
+  // Uten dette serverer Router Cache den gamle forsiden ved redirect, så det
+  // nye innlegget mangler til brukeren refresher manuelt. Alle andre
+  // create-actions (arrangementer, poll, album) revaliderer '/' på samme måte.
+  revalidatePath('/')
   redirect('/')
 }
 
