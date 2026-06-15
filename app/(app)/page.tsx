@@ -43,11 +43,42 @@ export default async function Forside() {
   const cutoffIso = cutoff.toISOString()
   const aar = norskAar()
 
+  // Poll-spørringen og den etterfølgende kåringspoll-RPC-en kjøres som én
+  // sammenhengende kjede side om side med de øvrige 10 spørringene. Tidligere
+  // måtte alle 11 fullføres før RPC-en kunne starte (waterfall). Nå er total
+  // ventetid max(de 10 andre, poll-spørring + RPC) i stedet for (alle 11) + RPC.
+  // Se #313 for bakgrunn og målinger.
+  async function hentPollerMedAggregat() {
+    // poll_chat(count) gir totalt kommentarantall per poll via PostgREST
+    // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
+    const { data: pollerRaad } = await supabase
+      .from('poll')
+      .select(
+        `id, spoersmaal, svarfrist, flervalg, opprettet_av,
+         kaaring_mal_id, aar, avsluttet_paa, tiebreak_status,
+         poll_valg (id, tekst, rekkefoelge),
+         poll_stemme (profil_id, valg_id),
+         poll_chat (count)`,
+      )
+      .gte('svarfrist', cutoffIso)
+      .order('svarfrist', { ascending: true })
+
+    // Kåringspoll-aggregater hentes via RPC (mig. 079), fordi RLS skjuler
+    // andres stemmer for vanlige medlemmer på åpne kåringspoller. For
+    // vanlige polls bruker vi poll_stemme-radene direkte slik som før.
+    const kaaringspollIder = (pollerRaad ?? [])
+      .filter(p => p.kaaring_mal_id !== null)
+      .map(p => p.id)
+    const kaaringAggregater = await hentPollStemmerAggregatBatch(supabase, kaaringspollIder)
+
+    return { pollerRaad, kaaringAggregater }
+  }
+
   const [
     { data: arrangementer },
     { data: profilerMedBursdag },
     { data: ansvar },
-    { data: pollerRaad },
+    { pollerRaad, kaaringAggregater },
     { data: arrKommentarer },
     { data: pollKommentarer },
     { data: meldingerRaad },
@@ -77,19 +108,7 @@ export default async function Forside() {
       .select('arrangement_navn, purredato, ansvarlig_id, profiles (visningsnavn)')
       .eq('aar', aar)
       .is('arrangement_id', null),
-    // poll_chat(count) gir totalt kommentarantall per poll via PostgREST
-    // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
-    supabase
-      .from('poll')
-      .select(
-        `id, spoersmaal, svarfrist, flervalg, opprettet_av,
-         kaaring_mal_id, aar, avsluttet_paa, tiebreak_status,
-         poll_valg (id, tekst, rekkefoelge),
-         poll_stemme (profil_id, valg_id),
-         poll_chat (count)`,
-      )
-      .gte('svarfrist', cutoffIso)
-      .order('svarfrist', { ascending: true }),
+    hentPollerMedAggregat(),
     // Siste kommentarer per arrangement og poll — vises inline på hvert kort.
     // Henter siste 30 per tabell innenfor samme 12-mnd-vindu (cutoffIso) som
     // arrangementer og polls. 30 rader dekker ~10 arrangementer med 3
@@ -170,14 +189,6 @@ export default async function Forside() {
       .select('id, navn, bilde_url, rolle')
       .eq('aktiv', true),
   ])
-
-  // Kåringspoll-aggregater hentes via RPC (mig. 079), fordi RLS skjuler
-  // andres stemmer for vanlige medlemmer på åpne kåringspoller. For
-  // vanlige polls bruker vi poll_stemme-radene direkte slik som før.
-  const kaaringspollIder = (pollerRaad ?? [])
-    .filter(p => p.kaaring_mal_id !== null)
-    .map(p => p.id)
-  const kaaringAggregater = await hentPollStemmerAggregatBatch(supabase, kaaringspollIder)
 
   // Aggreger poll-stemmer: antall unike profiler + om innlogget bruker er
   // blant dem, + hvilke valg jeg har stemt på. Valgene sorteres etter
