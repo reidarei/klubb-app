@@ -591,6 +591,7 @@ export type Database = {
         Row: {
           album_id: string | null
           album_spotlight_bilde_id: string | null
+          arkivert_tidspunkt: string | null
           fra_facebook: boolean
           id: string
           innhold: string | null
@@ -602,6 +603,7 @@ export type Database = {
         Insert: {
           album_id?: string | null
           album_spotlight_bilde_id?: string | null
+          arkivert_tidspunkt?: string | null
           fra_facebook?: boolean
           id?: string
           innhold?: string | null
@@ -613,6 +615,7 @@ export type Database = {
         Update: {
           album_id?: string | null
           album_spotlight_bilde_id?: string | null
+          arkivert_tidspunkt?: string | null
           fra_facebook?: boolean
           id?: string
           innhold?: string | null

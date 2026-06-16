@@ -2,7 +2,7 @@ import type { SVGProps } from 'react'
 
 export type IkonNavn =
   | 'calendar' | 'info' | 'trophy' | 'user' | 'plus' | 'mapPin' | 'plane'
-  | 'chevron' | 'chevronDown' | 'bell' | 'message' | 'clock' | 'users'
+  | 'chevron' | 'chevronDown' | 'chevronUp' | 'bell' | 'message' | 'clock' | 'users'
   | 'doc' | 'building' | 'chart' | 'cog' | 'arrowRight' | 'checkmark'
   | 'x' | 'send' | 'list' | 'search' | 'cake' | 'cigar' | 'wine' | 'crown'
   | 'sparkle' | 'diamond' | 'flame' | 'image'
@@ -17,6 +17,7 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   plane: <path d="M12 19l9-7-9-7v4L3 12l9 3v4z" />,
   chevron: <path d="M9 6l6 6-6 6" />,
   chevronDown: <path d="M6 9l6 6 6-6" />,
+  chevronUp: <path d="M6 15l6-6 6 6" />,
   bell: <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 004 0" />,
   message: <path d="M21 12a8 8 0 01-11 7l-6 2 2-5a8 8 0 1115-4z" />,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,

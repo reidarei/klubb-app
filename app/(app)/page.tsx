@@ -24,6 +24,7 @@ import {
   type PollRaad,
   type MeldingRaad,
 } from '@/lib/agenda-sortering'
+import { kanAdministrere } from '@/lib/roller'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
@@ -144,7 +145,7 @@ export default async function Forside() {
         // kommentaren faller innenfor melding_chat-limit-vinduet under.
         // Album-spotlight (#214): album + spotlight-bilde embed-es via
         // ALBUM_SPOTLIGHT_SELECT så samme select brukes alle steder.
-        `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id,
+        `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id, arkivert_tidspunkt,
          profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
          melding_bilder (bilde_url, rekkefoelge),
          melding_chat (count),
@@ -345,6 +346,7 @@ export default async function Forside() {
     sist_aktivitet: string
     fra_facebook: boolean | null
     profil_id: string
+    arkivert_tidspunkt: string | null
     profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
     melding_bilder: { bilde_url: string; rekkefoelge: number }[] | null
     melding_chat: { count: number }[] | null
@@ -400,6 +402,7 @@ export default async function Forside() {
       reaksjoner,
       antallKommentarer: antallKommPerMelding.get(m.id) ?? 0,
       albumSpotlight: tilAlbumSpotlight(m.album, m.spotlight),
+      arkivert_tidspunkt: m.arkivert_tidspunkt,
     }
   })
 
@@ -441,6 +444,11 @@ export default async function Forside() {
   })
 
   const chatProfiler = aktiveProfiler ?? []
+
+  // Slå opp innlogget brukers rolle fra aktive-profiler-lista (allerede hentet).
+  // Brukes til å styre om arkiver-knappen vises på MeldingKort. (#312)
+  const minRolle = chatProfiler.find(p => p.id === user!.id)?.rolle ?? null
+  const erAdmin = kanAdministrere(minRolle)
 
   // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
   // Følger M5-referansen fra #190.
@@ -551,6 +559,7 @@ export default async function Forside() {
                   brukerId={user!.id}
                   kommentarer={kommentarerPerMelding.get(i.data.id) ?? []}
                   profiler={chatProfiler}
+                  erAdmin={erAdmin}
                 />
               )
             })}
@@ -625,7 +634,7 @@ export default async function Forside() {
               if (t.kind === 'arrangement')
                 return <ArrangementKort key={t.data.id} arr={t.data} tidligere />
               if (t.kind === 'poll') return <PollKort key={t.data.id} poll={t.data} tidligere />
-              return <MeldingKort key={t.data.id} melding={t.data} brukerId={user!.id} />
+              return <MeldingKort key={t.data.id} melding={t.data} brukerId={user!.id} erAdmin={erAdmin} />
             })}
           </div>
           <Link

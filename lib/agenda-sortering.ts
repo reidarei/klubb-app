@@ -141,6 +141,9 @@ export type MeldingRaad = {
   // Album-spotlight: hvis satt, er innlegget en lenke til et album
   // og spotlight-bildet erstatter ev. egne bilder. Se #214.
   albumSpotlight: AlbumSpotlight | null
+  // Satt av forfatter/admin for å flytte innlegget til Tidligere umiddelbart.
+  // Null = ikke arkivert. Mig. 099.
+  arkivert_tidspunkt: string | null
 }
 
 // === Resultat-typer ===============================================
@@ -229,7 +232,8 @@ export function tilHighlight(arr: ArrangementRaad, meg: string): HighlightKortDa
 }
 
 // Mapper et MeldingRaad til MeldingKortData. Identitetsmapping —
-// `tidligere`-feltet (boolean) styrer kun visuell dempning.
+// `tidligere`-feltet (boolean) styrer visuell dempning og skjuler
+// reaksjoner og kommentarfelt på kortet.
 export function tilMeldingKort(m: MeldingRaad, tidligere: boolean): MeldingKortData {
   return {
     id: m.id,
@@ -405,9 +409,17 @@ export function byggAgenda(input: {
 
   // === Type 4: Meldinger ============================================
   // Splittes i levende (øverst) og tidligere. Levende sorteres på
-  // sist_aktivitet desc — nye reaksjoner og kommentarer dytter den opp.
-  const levendeRaad = meldingerRaad.filter(m => erMeldingLevende(m, naa))
-  const ikkeLevendeRaad = meldingerRaad.filter(m => !erMeldingLevende(m, naa))
+  // sist_aktivitet desc — nye kommentarer dytter den opp (reaksjoner teller
+  // ikke, se mig. 060).
+  //
+  // En melding er levende KUN hvis den er innenfor tidsvinduet OG ikke
+  // arkivert. Arkiverte meldinger havner i Tidligere uansett alder. (#312)
+  const levendeRaad = meldingerRaad.filter(
+    m => erMeldingLevende(m, naa) && !m.arkivert_tidspunkt,
+  )
+  const ikkeLevendeRaad = meldingerRaad.filter(
+    m => !erMeldingLevende(m, naa) || !!m.arkivert_tidspunkt,
+  )
 
   const meldinger: AgendaItem[] = levendeRaad
     .map(m => ({
@@ -419,7 +431,10 @@ export function byggAgenda(input: {
 
   const tidligereMelding: TidligereItem[] = ikkeLevendeRaad.map(m => ({
     kind: 'melding' as const,
-    sortIso: m.sist_aktivitet,
+    // Arkiverte meldinger sorteres på arkiveringstidspunkt — de legger seg
+    // øverst i Tidligere rett etter at brukeren trykker Arkiver. Ikke-
+    // arkiverte bruker sist_aktivitet som før.
+    sortIso: m.arkivert_tidspunkt ?? m.sist_aktivitet,
     data: tilMeldingKort(m, true),
   }))
 

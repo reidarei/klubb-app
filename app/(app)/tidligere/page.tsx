@@ -12,6 +12,7 @@ import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
 import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
 import { naa } from '@/lib/dato'
+import { kanAdministrere } from '@/lib/roller'
 import ArrangementKort from '@/components/agenda/ArrangementKort'
 import PollKort from '@/components/agenda/PollKort'
 import MeldingKort from '@/components/agenda/MeldingKort'
@@ -30,6 +31,15 @@ export default async function TidligereSide({
   const supabase = await createServerClient()
   const { cursor: cursorStr } = await searchParams
   const cursor = dekodeCursor(cursorStr)
+
+  // Innlogget brukers rolle — styrer om av-arkiver-knappen vises på andres
+  // innlegg (admin kan av-arkivere alle, ellers kun egne). (#312)
+  const { data: minProfil } = await supabase
+    .from('profiles')
+    .select('rolle')
+    .eq('id', user.id)
+    .single()
+  const erAdmin = kanAdministrere(minProfil?.rolle ?? null)
 
   const grense = TIDLIGERE_SIDESTOERRELSE + 1 // hent én ekstra for å sjekke om det er mer
 
@@ -55,7 +65,7 @@ export default async function TidligereSide({
   let meldQuery = supabase
     .from('meldinger')
     .select(
-      `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id,
+      `id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt, fra_facebook, profil_id,
        profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
        melding_bilder (bilde_url, rekkefoelge),
        melding_chat (count),
@@ -123,6 +133,7 @@ export default async function TidligereSide({
     innhold: string | null
     opprettet: string
     sist_aktivitet: string
+    arkivert_tidspunkt: string | null
     fra_facebook: boolean | null
     profil_id: string
     profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
@@ -138,6 +149,7 @@ export default async function TidligereSide({
     innhold: m.innhold,
     opprettet: m.opprettet,
     sist_aktivitet: m.sist_aktivitet,
+    arkivert_tidspunkt: m.arkivert_tidspunkt,
     bilder: [...(m.melding_bilder ?? [])]
       .sort((a, b) => a.rekkefoelge - b.rekkefoelge)
       .map(b => b.bilde_url),
@@ -169,10 +181,13 @@ export default async function TidligereSide({
     ),
   }))
 
-  // Bygg items for meldinger — alle i «tidligere»-stil (dempet visning)
+  // Bygg items for meldinger — alle i «tidligere»-stil (dempet visning).
+  // Arkiverte innlegg sorteres på arkivert_tidspunkt (faller tilbake til
+  // sist_aktivitet for ikke-arkiverte) — konsistent med forsiden, se
+  // byggAgenda i lib/agenda-sortering.ts. (#312)
   const meldItems: TidligereItem[] = meldinger.map(m => ({
     kind: 'melding' as const,
-    sortIso: m.sist_aktivitet,
+    sortIso: m.arkivert_tidspunkt ?? m.sist_aktivitet,
     data: tilMeldingKort(m, true),
   }))
 
@@ -270,8 +285,15 @@ export default async function TidligereSide({
     : harMerArr
       ? cursor.a // ikke emittert i denne siden — behold input-posisjon
       : null
+  // Meldings-cursoren MÅ bruke sist_aktivitet, ikke display-sortIso. Visningen
+  // sorterer på arkivert_tidspunkt ?? sist_aktivitet (#312), men DB-keyset-
+  // filteret over kjører mot sist_aktivitet-kolonnen. Bruker vi arkivert_tidspunkt
+  // som cursor mot en sist_aktivitet-sammenligning glipper/dupliseres rader.
+  const sisteMeldSistAktivitet = sisteMeld
+    ? meldinger.find(m => m.id === sisteMeld.data.id)?.sist_aktivitet ?? sisteMeld.sortIso
+    : null
   const nyMeldCursor: Pos = sisteMeld
-    ? [sisteMeld.sortIso, sisteMeld.data.id]
+    ? [sisteMeldSistAktivitet!, sisteMeld.data.id]
     : harMerMeld
       ? cursor.m
       : null
@@ -338,6 +360,7 @@ export default async function TidligereSide({
                   key={t.data.id}
                   melding={t.data}
                   brukerId={user.id}
+                  erAdmin={erAdmin}
                 />
               )
             })}

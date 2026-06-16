@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { BASE_URL } from '@/lib/config'
 import { INNLEGG_MAKS_LENGDE, INNLEGG_MIN_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
+import { naa } from '@/lib/dato'
 
 export async function opprettMelding(input: {
   innhold: string
@@ -170,4 +171,34 @@ export async function fjernMeldingReaksjon(meldingId: string, emoji: string) {
     .eq('emoji', emoji)
 
   if (error) throw new Error(error.message)
+}
+
+// Arkiver et innlegg — flytt det umiddelbart til Tidligere-seksjonen uten
+// å vente på tidsvinduet. RLS-policyen på meldinger (mig. 067) håndhever hvem
+// som får lov: «(fra_facebook is null or false) and (profil_id = auth.uid()
+// or er_admin())» — FB-importerte innlegg kan derfor ikke arkiveres. Mig. 099.
+export async function arkiverMelding(meldingId: string) {
+  const { supabase } = await ensureInnlogget()
+
+  const { error } = await supabase
+    .from('meldinger')
+    .update({ arkivert_tidspunkt: naa() })
+    .eq('id', meldingId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/')
+}
+
+// Reverter arkivering — sender innlegget tilbake til levende-seksjonen
+// hvis det fortsatt er innenfor tidsvinduet. Samme RLS som arkiverMelding.
+export async function avarkiverMelding(meldingId: string) {
+  const { supabase } = await ensureInnlogget()
+
+  const { error } = await supabase
+    .from('meldinger')
+    .update({ arkivert_tidspunkt: null })
+    .eq('id', meldingId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/')
 }
