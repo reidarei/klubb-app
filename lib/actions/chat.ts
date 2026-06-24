@@ -1,10 +1,11 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@/lib/supabase/server'
 import { sendChatMentionVarsler, sendVarsel } from '@/lib/varsler'
 import { BASE_URL } from '@/lib/config'
 import { CHAT_MIN_LENGDE, INNLEGG_MIN_LENGDE } from '@/lib/konstanter'
-import { konfigFor, type ChatScope } from '@/lib/chat-konfig'
+import { konfigFor, revalideringsPaths, type ChatScope } from '@/lib/chat-konfig'
 import { ensureInnlogget } from '@/lib/auth'
 
 // Trimmer og validerer chat-innhold for et gitt scope. Bruker scope-spesifikk
@@ -125,6 +126,8 @@ export async function sendChatMelding(
     })
   if (error) throw new Error(error.message)
 
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
+
   try {
     await sendVarslerEtterPost(scope, tekst, user.id, bildeUrl)
   } catch (err) {
@@ -158,6 +161,8 @@ export async function oppdaterChatMelding(
     .eq('id', meldingId)
 
   if (error) throw new Error(error.message)
+
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
 }
 
 export async function slettChatMelding(
@@ -172,6 +177,8 @@ export async function slettChatMelding(
     .eq('id', meldingId)
 
   if (error) throw new Error(error.message)
+
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
 }
 
 // Reaksjoner — felles for alle scopes via chat_reaksjoner-tabellen.

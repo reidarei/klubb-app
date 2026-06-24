@@ -23,8 +23,9 @@ export const PAAMINNELSE_DAGER = {
 export const PASS_TILGANG_TIMER = 24
 
 // Kommentarseksjonen på agenda-arrangementer kollapses automatisk når
-// det er stille; brukeren kan fortsatt åpne manuelt via chevron.
-export const KOMMENTARER_KOLLAPS_DAGER = 7
+// det er stille i 4 dager; brukeren kan fortsatt åpne manuelt via chevron.
+// se #316
+export const KOMMENTARER_KOLLAPS_DAGER = 4
 
 // Agenda-vinduet bakover: forsiden viser arrangementer, polls og meldinger
 // som er høyst AGENDA_VINDU_MND måneder gamle. Alt eldre er tilgjengelig

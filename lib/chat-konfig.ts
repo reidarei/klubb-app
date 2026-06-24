@@ -106,3 +106,29 @@ export const CHAT_KONFIG: Record<ChatScopeType, ChatKonfig> = {
 export function konfigFor(scope: ChatScope): ChatKonfig {
   return CHAT_KONFIG[scope.type]
 }
+
+// Stier som skal revalideres etter en chat-mutasjon. Kun scopes som faktisk
+// rendres på forsiden får '/' — ellers river vi unødvendig Next.js-cache.
+// se #316
+export function revalideringsPaths(scope: ChatScope): string[] {
+  switch (scope.type) {
+    case 'arrangement':
+      return ['/', `/arrangementer/${scope.arrangementId}`]
+    case 'poll':
+      return ['/', `/poll/${scope.pollId}`]
+    case 'melding':
+      return ['/', `/meldinger/${scope.meldingId}`]
+    case 'klubb':
+      // Klubb-chat vises ikke på forsiden — kun /chat trenger revalidering
+      return ['/chat']
+    case 'privat':
+      // Privatsamtaler vises ikke på forsiden
+      return [`/samtaler/${scope.samtaleId}`]
+    default: {
+      // Tvinger kompileringsfeil hvis en ny ChatScope-variant glemmes her,
+      // og kaster tydelig ved runtime i stedet for å returnere undefined. se #316
+      const ukjent: never = scope
+      throw new Error(`Ukjent chat-scope: ${JSON.stringify(ukjent)}`)
+    }
+  }
+}

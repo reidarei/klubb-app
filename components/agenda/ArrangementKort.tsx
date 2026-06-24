@@ -61,11 +61,17 @@ type Props = {
   profiler?: ChatProfil[]
   /** Innlogget brukers id — ekskluderes fra mention-forslag. */
   brukerId?: string
+  /** Innlogget brukers navn — sendes til KommentarerPaaKort for optimistisk rad. se #316 */
+  brukerNavn?: string
+  /** Innlogget brukers bilde_url — sendes til KommentarerPaaKort for optimistisk rad-avatar. se #316 */
+  brukerBildeUrl?: string | null
+  /** Innlogget brukers rolle — sendes til KommentarerPaaKort for gul glød på optimistisk rad. se #316 */
+  brukerRolle?: string | null
   /** Vis kommentar-blokken. Default true. Sett false (f.eks. i ubesvart-seksjonen) for å skjule — se #274. */
   visKommentarer?: boolean
 }
 
-export default function ArrangementKort({ arr, tidligere = false, kommentarer = [], totaltKommentarer, profiler, brukerId, visKommentarer = true }: Props) {
+export default function ArrangementKort({ arr, tidligere = false, kommentarer = [], totaltKommentarer, profiler, brukerId, brukerNavn, brukerBildeUrl, brukerRolle, visKommentarer = true }: Props) {
   const iso = arr.start_tidspunkt
   const mnd = formaterDato(iso, 'MMM').toUpperCase()
   const dag = formaterDato(iso, 'd')
@@ -272,6 +278,9 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
             totaltAntall={totaltKommentarer}
             profiler={profiler}
             brukerId={brukerId}
+            brukerNavn={brukerNavn}
+            brukerBildeUrl={brukerBildeUrl}
+            brukerRolle={brukerRolle}
           />
         )}
       </Card>

@@ -445,9 +445,10 @@ export default async function Forside() {
 
   const chatProfiler = aktiveProfiler ?? []
 
-  // Slå opp innlogget brukers rolle fra aktive-profiler-lista (allerede hentet).
-  // Brukes til å styre om arkiver-knappen vises på MeldingKort. (#312)
-  const minRolle = chatProfiler.find(p => p.id === user!.id)?.rolle ?? null
+  // Slå opp innlogget brukers profil fra aktive-profiler-lista (allerede hentet).
+  // Brukes til rolle-sjekk (erAdmin) og til optimistisk kommentar-rad. (#312, #316)
+  const minProfil = chatProfiler.find(p => p.id === user!.id)
+  const minRolle = minProfil?.rolle ?? null
   const erAdmin = kanAdministrere(minRolle)
 
   // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
@@ -582,7 +583,7 @@ export default async function Forside() {
               if (i.kind === 'poll')
                 return <PollKort key={i.data.id} poll={i.data} kommentarer={kommentarerPerPoll.get(i.data.id) ?? []} totaltKommentarer={totaltPerPoll.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} />
               if (i.kind === 'arrangement')
-                return <ArrangementKort key={i.data.id} arr={i.data} kommentarer={kommentarerPerArr.get(i.data.id) ?? []} totaltKommentarer={totaltPerArr.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} />
+                return <ArrangementKort key={i.data.id} arr={i.data} kommentarer={kommentarerPerArr.get(i.data.id) ?? []} totaltKommentarer={totaltPerArr.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} brukerNavn={minProfil?.navn} brukerBildeUrl={minProfil?.bilde_url} brukerRolle={minRolle} />
               // Meldinger plasseres kun i toppseksjonen (eller Tidligere) — ikke her
               return null
             })}
@@ -596,7 +597,7 @@ export default async function Forside() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {kommende.map(i => {
             if (i.kind === 'arrangement')
-              return <ArrangementKort key={i.data.id} arr={i.data} kommentarer={kommentarerPerArr.get(i.data.id) ?? []} totaltKommentarer={totaltPerArr.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} />
+              return <ArrangementKort key={i.data.id} arr={i.data} kommentarer={kommentarerPerArr.get(i.data.id) ?? []} totaltKommentarer={totaltPerArr.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} brukerNavn={minProfil?.navn} brukerBildeUrl={minProfil?.bilde_url} brukerRolle={minRolle} />
             if (i.kind === 'bursdag') return <BursdagKort key={i.data.id} bursdag={i.data} />
             if (i.kind === 'klubbjubileum') return <KlubbJubileumKort key={i.data.id} jubileum={i.data} />
             if (i.kind === 'utkast') return <UtkastKort key={i.data.id} utkast={i.data} meg={user!.id} />
