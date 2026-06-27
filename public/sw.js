@@ -123,33 +123,44 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Stale-while-revalidate: HTML-sider — returner cachet versjon umiddelbart
-  // hvis vi har den, og oppdater i bakgrunnen. Cold-load føles momentan
-  // selv om Vercel-funksjonen cold-starter (~1-3s). Sosial data tåler å være
-  // sekunder gammel. Se #180.
+  // Network-first: HTML-sider hentes alltid fra nett først. HTML inneholder
+  // datorelativt innhold («i dag», «om 2 dager», påmeldingsfrister) som blir
+  // feil hvis en cachet versjon vises. Network-first koster én tur-retur ved
+  // cold load, men garanterer korrekt innhold. Se #319.
   //
-  // Fallback hvis ikke cached: vanlig network-fetch (med cache-write).
-  // Fallback ved offline: returner cache (samme som network-first før).
+  // Vi reverserer trade-offen fra #180 (stale-while-revalidate) for navigate-
+  // requests: cold-start-forsinkelsen var akseptabel for statisk innhold, men
+  // ikke for side-HTML med relativt tidsinnhold.
+  //
+  // Fallback til cache hvis fetch feiler (offline) eller returnerer !ok.
+  // Hvis heller ikke cache finnes ved nettverksfeil, returnerer vi
+  // Response.error() (tydeligere nettverksfeil-semantikk enn undefined).
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetchOgCache = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              const clone = response.clone()
-              event.waitUntil(
-                caches.open(PAGE_CACHE).then(async (cache) => {
-                  await cache.put(request, clone)
-                  await trimCache(PAGE_CACHE, MAX_PAGE_CACHE_ENTRIES)
-                })
-              )
-            }
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            event.waitUntil(
+              caches.open(PAGE_CACHE).then(async (cache) => {
+                await cache.put(request, clone)
+                await trimCache(PAGE_CACHE, MAX_PAGE_CACHE_ENTRIES)
+              })
+            )
             return response
-          })
-          .catch(() => cached) // offline-fallback
-        // Stale: vis cache nå, oppdater i bakgrunnen
-        return cached || fetchOgCache
-      })
+          }
+          // Ikke-ok respons (4xx/5xx) — prøv cache som fallback. Cache er
+          // offline-fallback generelt, ikke 5xx-spesifikk: om brukeren har en
+          // gyldig cachet side er den bedre enn en feilmelding. Hvis cache
+          // mangler returnerer vi originalresponsen heller enn å skjule
+          // feilen bak en generisk Response.error().
+          return caches.match(request).then((cached) => cached || response)
+        })
+        .catch(async () =>
+          // Offline eller nettverksfeil — prøv cache, ellers en
+          // network-error-response så respondWith aldri får undefined.
+          (await caches.match(request)) ?? Response.error()
+        )
     )
     return
   }
