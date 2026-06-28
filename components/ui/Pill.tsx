@@ -4,8 +4,8 @@ type Variant = 'accent' | 'success' | 'danger' | 'neutral'
 
 const VARIANTER: Record<Variant, { bg: string; color: string; border: string }> = {
   accent: { bg: 'var(--accent-soft)', color: 'var(--accent-hot)', border: 'var(--border-strong)' },
-  success: { bg: 'var(--success-soft)', color: '#94c9a2', border: 'var(--success-border)' },
-  danger: { bg: 'var(--danger-soft)', color: '#e89b94', border: 'var(--danger-border)' },
+  success: { bg: 'var(--success-soft)', color: 'var(--success-hot)', border: 'var(--success-border)' },
+  danger: { bg: 'var(--danger-soft)', color: 'var(--danger-hot)', border: 'var(--danger-border)' },
   neutral: { bg: 'var(--border-subtle)', color: 'var(--text-secondary)', border: 'var(--border)' },
 }
 
@@ -59,7 +59,7 @@ export function IKveldChip({ children = 'I KVELD' }: { children?: ReactNode }) {
         letterSpacing: '1.2px',
         borderRadius: 999,
         background: 'var(--accent-hot)',
-        color: '#1a1208',
+        color: 'var(--accent-foreground)',
         textTransform: 'uppercase',
       }}
     >

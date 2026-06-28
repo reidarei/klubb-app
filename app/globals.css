@@ -67,6 +67,14 @@
   --blur-nav: blur(40px) saturate(200%) brightness(1.1);
   --blur-glass: blur(16px);
 
+  /* Overlay (modal/lightbox-bakgrunner og kontroller på overlay) */
+  --overlay-backdrop: rgba(0, 0, 0, 0.9);
+  --overlay-control-bg: rgba(0, 0, 0, 0.65);
+  --overlay-control-ring: rgba(255, 255, 255, 0.25);
+
+  /* Shadow */
+  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
+
   /* Bakoverkompatible aliaser — fjernes etter hvert som komponenter skrives om */
   --bg-tertiary: var(--bg-elevated-2);
   --accent-subtle: var(--accent-soft);
@@ -127,6 +135,13 @@
   --blur-card: blur(24px) saturate(160%);
   --blur-nav: blur(40px) saturate(200%) brightness(1.1);
   --blur-glass: blur(16px);
+
+  /* Overlay/shadow speiles identisk fra :root for konsistens — vil divergere når light-modus aktiveres i v2 */
+  --overlay-backdrop: rgba(0, 0, 0, 0.9);
+  --overlay-control-bg: rgba(0, 0, 0, 0.65);
+  --overlay-control-ring: rgba(255, 255, 255, 0.25);
+
+  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
 
   --bg-tertiary: var(--bg-elevated-2);
   --accent-subtle: var(--accent-soft);

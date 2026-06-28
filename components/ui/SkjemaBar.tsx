@@ -87,7 +87,7 @@ export default function SkjemaBar({
           disabled={laster}
           style={{
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             padding: '7px 14px',
             border: 'none',
             borderRadius: 999,

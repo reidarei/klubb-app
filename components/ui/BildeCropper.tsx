@@ -167,7 +167,7 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(6, 6, 8, 0.88)',
+        background: 'var(--overlay-backdrop)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         zIndex: 1000,
@@ -280,10 +280,11 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
               <circle cx={VIEW_SIZE / 2} cy={VIEW_SIZE / 2} r={VIEW_SIZE / 2 - 2} fill="black" />
             </mask>
           </defs>
+          {/* style-prop nødvendig — SVG fill-attributt støtter ikke CSS-variabler direkte i alle nettlesere */}
           <rect
             width={VIEW_SIZE}
             height={VIEW_SIZE}
-            fill="rgba(6,6,8,0.72)"
+            style={{ fill: 'var(--overlay-backdrop)' }}
             mask="url(#sirkel-maske)"
           />
           <circle
@@ -375,7 +376,7 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
             borderRadius: 999,
             background: 'var(--accent)',
             border: 'none',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 14,
             fontWeight: 600,

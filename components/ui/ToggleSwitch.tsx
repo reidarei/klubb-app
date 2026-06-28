@@ -39,7 +39,7 @@ export default function ToggleSwitch({
     width: 18,
     height: 18,
     borderRadius: '50%',
-    background: on ? '#0a0a0a' : 'var(--text-tertiary)',
+    background: on ? 'var(--accent-foreground)' : 'var(--text-tertiary)',
     transition: 'left 0.2s, background 0.2s, top 0.2s',
   }
 

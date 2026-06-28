@@ -39,7 +39,7 @@ export default function Avatar({ name, size = 32, src, rolle }: Props) {
     width: size,
     height: size,
     borderRadius: '50%',
-    border: glod ? '1.5px solid #e8d9b5' : '0.5px solid var(--border)',
+    border: glod ? '1.5px solid var(--accent)' : '0.5px solid var(--border)',
     flexShrink: 0,
   } as const
 

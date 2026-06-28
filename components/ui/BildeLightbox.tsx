@@ -44,7 +44,7 @@ export default function BildeLightbox({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.92)',
+        background: 'var(--overlay-backdrop)',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
@@ -78,13 +78,13 @@ export default function BildeLightbox({
           height: 44,
           borderRadius: '50%',
           border: 'none',
-          background: 'rgba(0,0,0,0.65)',
-          color: '#fff',
+          background: 'var(--overlay-control-bg)',
+          color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          boxShadow: '0 0 0 1px rgba(255,255,255,0.25)',
+          boxShadow: '0 0 0 1px var(--overlay-control-ring)',
         }}
       >
         <Icon name="x" size={20} color="currentColor" strokeWidth={2.5} />

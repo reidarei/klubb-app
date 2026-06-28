@@ -57,7 +57,7 @@ export default function Toast({
         fontFamily: 'var(--font-body)',
         fontSize: 14,
         fontWeight: 500,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+        boxShadow: 'var(--shadow-floating)',
         maxWidth: 'calc(100vw - 32px)',
         textAlign: 'center',
       }}
