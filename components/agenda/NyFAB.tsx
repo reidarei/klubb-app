@@ -85,7 +85,7 @@ export default function NyFAB() {
             background: 'var(--bg-elevated)',
             border: '0.5px solid var(--border)',
             borderRadius: 'var(--radius-card)',
-            boxShadow: '0 10px 28px rgba(0,0,0,0.35)',
+            boxShadow: 'var(--shadow-popover)', // offset redusert fra 10px til 6px — marginalt synlig
             overflow: 'hidden',
             zIndex: 20,
           }}

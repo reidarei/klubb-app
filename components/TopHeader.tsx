@@ -124,7 +124,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     right: 0,
     zIndex: 30,
     paddingTop: 'env(safe-area-inset-top)',
-    background: 'rgba(14, 15, 19, 0.85)',
+    background: 'var(--bg-header)',
     backdropFilter: 'var(--blur-nav)',
     WebkitBackdropFilter: 'var(--blur-nav)',
     borderBottom: '0.5px solid var(--border-subtle)',
@@ -225,7 +225,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                         borderRadius: '50%',
                         background: 'var(--accent)',
                         // Skygge i header-bg-fargen løfter prikken visuelt fra pill-bakgrunnen
-                        boxShadow: '0 0 0 2px rgba(14, 15, 19, 0.85)',
+                        boxShadow: '0 0 0 2px var(--bg-header)',
                       }}
                     />
                     {/* Sr-only — behold "Chat" som accessible name, legg ulest-info
@@ -284,7 +284,9 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                   height: 10,
                   borderRadius: '50%',
                   background: 'var(--accent)',
-                  boxShadow: '0 0 0 2.5px rgba(14, 15, 19, 0.95)',
+                  // 0.95 i original — marginalt mørkere enn 0.85 i tab-prikken,
+                  // men avatar-plassering trenger ikke skille seg; bruker samme token.
+                  boxShadow: '0 0 0 2.5px var(--bg-header)',
                 }}
               />
               {/* Sr-only — behold "Min profil" som accessible name */}

@@ -138,7 +138,7 @@ export default function InstallVeiledning() {
         borderRadius: 'var(--radius)',
         background: 'var(--bg-elevated-2)',
         border: '0.5px solid var(--border-strong)',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+        boxShadow: 'var(--shadow-modal)',
         backdropFilter: 'var(--blur-card)',
         animation: 'install-veiledning-inn 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both',
       }}
@@ -250,7 +250,7 @@ export default function InstallVeiledning() {
                   borderRadius: 999,
                   border: 'none',
                   background: 'var(--accent)',
-                  color: '#0a0a0a',
+                  color: 'var(--accent-foreground)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: 'pointer',

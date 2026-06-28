@@ -433,11 +433,11 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                         style={{
                           position: 'absolute',
                           inset: 0,
-                          background: 'rgba(0,0,0,0.5)',
+                          background: 'var(--overlay-soft)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: 'white',
+                          color: 'var(--text-primary)',
                           fontFamily: 'var(--font-display)',
                           fontSize: 22,
                           fontWeight: 500,

@@ -12,6 +12,8 @@
     linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
   --bg-elevated: rgba(40, 42, 50, 0.95);
   --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  /* Semi-transparent header-bakgrunn — backdrop-blurred variant av --bg */
+  --bg-header: rgba(14, 15, 19, 0.85);
 
   /* Kantlinjer — boostet så kort/skiller faktisk synes mot ny base */
   --border: rgba(255, 255, 255, 0.16);
@@ -71,9 +73,15 @@
   --overlay-backdrop: rgba(0, 0, 0, 0.9);
   --overlay-control-bg: rgba(0, 0, 0, 0.65);
   --overlay-control-ring: rgba(255, 255, 255, 0.25);
+  /* Lett overlay på bilder/flater inni innhold (f.eks. foto-grid "+N"-badge) */
+  --overlay-soft: rgba(0, 0, 0, 0.5);
 
   /* Shadow */
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
+  /* Popover-skygge (kontekstmenyer, reaksjons-picker, FAB-meny) */
+  --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
+  /* Modal-skygge (bunnskuff, install-veiledning) */
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
 
   /* Bakoverkompatible aliaser — fjernes etter hvert som komponenter skrives om */
   --bg-tertiary: var(--bg-elevated-2);
@@ -93,6 +101,7 @@
     linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
   --bg-elevated: rgba(40, 42, 50, 0.95);
   --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  --bg-header: rgba(14, 15, 19, 0.85);
 
   --border: rgba(255, 255, 255, 0.16);
   --border-strong: rgba(255, 255, 255, 0.26);
@@ -140,8 +149,11 @@
   --overlay-backdrop: rgba(0, 0, 0, 0.9);
   --overlay-control-bg: rgba(0, 0, 0, 0.65);
   --overlay-control-ring: rgba(255, 255, 255, 0.25);
+  --overlay-soft: rgba(0, 0, 0, 0.5);
 
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
 
   --bg-tertiary: var(--bg-elevated-2);
   --accent-subtle: var(--accent-soft);

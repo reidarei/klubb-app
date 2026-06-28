@@ -164,7 +164,7 @@ export default function MeldingReaksjoner({
             background: 'var(--bg-elevated-2)',
             border: '0.5px solid var(--border)',
             borderRadius: 999,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+            boxShadow: 'var(--shadow-popover)',
             zIndex: 10,
           }}
         >

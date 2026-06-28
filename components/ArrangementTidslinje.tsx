@@ -173,7 +173,9 @@ export default function ArrangementTidslinje({
         style={{
           background: 'var(--bg-elevated)',
           border: idag ? '2px solid var(--accent)' : '1px solid var(--border)',
-          boxShadow: idag ? '0 0 0 4px var(--accent-subtle), 0 12px 32px rgba(212, 168, 83, 0.22)' : undefined,
+          // Pre-existing bug: ytre halo brukte en hardkodet gullfarve-verdi som hadde driftet
+          // fra aksent-tokenet. Konsolidert til --accent-soft begge plasser. Se issue 330.
+          boxShadow: idag ? '0 0 0 4px var(--accent-soft), 0 12px 32px var(--accent-soft)' : undefined,
           opacity: fortid ? 0.5 : 1,
           textDecoration: 'none',
           color: 'inherit',
@@ -184,9 +186,9 @@ export default function ArrangementTidslinje({
             className="absolute top-3 right-3 z-10 text-[11px] font-bold uppercase px-2.5 py-1 rounded-full"
             style={{
               background: 'var(--accent)',
-              color: '#0a0a0a',
+              color: 'var(--accent-foreground)',
               letterSpacing: '0.6px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+              boxShadow: 'var(--shadow-floating)', // 0.4 → 0.18, marginalt, akseptabelt
             }}
           >
             I dag!

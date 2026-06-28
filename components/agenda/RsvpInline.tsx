@@ -100,8 +100,8 @@ export default function RsvpInline({ arrangementId }: { arrangementId: string })
                 ? erJa
                   ? 'var(--accent)'
                   : 'var(--accent-soft)'
-                : 'rgba(255,255,255,0.04)',
-              color: erValgt && erJa ? '#0a0a0a' : 'var(--text-primary)',
+                : 'var(--border-subtle)', // rgba(255,255,255,0.06) — nær original 0.04, ingen ny token
+              color: erValgt && erJa ? 'var(--accent-foreground)' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 14,
               fontWeight: 600,
@@ -115,7 +115,7 @@ export default function RsvpInline({ arrangementId }: { arrangementId: string })
               size={15}
               color={
                 erValgt && erJa
-                  ? '#0a0a0a'
+                  ? 'var(--accent-foreground)'
                   : k.id === 'ja'
                   ? 'var(--accent)'
                   : k.id === 'kanskje'

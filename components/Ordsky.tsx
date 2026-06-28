@@ -1,6 +1,7 @@
 export default function Ordsky({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const accent = 'var(--accent)'
   const subtle = 'var(--text-tertiary)'
+  // Kunstnerisk SVG-fyll for diskré ord — ikke en tema-token
   const faint = '#2c2c2e'
   const font = "var(--font-inter), 'Inter', system-ui, sans-serif"
 

@@ -1,3 +1,4 @@
+// Skyer er hvite — "white"-verdier under er bevisst grafisk identitet, ikke tema-tokens
 export default function SkyBakgrunn() {
   return (
     <div className="fixed top-0 left-0 right-0 h-96 pointer-events-none z-0 overflow-hidden">
@@ -18,8 +19,9 @@ export default function SkyBakgrunn() {
 
           {/* Fade ned mot mørk bakgrunn */}
           <linearGradient id="nedFade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="40%" stopColor="#111111" stopOpacity="0" />
-            <stop offset="100%" stopColor="#111111" stopOpacity="1" />
+            {/* stopColor via style: SVG-attributt leser ikke CSS-variabler pålitelig i alle nettlesere */}
+            <stop offset="40%" style={{ stopColor: 'var(--bg)' }} stopOpacity="0" />
+            <stop offset="100%" style={{ stopColor: 'var(--bg)' }} stopOpacity="1" />
           </linearGradient>
 
           {/* Hvit sky-gradient — lysere midten */}
