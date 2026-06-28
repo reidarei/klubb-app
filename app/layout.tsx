@@ -62,13 +62,27 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Default-verdiene fra lib/klubb-config matcher allerede globals.css,
+  // så vi sløyfer injeksjon når env-var ikke er satt — sparer bytes og holder DOM-en ren.
+  // Selektor må matche dark-blokken i globals.css (`:root[data-theme="dark"]`), ellers
+  // taper overridene på spesifisitet siden html-roten har data-theme="dark" satt.
+  // Med samme spesifisitet vinner overridene fordi de kommer senere i kilde-rekkefølgen.
+  const klubbOverrides = [
+    process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER && `--accent: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER};`,
+    process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT && `--accent-soft: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT};`,
+    process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_HOT && `--accent-hot: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_HOT};`,
+    process.env.NEXT_PUBLIC_KLUBB_FARGE_BAKGRUNN && `--bg: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_BAKGRUNN};`,
+  ].filter(Boolean).join(' ')
+
   return (
     <html
       lang="nb"
+      data-theme="dark"
       className={`${inter.variable} ${instrument.variable} ${jetbrains.variable}`}
     >
       <head>
         <meta name="theme-color" content="#060608" />
+        {klubbOverrides && <style>{`:root[data-theme="dark"] { ${klubbOverrides} }`}</style>}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
       </head>

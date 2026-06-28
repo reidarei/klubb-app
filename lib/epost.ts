@@ -1,5 +1,6 @@
 // Krever verifisert domene i Resend — sett RESEND_FROM til f.eks. "Klubben <noreply@dittdomene.no>"
 import { KLUBB_NAVN } from './klubb-config'
+import { EPOST_FARGER } from './tema'
 const RESEND_API_KEY = process.env.RESEND_API_KEY!
 // Avsender er server-only-konfig (Resend-spesifikk) og holdes derfor her,
 // ikke i klient-trygg klubb-config. Ingen NEXT_PUBLIC_-prefiks.
@@ -23,10 +24,10 @@ export async function sendEpost({ til, emne, html }: { til: string; emne: string
   }
 }
 
-// Nøytral gull-aksent som gir gjenkjennelig klubb-preg i begge moduser.
-// Ellers er malen helt upåvirket av dark/light — klientene inverterer lys-mal
-// automatisk for brukere med dark mode (Apple Mail, Gmail, Outlook).
-const AKSENT = '#d4a853'
+// E-postmaler bruker EPOST_FARGER fra lib/tema.ts (sand-aksent #e8d9b5).
+// CSS-variabler er ikke tilgjengelig i e-postklienter, så farger må hardkodes
+// som inline styles — derfor går vi via tema.ts i stedet for globals.css.
+// Knapptekst (#0a0a0a) er bevisst nesten-svart for kontrast mot aksent — ikke en del av tema-paletten, derfor ikke i EPOST_FARGER.
 
 // Escaper brukerinput før den interpoleres i HTML. Sentral i e-postmalene
 // så vi ikke risikerer at en hilsen som «<a href=…>klikk</a>» rendres som
@@ -77,7 +78,7 @@ export function arrangementEpostHtml({
           <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;">${tittelEsc}</h1>
           <p style="margin:0 0 24px;font-size:15px;line-height:1.6;white-space:pre-wrap;">${tekstEsc}</p>
           <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:separate;">
-            <tr><td bgcolor="${AKSENT}" style="background:${AKSENT};border-radius:8px;">
+            <tr><td bgcolor="${EPOST_FARGER.aksent}" style="background:${EPOST_FARGER.aksent};border-radius:8px;">
               <a href="${urlEsc}" style="display:inline-block;padding:12px 24px;color:#0a0a0a;text-decoration:none;font-weight:600;font-size:14px;">${knappTekstEsc}</a>
             </td></tr>
           </table>
@@ -134,7 +135,7 @@ export function velkommenEpostHtml({
             </td></tr>
           </table>
           <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:separate;">
-            <tr><td bgcolor="${AKSENT}" style="background:${AKSENT};border-radius:8px;">
+            <tr><td bgcolor="${EPOST_FARGER.aksent}" style="background:${EPOST_FARGER.aksent};border-radius:8px;">
               <a href="${loggInnUrlEsc}" style="display:inline-block;padding:12px 24px;color:#0a0a0a;text-decoration:none;font-weight:600;font-size:14px;">Logg inn</a>
             </td></tr>
           </table>

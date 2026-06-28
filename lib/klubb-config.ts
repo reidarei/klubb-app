@@ -54,3 +54,15 @@ export const KLUBB_MEDLEMMER_TITTEL =
 // («generalsekretaer») endres ikke — kun visningsnavnet kan overstyres.
 export const ROLLE_TITTEL_GENERALSEKRETAER =
   process.env.NEXT_PUBLIC_ROLLE_TITTEL_GENERALSEKRETAER ?? 'Generalsekretær'
+
+// Brand-farger — kan overstyres av andre klubber via NEXT_PUBLIC_KLUBB_FARGE_*-
+// env-vars. Standard-defaults er sand/gull (som originalen), men sett dine egne
+// for å gi klubben sin egen visuell identitet. Se docs/tema-arkitektur.md §4.
+export const KLUBB_FARGE_PRIMAER =
+  process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER ?? '#e8d9b5'
+export const KLUBB_FARGE_PRIMAER_SOFT =
+  process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT ?? 'rgba(232, 217, 181, 0.16)'
+export const KLUBB_FARGE_PRIMAER_HOT =
+  process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_HOT ?? '#f5e8c8'
+export const KLUBB_FARGE_BAKGRUNN =
+  process.env.NEXT_PUBLIC_KLUBB_FARGE_BAKGRUNN ?? '#0e0f13'
