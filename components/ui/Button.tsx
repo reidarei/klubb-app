@@ -1,6 +1,6 @@
 import { ButtonHTMLAttributes, ReactNode } from 'react'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const styles: Record<Variant, React.CSSProperties> = {
   primary: {
@@ -18,7 +18,7 @@ const styles: Record<Variant, React.CSSProperties> = {
     color: 'var(--text-secondary)',
     border: 'none',
   },
-  destructive: {
+  danger: {
     background: 'var(--danger-soft)',
     color: 'var(--danger)',
     border: 'none',

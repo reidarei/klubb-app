@@ -51,7 +51,7 @@ type TidslinjeItem =
 function statusBadge(status: string | undefined, fortid?: boolean) {
   if (status === 'ja') return { label: fortid ? 'Du svarte ja' : 'Påmeldt', variant: 'success' as const }
   if (status === 'kanskje') return { label: fortid ? 'Du svarte kanskje' : 'Kanskje', variant: 'accent' as const }
-  if (status === 'nei') return { label: fortid ? 'Du svarte nei' : 'Avmeldt', variant: 'destructive' as const }
+  if (status === 'nei') return { label: fortid ? 'Du svarte nei' : 'Avmeldt', variant: 'danger' as const }
   return { label: fortid ? 'Du svarte ikke' : 'Ikke svart', variant: 'neutral' as const }
 }
 

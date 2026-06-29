@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 
-type Variant = 'accent' | 'success' | 'destructive' | 'neutral'
+type Variant = 'accent' | 'success' | 'danger' | 'neutral'
 
 const styles: Record<Variant, React.CSSProperties> = {
   accent: {
@@ -11,7 +11,7 @@ const styles: Record<Variant, React.CSSProperties> = {
     background: 'var(--success-soft)',
     color: 'var(--success)',
   },
-  destructive: {
+  danger: {
     background: 'var(--danger-soft)',
     color: 'var(--danger)',
   },
