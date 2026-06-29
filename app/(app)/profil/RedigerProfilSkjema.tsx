@@ -177,7 +177,7 @@ export default function RedigerProfilSkjema({
                   onChange={e => setBekreft(e.target.value)}
                   style={{ ...inputStil, fontSize: '0.875rem' }}
                 />
-                {passordFeil && <p className="text-xs" style={{ color: 'var(--destructive)' }}>{passordFeil}</p>}
+                {passordFeil && <p className="text-xs" style={{ color: 'var(--danger)' }}>{passordFeil}</p>}
               </div>
             )}
           </div>

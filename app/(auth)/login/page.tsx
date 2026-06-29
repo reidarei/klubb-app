@@ -120,7 +120,7 @@ export default function LoginSide() {
                 <label htmlFor="epost" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>E-post</label>
                 <input id="epost" type="email" value={epost} onChange={(e) => setEpost(e.target.value)} required autoComplete="email" style={inputStil} />
               </div>
-              {feil && <p className="text-sm" style={{ color: 'var(--destructive)' }}>{feil}</p>}
+              {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster}>{laster ? 'Sender...' : 'Send kode'}</Button>
               <button type="button" onClick={() => setGlemtPassord(false)} className="w-full text-sm underline pt-1"
                 style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -137,7 +137,7 @@ export default function LoginSide() {
                 <label htmlFor="passord" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Passord</label>
                 <input id="passord" type="password" value={passord} onChange={(e) => setPassord(e.target.value)} required autoComplete="current-password" style={inputStil} />
               </div>
-              {feil && <p className="text-sm" style={{ color: 'var(--destructive)' }}>{feil}</p>}
+              {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster} className="mt-2">{laster ? 'Logger inn...' : 'Logg inn'}</Button>
               <button type="button" onClick={() => setGlemtPassord(true)} className="w-full text-sm underline pt-1"
                 style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>

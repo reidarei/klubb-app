@@ -65,7 +65,7 @@ export default function EndrePassord() {
         <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Endre passord</p>
         <input type="password" placeholder="Nytt passord" value={passord} onChange={e => setPassord(e.target.value)} style={inputStil} />
         <input type="password" placeholder="Bekreft nytt passord" value={bekreft} onChange={e => setBekreft(e.target.value)} style={inputStil} />
-        {feilmelding && <p className="text-xs" style={{ color: 'var(--destructive)' }}>{feilmelding}</p>}
+        {feilmelding && <p className="text-xs" style={{ color: 'var(--danger)' }}>{feilmelding}</p>}
         {status === 'ok' && <p className="text-xs" style={{ color: 'var(--success)' }}>Passord oppdatert!</p>}
         <div className="flex gap-2">
           <Button type="submit" disabled={status === 'lagrer'}>{status === 'lagrer' ? 'Lagrer…' : 'Lagre'}</Button>

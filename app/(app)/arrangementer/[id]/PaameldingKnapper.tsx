@@ -5,9 +5,9 @@ import { oppdaterPaamelding } from '@/lib/actions/paameldinger'
 import Card from '@/components/ui/Card'
 
 const valg = [
-  { status: 'ja', label: 'Ja', aktiv: 'var(--success)', aktivBg: 'var(--success-subtle)' },
-  { status: 'kanskje', label: 'Kanskje', aktiv: 'var(--accent)', aktivBg: 'var(--accent-subtle)' },
-  { status: 'nei', label: 'Nei', aktiv: 'var(--destructive)', aktivBg: 'var(--destructive-subtle)' },
+  { status: 'ja', label: 'Ja', aktiv: 'var(--success)', aktivBg: 'var(--success-soft)' },
+  { status: 'kanskje', label: 'Kanskje', aktiv: 'var(--accent)', aktivBg: 'var(--accent-soft)' },
+  { status: 'nei', label: 'Nei', aktiv: 'var(--danger)', aktivBg: 'var(--danger-soft)' },
 ] as const
 
 export default function PaameldingKnapper({

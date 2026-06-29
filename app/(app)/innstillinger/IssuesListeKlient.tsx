@@ -43,7 +43,7 @@ function IssueRad({ issue, i, erLukket }: { issue: GitHubIssue; i: number; erLuk
       <span
         className="text-xs px-2 py-0.5 rounded-md shrink-0"
         style={{
-          background: erLukket ? 'var(--success-subtle)' : 'var(--accent-subtle)',
+          background: erLukket ? 'var(--success-soft)' : 'var(--accent-soft)',
           color: erLukket ? 'var(--success)' : 'var(--accent)',
           fontWeight: 600,
         }}

@@ -85,12 +85,6 @@
   /* Modal-skygge (bunnskuff, install-veiledning) */
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
 
-  /* Bakoverkompatible aliaser — fjernes etter hvert som komponenter skrives om */
-  --bg-tertiary: var(--bg-elevated-2);
-  --accent-subtle: var(--accent-soft);
-  --success-subtle: var(--success-soft);
-  --destructive: var(--danger);
-  --destructive-subtle: var(--danger-soft);
 }
 
 /* Speiling for data-theme="dark" — identiske verdier som :root. Forbereder
@@ -158,12 +152,6 @@
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
   --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
-
-  --bg-tertiary: var(--bg-elevated-2);
-  --accent-subtle: var(--accent-soft);
-  --success-subtle: var(--success-soft);
-  --destructive: var(--danger);
-  --destructive-subtle: var(--danger-soft);
 }
 
 /* Binder CSS-tokens til Tailwind v4-utilities via @theme inline.

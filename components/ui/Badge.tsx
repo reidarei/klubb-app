@@ -4,19 +4,19 @@ type Variant = 'accent' | 'success' | 'destructive' | 'neutral'
 
 const styles: Record<Variant, React.CSSProperties> = {
   accent: {
-    background: 'var(--accent-subtle)',
+    background: 'var(--accent-soft)',
     color: 'var(--accent)',
   },
   success: {
-    background: 'var(--success-subtle)',
+    background: 'var(--success-soft)',
     color: 'var(--success)',
   },
   destructive: {
-    background: 'var(--destructive-subtle)',
-    color: 'var(--destructive)',
+    background: 'var(--danger-soft)',
+    color: 'var(--danger)',
   },
   neutral: {
-    background: 'var(--bg-tertiary)',
+    background: 'var(--bg-elevated-2)',
     color: 'var(--text-secondary)',
   },
 }

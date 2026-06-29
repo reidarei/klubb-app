@@ -19,8 +19,8 @@ const styles: Record<Variant, React.CSSProperties> = {
     border: 'none',
   },
   destructive: {
-    background: 'var(--destructive-subtle)',
-    color: 'var(--destructive)',
+    background: 'var(--danger-soft)',
+    color: 'var(--danger)',
     border: 'none',
   },
 }

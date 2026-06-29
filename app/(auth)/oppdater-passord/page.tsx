@@ -113,7 +113,7 @@ export default function OppdaterPassordSide() {
                 <label htmlFor="bekreft" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Bekreft passord</label>
                 <input id="bekreft" type="password" value={bekreft} onChange={(e) => setBekreft(e.target.value)} required autoComplete="new-password" style={inputStil} />
               </div>
-              {feil && <p className="text-sm" style={{ color: 'var(--destructive)' }}>{feil}</p>}
+              {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster}>{laster ? 'Lagrer…' : 'Lagre nytt passord'}</Button>
               <button type="button" onClick={() => router.push('/login')} className="w-full text-sm underline pt-1"
                 style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
