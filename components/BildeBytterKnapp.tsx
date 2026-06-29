@@ -48,7 +48,7 @@ export default function BildeBytterKnapp({
         onClick={() => inputRef.current?.click()}
         disabled={laster}
         style={{
-          background: 'rgba(10,10,12,0.6)',
+          background: 'var(--overlay-soft)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           color: 'var(--text-primary)',
@@ -76,7 +76,7 @@ export default function BildeBytterKnapp({
         <p
           style={{
             fontSize: 11,
-            color: 'var(--danger, #d97a6c)',
+            color: 'var(--danger)',
             marginTop: 6,
             fontFamily: 'var(--font-body)',
           }}

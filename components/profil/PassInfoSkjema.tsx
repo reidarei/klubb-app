@@ -111,7 +111,7 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
             background: 'var(--accent)',
             border: 'none',
             borderRadius: 999,
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 600,

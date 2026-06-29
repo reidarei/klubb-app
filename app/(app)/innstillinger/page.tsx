@@ -224,7 +224,7 @@ export default async function Innstillinger() {
             height="12"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#0a0a0a"
+            stroke="var(--accent-foreground)"
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -351,7 +351,7 @@ export default async function Innstillinger() {
                 padding: '0 8px',
                 borderRadius: 999,
                 background: 'var(--accent)',
-                color: '#0a0a0a',
+                color: 'var(--accent-foreground)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
                 fontWeight: 700,

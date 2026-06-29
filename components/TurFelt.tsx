@@ -42,7 +42,7 @@ export default function TurFelt({
           style={{
             background: !hemmelig ? 'var(--accent)' : 'var(--bg-elevated)',
             border: `1px solid ${!hemmelig ? 'var(--accent)' : 'var(--border)'}`,
-            color: !hemmelig ? '#fff' : 'var(--text-secondary)',
+            color: !hemmelig ? 'var(--accent-foreground)' : 'var(--text-secondary)',
             fontFamily: 'inherit',
             cursor: 'pointer',
           }}
@@ -54,8 +54,8 @@ export default function TurFelt({
           onClick={() => !hemmelig && onToggle()}
           className="flex-1 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
           style={{
-            background: hemmelig ? 'var(--bg-tertiary)' : 'var(--bg-elevated)',
-            border: `1px solid ${hemmelig ? 'rgba(255,255,255,0.15)' : 'var(--border)'}`,
+            background: hemmelig ? 'var(--bg-elevated-2)' : 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
             color: hemmelig ? 'var(--text-secondary)' : 'var(--text-tertiary)',
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -68,7 +68,7 @@ export default function TurFelt({
               width: '3.5rem',
               height: '0.75em',
               borderRadius: '2px',
-              border: '1px solid rgba(255,255,255,0.15)',
+              border: '1px solid var(--border)',
             }}
           />
           Hemmelig

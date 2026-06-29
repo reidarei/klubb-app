@@ -18,7 +18,7 @@ const textareaStil: React.CSSProperties = {
   lineHeight: 1.55,
   resize: 'vertical',
   minHeight: 260,
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+  boxShadow: 'inset 0 1px 0 var(--border-subtle)',
 }
 
 export default function BliUtvikler() {
@@ -128,7 +128,7 @@ export default function BliUtvikler() {
               padding: '14px 0',
               borderRadius: 999,
               background: 'var(--accent)',
-              color: '#0a0a0a',
+              color: 'var(--accent-foreground)',
               border: 'none',
               fontFamily: 'var(--font-body)',
               fontSize: 14,
@@ -155,7 +155,7 @@ export default function BliUtvikler() {
       />
 
       <style>{`textarea.innspill-felt::placeholder { color: var(--text-tertiary); opacity: 0.6; }
-textarea.innspill-felt:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,0.04); }`}</style>
+textarea.innspill-felt:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 0 var(--border-subtle); }`}</style>
       <textarea
         className="innspill-felt"
         value={tekst}

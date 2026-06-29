@@ -128,7 +128,7 @@ export default function AlbumTittel({
           borderRadius: '50%',
           border: 'none',
           background: 'var(--accent)',
-          color: '#0a0a0a',
+          color: 'var(--accent-foreground)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

@@ -48,7 +48,7 @@ function MalRad({ mal }: { mal: Mal }) {
           onKeyDown={e => { if (e.key === 'Enter') handleLagre(); if (e.key === 'Escape') setRedigerer(false) }}
         />
         <button onClick={handleLagre} disabled={isPending} className="text-xs px-2 py-1 rounded-lg shrink-0"
-          style={{ background: 'var(--accent)', color: '#fff', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
+          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
           {isPending ? '…' : 'OK'}
         </button>
         <button onClick={() => { setNavn(mal.navn); setRedigerer(false) }} className="text-xs px-2 py-1 rounded-lg shrink-0"
@@ -66,7 +66,7 @@ function MalRad({ mal }: { mal: Mal }) {
         {bekrefterSlett ? (
           <>
             <button onClick={handleSlett} disabled={isPending} className="text-xs px-2 py-1 rounded-lg"
-              style={{ background: 'var(--destructive)', color: '#fff', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
+              style={{ background: 'var(--danger)', color: '#fff', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
               Slett
             </button>
             <button onClick={() => setBekrefterSlett(false)} className="text-xs px-2 py-1 rounded-lg"
@@ -81,7 +81,7 @@ function MalRad({ mal }: { mal: Mal }) {
               Rediger
             </button>
             <button onClick={() => setBekrefterSlett(true)} className="text-xs px-2 py-1 rounded-lg"
-              style={{ border: '1px solid var(--border)', color: 'var(--destructive)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+              style={{ border: '1px solid var(--border)', color: 'var(--danger)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
               Slett
             </button>
           </>
@@ -113,7 +113,7 @@ function NyMalForm() {
         onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
       />
       <button onClick={handleLeggTil} disabled={isPending || !navn.trim()} className="text-xs px-2 py-1 rounded-lg shrink-0"
-        style={{ background: 'var(--accent)', color: '#fff', fontFamily: 'inherit', cursor: 'pointer', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
+        style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', fontFamily: 'inherit', cursor: 'pointer', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
         {isPending ? '…' : '+ Legg til'}
       </button>
     </div>

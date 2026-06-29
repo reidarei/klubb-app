@@ -68,7 +68,7 @@ export default function OpprettAlbumKnapp() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.6)',
+            background: 'var(--overlay-soft)',
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
@@ -148,7 +148,7 @@ export default function OpprettAlbumKnapp() {
                   borderRadius: 999,
                   border: 'none',
                   background: 'var(--accent)',
-                  color: '#0a0a0a',
+                  color: 'var(--accent-foreground)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: !tittel.trim() || pending ? 'default' : 'pointer',

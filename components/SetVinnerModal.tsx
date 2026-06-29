@@ -160,7 +160,7 @@ export default function SetVinnerModal({
             />
           </div>
 
-          {feil && <p className="text-sm" style={{ color: 'var(--destructive)' }}>{feil}</p>}
+          {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" fullWidth onClick={() => setAapen(false)}>Avbryt</Button>

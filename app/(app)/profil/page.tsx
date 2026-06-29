@@ -276,7 +276,7 @@ export default async function Profil() {
               padding: '0 7px',
               borderRadius: 999,
               background: 'var(--accent)',
-              color: '#0a0a0a',
+              color: 'var(--accent-foreground)',
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
               fontWeight: 700,

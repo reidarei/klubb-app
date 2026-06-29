@@ -110,7 +110,7 @@ export default function GodkjenningRad({
             background: 'var(--accent)',
             border: 'none',
             borderRadius: 999,
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
             fontWeight: 600,

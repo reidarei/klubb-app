@@ -251,14 +251,14 @@ export default function RedigerProfilForm({
               height: 22,
               borderRadius: '50%',
               background: 'var(--accent)',
-              color: '#0a0a0a',
+              color: 'var(--accent-foreground)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               border: '2px solid var(--bg)',
             }}
           >
-            <Icon name="plus" size={11} color="#0a0a0a" strokeWidth={2.5} />
+            <Icon name="plus" size={11} color="var(--accent-foreground)" strokeWidth={2.5} />
           </div>
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>

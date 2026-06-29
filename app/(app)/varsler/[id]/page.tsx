@@ -90,7 +90,7 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
             display: 'inline-block',
             padding: '11px 20px',
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             borderRadius: 999,
             fontFamily: 'var(--font-body)',
             fontSize: 13,

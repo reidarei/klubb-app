@@ -136,7 +136,7 @@ export default function AlbumLightbox({
         bottom: 0,
         width: '100vw',
         height: '100dvh',
-        background: 'rgba(0,0,0,0.96)',
+        background: 'var(--overlay-backdrop)',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
@@ -170,13 +170,13 @@ export default function AlbumLightbox({
           height: 44,
           borderRadius: '50%',
           border: 'none',
-          background: 'rgba(0,0,0,0.65)',
-          color: '#fff',
+          background: 'var(--overlay-control-bg)',
+          color: 'var(--text-primary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          boxShadow: '0 0 0 1px rgba(255,255,255,0.25)',
+          boxShadow: '0 0 0 1px var(--overlay-control-ring)',
         }}
       >
         <Icon name="x" size={20} color="currentColor" strokeWidth={2.5} />
@@ -190,7 +190,8 @@ export default function AlbumLightbox({
             top: 'max(24px, calc(env(safe-area-inset-top) + 8px))',
             left: '50%',
             transform: 'translateX(-50%)',
-            color: 'rgba(255,255,255,0.85)',
+            color: 'var(--text-primary)',
+            opacity: 0.85,
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
             letterSpacing: '1.4px',
@@ -217,8 +218,9 @@ export default function AlbumLightbox({
               height: 44,
               borderRadius: '50%',
               border: 'none',
+              // glass-effekt på fotografisk bakgrunn — ingen passende token
               background: 'rgba(255,255,255,0.12)',
-              color: '#fff',
+              color: 'var(--text-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -243,8 +245,9 @@ export default function AlbumLightbox({
               height: 44,
               borderRadius: '50%',
               border: 'none',
+              // glass-effekt på fotografisk bakgrunn — ingen passende token
               background: 'rgba(255,255,255,0.12)',
-              color: '#fff',
+              color: 'var(--text-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -269,8 +272,8 @@ export default function AlbumLightbox({
             gap: 10,
             padding: '8px 10px',
             borderRadius: 999,
-            background: 'rgba(0,0,0,0.65)',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.18)',
+            background: 'var(--overlay-control-bg)',
+            boxShadow: '0 0 0 1px var(--overlay-control-ring)',
           }}
         >
           <button
@@ -303,7 +306,7 @@ export default function AlbumLightbox({
               borderRadius: '50%',
               border: 'none',
               background: 'transparent',
-              color: '#e87060',
+              color: 'var(--danger-alt)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
