@@ -155,7 +155,7 @@ export default function AnsvarAdmin({
               flexShrink: 0,
             }}
           >
-            <Icon name="plus" size={14} color="#0a0a0a" strokeWidth={2.5} />
+            <Icon name="plus" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
           </button>
         </form>
       )}

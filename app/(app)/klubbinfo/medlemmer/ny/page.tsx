@@ -161,7 +161,7 @@ export default function NyttMedlem() {
             padding: '14px 0',
             borderRadius: 999,
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             border: 'none',
             fontFamily: 'var(--font-body)',
             fontSize: 14,

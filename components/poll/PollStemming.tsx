@@ -97,12 +97,12 @@ export default function PollStemming({ pollId, flervalg, valg, mineStemmer }: Pr
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      background: '#0a0a0a',
+                      background: 'var(--accent-foreground)',
                     }}
                   />
                 )}
                 {valgt && flervalg && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="3">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-foreground)" strokeWidth="3">
                     <path d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -127,7 +127,7 @@ export default function PollStemming({ pollId, flervalg, valg, mineStemmer }: Pr
           marginTop: 16,
           padding: '12px 0',
           background: 'var(--accent)',
-          color: '#0a0a0a',
+          color: 'var(--accent-foreground)',
           border: 'none',
           borderRadius: 999,
           fontFamily: 'var(--font-body)',

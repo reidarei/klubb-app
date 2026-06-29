@@ -158,7 +158,7 @@ export default function TiebreakSkjema({ pollId, tittel, undertittel, kandidater
             flex: 2,
             padding: '12px 0',
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             border: 'none',
             borderRadius: 999,
             fontFamily: 'var(--font-body)',

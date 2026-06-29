@@ -73,7 +73,7 @@ export default function RsvpBlokk({
             name={v.ikon}
             color={
               isJa
-                ? '#0a0a0a'
+                ? 'var(--accent-foreground)'
                 : aktivtSvar === 'kanskje'
                 ? 'var(--text-secondary)'
                 : 'var(--text-tertiary)'
@@ -200,7 +200,7 @@ export default function RsvpBlokk({
                     ? 'none'
                     : '0.5px solid var(--border-strong)'
                   : '1px solid var(--border)',
-                color: erAktiv && erJa ? '#0a0a0a' : 'var(--text-primary)',
+                color: erAktiv && erJa ? 'var(--accent-foreground)' : 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 cursor: 'pointer',
                 transition: 'background 0.15s, border 0.15s',
@@ -215,7 +215,8 @@ export default function RsvpBlokk({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: erAktiv && erJa ? 'rgba(10,10,12,0.12)' : 'transparent',
+                  // bevisst svart-tinge på accent-flaten — indre badge-skygge, ingen passende token
+                  background: erAktiv && erJa ? 'rgba(0, 0, 0, 0.12)' : 'transparent',
                   border: erAktiv && erJa ? 'none' : '0.5px solid var(--border)',
                 }}
               >
@@ -223,7 +224,7 @@ export default function RsvpBlokk({
                   name={a.ikon}
                   color={
                     erAktiv && erJa
-                      ? '#0a0a0a'
+                      ? 'var(--accent-foreground)'
                       : a.id === 'ja'
                       ? 'var(--accent)'
                       : a.id === 'kanskje'

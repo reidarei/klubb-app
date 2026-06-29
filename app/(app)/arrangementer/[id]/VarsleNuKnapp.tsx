@@ -98,7 +98,7 @@ export default function VarsleNuKnapp({
         style={{
           padding: '8px 14px',
           borderRadius: 999,
-          background: 'rgba(10,10,12,0.6)',
+          background: 'var(--overlay-control-bg)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           border: '0.5px solid var(--border)',
@@ -125,7 +125,7 @@ export default function VarsleNuKnapp({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'var(--overlay-soft)',
             zIndex: 100,
             display: 'flex',
             alignItems: 'center',
@@ -258,7 +258,7 @@ export default function VarsleNuKnapp({
                   borderRadius: 999,
                   background: 'var(--accent)',
                   border: 'none',
-                  color: '#0a0a0a',
+                  color: 'var(--accent-foreground)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
                   fontWeight: 600,

@@ -212,7 +212,7 @@ export default function PollInlineStemme({
                 borderRadius: 14,
                 background: valgt ? 'var(--accent)' : 'transparent',
                 border: valgt ? 'none' : '1px solid var(--border)',
-                color: valgt ? '#0a0a0a' : 'var(--text-primary)',
+                color: valgt ? 'var(--accent-foreground)' : 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 13,
                 fontWeight: valgt ? 600 : 500,

@@ -243,7 +243,7 @@ export default async function ArrangementDetaljer({
             width: 36,
             height: 36,
             borderRadius: '50%',
-            background: 'rgba(10,10,12,0.6)',
+            background: 'var(--overlay-control-bg)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
             border: '0.5px solid var(--border)',
@@ -278,7 +278,7 @@ export default async function ArrangementDetaljer({
               style={{
                 padding: '8px 14px',
                 borderRadius: 999,
-                background: 'rgba(10,10,12,0.6)',
+                background: 'var(--overlay-control-bg)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
                 border: '0.5px solid var(--border)',

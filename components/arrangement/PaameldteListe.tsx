@@ -272,7 +272,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'var(--overlay-soft)',
             zIndex: 100,
             display: 'flex',
             alignItems: 'center',
@@ -499,7 +499,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'var(--overlay-soft)',
             zIndex: 100,
             display: 'flex',
             alignItems: 'center',
@@ -628,7 +628,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                   borderRadius: 999,
                   background: 'var(--accent)',
                   border: 'none',
-                  color: '#0a0a0a',
+                  color: 'var(--accent-foreground)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
                   fontWeight: 600,

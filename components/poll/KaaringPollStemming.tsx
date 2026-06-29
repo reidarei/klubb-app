@@ -98,7 +98,7 @@ export default function KaaringPollStemming({ pollId, valg, mineStemmer }: Props
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      background: '#0a0a0a',
+                      background: 'var(--accent-foreground)',
                     }}
                   />
                 )}
@@ -122,7 +122,7 @@ export default function KaaringPollStemming({ pollId, valg, mineStemmer }: Props
           marginTop: 16,
           padding: '12px 0',
           background: 'var(--accent)',
-          color: '#0a0a0a',
+          color: 'var(--accent-foreground)',
           border: 'none',
           borderRadius: 999,
           fontFamily: 'var(--font-body)',

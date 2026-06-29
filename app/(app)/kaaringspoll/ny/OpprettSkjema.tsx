@@ -224,7 +224,7 @@ export default function OpprettSkjema({
           marginTop: 16,
           padding: 12,
           borderRadius: 'var(--radius-card)',
-          background: forFaaKandidater ? 'rgba(220,80,80,0.08)' : 'var(--bg-elevated)',
+          background: forFaaKandidater ? 'var(--danger-soft)' : 'var(--bg-elevated)',
           color: forFaaKandidater ? 'var(--danger)' : 'var(--text-secondary)',
           fontFamily: 'var(--font-body)',
           fontSize: 13,
