@@ -321,7 +321,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: 'white',
+                          color: 'var(--text-primary)',
                           fontSize: 11,
                           fontFamily: 'var(--font-mono)',
                         }}
@@ -342,9 +342,9 @@ export default function NyMeldingSkjema({ albumer }: Props) {
                         width: 22,
                         height: 22,
                         borderRadius: '50%',
-                        background: 'rgba(0,0,0,0.55)',
+                        background: 'var(--overlay-control-bg)',
                         border: 'none',
-                        color: 'white',
+                        color: 'var(--text-primary)',
                         fontSize: 13,
                         lineHeight: 1,
                         cursor: 'pointer',
@@ -555,7 +555,8 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.6)',
+            // original var litt tyngre backdrop — konsolidert til felles overlay-soft-token
+            background: 'var(--overlay-soft)',
             zIndex: 200,
             display: 'flex',
             alignItems: 'flex-end',

@@ -954,7 +954,7 @@ export default function Chat({
                             borderRadius: 999,
                             background: 'var(--accent)',
                             border: 'none',
-                            color: '#0a0a0a',
+                            color: 'var(--accent-foreground)',
                             fontFamily: 'var(--font-mono)',
                             fontSize: 9,
                             letterSpacing: '1.4px',
@@ -1094,7 +1094,8 @@ export default function Chat({
                               borderRadius: 999,
                               border: `0.5px solid ${minReaksjon ? 'var(--accent)' : 'var(--border)'}`,
                               background: 'var(--bg-elevated-2)',
-                              boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                              // marginalt mindre offset i original — akseptert konsolidering
+                              boxShadow: 'var(--shadow-floating)',
                               fontSize: 11,
                               lineHeight: 1.2,
                               color: 'var(--text-primary)',
@@ -1146,7 +1147,7 @@ export default function Chat({
                           borderRadius: 999,
                           background: 'var(--bg-elevated)',
                           border: '0.5px solid var(--border-strong)',
-                          boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+                          boxShadow: 'var(--shadow-popover)',
                         }}
                       >
                         {REAKSJON_EMOJIS.map(emoji => (
@@ -1332,8 +1333,9 @@ export default function Chat({
               width: 22,
               height: 22,
               borderRadius: '50%',
-              background: 'rgba(0,0,0,0.75)',
-              color: '#fff',
+              // original var litt mørkere — konsolidert til felles overlay-control-bg-token
+              background: 'var(--overlay-control-bg)',
+              color: 'var(--text-primary)',
               border: 'none',
               fontSize: 14,
               fontWeight: 700,
@@ -1372,7 +1374,7 @@ export default function Chat({
           padding: '8px 8px 8px 12px',
           border: '0.5px solid var(--border)',
           borderRadius: 999,
-          background: '#282a32',
+          background: 'var(--bg-elevated-solid)',
           marginBottom: 4,
         }}
       >
@@ -1452,7 +1454,7 @@ export default function Chat({
           }}
           aria-label="Send melding"
         >
-          <Icon name="arrowRight" size={14} color="#0a0a0a" strokeWidth={2.5} />
+          <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
         </button>
       </div>
       </div>

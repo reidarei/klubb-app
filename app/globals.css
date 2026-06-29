@@ -12,6 +12,8 @@
     linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
   --bg-elevated: rgba(40, 42, 50, 0.95);
   --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  /* Solid variant av elevated-flaten — for sticky inputs der gjennomskinn lar innhold lekke gjennom */
+  --bg-elevated-solid: #282a32;
   /* Semi-transparent header-bakgrunn — backdrop-blurred variant av --bg */
   --bg-header: rgba(14, 15, 19, 0.85);
 
@@ -101,6 +103,8 @@
     linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
   --bg-elevated: rgba(40, 42, 50, 0.95);
   --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  /* Solid variant av elevated-flaten — for sticky inputs der gjennomskinn lar innhold lekke gjennom */
+  --bg-elevated-solid: #282a32;
   --bg-header: rgba(14, 15, 19, 0.85);
 
   --border: rgba(255, 255, 255, 0.16);
@@ -168,6 +172,7 @@
   --color-bg: var(--bg);
   --color-bg-elevated: var(--bg-elevated);
   --color-bg-elevated-2: var(--bg-elevated-2);
+  --color-bg-elevated-solid: var(--bg-elevated-solid);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-hot: var(--accent-hot);
