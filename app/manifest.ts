@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_BESKRIVELSE } from '@/lib/klubb-config'
+import { MANIFEST_FARGER } from '@/lib/tema'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -8,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: KLUBB_BESKRIVELSE,
     start_url: '/',
     display: 'standalone',
-    background_color: '#060608',
-    theme_color: '#060608',
+    background_color: MANIFEST_FARGER.bakgrunn,
+    theme_color: MANIFEST_FARGER.tema,
     orientation: 'portrait',
     icons: [
       {

@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import VitalsLogger from '@/components/VitalsLogger'
 import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_BESKRIVELSE } from '@/lib/klubb-config'
+import { MANIFEST_FARGER } from '@/lib/tema'
 import './globals.css'
 
 const inter = Inter({
@@ -81,7 +82,7 @@ export default function RootLayout({
       className={`${inter.variable} ${instrument.variable} ${jetbrains.variable}`}
     >
       <head>
-        <meta name="theme-color" content="#060608" />
+        <meta name="theme-color" content={MANIFEST_FARGER.tema} />
         {klubbOverrides && <style>{`:root[data-theme="dark"] { ${klubbOverrides} }`}</style>}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
