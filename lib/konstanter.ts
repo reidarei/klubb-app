@@ -56,3 +56,22 @@ export const PURRING_MAKS_LENGDE = 500
 // Tilfeldigvis samme verdi som PURRING_MAKS_LENGDE — semantisk separat
 // så de to grensene kan utvikle seg uavhengig. Se #282.
 export const VARSLE_MAKS_LENGDE = 500
+
+// Emoji-pool for automatiske bursdagsgratulasjonar i klubb-chat.
+// 16 symboler som passer tonen — alkohol, feiring, klasse. Se #328.
+export const BURSDAG_EMOJI_POOL = [
+  '🤩', '❤️', '🥂', '🎉', '🎩', '🍺', '🍻', '🌟',
+  '🥳', '🍾', '💎', '😁', '👏', '🍸', '😘', '🥰',
+] as const
+
+// Antall cron-slots i det norske vinduet 07–10 der vi forsøker å sende.
+// Slot-logikken garanterer at meldingen sendes seinest i siste slot.
+export const BURSDAG_VINDU_SLOTS = 4
+
+// Antall unike emoji som trekkes frå BURSDAG_EMOJI_POOL per gratulasjon.
+export const BURSDAG_EMOJI_ANTALL = 5
+
+// Variasjoner i hilsen-ord og utropstegn for bursdagsgratulasjonar.
+// Kombinert gir fire mulige meldingsmønstre per post. Se #328.
+export const BURSDAG_HILSNER = ['Gratulerer', 'Grattis'] as const
+export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const

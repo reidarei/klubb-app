@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getProfil } from '@/lib/auth-cache'
+import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import VarselToggle from '@/components/VarselToggle'
@@ -11,6 +11,7 @@ import VarselLogg from './VarselLogg'
 import ArrangementmalerAdmin from '@/components/ArrangementmalerAdmin'
 import KaaringMalAdmin from '@/components/KaaringMalAdmin'
 import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
+import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 
 const innstillingLabels: Record<string, string> = {
@@ -62,9 +63,17 @@ const VARSEL_REKKEFOLGE = [
 ]
 
 export default async function Innstillinger() {
-  const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
+  const [supabase, profil, bruker] = await Promise.all([
+    createServerClient(),
+    getProfil(),
+    getInnloggetBruker(),
+  ])
 
   if (!kanAdministrere(profil?.rolle)) notFound()
+  // Etter at admin-sjekken er passert vet vi at det finnes en innlogget
+  // bruker — getProfil() returnerer kun en rolle hvis bruker-id finnes.
+  // Eksplisitt narrow her gjør at vi slipper `!`-cast nedenfor.
+  if (!bruker) notFound()
 
   const admin = createAdminClient()
   const sisteDognIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -77,6 +86,7 @@ export default async function Innstillinger() {
     { count: varselSisteDogn },
     { data: vitalsRader },
     { data: adminProfiler },
+    { data: egenProfil },
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -108,6 +118,12 @@ export default async function Innstillinger() {
       .eq('aktiv', true)
       .in('rolle', rollerMed('kanAdministrere'))
       .order('navn'),
+    // bursdagsgratulasjon_aktiv finnes etter migrasjon 100; cast via any
+    // til TypeScript er regenerert mot ny databasestruktur.
+    (admin.from('profiles') as any)
+      .select('bursdagsgratulasjon_aktiv')
+      .eq('id', bruker.id)
+      .maybeSingle(),
   ])
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
@@ -317,6 +333,17 @@ export default async function Innstillinger() {
           </InnstillingsKort>
         )
       })()}
+
+      {/* Automatisering — per-admin toggles */}
+      <InnstillingsKort
+        tittel="Automatisering"
+        oppsummering="Mine automatiske handlinger"
+        beskrivelse="Disse togglene gjelder kun for deg — andre admins har sine egne."
+      >
+        <BursdagsgratulasjonToggle
+          aktiv={(egenProfil as any)?.bursdagsgratulasjon_aktiv ?? false}
+        />
+      </InnstillingsKort>
 
       {/* Faste arrangementer */}
       <InnstillingsKort
