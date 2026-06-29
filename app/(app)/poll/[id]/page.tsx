@@ -454,7 +454,7 @@ function KaaringVisning({
                   marginTop: 8,
                   padding: '10px 18px',
                   background: 'var(--accent)',
-                  color: '#0a0a0a',
+                  color: 'var(--accent-foreground)',
                   borderRadius: 999,
                   fontFamily: 'var(--font-body)',
                   fontSize: 14,

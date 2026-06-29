@@ -285,7 +285,7 @@ export default function AlbumLightbox({
               padding: '8px 14px',
               borderRadius: 999,
               background: erOmslag ? 'var(--accent-soft)' : 'transparent',
-              color: erOmslag ? 'var(--accent)' : '#fff',
+              color: erOmslag ? 'var(--accent)' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
               fontWeight: 600,

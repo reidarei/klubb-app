@@ -103,7 +103,7 @@ export default function PushPaaminnelse() {
         style={{
           padding: '8px 14px',
           background: 'var(--accent)',
-          color: '#0a0a0a',
+          color: 'var(--accent-foreground)',
           border: 'none',
           borderRadius: 999,
           fontFamily: 'var(--font-body)',

@@ -151,7 +151,7 @@ function MalRad({ mal }: { mal: Mal }) {
         {bekrefterSlett ? (
           <>
             <button onClick={handleSlett} disabled={isPending} className="text-xs px-2 py-1 rounded-lg"
-              style={{ background: 'var(--danger)', color: '#fff', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
+              style={{ background: 'var(--danger)', color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
               Slett
             </button>
             <button onClick={() => setBekrefterSlett(false)} className="text-xs px-2 py-1 rounded-lg"

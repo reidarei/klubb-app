@@ -72,7 +72,7 @@ export default function Error({
             borderRadius: 999,
             border: 'none',
             background: 'var(--accent)',
-            color: '#0a0a0a',
+            color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 600,

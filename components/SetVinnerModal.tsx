@@ -113,7 +113,7 @@ export default function SetVinnerModal({
   const labelKey = type === 'profil' ? 'navn' : 'tittel'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto" style={{ background: 'rgba(0,0,0,0.7)' }}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto" style={{ background: 'var(--overlay-soft)' }}>
       <div
         className="w-full max-w-lg rounded-b-2xl p-6 pb-8 mt-16"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
