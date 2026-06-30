@@ -13,6 +13,7 @@ import SlettBildeKnapp from './SlettBildeKnapp'
 import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
+import { Linkified } from '@/lib/linkify'
 
 type CoverObj = { bilde_url: string; thumb_url: string | null }
 type RawAlbumEmbed = {
@@ -192,7 +193,7 @@ export default async function MeldingDetalj({
             marginBottom: 16,
           }}
         >
-          {melding.innhold}
+          <Linkified text={melding.innhold ?? ''} />
         </div>
 
         {/* Album-spotlight: stort bilde + CTA-pille som lenker til albumet.

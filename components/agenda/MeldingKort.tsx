@@ -14,6 +14,7 @@ import type { AlbumSpotlight } from '@/lib/melding-spotlight'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { arkiverMelding, avarkiverMelding } from '@/lib/actions/meldinger'
+import { Linkified } from '@/lib/linkify'
 
 export type MeldingKortData = {
   id: string
@@ -315,7 +316,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   : 0,
             }}
           >
-            {melding.innhold}
+            <Linkified text={melding.innhold ?? ''} />
           </div>
 
           {/* Album-spotlight: én stort bilde + CTA-pille som lenker til

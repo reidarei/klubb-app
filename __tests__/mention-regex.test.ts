@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest'
+import { mentionExtractRegex } from '@/lib/mention'
 
-// Regex'en lever inni sendChatMentionVarsler i lib/varsler.ts. Vi
-// duplikerer den her for å låse adferden — bug 28. april 2026 var at
+// Låser adferden til extract-regexen — bug 28. april 2026 var at
 // `@alle andre` matchet som én mention `'alle andre'` istedenfor
 // `'alle'`, så ingen varsler gikk ut.
-const MENTION_REGEX = /@([\wæøåÆØÅ-]+)/g
 
 function parse(tekst: string): string[] {
-  return [...tekst.matchAll(MENTION_REGEX)].map(m => m[1].trim().toLowerCase())
+  return [...tekst.matchAll(mentionExtractRegex())].map(m => m[1].trim().toLowerCase())
 }
 
 describe('mention-regex', () => {

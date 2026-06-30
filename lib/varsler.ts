@@ -4,6 +4,7 @@ import { sendEpost, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE } from '@/lib/dato'
 import { BASE_URL } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
+import { mentionExtractRegex } from '@/lib/mention'
 
 const formaterDatoKlokke = (iso: string) => formaterDato(iso, FORMAT_DATO_KLOKKE)
 
@@ -575,12 +576,12 @@ export type MentionScope =
   | { type: 'poll'; id: string }
   | { type: 'melding'; id: string }
 
-// Regex stopper ved space — `@alle andre` matches som `'alle'`, ikke
+// Mention-extract-regex er sentralisert i lib/mention.ts.
+// Stopper ved space — `@alle andre` matcher som `'alle'`, ikke
 // `'alle andre'`. Flerords-navn håndteres fortsatt riktig fordi
 // matching-funksjonen bruker `.includes()` på fullt profilnavn:
 // `@Ola` treffer «Ola Petter Nordmann», og `@Ola Nordmann` treffer
 // også (etternavnet blir bare vanlig tekst i meldingen).
-const MENTION_REGEX = /@([\wæøåÆØÅ-]+)/g
 
 function utdrag(tekst: string, maks = 80): string {
   return tekst.length > maks ? tekst.slice(0, maks - 3) + '...' : tekst
@@ -636,7 +637,7 @@ export async function sendChatMentionVarsler(
   tekst: string,
   avsenderId: string,
 ) {
-  const mentions = [...tekst.matchAll(MENTION_REGEX)].map(m =>
+  const mentions = [...tekst.matchAll(mentionExtractRegex())].map(m =>
     m[1].trim().toLowerCase(),
   )
   if (mentions.length === 0) return

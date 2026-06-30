@@ -14,6 +14,7 @@ import PaameldteListe, { type RsvpStatus } from '@/components/arrangement/Paamel
 import AlbumSeksjon from '@/components/album/AlbumSeksjon'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
+import { Linkified } from '@/lib/linkify'
 
 type Paamelding = {
   profil_id: string
@@ -498,7 +499,7 @@ export default async function ArrangementDetaljer({
                 whiteSpace: 'pre-wrap',
               }}
             >
-              {arr.beskrivelse}
+              <Linkified text={arr.beskrivelse ?? ''} />
             </p>
           </>
         )}
