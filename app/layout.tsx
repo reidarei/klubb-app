@@ -2,8 +2,11 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import VitalsLogger from '@/components/VitalsLogger'
+import TemaSync from '@/components/TemaSync'
 import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_BESKRIVELSE } from '@/lib/klubb-config'
 import { MANIFEST_FARGER } from '@/lib/tema'
+import { TEMA_STORAGE_KEY } from '@/lib/konstanter'
+import { lesTemaFraCookie, resolveServerTema } from '@/lib/tema-server'
 import './globals.css'
 
 const inter = Inter({
@@ -58,16 +61,17 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const valgtTema = await lesTemaFraCookie()
+  const resolved = resolveServerTema(valgtTema)
+
   // Default-verdiene fra lib/klubb-config matcher allerede globals.css,
   // så vi sløyfer injeksjon når env-var ikke er satt — sparer bytes og holder DOM-en ren.
-  // Selektor må matche dark-blokken i globals.css (`:root[data-theme="dark"]`), ellers
-  // taper overridene på spesifisitet siden html-roten har data-theme="dark" satt.
-  // Med samme spesifisitet vinner overridene fordi de kommer senere i kilde-rekkefølgen.
+  // Selektor må matche begge tema-blokkene i globals.css, ellers taper overridene på spesifisitet.
   const klubbOverrides = [
     process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER && `--accent: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER};`,
     process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT && `--accent-soft: ${process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT};`,
@@ -78,16 +82,46 @@ export default function RootLayout({
   return (
     <html
       lang="nb"
-      data-theme="dark"
+      data-theme={resolved}
       className={`${inter.variable} ${instrument.variable} ${jetbrains.variable}`}
     >
       <head>
+        {/* Pre-hydration-script: kjører synkront før nettleseren tegner første pixel.
+            Les localStorage (raskest) → cookie-verdi → resolv system-preferanse om nødvendig.
+            Forhindrer FOUC når bruker har valgt light eller system=light. */}
+        <script dangerouslySetInnerHTML={{
+          __html: `(function(){try{
+var lagret = localStorage.getItem('${TEMA_STORAGE_KEY}');
+var cookie = ${JSON.stringify(valgtTema)};
+// Valider lagret-verdien — korrupt/ukjent verdi (f.eks. 'blue') skal ikke
+// overstyre cookie. Speiler TEMA_VALG i lib/konstanter.ts.
+var valid = lagret === 'system' || lagret === 'dark' || lagret === 'light';
+var valg = valid ? lagret : cookie;
+var resolved = valg === 'system'
+  ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+  : valg;
+if (resolved === 'light' || resolved === 'dark') {
+  document.documentElement.setAttribute('data-theme', resolved);
+  // Pre-hydration kjører før CSS er parset — getComputedStyle på --bg
+  // kan returnere tom streng her. Hardkod verdiene som speiler globals.css
+  // (post-hydration tar settDataTheme i lib/tema-klient over og leser CSS).
+  var bg = resolved === 'light' ? '#f4f2ec' : '#0e0f13';
+  var m = document.querySelector('meta[name=theme-color]');
+  if (m) m.setAttribute('content', bg);
+}
+}catch(e){}})();`
+        }} />
         <meta name="theme-color" content={MANIFEST_FARGER.tema} />
+        {/* Klubb-overrides treffer kun dark — kremgul aksent har dårlig
+            kontrast på lyst papir. Klubb-spesifikke light-overrides kan
+            introduseres som eget issue ved behov. */}
         {klubbOverrides && <style>{`:root[data-theme="dark"] { ${klubbOverrides} }`}</style>}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
       </head>
       <body>
+        {/* TemaSync kobler localStorage og system-mq til data-theme etter hydration */}
+        <TemaSync initial={valgtTema} />
         {children}
         <div className="orientering-overlay" role="alert" aria-live="polite">
           <div style={{ fontSize: 40, lineHeight: 1 }}>↻</div>

@@ -19,7 +19,8 @@ function initialerAv(navn: string): string {
     .toUpperCase()
 }
 
-function hueAv(navn: string): number {
+// Eksportert slik at tema-server og andre som trenger hue-verdien kan bruke den direkte
+export function hueAv(navn: string): number {
   let h = 0
   for (let i = 0; i < navn.length; i++) {
     h = (h * 31 + navn.charCodeAt(i)) & 0xffff
@@ -60,19 +61,22 @@ export default function Avatar({ name, size = 32, src, rolle }: Props) {
     )
   }
 
+  // Gradient og tekstfarge styres av .avatar-initialer i globals.css (tema-sensitiv).
+  // --avatar-hue settes inline per navn; klassen velger riktig oklch-nivå for mørk/lys modus.
   return (
     <div
+      className="avatar-initialer"
       style={{
         ...felles,
+        '--avatar-hue': hue,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: `linear-gradient(135deg, oklch(0.28 0.04 ${hue}), oklch(0.18 0.03 ${hue}))`,
-        color: 'var(--text-primary)',
         fontSize: size * 0.36,
         fontWeight: 600,
         fontFamily: 'var(--font-body)',
-      }}
+      // Cast nødvendig — TypeScript støtter ikke CSS custom properties i CSSProperties-typen
+      } as React.CSSProperties}
       aria-label={name}
     >
       {init}

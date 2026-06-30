@@ -1,7 +1,7 @@
 // Skyer er hvite — "white"-verdier under er bevisst grafisk identitet, ikke tema-tokens
 export default function SkyBakgrunn() {
   return (
-    <div className="fixed top-0 left-0 right-0 h-96 pointer-events-none z-0 overflow-hidden">
+    <div className="sky-bakgrunn fixed top-0 left-0 right-0 h-96 pointer-events-none z-0 overflow-hidden">
       <svg
         viewBox="0 0 390 220"
         xmlns="http://www.w3.org/2000/svg"

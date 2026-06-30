@@ -152,7 +152,81 @@
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
   --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  /* Avatar-initialer-farge — lys glyph på mørk boble */
+  --avatar-foreground: #f5f5f7;
 }
+
+:root[data-theme="light"] {
+  /* Bakgrunn — varm off-white, sand-undertone bevart */
+  --bg: #f4f2ec;
+  --bg-gradient:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(120, 100, 205, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #faf8f2 0%, #f1efe8 100%);
+  --bg-elevated: rgba(255, 255, 255, 0.86);
+  --bg-elevated-2: rgba(255, 255, 255, 0.96);
+  --bg-elevated-solid: #ffffff;
+  --bg-header: rgba(244, 242, 236, 0.85);
+
+  /* Kantlinjer — varm mørk i lav alpha */
+  --border: rgba(40, 36, 26, 0.12);
+  --border-strong: rgba(40, 36, 26, 0.22);
+  --border-subtle: rgba(40, 36, 26, 0.06);
+
+  /* Tekst — varm nær-sort */
+  --text-primary: #1c1b16;
+  --text-secondary: #54514a;
+  --text-tertiary: #86827a;
+
+  /* Aksent — cognac (kan overstyres via NEXT_PUBLIC_KLUBB_FARGE_*) */
+  --accent: #a07a39;
+  --accent-soft: rgba(160, 122, 57, 0.14);
+  --accent-hot: #876427;
+  --accent-foreground: #fffdf6;
+
+  /* Semantisk */
+  --success: #3f8f5f;
+  --success-soft: rgba(63, 143, 95, 0.13);
+  --success-border: rgba(63, 143, 95, 0.32);
+  --success-hot: #327a4e;
+  --danger: #c0432f;
+  --danger-alt: #cf4334;
+  --danger-soft: rgba(192, 67, 47, 0.12);
+  --danger-border: rgba(192, 67, 47, 0.32);
+  --danger-hot: #a83622;
+  --warning: #b9701f;
+  --warning-soft: rgba(185, 112, 31, 0.13);
+  --warning-border: rgba(185, 112, 31, 0.32);
+  --warning-hot: #9c5d14;
+
+  /* Overlay — lightbox holdes mørk (foto), kun varmet */
+  --overlay-backdrop: rgba(22, 20, 15, 0.92);
+  --overlay-control-bg: rgba(22, 20, 15, 0.62);
+  --overlay-control-ring: rgba(255, 255, 255, 0.30);
+  --overlay-soft: rgba(22, 20, 15, 0.45);
+
+  /* Skygge — varm og mykere */
+  --shadow-floating: 0 4px 16px rgba(60, 50, 30, 0.10);
+  --shadow-popover: 0 6px 18px rgba(50, 42, 26, 0.14);
+  --shadow-modal: 0 12px 40px rgba(40, 34, 20, 0.20);
+
+  /* Avatar-initialer-farge — mørk glyph på lys boble */
+  --avatar-foreground: #1c1b16;
+}
+
+/* Avatar-initialer: gradient styrt av --avatar-hue (satt inline per navn),
+   farge bytter automatisk med tema via --avatar-foreground. */
+.avatar-initialer {
+  background: linear-gradient(135deg, oklch(0.28 0.04 var(--avatar-hue)), oklch(0.18 0.03 var(--avatar-hue)));
+  color: var(--avatar-foreground);
+}
+:root[data-theme="light"] .avatar-initialer {
+  background: linear-gradient(135deg, oklch(0.82 0.06 var(--avatar-hue)), oklch(0.72 0.05 var(--avatar-hue)));
+}
+
+/* Hvite skyer er usynlige mot lyst papir — dempet til nesten null i light mode */
+:root[data-theme="light"] .sky-bakgrunn { opacity: 0.05; }
 
 /* Binder CSS-tokens til Tailwind v4-utilities via @theme inline.
  * Gir f.eks. bg-accent, text-text-secondary, border-border som klasser. */

@@ -8,13 +8,19 @@ import SectionLabel from '@/components/ui/SectionLabel'
 import VarslerInnstillinger from '@/components/VarslerInnstillinger'
 import VarslerListe from '@/components/profil/VarslerListe'
 import PassInfoKort from '@/components/profil/PassInfoKort'
+import UtseendeValg from '@/components/profil/UtseendeValg'
 import { tittelFor } from '@/lib/roller'
+import { lesTemaFraCookie } from '@/lib/tema-server'
 import LoggUtKnapp from './LoggUtKnapp'
 
 const KLUBBEN_START_AAR = 2007
 
 export default async function Profil() {
-  const [supabase, user] = await Promise.all([createServerClient(), getInnloggetBruker()])
+  const [supabase, user, valgtTema] = await Promise.all([
+    createServerClient(),
+    getInnloggetBruker(),
+    lesTemaFraCookie(),
+  ])
 
   const [
     { data: profil },
@@ -392,6 +398,9 @@ export default async function Profil() {
         pushAktiv={varselPref?.push_aktiv ?? false}
         epostAktiv={varselPref?.epost_aktiv ?? true}
       />
+
+      {/* Utseende-innstillinger — alle kan velge tema */}
+      <UtseendeValg initial={valgtTema} />
 
       {/* Personlige varsler — interaktiv klient-komponent med filter, kollaps
           og marker-alle-lest. Vis seksjonen hvis det enten finnes varsler i

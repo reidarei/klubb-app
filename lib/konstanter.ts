@@ -75,3 +75,13 @@ export const BURSDAG_EMOJI_ANTALL = 5
 // Kombinert gir fire mulige meldingsmønstre per post. Se #328.
 export const BURSDAG_HILSNER = ['Gratulerer', 'Grattis'] as const
 export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const
+
+// Tema-valg — «dark» er default for alle eksisterende brukere.
+// Cookie er HttpOnly og speiles til localStorage for klient-synk.
+export const TEMA_COOKIE = 'tema' as const
+export const TEMA_STORAGE_KEY = 'hk-tema' as const
+export const TEMA_VALG = ['system', 'dark', 'light'] as const
+export type TemaValg = typeof TEMA_VALG[number]
+// CustomEvent-navn for klient-side tema-bytte. Dispatches av UtseendeValg,
+// lyttes av TemaSync — bruk konstanten for å unngå magiske strenger.
+export const TEMA_EVENT = 'temaEndret' as const
