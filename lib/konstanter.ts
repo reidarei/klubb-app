@@ -76,6 +76,10 @@ export const BURSDAG_EMOJI_ANTALL = 5
 export const BURSDAG_HILSNER = ['Gratulerer', 'Grattis'] as const
 export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const
 
+// Emoji-pool for reaksjons-picker i chat og kommentarer.
+// Brukes i Chat.tsx, MeldingReaksjoner.tsx og KommentarReaksjoner.tsx.
+export const REAKSJON_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '🙌'] as const
+
 // Tema-valg — «dark» er default for alle eksisterende brukere.
 // Cookie er HttpOnly og speiles til localStorage for klient-synk.
 export const TEMA_COOKIE = 'tema' as const

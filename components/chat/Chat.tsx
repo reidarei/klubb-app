@@ -26,7 +26,7 @@ import {
   type ChatProfil,
 } from '@/lib/mention'
 import MentionVelger from '@/components/agenda/MentionVelger'
-import { CHAT_NAER_BUNN_TERSKEL_PX } from '@/lib/konstanter'
+import { CHAT_NAER_BUNN_TERSKEL_PX, REAKSJON_EMOJIS } from '@/lib/konstanter'
 // Importer fra linkify-core (pure helper) i stedet for linkify.tsx — vi
 // trenger bare splitteren, ikke React-komponenten. Holder bundle slank.
 import { splittPaaUrler } from '@/lib/linkify-core'
@@ -53,8 +53,6 @@ export type ChatMelding = {
 // Antall meldinger som lastes first-batch og per "Vis eldre"-klikk
 const SIDE_STORRELSE = 30
 
-// Emojis tilgjengelige i reaksjons-picker
-const REAKSJON_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '🙌'] as const
 
 type Reaksjon = { melding_id: string; profil_id: string; emoji: string }
 

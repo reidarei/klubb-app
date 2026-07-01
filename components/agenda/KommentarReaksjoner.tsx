@@ -2,26 +2,30 @@
 
 import { useState, useTransition, useEffect, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { leggTilMeldingReaksjon, fjernMeldingReaksjon } from '@/lib/actions/meldinger'
+import { leggTilReaksjon, fjernReaksjon } from '@/lib/actions/chat'
 import { REAKSJON_EMOJIS } from '@/lib/konstanter'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
-
-// Re-eksport for bakoverkompatibilitet — flere komponenter importerte typen
-// herfra før den ble flyttet til lib/reaksjoner.ts. se #359.
-export type { ReaksjonGruppe }
 
 type Props = {
   meldingId: string
   brukerId: string
   reaksjoner: ReaksjonGruppe[]
-  /** Controlled-mode: hvis satt, styrer forelderen picker-tilstand
-   * (typisk via long-press) og + knappen rendres ikke. Hvis utelatt
-   * holder komponenten egen state og viser en + knapp. */
-  pickerApen?: boolean
-  lukkPicker?: () => void
+  /** Styres av forelder-komponenten (KommentarerPaaKort) som håndterer
+   * hover (desktop) og long-press (mobil). true = vis picker, false = skjul. */
+  pickerApen: boolean
+  lukkPicker: () => void
 }
 
-export default function MeldingReaksjoner({
+/**
+ * Reaksjons-rad for inline kommentarer på agenda-kortet. Bruker
+ * chat_reaksjoner-tabellen (leggTilReaksjon / fjernReaksjon fra
+ * lib/actions/chat.ts) — ikke melding_reaksjon-tabellen.
+ *
+ * Rendrer eksisterende reaksjons-badges + en controlled emoji-picker som
+ * åpnes/lukkes av forelderen (KommentarerPaaKort) basert på hover (desktop)
+ * eller long-press (mobil). Ingen egen trigger-knapp — helt controlled. se #359.
+ */
+export default function KommentarReaksjoner({
   meldingId,
   brukerId,
   reaksjoner: initial,
@@ -29,25 +33,15 @@ export default function MeldingReaksjoner({
   lukkPicker,
 }: Props) {
   const [reaksjoner, setReaksjoner] = useState<ReaksjonGruppe[]>(initial)
-  const [internApen, setInternApen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
   // Sync inn ferske server-props etter router.refresh(). Uten dette blir en
-  // rollback (setReaksjoner(initial)) fanget på den *første* initial-verdien,
-  // og etterfølgende server-oppdateringer ignoreres når komponent-instansen
-  // ikke remountes. se #359.
+  // rollback fanget på den *første* initial-verdien, og senere server-
+  // oppdateringer ignoreres når komponent-instansen ikke remountes. se #359.
   useEffect(() => {
     setReaksjoner(initial)
   }, [initial])
-
-  const erControlled = pickerApen !== undefined
-  const apen = erControlled ? !!pickerApen : internApen
-
-  function lukk() {
-    if (erControlled) lukkPicker?.()
-    else setInternApen(false)
-  }
 
   function stopp(e: MouseEvent) {
     e.preventDefault()
@@ -58,6 +52,8 @@ export default function MeldingReaksjoner({
     const finnes = reaksjoner.find(r => r.emoji === emoji)
     const harReagert = finnes?.profilIder.includes(brukerId) ?? false
 
+    // Optimistisk oppdatering: legg til eller fjern brukerens stemme
+    // umiddelbart — rollback til initial ved server-feil.
     setReaksjoner(prev => {
       const utenBruker = prev.map(r => ({
         ...r,
@@ -78,9 +74,9 @@ export default function MeldingReaksjoner({
     startTransition(async () => {
       try {
         if (harReagert) {
-          await fjernMeldingReaksjon(meldingId, emoji)
+          await fjernReaksjon(meldingId, emoji)
         } else {
-          await leggTilMeldingReaksjon(meldingId, emoji)
+          await leggTilReaksjon(meldingId, emoji)
         }
         router.refresh()
       } catch {
@@ -89,9 +85,8 @@ export default function MeldingReaksjoner({
     })
   }
 
-  // Controlled-mode uten reaksjoner og uten åpen picker → ingenting
-  // (sparer plass på agenda-kortene)
-  if (erControlled && reaksjoner.length === 0 && !apen) return null
+  // Ingen reaksjoner og picker er lukket → tom komponent (sparer vertikalt rom)
+  if (reaksjoner.length === 0 && !pickerApen) return null
 
   return (
     <div
@@ -100,10 +95,12 @@ export default function MeldingReaksjoner({
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
         flexWrap: 'wrap',
+        marginTop: 4,
       }}
     >
+      {/* Eksisterende reaksjonsbadger — alltid synlige når de finnes */}
       {reaksjoner.map(r => {
         const harReagert = r.profilIder.includes(brukerId)
         return (
@@ -118,14 +115,14 @@ export default function MeldingReaksjoner({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '3px 8px',
+              gap: 3,
+              padding: '2px 6px',
               borderRadius: 999,
               background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated-2)',
               border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
-              fontSize: 12,
+              fontSize: 11,
               cursor: isPending ? 'default' : 'pointer',
               opacity: isPending ? 0.6 : 1,
             }}
@@ -136,39 +133,13 @@ export default function MeldingReaksjoner({
         )
       })}
 
-      {/* + knapp kun i uncontrolled mode (detaljside) */}
-      {!erControlled && (
-        <button
-          type="button"
-          onClick={e => {
-            stopp(e)
-            setInternApen(v => !v)
-          }}
-          aria-label="Legg til reaksjon"
-          style={{
-            width: 28,
-            height: 26,
-            borderRadius: 999,
-            background: 'transparent',
-            border: '0.5px dashed var(--border-strong)',
-            color: 'var(--text-tertiary)',
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 0,
-          }}
-        >
-          +
-        </button>
-      )}
-
-      {apen && (
+      {/* Picker — åpnes ved hover (desktop) eller long-press/tap (mobil),
+          styrt av forelderen via pickerApen. Posisjonert over raden. */}
+      {pickerApen && (
         <div
           style={{
             position: 'absolute',
-            bottom: 'calc(100% + 6px)',
+            bottom: 'calc(100% + 4px)',
             left: 0,
             display: 'flex',
             gap: 4,
@@ -187,16 +158,16 @@ export default function MeldingReaksjoner({
               disabled={isPending}
               onClick={e => {
                 stopp(e)
-                lukk()
+                lukkPicker()
                 toggle(emoji)
               }}
               style={{
-                width: 30,
-                height: 30,
+                width: 28,
+                height: 28,
                 borderRadius: '50%',
                 background: 'transparent',
                 border: 'none',
-                fontSize: 18,
+                fontSize: 16,
                 cursor: isPending ? 'default' : 'pointer',
                 padding: 0,
                 opacity: isPending ? 0.6 : 1,
