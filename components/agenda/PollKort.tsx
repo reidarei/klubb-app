@@ -171,7 +171,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
           display: 'flex',
           flexDirection: 'column',
           gap: 0,
-          opacity: tidligere ? 0.62 : 1,
+          opacity: tidligere ? 'var(--tidligere-opacity)' : 1,
           borderRadius: 'var(--radius-card)',
         }}
       >

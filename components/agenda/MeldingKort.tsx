@@ -171,7 +171,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
           display: 'flex',
           flexDirection: 'column',
           gap: 0,
-          opacity: melding.tidligere ? 0.62 : 1,
+          opacity: melding.tidligere ? 'var(--tidligere-opacity)' : 1,
           borderRadius: 'var(--radius-card)',
         }}
       >

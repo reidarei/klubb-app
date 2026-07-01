@@ -203,7 +203,7 @@ export default function VarslerListe({
                       i < visning.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
                     textDecoration: 'none',
                     color: 'inherit',
-                    opacity: v.lest ? 0.6 : 1,
+                    opacity: v.lest ? 'var(--lest-opacity)' : 1,
                   }}
                 >
                   <div

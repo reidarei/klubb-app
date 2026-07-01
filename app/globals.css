@@ -85,6 +85,14 @@
   /* Modal-skygge (bunnskuff, install-veiledning) */
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
 
+  /* Opacity-tokens for dempet innhold (tidligere arrangementer, leste varsler).
+   * Speiles i data-theme="dark" med identiske verdier; heves i data-theme="light"
+   * fordi lys bakgrunn gjør lavere opacity vanskeligere å lese. */
+  --tidligere-opacity: 0.62;
+  --tidligere-opacity-lav: 0.5;
+  --tidligere-opacity-dypere: 0.4;
+  --lest-opacity: 0.6;
+
 }
 
 /* Speiling for data-theme="dark" — identiske verdier som :root. Forbereder
@@ -153,6 +161,12 @@
   --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
 
+  /* Opacity-tokens — identiske med :root (mørk modus) */
+  --tidligere-opacity: 0.62;
+  --tidligere-opacity-lav: 0.5;
+  --tidligere-opacity-dypere: 0.4;
+  --lest-opacity: 0.6;
+
   /* Avatar-initialer-farge — lys glyph på mørk boble */
   --avatar-foreground: #f5f5f7;
 }
@@ -210,6 +224,12 @@
   --shadow-floating: 0 4px 16px rgba(60, 50, 30, 0.10);
   --shadow-popover: 0 6px 18px rgba(50, 42, 26, 0.14);
   --shadow-modal: 0 12px 40px rgba(40, 34, 20, 0.20);
+
+  /* Opacity-tokens — hevet for bedre lesbarhet på lyst papir */
+  --tidligere-opacity: 0.85;
+  --tidligere-opacity-lav: 0.78;
+  --tidligere-opacity-dypere: 0.7;
+  --lest-opacity: 0.78;
 
   /* Avatar-initialer-farge — mørk glyph på lys boble */
   --avatar-foreground: #1c1b16;
