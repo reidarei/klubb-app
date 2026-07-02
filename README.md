@@ -189,7 +189,7 @@ Alle disse er kodifisert som «policies» i [`CLAUDE.md`](./CLAUDE.md) — refer
 - **Bildelagring:** server actions i `lib/actions/bilde-opplasting.ts` + `lib/r2.ts`. Klient komprimerer (1600px / q0.85) før upload.
 - **Avatar:** `<Avatar>`-komponenten er bevisst enkel (kun `name`, `size`, `src`, `rolle`). Spesialtilfeller løses med lokale wrappere, ikke ved å utvide kjerne-komponenten.
 
-### Chat-arkitektur (refaktorert i V2.176)
+### Chat-arkitektur
 
 Fem chat-scopes (arrangement, klubb, poll, melding, privat) deler tabell-mønster men er fysisk separate tabeller (RLS er enklere per-tabell enn polymorf med `scope_type`-kolonne). All scope-spesifikk logikk samles i `lib/chat-konfig.ts` (CHAT_KONFIG) og tre generiske server actions i `lib/actions/chat.ts` (`sendChatMelding`, `oppdaterChatMelding`, `slettChatMelding`).
 
