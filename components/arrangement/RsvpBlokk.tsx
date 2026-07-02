@@ -111,6 +111,11 @@ export default function RsvpBlokk({
 
         <button
           onClick={() => setRedigerer(true)}
+          // Test-hook for e2e — panelet skjuler valg-knappene i "valgt"-modus,
+          // så e2e må klikke Endre først. Vi eksponerer også hvilket svar som
+          // er aktivt slik at Playwright kan lese det uten å parse tekst.
+          data-svar={aktivtSvar}
+          data-testid="rsvp-endre"
           style={{
             padding: '8px 14px',
             borderRadius: 999,
@@ -183,6 +188,11 @@ export default function RsvpBlokk({
               key={a.id}
               disabled={isPending}
               onClick={() => velg(a.id)}
+              // Test-hooks: e2e (golden-path) leser data-aktiv for å verifisere
+              // valgt tilstand uten å måtte parse styling. data-status er stabil
+              // identifikator for hvilken knapp dette er (uavhengig av label-tekst).
+              data-status={a.id}
+              data-aktiv={erAktiv ? 'true' : 'false'}
               style={{
                 display: 'flex',
                 flexDirection: 'column',

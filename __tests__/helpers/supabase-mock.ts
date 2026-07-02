@@ -4,7 +4,8 @@ import { vi } from 'vitest'
 export function lagChain(resolveData: unknown = []) {
   const chain: Record<string, unknown> = {}
 
-  const metoder = ['select', 'insert', 'update', 'delete', 'eq', 'in', 'gte', 'lt', 'is', 'not', 'limit', 'order']
+  // upsert er med her fordi paameldinger og auto-RSVP bruker det
+  const metoder = ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'in', 'gte', 'lt', 'is', 'not', 'limit', 'order']
   for (const m of metoder) {
     chain[m] = vi.fn().mockReturnValue(chain)
   }
