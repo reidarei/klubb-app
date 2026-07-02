@@ -308,25 +308,19 @@ Denne seksjonen er for teknisk kyndige som vurderer kodebasen. Den er bevisst us
 
 Disse er bevisste pragmatiske valg for et hobbyprosjekt med én utvikler — men en gjennomgang fra tradisjonell vinkel ville flagget dem.
 
-- **`Chat.tsx` er 1300+ linjer.** Konsolidert mye via CHAT_KONFIG-refactoren, men selve komponenten er fortsatt en katedral. Sub-komponenter og custom hooks står uendret som «fase B».
-- **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier. Men styling er fortsatt skrevet som inline-objekter, ikke CSS-moduler eller className-baserte utility-klasser overalt. Pragmatisk for AI-flow siden diff-bredden er smal, men ikke skalerbart for større team.
+- **`Chat.tsx` er 1500+ linjer.** Konsolidert mye via CHAT_KONFIG-refactoren, men selve komponenten er fortsatt en katedral. Sub-komponenter og custom hooks står uendret som «fase B».
+- **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
 - **Test-dekning er overflate-tynn.** Enhetstester for helpers (`dato`, `roller`, `mention-regex`, `varsler`, `linkify`, `tema-klient`). Komponenter, server actions og integrasjoner er ikke dekket. End-to-end er ikke automatisert.
-- **`scripts/`-mappen inneholder engangsimport-scripts** fra Facebook-dataeksport. Noen av disse har hatt klartekst-passord og datafiler med personopplysninger. Mappen skal ikke kopieres til et nytt repo uten individuell audit av hvert script.
-- **`lib/actions/`-filer har lett gjenværende dupliserte mønstre** (varsel-sending etter insert, error-håndtering). Konsolidering er gjort der det betalte seg, ikke pedantisk overalt.
 - **Et lite antall `as unknown as`-casts** der Supabase-genererte typer ikke matcher faktiske join-resultater. Type-løgner, men avgrenset.
-- **iOS Safari-quirks håndteres med flere lag samtidig** (visualViewport-poll + focus-tracking + pathname-reset). Hver er logget med begrunnelse, men aggregert kompleksitet er reell.
 
 ### Hva en profesjonell modning ville krevd
 
 For et selskap eller team:
 
 1. **CI:** automatisk lint + test + DB-migrasjon-validering på PR.
-2. **Skikkelig test-dekning** — minst integrasjonstest av alle server actions med stub Supabase, og en håndfull e2e mot preview-deploy.
-3. **Type-strict mode** + null-as-unknown-erstatning av `as unknown as`-castene.
-4. **Komponent-splitting** av Chat.tsx + de største detaljsidene.
-5. **Observability:** strukturert logging, error reporting (Sentry e.l.), latency-metrics utover `web-vitals`.
-6. **Backup/restore-rutiner.** Supabase tar daglig backup, men det er ikke testet å restore.
-7. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
+2. **Observability:** strukturert logging, error reporting (Sentry e.l.), latency-metrics utover `web-vitals`.
+3. **Backup/restore-rutiner.** Supabase tar daglig backup, men det er ikke testet å restore.
+4. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
 
 For en privat klubb på 15–20 medlemmer er dette overkill. For en kommersiell SaaS er det baseline.
 
