@@ -1,0 +1,53 @@
+# CI-sjekk for pull requests mot main.
+# Kjører lint, tester og produksjonsbygg for å fange regresjoner
+# før merge. Build-steget bruker dummy-env slik at ingen ekte secrets trengs.
+
+name: PR-sjekk
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Minste privilegium — jobben trenger bare å lese koden.
+permissions:
+  contents: read
+
+# Avbryt pågående run for samme branch ved nytt push — sparer CI-tid.
+# Gruppen inkluderer workflow-navn slik at fremtidige workflows ikke
+# kolliderer med denne på samme ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sjekk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Installer avhengigheter
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Bygg
+        env:
+          # Supabase-klienten (lib/supabase/server.ts + client.ts) og push-modulen
+          # leser disse ved modulinnlasting. Vi bruker dummy-verdier siden bygget
+          # ikke faktisk kaller ut — ingen ekte secrets trengs i CI.
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: dummy
+        run: npm run build
