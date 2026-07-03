@@ -3,6 +3,7 @@
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
 import { videoSti, VIDEO_KATEGORIER, type VideoKategori } from '@/lib/bilde-utils'
+import { logg } from '@/lib/logg'
 
 // Maksstørrelse for video. 50 MB er en pragmatisk grense som rommer korte
 // mobilopptak; vi avviser større filer eksplisitt for å unngå at urimelig
@@ -54,7 +55,7 @@ export async function lastOppVideo(formData: FormData): Promise<{ url: string }>
 
     return { url }
   } catch (err) {
-    console.error('[video-opplasting] feil:', err)
+    await logg.feil('video.opplast.feilet', err)
     const melding = err instanceof Error ? err.message : 'Ukjent feil ved opplasting'
     throw new Error(`Opplasting feilet: ${melding}`)
   }

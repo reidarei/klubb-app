@@ -10,8 +10,27 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    // Logg til server via console — fanges opp av Vercel-logger
-    console.error('App error boundary:', error)
+    // Beacon til /api/logg-feil — scrubbes og lagres i feil_logg. Se #366.
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      navigator.sendBeacon(
+        '/api/logg-feil',
+        new Blob(
+          [
+            JSON.stringify({
+              event: 'klient.render.feilet',
+              nivaa: 'error',
+              kontekst: {
+                message: error.message,
+                stack: error.stack?.slice(0, 2000),
+                digest: error.digest,
+                url: typeof window !== 'undefined' ? window.location.href : '',
+              },
+            }),
+          ],
+          { type: 'application/json' },
+        ),
+      )
+    }
   }, [error])
 
   return (

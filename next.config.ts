@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withSentryConfig } from '@sentry/nextjs'
 import pkg from './package.json' with { type: 'json' }
 import versjon from './lib/versjon.json' with { type: 'json' }
 
@@ -54,4 +55,10 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+// withSentryConfig wrapper aktiverer Sentry server-side via instrumentation.ts.
+// Vi har ingen sentry.client.config.ts, så browser-SDK initialiseres aldri
+// i klienten — klient-feil sendes via /api/logg-feil + beacon istedenfor. Se #366.
+// silent: true demper Sentry-build-output.
+export default withSentryConfig(nextConfig, {
+  silent: true,
+})

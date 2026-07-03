@@ -41,6 +41,10 @@ export const R2_PUBLIC_URL = (
 // instans appen bruker; access keys er det hemmelige.
 export const KJENT_PROD_SUPABASE_URL = 'https://tdlfswmxezjdnxcbbiwn.supabase.co'
 
+// DSN for Sentry feil-rapportering. Kun tilgjengelig server-side (ingen NEXT_PUBLIC_-prefiks)
+// slik at DSN-en ikke lekker til klient-bundlen. Brukes av lib/logg.ts og sentry.server.config.ts.
+export const SENTRY_DSN = process.env.SENTRY_DSN ?? ''
+
 // GitHub-repo som backer «innspill»-funksjonen. Issues med label
 // GITHUB_ONSKE_LABEL behandles som brukerønsker.
 export const GITHUB_REPO =

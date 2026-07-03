@@ -80,6 +80,26 @@ export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const
 // Brukes i Chat.tsx, MeldingReaksjoner.tsx og KommentarReaksjoner.tsx.
 export const REAKSJON_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '🙌'] as const
 
+// ─── FEILLOGGING / OBSERVABILITY ─────────────────────────────────────────────
+
+// Antall klient-feil vi tillater per IP+profil per minutt via /api/logg-feil.
+// Overskridelse returnerer 429. In-memory per Vercel-instans — deles ikke på
+// tvers av instanser, men er god nok til å stoppe utilsiktede stormer.
+export const LOGG_FEIL_RATE_LIMIT_PER_MIN = 10
+
+// Antall dager feil_logg-rader beholdes. Sletting utføres av sjekk-klientfeil-cron.
+export const LOGG_FEIL_RETENSJONSDAGER = 30
+
+// Antall klientfeil siste 24t som trigger admin-varsel i sjekk-klientfeil-cron.
+export const KLIENT_FEIL_ALARM_TERSKEL = 5
+
+// Maksimal størrelse på kontekst-JSON sendt til /api/logg-feil (i KB).
+// Hindrer at store payloads metter tabellen — typisk stacktrace er < 2 KB.
+export const LOGG_KONTEKST_MAKS_KB = 4
+
+// Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
+export const LOGG_EVENT_MAKS_LENGDE = 128
+
 // Tema-valg — «dark» er default for alle eksisterende brukere.
 // Cookie er HttpOnly og speiles til localStorage for klient-synk.
 export const TEMA_COOKIE = 'tema' as const

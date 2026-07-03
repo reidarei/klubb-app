@@ -10,6 +10,7 @@ import {
 } from '@/lib/varsler'
 import { behandleKaaringspollAvsluttResultat } from '@/lib/varsler-kaaringspoll'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
+import { logg } from '@/lib/logg'
 
 type OpprettInput = {
   kaaringMalId: string
@@ -129,7 +130,7 @@ export async function opprettKaaringspoll(input: OpprettInput) {
     pollId: poll.id,
     spoersmaal,
     svarfrist: frist.toISOString(),
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('kaaringspoll.varsler.feilet', err))
 
   revalidatePath('/')
   revalidatePath('/kaaringer')
@@ -197,7 +198,7 @@ export async function velgTiebreakVinner(pollId: string, valgId: string) {
   await sendKaaringspollVinnerVarsel({
     pollId: poll.id,
     spoersmaal: poll.spoersmaal,
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('kaaringspoll.varsler.feilet', err))
 
   revalidatePath(`/poll/${pollId}`)
   revalidatePath('/kaaringer')
@@ -268,7 +269,7 @@ export async function lukkKaaringspollNaa(pollId: string) {
     status: rad.status as string,
     tiebreakIder,
     adminIder,
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('kaaringspoll.varsler.feilet', err))
 
   revalidatePath(`/poll/${pollId}`)
   revalidatePath('/kaaringer')

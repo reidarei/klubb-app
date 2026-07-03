@@ -293,12 +293,13 @@ describe('opprettArrangement', () => {
   // låser den kontrakten — et fremtidig forsøk på å strømlinjeforme flyten ved
   // å kaste videre vil brekke her, ikke i prod.
   it('auto-RSVP-feil hindrer IKKE at opprettelsen fullfører (swallow)', async () => {
-    // Undertrykk console.error slik at testoutput holdes rent — vi verifiserer
-    // via mock i stedet at feilen faktisk ble logget.
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // Etter #366 loggeres feilen via logg.feil() → console.log (JSON-linje),
+    // ikke console.error. Vi verifiserer at noe ble logget til console.log
+    // med event 'arrangement.rsvp.feilet', og at flyten fullfører.
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     // try/finally sikrer at spy restores selv om en assertion kaster — ellers
-    // lekker mocken til påfølgende tester og maskerer console.error der.
+    // lekker mocken til påfølgende tester og maskerer console.log der.
     try {
       mockFrom.mockImplementation((tabell: string) => {
         if (tabell === 'arrangementer') {
@@ -338,13 +339,13 @@ describe('opprettArrangement', () => {
       expect(mockSendNyttArrangementVarsler).toHaveBeenCalled()
       // Redirect ble kalt (siste steg i happy path)
       expect(mockRedirect).toHaveBeenCalled()
-      // Feilen ble logget — ikke svelget stumt
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('auto-RSVP'),
-        expect.objectContaining({ message: 'RSVP-upsert glapp' })
+      // Feilen ble logget via logg.feil() som skriver JSON til console.log
+      // med event-feltet 'arrangement.rsvp.feilet' (#366)
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('arrangement.rsvp.feilet')
       )
     } finally {
-      consoleErrorSpy.mockRestore()
+      consoleLogSpy.mockRestore()
     }
   })
 

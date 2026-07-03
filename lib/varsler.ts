@@ -5,6 +5,7 @@ import { formaterDato, FORMAT_DATO_KLOKKE } from '@/lib/dato'
 import { BASE_URL } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
+import { logg } from '@/lib/logg'
 
 const formaterDatoKlokke = (iso: string) => formaterDato(iso, FORMAT_DATO_KLOKKE)
 
@@ -164,18 +165,14 @@ export async function sendVarsel({
   // forurense loggen med "late som"-rader. Logg til konsoll slik at
   // utvikleren ser hva som skjedde.
   if (BLOKKER_UTSENDING) {
-    console.warn(
-      `[varsler] BLOKKERT: BASE_URL='${BASE_URL}' ser lokal ut. ` +
-      `Varselet '${tittel}' (type=${type}) ble IKKE sendt. ` +
-      `Sett NEXT_PUBLIC_BASE_URL til prod-URL eller ALLOW_LOCAL_NOTIFICATIONS=true for å overstyre.`
-    )
+    logg.warn('varsel.blokkert.lokal', { sample: type })
     return
   }
 
   // 0. Sjekk admin-kontrollpanelet — admin kan slå av en hel varseltype
   // sentralt. Manglende nøkkel teller som «aktiv» (default true).
   if (!(await erTypeAktiv(type))) {
-    console.log(`[varsler] Type '${type}' er deaktivert i admin-innstillinger — varsel ikke sendt`)
+    logg.warn('varsel.type.deaktivert', { sample: type })
     return
   }
 

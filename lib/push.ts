@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import { VAPID_CONTACT_EMAIL } from '@/lib/config'
+import { logg } from '@/lib/logg'
 
 let initialisert = false
 
@@ -43,7 +44,7 @@ export async function sendPush(subscription: PushSubscription, payload: PushPayl
   } catch (err: unknown) {
     // 410 = subscription er utløpt/avmeldt, ignorer
     if ((err as { statusCode?: number }).statusCode !== 410) {
-      console.error('Push feilet:', err)
+      await logg.feil('varsel.push.feilet', err)
     }
   }
 }

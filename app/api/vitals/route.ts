@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { logg } from '@/lib/logg'
 
 // Tillat mobil-klienter som bruker navigator.sendBeacon (sender
 // text/plain content-type) eller fetch med JSON. Vi parser begge.
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (error) {
-    console.error('[vitals] insert feilet:', error)
+    await logg.feil('vitals.insert.feilet', error, { ctx: { code: error.code } })
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 

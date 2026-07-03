@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { ensureAdmin, ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { normaliserTelefon } from '@/lib/telefon'
+import { logg } from '@/lib/logg'
 
 // Resultattyper for GS-actions — strukturert retur i stedet for throw,
 // slik at klienten kan vise reaktiv confirm ved race-tilstand (23505).
@@ -98,11 +99,12 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
   // fjernGeneralsekretaer() først hvis demotering av GS er ønsket.
   const skalRoreRolle = !gjeldendeFeil && gjeldende != null && gjeldende.rolle !== 'generalsekretaer'
   if (!skalRoreRolle) {
-    console.warn(
-      `[oppdaterMedlemAdmin] Hopper over rolle-oppdatering for profil ${id}: ` +
-      `gjeldende rolle '${gjeldende?.rolle ?? 'ukjent'}' (oppslagsfeil: ${gjeldendeFeil?.message ?? 'nei'}), innsendt '${data.rolle}'. ` +
-      `Forventer at fjernGeneralsekretaer() ble kalt først hvis GS skulle demoteres.`,
-    )
+    // Warn (ikke feil) — typisk scenario er at GS-demotering håndteres av
+    // fjernGeneralsekretaer() i RedigerMedlemSkjema.handleLagre() før denne actionen.
+    logg.warn('profil.rolle.hoppet', {
+      profil_id: id,
+      code: gjeldendeFeil?.code,
+    })
   }
   const oppdatering: Record<string, unknown> = skalRoreRolle
     ? { ...baseOppdatering, rolle: data.rolle }

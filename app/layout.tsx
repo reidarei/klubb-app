@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import VitalsLogger from '@/components/VitalsLogger'
 import TemaSync from '@/components/TemaSync'
+import FeilFangst from '@/components/FeilFangst'
 import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_BESKRIVELSE } from '@/lib/klubb-config'
 import { MANIFEST_FARGER } from '@/lib/tema'
 import { TEMA_STORAGE_KEY } from '@/lib/konstanter'
@@ -122,6 +123,8 @@ if (resolved === 'light' || resolved === 'dark') {
       <body>
         {/* TemaSync kobler localStorage og system-mq til data-theme etter hydration */}
         <TemaSync initial={valgtTema} />
+        {/* FeilFangst lytter på window.error og unhandledrejection globalt. Se #366. */}
+        <FeilFangst />
         {children}
         <div className="orientering-overlay" role="alert" aria-live="polite">
           <div style={{ fontSize: 40, lineHeight: 1 }}>↻</div>

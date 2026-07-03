@@ -10,6 +10,7 @@ import { naa } from '@/lib/dato'
 import { r2StiFraUrl, slettR2 } from '@/lib/r2'
 import { VARSLE_MAKS_LENGDE, PURRING_MAKS_LENGDE } from '@/lib/konstanter'
 import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
 
 export type ArrangementInput = {
   type: 'moete' | 'tur'
@@ -97,7 +98,7 @@ export async function opprettArrangement(data: ArrangementInput) {
       { onConflict: 'arrangement_id,profil_id' },
     )
   if (rsvpError) {
-    console.error('[opprettArrangement] auto-RSVP feilet:', rsvpError)
+    await logg.feil('arrangement.rsvp.feilet', rsvpError, { ctx: { code: rsvpError.code } })
   }
 
   await koble(supabase, arrangement.id, data.mal_navn, data.aar)
@@ -110,7 +111,7 @@ export async function opprettArrangement(data: ArrangementInput) {
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('arrangement.varsler.feilet', err))
 
   redirect(`/arrangementer/${arrangement.id}?varslet=true`)
 }

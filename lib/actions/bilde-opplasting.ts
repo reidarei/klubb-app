@@ -3,6 +3,7 @@
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
 import { bildeSti, BILDE_KATEGORIER, type BildeKategori } from '@/lib/bilde-utils'
+import { logg } from '@/lib/logg'
 
 // Maksstørrelse mot R2 — komprimering på klienten skal holde filer godt
 // under dette, men vi avviser eksplisitt for å unngå at store råfiler
@@ -44,7 +45,7 @@ export async function lastOppBilde(formData: FormData): Promise<{ url: string }>
     // Log fullt til server-konsoll, og kast en ren Error som klienten kan
     // vise i UI. Default Next-wrapper ("server components render error")
     // skjuler ellers den faktiske årsaken.
-    console.error('[bilde-opplasting] feil:', err)
+    await logg.feil('bilde.opplast.feilet', err)
     const melding = err instanceof Error ? err.message : 'Ukjent feil ved opplasting'
     throw new Error(`Opplasting feilet: ${melding}`)
   }

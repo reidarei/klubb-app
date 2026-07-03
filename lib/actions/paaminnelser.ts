@@ -1,4 +1,5 @@
 import { addDays } from 'date-fns'
+import { createHash } from 'crypto'
 import { norskDatoNaa, naa } from '@/lib/dato'
 import {
   sendPaaminneVarsler,
@@ -8,6 +9,7 @@ import {
 import { behandleKaaringspollAvsluttResultat } from '@/lib/varsler-kaaringspoll'
 import { PAAMINNELSE_DAGER } from '@/lib/konstanter'
 import { rollerMed } from '@/lib/roller'
+import { logg } from '@/lib/logg'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -82,7 +84,37 @@ export async function kjorPaaminnelser(admin: Admin) {
   const behandlet = utfall
     .filter((r): r is PromiseFulfilledResult<{ id: string; type: string }> => r.status === 'fulfilled')
     .map(r => r.value)
-  let feil = utfall.filter(r => r.status === 'rejected').length
+  let feil = 0
+
+  // Aggreger feil per fingerprint — én Sentry-event per feil-klasse, ikke per
+  // arrangement. Map<fingerprint, {count, sample}> slik at vi rapporterer
+  // «paaminne feilet 3 ganger» i stedet for tre identiske Sentry-issues.
+  const feilMap = new Map<string, { count: number; sample: unknown }>()
+  for (const r of utfall) {
+    if (r.status !== 'rejected') continue
+    feil++
+    const err = r.reason
+    const code = (err && typeof err === 'object' && 'code' in err) ? String((err as Record<string, unknown>).code) : undefined
+    // Fingerprint: feil-kode hvis kjent (grupperer alle «23505»-feil),
+    // ellers en kort hash av meldingsteksten (8 hex-tegn er nok for bucketing).
+    const fingerprint =
+      code ??
+      createHash('sha1')
+        .update(err instanceof Error ? err.message : String(err))
+        .digest('hex')
+        .slice(0, 8)
+    const bucket = feilMap.get(fingerprint)
+    if (bucket) {
+      bucket.count++
+    } else {
+      feilMap.set(fingerprint, { count: 1, sample: err })
+    }
+  }
+
+  // Rapporter én logg-event per fingerprint (ikke per arrangement).
+  for (const [fingerprint, { count, sample }] of feilMap) {
+    await logg.feil('cron.paaminne.feilet', sample, { fingerprint, ctx: { count } })
+  }
 
   // ─── Kåringspoll: lukk de som har passert frist ───────────────────────────
   // RPC-en avslutt_kaaringspoll er idempotent, så å kjøre den hver dag på

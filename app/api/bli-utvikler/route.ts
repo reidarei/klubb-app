@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { GITHUB_REPO, GITHUB_ONSKE_LABEL } from '@/lib/config'
+import { logg } from '@/lib/logg'
 
 // Ingen non-null assertion: GITHUB_TOKEN er en valgfri integrasjon, og en
 // instans uten den skal degradere pent — ikke krasje (#299).
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
 
   if (!res.ok) {
     const feil = await res.text()
-    console.error('GitHub Issue feilet:', feil)
+    await logg.feil('bli-utvikler.issue.feilet', new Error(feil))
     return NextResponse.json({ feil: 'Kunne ikke opprette ønske' }, { status: 500 })
   }
 

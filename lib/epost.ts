@@ -1,6 +1,7 @@
 // Krever verifisert domene i Resend — sett RESEND_FROM til f.eks. "Klubben <noreply@dittdomene.no>"
 import { KLUBB_NAVN } from './klubb-config'
 import { EPOST_FARGER } from './tema'
+import { logg } from './logg'
 const RESEND_API_KEY = process.env.RESEND_API_KEY!
 // Avsender er server-only-konfig (Resend-spesifikk) og holdes derfor her,
 // ikke i klient-trygg klubb-config. Ingen NEXT_PUBLIC_-prefiks.
@@ -17,10 +18,11 @@ export async function sendEpost({ til, emne, html }: { til: string; emne: string
       body: JSON.stringify({ from: RESEND_FROM, to: til, subject: emne, html }),
     })
     if (!res.ok) {
-      console.error('Epost feilet:', await res.text())
+      const tekst = await res.text()
+      await logg.feil('varsel.epost.feilet', new Error(tekst))
     }
   } catch (err) {
-    console.error('Epost-feil:', err)
+    await logg.feil('varsel.epost.feilet', err)
   }
 }
 

@@ -7,6 +7,7 @@ import { BASE_URL } from '@/lib/config'
 import { CHAT_MIN_LENGDE, INNLEGG_MIN_LENGDE } from '@/lib/konstanter'
 import { konfigFor, revalideringsPaths, type ChatScope } from '@/lib/chat-konfig'
 import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
 
 // Trimmer og validerer chat-innhold for et gitt scope. Bruker scope-spesifikk
 // charLimit (privat = INNLEGG_MAKS_LENGDE = 2000, øvrige = CHAT_MAKS_LENGDE
@@ -133,7 +134,7 @@ export async function sendChatMelding(
   } catch (err) {
     // Varsel-svikt skal ikke feile selve meldingen — den er allerede skrevet
     // til DB. Logg og gå videre.
-    console.error('post-send-varsler feilet:', err)
+    await logg.feil('chat.varsler.feilet', err)
   }
 }
 

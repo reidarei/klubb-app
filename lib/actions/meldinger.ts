@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { BASE_URL } from '@/lib/config'
 import { INNLEGG_MAKS_LENGDE, INNLEGG_MIN_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
 import { naa } from '@/lib/dato'
+import { logg } from '@/lib/logg'
 
 export async function opprettMelding(input: {
   innhold: string
@@ -98,7 +99,7 @@ export async function opprettMelding(input: {
     url: `${BASE_URL}/meldinger/${data.id}`,
     knappTekst: 'Åpne innlegget',
     type: 'melding-ny',
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('melding.varsler.feilet', err))
 
   // Uten dette serverer Router Cache den gamle forsiden ved redirect, så det
   // nye innlegget mangler til brukeren refresher manuelt. Alle andre

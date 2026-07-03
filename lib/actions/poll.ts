@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendNyPollVarsler } from '@/lib/varsler'
 import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
 
 export type PollInput = {
   spoersmaal: string
@@ -74,7 +75,7 @@ export async function opprettPoll(data: PollInput) {
     pollId: poll.id,
     spoersmaal,
     svarfrist: frist.toISOString(),
-  }).catch(console.error)
+  }).catch((err: unknown) => logg.feil('poll.varsler.feilet', err))
 
   redirect(`/poll/${poll.id}`)
 }

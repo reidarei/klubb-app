@@ -4,6 +4,7 @@ import { sendVarsel } from '@/lib/varsler'
 import { formaterDato } from '@/lib/dato'
 import { rollerMed } from '@/lib/roller'
 import { BASE_URL, GITHUB_ONSKE_LABEL } from '@/lib/config'
+import { logg } from '@/lib/logg'
 import crypto from 'crypto'
 
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET
@@ -22,7 +23,8 @@ export async function POST(request: Request) {
   // hoppet over verifisering ved manglende env-var — det er fail-open og
   // ble fanget i sikkerhetsgjennomgangen 2026-06.
   if (!WEBHOOK_SECRET) {
-    console.error('[github-webhook] GITHUB_WEBHOOK_SECRET er ikke satt — avviser kall')
+    // Konfigurasjons-feil — warn er tilstrekkelig (ikke en exception)
+    logg.warn('github.webhook.ikke-konfigurert')
     return NextResponse.json({ feil: 'Webhook ikke konfigurert' }, { status: 503 })
   }
 

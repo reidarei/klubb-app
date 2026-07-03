@@ -1,0 +1,27 @@
+# Daglig sjekk av klientfeil-volumet og retention av feil_logg.
+# Kjøres 05:00 UTC = 07:00 norsk sommer / 06:00 norsk vinter.
+# Samme autentiseringsmønster som paaminne.yml (Bearer CRON_SECRET).
+# Se #366 og docs/oppsett.md seksjon 9 for secret-oppsett.
+
+name: Daglig klientfeil-sjekk
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch: # Kan kjøres manuelt fra GitHub
+
+jobs:
+  sjekk-klientfeil:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sjekk klientfeil og rydd opp gammel logg
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L \
+            -X POST "${{ secrets.APP_URL }}/api/cron/sjekk-klientfeil" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::sjekk-klientfeil-endepunktet svarte med HTTP $STATUS"
+            exit 1
+          fi

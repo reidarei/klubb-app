@@ -18,6 +18,7 @@ import {
 } from '@/lib/konstanter'
 import { sendVarsel } from '@/lib/varsler'
 import { rollerMed } from '@/lib/roller'
+import { logg } from '@/lib/logg'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -166,7 +167,9 @@ export async function kjorBursdagsgratulasjon(
             hoppet++
             continue
           }
-          console.error('[bursdagsgratulasjon] Insert-feil:', insertErr.message)
+          await logg.feil('bursdagsgratulasjon.feilet', insertErr, {
+            ctx: { code: insertErr.code },
+          })
           feil++
           continue
         }
@@ -188,7 +191,7 @@ export async function kjorBursdagsgratulasjon(
 
         sendt++
       } catch (e) {
-        console.error('[bursdagsgratulasjon] Uventet feil:', e)
+        await logg.feil('bursdagsgratulasjon.feilet', e)
         feil++
       }
     }
