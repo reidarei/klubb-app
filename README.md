@@ -161,6 +161,7 @@ samtale (privat 1:1) ──── samtale_chat
 arrangoransvar (hvem er ansvarlig for hvilke faste arrangementer per år)
 kaaringer / kaaring_vinnere (årets vinnere per kategori)
 varsel_logg (alle utsendte push/epost loggføres)
+feil_logg (klient-side JavaScript-feil med 30-dagers retention)
 ```
 
 Alle tabeller har RLS slått på. Policy-mønsteret er typisk:
@@ -188,6 +189,7 @@ Alle disse er kodifisert som «policies» i [`CLAUDE.md`](./CLAUDE.md) — refer
 - **Klubbidentitet:** navn, stiftelsesdato, rolletitler i `lib/klubb-config.ts` med env-override — se [docs/klubb-tilpasning.md](docs/klubb-tilpasning.md).
 - **Bildelagring:** server actions i `lib/actions/bilde-opplasting.ts` + `lib/r2.ts`. Klient komprimerer (1600px / q0.85) før upload.
 - **Avatar:** `<Avatar>`-komponenten er bevisst enkel (kun `name`, `size`, `src`, `rolle`). Spesialtilfeller løses med lokale wrappere, ikke ved å utvide kjerne-komponenten.
+- **Observability:** Sentry integreres server-side kun (kysemeg på bundle-størrelse). Klient-side JavaScript-feil fanges opp via global error boundary og logges til `feil_logg`-tabell med automatisk 30-dagers opprydding. Daglig cron varsler admins hvis flere enn 5 feil passert tolden siste døgn.
 
 ### Chat-arkitektur
 
@@ -261,7 +263,10 @@ __tests__/       # Vitest — fokuserte enhets-tester på utvalgte helpers
 
 **Versjon:** `lib/versjon.json` stampes automatisk via `npm run stamp-versjon` før hver commit — oppdaterer også `public/sw.js` for å invalidere service-worker-cache.
 
-**Cron:** GitHub Actions (`.github/workflows/paaminne.yml`) kaller `/api/cron/paaminne` daglig kl 06:00 UTC med `CRON_SECRET`-header. Valgt foran Vercel Cron for bedre logging og synlig feilrapportering.
+**Cron:** GitHub Actions kjører daglig påminnelser og error-monitoring:
+- `.github/workflows/paaminne.yml` → `/api/cron/paaminne` kl 06:00 UTC. Sender påminnelse-varsler for kommende arrangementer.
+- `.github/workflows/sjekk-klientfeil.yml` → `/api/cron/sjekk-klientfeil` kl 05:00 UTC. Sjekker om det er > 5 ubehandlede feil i `feil_logg` siste døgn; varsler admins hvis ja.
+Begge bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cron for bedre logging og synlig feilrapportering.
 
 **Migrasjoner:** kjøres lokalt med `npx supabase db push` mot prod-prosjektet. Det er **ingen CI-orkestrering** — migrasjoner er en manuell utviklerhandling.
 
@@ -284,10 +289,12 @@ npm run sjekk-miljo
 Skriptet sjekker tre nivåer:
 
 - **Kritisk** (Supabase, R2, VAPID) — appen/kjernefunksjoner starter ikke uten disse.
-- **Anbefalt** (Resend, CRON_SECRET, GitHub-token) — appen starter, men e-post, påminnelsesvarsler eller innspill-funksjonen mangler.
+- **Anbefalt** (Resend, CRON_SECRET, GitHub-token, SENTRY_DSN) — appen starter, men e-post, påminnelsesvarsler, innspill-funksjonen eller error reporting mangler.
 - **Valgfri** (klubbidentitet m.m.) — har defaults, vises kun hvis eksplisitt satt.
 
 **CRON_SECRET** settes to steder med samme verdi: i Vercel env-vars (runtime-sjekken i cron-endepunktet) og som GitHub Actions-secret (workflow-en som sender headeren). Mismatch eller manglende verdi gir 401 fra cron-endepunktet.
+
+**SENTRY_DSN** (valgfri) — client-ID for Sentry error tracking. Uten den kjører appen helt fint, men uten server-side error reporting. Opprett en egen Sentry-konto for din instans og lim inn DSN-en her. Klient-side JavaScript-feil logges lokalt til `feil_logg`-tabellen uansett.
 
 **APP_URL** settes kun som GitHub Actions-secret (peker workflow-en til prod-URL) — den brukes ikke av appen i runtime og hører ikke hjemme i `.env.local`.
 
