@@ -267,6 +267,8 @@ __tests__/       # Vitest — fokuserte enhets-tester på utvalgte helpers
 
 **Secrets:** Vercel env-vars. R2-credentials er markert «Sensitive» (kan ikke pulles tilbake).
 
+**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint + tester + produksjonsbygg på hver PR mot `main`. Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk`, blokker force-push og slett av branch. Da kan ingen PR merges før CI er grønn.
+
 ---
 
 ## Miljøvariabler
