@@ -20,9 +20,9 @@ if (fs.existsSync(envPath)) {
 }
 
 // ─── Test-instans (#386) ─────────────────────────────────────────────────────
-// ALL e2e kjører mot en dedikert Supabase-testinstans (selvhostet, se
-// docs/test-instans.md) — ALDRI mot prod. Bakgrunn: hendelsen 2026-07-04 der
-// testkjøringer opprettet ekte poller og sendte push til alle medlemmer.
+// ALL e2e kjører mot en dedikert Supabase-testinstans (se e2e/README.md for
+// oppsett) — ALDRI mot prod. Bakgrunn: en testkjøring mot prod opprettet ekte
+// poller og sendte push til alle medlemmer.
 const E2E_SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? ''
 const E2E_SUPABASE_ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? ''
 const E2E_SUPABASE_SERVICE_KEY = process.env.E2E_SUPABASE_SERVICE_KEY ?? ''
@@ -36,7 +36,7 @@ const HAR_TEST_INSTANS = Boolean(
 if (/supabase\.(co|com)/.test(E2E_SUPABASE_URL)) {
   throw new Error(
     'E2E_SUPABASE_URL peker mot sky-Supabase. e2e kjører KUN mot lokal/selvhostet ' +
-      'test-instans (#386) — se docs/test-instans.md.',
+      'test-instans (#386) — se e2e/README.md.',
   )
 }
 
