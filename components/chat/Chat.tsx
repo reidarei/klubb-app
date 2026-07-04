@@ -1,35 +1,32 @@
 'use client'
 
-import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   sendChatMelding,
   oppdaterChatMelding,
   slettChatMelding,
-  leggTilReaksjon,
-  fjernReaksjon,
 } from '@/lib/actions/chat'
 import { konfigFor, type ChatScope as ChatScopeKonfig } from '@/lib/chat-konfig'
-import { formaterDato, erSammeNorskeDag, formaterDatoSkille } from '@/lib/dato'
-import Avatar from '@/components/ui/Avatar'
+import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
 import BildeLightbox from '@/components/ui/BildeLightbox'
-import MessengerBadge from '@/components/ui/MessengerBadge'
-import { komprimer, genererFilnavn } from '@/lib/bilde-utils'
+import { genererFilnavn } from '@/lib/bilde-utils'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import {
   beregnMentionSøk,
   velgMentionTekst,
   lagMentionForslag,
-  mentionSplitRegex,
   type ChatProfil,
 } from '@/lib/mention'
 import MentionVelger from '@/components/agenda/MentionVelger'
-import { CHAT_NAER_BUNN_TERSKEL_PX, REAKSJON_EMOJIS } from '@/lib/konstanter'
-// Importer fra linkify-core (pure helper) i stedet for linkify.tsx — vi
-// trenger bare splitteren, ikke React-komponenten. Holder bundle slank.
-import { splittPaaUrler } from '@/lib/linkify-core'
+import { CHAT_NAER_BUNN_TERSKEL_PX } from '@/lib/konstanter'
+import ChatMeldingRad from './ChatMeldingRad'
+import { useKeyboardOffset } from './hooks/useKeyboardOffset'
+import { useBildeOpplasting } from './hooks/useBildeOpplasting'
+import { useChatReaksjoner } from './hooks/useChatReaksjoner'
+import { useChatMeldinger } from './hooks/useChatMeldinger'
 
 // ChatScope er sentralt definert i lib/chat-konfig.ts og re-eksportert her
 // for kall-ergonomi (eksisterende callsites importerer fra Chat.tsx).
@@ -49,63 +46,6 @@ export type ChatMelding = {
 }
 
 // ChatProfil-typen ligger i lib/mention.ts — importer derfra direkte.
-
-// Antall meldinger som lastes first-batch og per "Vis eldre"-klikk
-const SIDE_STORRELSE = 30
-
-
-type Reaksjon = { melding_id: string; profil_id: string; emoji: string }
-
-/**
- * Rendrer melding-innhold med både klikkbare URLer OG mention-styling.
- * Wrapper rundt splittPaaUrler — kjernen i lib/linkify-core.ts holdes enkel,
- * mention-styling er chat-spesifikk og hører hjemme her (jf. avatar-policy:
- * lokal wrapper framfor å utvide felleskomponent med props). se #350
- */
-function LinkifiedMedMentions({ text }: { text: string }) {
-  const deler = splittPaaUrler(text)
-  if (deler.length === 0) return null
-
-  return (
-    <>
-      {deler.map((del, i) => {
-        if (del.type === 'url') {
-          return (
-            <a
-              key={i}
-              href={del.href}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                color: 'var(--accent)',
-                textDecoration: 'underline',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              {del.verdi}
-            </a>
-          )
-        }
-        // Tekst-del: splitt videre på mentions og styliser dem
-        const subDeler = del.verdi.split(mentionSplitRegex())
-        return (
-          <Fragment key={i}>
-            {subDeler.map((sub, j) =>
-              sub.startsWith('@') ? (
-                <span key={j} style={{ fontWeight: 600, color: 'var(--accent)' }}>
-                  {sub}
-                </span>
-              ) : (
-                <Fragment key={j}>{sub}</Fragment>
-              ),
-            )}
-          </Fragment>
-        )
-      })}
-    </>
-  )
-}
 
 type Props = {
   scope: ChatScope
@@ -130,25 +70,23 @@ export default function Chat({
   visSeksjonsLabel = true,
   autoScrollTilBunn = false,
 }: Props) {
-  // initialMeldinger kommer som de siste N meldingene i stigende rekkefølge
-  const [meldinger, setMeldinger] = useState<ChatMelding[]>(initialMeldinger)
-  const [harMerEldre, setHarMerEldre] = useState(initialMeldinger.length >= SIDE_STORRELSE)
-  const [henterEldre, setHenterEldre] = useState(false)
-
   const [tekst, setTekst] = useState('')
   const [sender, setSender] = useState(false)
   const [mentionSøk, setMentionSøk] = useState<string | null>(null)
   // Vedheng-bilde (file holdes til submit, lastes opp først ved send)
-  const [bildeFil, setBildeFil] = useState<File | null>(null)
-  const [bildePreview, setBildePreview] = useState<string | null>(null)
-  const [bildeFeil, setBildeFeil] = useState('')
-  const bildeInputRef = useRef<HTMLInputElement>(null)
+  const {
+    bildeFil,
+    setBildeFil,
+    bildePreview,
+    setBildePreview,
+    bildeFeil,
+    setBildeFeil,
+    bildeInputRef,
+    velgBilde,
+    fjernBilde,
+  } = useBildeOpplasting()
   // Lightbox-visning av bilder
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  // Reaksjoner — flat liste hentet fra chat_reaksjoner. Grupperes per melding
-  // i render. En Map er raskere for hot-paths men flat liste er lettere å
-  // oppdatere atomisk via realtime.
-  const [reaksjoner, setReaksjoner] = useState<Reaksjon[]>([])
   // Hvilken melding viser picker. Null = ingen.
   const [pickerFor, setPickerFor] = useState<string | null>(null)
   // Hvilken melding redigeres. Null = ingen. editTekst holder editert innhold.
@@ -177,81 +115,13 @@ export default function Chat({
   // 5 paralle switch-kjeder som tidligere måtte holdes synk her, i hentMeldinger,
   // i realtime-oppsett og i input-validering.
   const konfig = konfigFor(scope)
-  const tabell = konfig.tabell
   const kanalNavn = konfig.kanalNavn(scope)
 
-  // Ekstraherte scope-felter — flate verdier slik at react-hooks/exhaustive-deps
-  // kan analysere deps-arrayene under uten "complex expression"-warnings.
-  const scopeType = scope.type
-  const arrangementId = scope.type === 'arrangement' ? scope.arrangementId : ''
-  const pollId = scope.type === 'poll' ? scope.pollId : ''
-  const meldingId = scope.type === 'melding' ? scope.meldingId : ''
-  const samtaleId = scope.type === 'privat' ? scope.samtaleId : ''
-
-  // Helper — henter meldinger med riktig scope-filter. Returnerer i
-  // *stigende* rekkefølge (eldste først) siden det er det UI-et ønsker.
-  // Bruker CHAT_KONFIG til å slå opp tabell + FK-filter — ingen scope-
-  // spesifikke grener her.
-  const hentMeldinger = useCallback(
-    async (forTidspunkt?: string): Promise<ChatMelding[]> => {
-      // klubb_chat har i tillegg `fra_facebook` for å vise Messenger-badge på
-      // historisk-importerte meldinger. Andre chat-tabeller har ikke kolonnen.
-      // UPDATE-handleren (under) tar bevisst kun innhold, så endring av
-      // fra_facebook på en eksisterende rad slår ikke gjennom i UI — i
-      // praksis er flagget skrivebeskyttet etter import.
-      const select =
-        tabell === 'klubb_chat'
-          ? 'id, profil_id, innhold, bilde_url, video_url, opprettet, fra_facebook'
-          : 'id, profil_id, innhold, bilde_url, video_url, opprettet'
-      let q = supabase
-        .from(konfig.tabell)
-        .select(select)
-        .order('opprettet', { ascending: false })
-        .limit(SIDE_STORRELSE)
-      const fkVerdi = konfig.scopeId(scope)
-      if (konfig.fkFelt && fkVerdi) {
-        q = q.eq(konfig.fkFelt, fkVerdi)
-      }
-      if (forTidspunkt) q = q.lt('opprettet', forTidspunkt)
-      const { data } = await q
-      return data ? ([...data].reverse() as unknown as ChatMelding[]) : []
-    },
-    // konfig/scope/tabell utelates bevisst — de er rent utledet av scope-feltene over,
-    // og parent sender inline scope-objekter (ny identitet per render) som ville trigget
-    // unødvendige re-fetches.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scopeType, arrangementId, pollId, meldingId, samtaleId, supabase],
-  )
-
-  // Frigjør blob-URL når preview byttes
-  useEffect(() => {
-    return () => {
-      if (bildePreview) URL.revokeObjectURL(bildePreview)
-    }
-  }, [bildePreview])
-
-  async function velgBilde(e: React.ChangeEvent<HTMLInputElement>) {
-    const fil = e.target.files?.[0]
-    if (!fil) return
-    setBildeFeil('')
-    try {
-      const komprimert = await komprimer(fil)
-      setBildeFil(komprimert)
-      if (bildePreview) URL.revokeObjectURL(bildePreview)
-      setBildePreview(URL.createObjectURL(komprimert))
-    } catch (err) {
-      setBildeFeil(err instanceof Error ? err.message : 'Kunne ikke lese bildet')
-    } finally {
-      if (bildeInputRef.current) bildeInputRef.current.value = ''
-    }
-  }
-
-  function fjernBilde() {
-    setBildeFil(null)
-    if (bildePreview) URL.revokeObjectURL(bildePreview)
-    setBildePreview(null)
-    setBildeFeil('')
-  }
+  // Meldingsliste (fetch/paginering, realtime, visibility-refetch) bor i egen
+  // hook. setMeldinger/hentMeldinger brukes videre av de optimistiske
+  // handler-funksjonene under (handleSend, lagreEdit, handleSlett).
+  const { meldinger, setMeldinger, harMerEldre, henterEldre, lastEldre, hentMeldinger } =
+    useChatMeldinger({ scope, initialMeldinger, supabase, konfig, kanalNavn })
 
   // Mention-state og -forslag styres av hjelperne i lib/mention.ts.
   // andreProfiler-filteret over ekskluderer allerede innlogget bruker, men vi
@@ -320,257 +190,18 @@ export default function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meldinger.length, scrollTilBunn, autoScrollTilBunn])
 
-  // Tastatur-høyde via visualViewport. Når iOS-tastaturet åpner med
-  // interactiveWidget='overlays-content' (jf. app/layout.tsx, valgt for å
-  // unngå dock-bug-klassen) endrer ikke window.innerHeight seg, men
-  // visualViewport.height krymper. Differansen er omtrent tastatur-høyden.
-  // keyboardOffset brukes KUN til layout: løfter input-pillen (sticky-pill
-  // bottom) og vokser paddingBottom på meldingslisten. Ingen scroll-side-
-  // effekter — terskel-basert auto-scroll fjernet fordi bounce-quirk (#222)
-  // på iOS PWA var ikke robust å skille fra ekte tastatur-åpning. Se #236.
-  const [keyboardOffset, setKeyboardOffset] = useState(0)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.visualViewport) return
-    const vv = window.visualViewport
-    function oppdater() {
-      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      setKeyboardOffset(offset)
-    }
-    vv.addEventListener('resize', oppdater)
-    vv.addEventListener('scroll', oppdater)
-    oppdater()
-    return () => {
-      vv.removeEventListener('resize', oppdater)
-      vv.removeEventListener('scroll', oppdater)
-    }
-  }, [])
+  // iOS-tastaturhøyde — skjør visualViewport-logikk, se hooks/useKeyboardOffset.ts
+  const keyboardOffset = useKeyboardOffset()
 
-  // Realtime-subscription — én kanal per scope
-  useEffect(() => {
-    let cancelled = false
+  // Reaksjoner (fetch + realtime + optimistisk toggle) bor i egen hook.
+  const { reaksjonerPerMelding, toggleReaksjon: toggleReaksjonBase } =
+    useChatReaksjoner(meldinger, brukerId, supabase)
 
-    async function startSubscription() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled || !session) return
-
-      supabase.realtime.setAuth(session.access_token)
-
-      const channel = supabase.channel(kanalNavn)
-
-      // Filter på FK-kolonnen hvis scope har en (alle utenom klubb).
-      const fkVerdi = konfig.scopeId(scope)
-      const insertConfig =
-        konfig.fkFelt && fkVerdi
-          ? {
-              event: 'INSERT' as const,
-              schema: 'public',
-              table: tabell,
-              filter: `${konfig.fkFelt}=eq.${fkVerdi}`,
-            }
-          : { event: 'INSERT' as const, schema: 'public', table: tabell }
-
-      const deleteConfig = { event: 'DELETE' as const, schema: 'public', table: tabell }
-      const updateConfig = { event: 'UPDATE' as const, schema: 'public', table: tabell }
-
-      channel
-        .on('postgres_changes', insertConfig, payload => {
-          const ny = payload.new as ChatMelding
-          setMeldinger(prev => {
-            if (prev.some(m => m.id === ny.id)) return prev
-            // Fjern KUN ÉN matching temp-rad (eldste først), så samme melding
-            // sendt to ganger på rad ikke fører til at begge temp-rader
-            // forsvinner ved første INSERT.
-            const tempIdx = prev.findIndex(
-              m =>
-                m.id.startsWith('temp-') &&
-                m.profil_id === ny.profil_id &&
-                m.innhold === ny.innhold,
-            )
-            const utenTemp =
-              tempIdx === -1 ? prev : prev.filter((_, i) => i !== tempIdx)
-            // Frigjør blob-URL fra temp-raden hvis den hadde en
-            if (tempIdx !== -1) {
-              const fjernet = prev[tempIdx]
-              if (fjernet.bilde_url?.startsWith('blob:')) {
-                URL.revokeObjectURL(fjernet.bilde_url)
-              }
-            }
-            return [...utenTemp, ny]
-          })
-        })
-        .on('postgres_changes', deleteConfig, payload => {
-          const slettetId = (payload.old as { id: string }).id
-          setMeldinger(prev => prev.filter(m => m.id !== slettetId))
-        })
-        .on('postgres_changes', updateConfig, payload => {
-          const oppdatert = payload.new as ChatMelding
-          setMeldinger(prev =>
-            prev.map(m => (m.id === oppdatert.id ? { ...m, innhold: oppdatert.innhold } : m)),
-          )
-        })
-        .subscribe()
-
-      return channel
-    }
-
-    let channelRef: ReturnType<typeof supabase.channel> | undefined
-    startSubscription().then(ch => {
-      channelRef = ch
-    })
-
-    return () => {
-      cancelled = true
-      if (channelRef) supabase.removeChannel(channelRef)
-    }
-    // kanalNavn/konfig/scope/tabell utelates bevisst — alle utledet av scope-feltene over,
-    // og parent sender inline scope-objekter (ny identitet per render) som ville trigget
-    // unødvendige re-subscribes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeType, arrangementId, pollId, meldingId, samtaleId, supabase])
-
-  // Hent reaksjoner — kun for meldings-ID-er vi ikke har hentet før. På
-  // mount: fetch for alle. Ved scrollback (Vis eldre): fetch for nye
-  // gamle IDer. Når en ny melding kommer inn via send/realtime: fetcher
-  // for den ene IDen — typisk 0 rader, men billig og holder logikken
-  // homogen. Realtime-subscription under fanger nye reaksjoner uansett.
-  //
-  // Tidligere mønster fetch'et HELE settet hver gang meldinger.length
-  // endret seg, og erstattet reaksjons-state komplett → re-render av
-  // alle chat-bobler. Det dro INP merkbart.
-  const fetchedReaksjonsIder = useRef(new Set<string>())
-  useEffect(() => {
-    const synlige = meldinger.map(m => m.id).filter(id => !id.startsWith('temp-'))
-    const nye = synlige.filter(id => !fetchedReaksjonsIder.current.has(id))
-    if (nye.length === 0) return
-    for (const id of nye) fetchedReaksjonsIder.current.add(id)
-
-    let cancelled = false
-    supabase
-      .from('chat_reaksjoner')
-      .select('melding_id, profil_id, emoji')
-      .in('melding_id', nye)
-      .then(({ data }) => {
-        if (cancelled || !data || data.length === 0) return
-        setReaksjoner(prev => {
-          // Slå sammen — fjerne dubletter for samme (melding_id, profil_id, emoji)
-          const eksisterende = new Set(
-            prev.map(r => `${r.melding_id}|${r.profil_id}|${r.emoji}`),
-          )
-          const nye = (data as Reaksjon[]).filter(
-            r => !eksisterende.has(`${r.melding_id}|${r.profil_id}|${r.emoji}`),
-          )
-          return nye.length > 0 ? [...prev, ...nye] : prev
-        })
-      })
-
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meldinger.length])
-
-  // Reaksjoner gruppert per melding_id — kalkuleres én gang per
-  // render, ikke i hver boble. Sparer O(N×R) → O(N+R) når N meldinger
-  // og R reaksjoner.
-  const reaksjonerPerMelding = useMemo(() => {
-    const map = new Map<string, Reaksjon[]>()
-    for (const r of reaksjoner) {
-      const liste = map.get(r.melding_id)
-      if (liste) liste.push(r)
-      else map.set(r.melding_id, [r])
-    }
-    return map
-  }, [reaksjoner])
-
-  // Realtime for reaksjoner — egen kanal siden vi ikke har filter per scope
-  // (reaksjoner har ingen scope-kolonne; vi stoler på at bare synlige meldinger
-  // får reaksjoner oppdatert via postfiltering).
-  useEffect(() => {
-    let cancelled = false
-    let channelRef: ReturnType<typeof supabase.channel> | undefined
-
-    async function start() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled || !session) return
-      supabase.realtime.setAuth(session.access_token)
-
-      const channel = supabase.channel('chat-reaksjoner')
-      channel
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'chat_reaksjoner' },
-          payload => {
-            const ny = payload.new as Reaksjon
-            setReaksjoner(prev => {
-              if (prev.some(r =>
-                r.melding_id === ny.melding_id &&
-                r.profil_id === ny.profil_id &&
-                r.emoji === ny.emoji
-              )) return prev
-              return [...prev, ny]
-            })
-          },
-        )
-        .on(
-          'postgres_changes',
-          { event: 'DELETE', schema: 'public', table: 'chat_reaksjoner' },
-          payload => {
-            const gml = payload.old as Partial<Reaksjon>
-            setReaksjoner(prev =>
-              prev.filter(r =>
-                !(
-                  r.melding_id === gml.melding_id &&
-                  r.profil_id === gml.profil_id &&
-                  r.emoji === gml.emoji
-                ),
-              ),
-            )
-          },
-        )
-        .subscribe()
-      channelRef = channel
-    }
-
-    start()
-    return () => {
-      cancelled = true
-      if (channelRef) supabase.removeChannel(channelRef)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Re-fetch ved visibilitychange (iOS PWA dropper WebSocket i bakgrunnen).
-  // Henter de siste SIDE_STORRELSE for å fylle manglende meldinger.
-  useEffect(() => {
-    async function reFetch() {
-      if (document.visibilityState !== 'visible') return
-      const nyeste = await hentMeldinger()
-      if (nyeste.length === 0) return
-      setMeldinger(prev => {
-        // Behold eventuelle eldre meldinger brukeren allerede har lastet
-        const eldste = nyeste[0].opprettet
-        const eldre = prev.filter(m => m.opprettet < eldste)
-        return [...eldre, ...nyeste]
-      })
-    }
-
-    document.addEventListener('visibilitychange', reFetch)
-    return () => document.removeEventListener('visibilitychange', reFetch)
-  }, [hentMeldinger])
-
-  async function lastEldre() {
-    if (henterEldre || !harMerEldre || meldinger.length === 0) return
-    setHenterEldre(true)
-    try {
-      const eldstKjentTid = meldinger[0].opprettet
-      const eldre = await hentMeldinger(eldstKjentTid)
-      if (eldre.length > 0) {
-        setMeldinger(prev => [...eldre, ...prev])
-      }
-      if (eldre.length < SIDE_STORRELSE) setHarMerEldre(false)
-    } finally {
-      setHenterEldre(false)
-    }
+  // Lukker picker i tillegg til å toggle — pickerFor er UI-state som bor
+  // her i Chat, selve reaksjons-logikken bor i useChatReaksjoner.
+  function toggleReaksjon(meldingId: string, emoji: string) {
+    setPickerFor(null)
+    toggleReaksjonBase(meldingId, emoji)
   }
 
   async function handleSend() {
@@ -648,48 +279,6 @@ export default function Chat({
     }
   }
 
-  async function toggleReaksjon(meldingId: string, emoji: string) {
-    const alleredePaa = reaksjoner.some(
-      r => r.melding_id === meldingId && r.profil_id === brukerId && r.emoji === emoji,
-    )
-    // Optimistisk oppdatering
-    if (alleredePaa) {
-      setReaksjoner(prev =>
-        prev.filter(
-          r => !(r.melding_id === meldingId && r.profil_id === brukerId && r.emoji === emoji),
-        ),
-      )
-    } else {
-      setReaksjoner(prev => [
-        ...prev,
-        { melding_id: meldingId, profil_id: brukerId, emoji },
-      ])
-    }
-    setPickerFor(null)
-
-    try {
-      if (alleredePaa) {
-        await fjernReaksjon(meldingId, emoji)
-      } else {
-        await leggTilReaksjon(meldingId, emoji)
-      }
-    } catch {
-      // Rollback ved feil
-      if (alleredePaa) {
-        setReaksjoner(prev => [
-          ...prev,
-          { melding_id: meldingId, profil_id: brukerId, emoji },
-        ])
-      } else {
-        setReaksjoner(prev =>
-          prev.filter(
-            r => !(r.melding_id === meldingId && r.profil_id === brukerId && r.emoji === emoji),
-          ),
-        )
-      }
-    }
-  }
-
   function startEdit(meldingId: string, naavarende: string) {
     setPickerFor(null)
     setEditerer(meldingId)
@@ -738,6 +327,21 @@ export default function Chat({
       const nyeste = await hentMeldinger()
       setMeldinger(nyeste)
     }
+  }
+
+  // Callbacks til ChatMeldingRad samlet i ett objekt — state-eierskapet
+  // (edit, picker, lightbox, meldinger) blir her i Chat.
+  const radHandlers = {
+    setEditTekst,
+    lagreEdit,
+    avbrytEdit,
+    startEdit,
+    startLongPress,
+    clearLongPress,
+    setPickerFor,
+    toggleReaksjon,
+    handleSlett,
+    setLightboxSrc,
   }
 
   return (
@@ -823,468 +427,28 @@ export default function Chat({
           // (i appen eller i Messenger som senere ble importert), kan du
           // slette den her.
           const kanSlette = erEgen
-          const navn = profilMap.get(m.profil_id) ?? 'Ukjent'
-          const bilde = bildeMap.get(m.profil_id)
-          const rolle = rolleMap.get(m.profil_id) ?? null
-          const tid = formaterDato(m.opprettet, 'HH:mm')
           return (
-            <Fragment key={m.id}>
-              {visDatoSkille && (
-                <div
-                  role="separator"
-                  aria-label={`Meldinger fra ${formaterDatoSkille(m.opprettet)}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                    margin: '10px 0 2px',
-                    paddingRight: 2,
-                  }}
-                >
-                  <span aria-hidden="true" style={{ width: 24, height: '0.5px', background: 'var(--border-subtle)' }} />
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      letterSpacing: '1.2px',
-                      fontWeight: 600,
-                      color: 'var(--text-tertiary)',
-                    }}
-                  >
-                    {formaterDatoSkille(m.opprettet)}
-                  </span>
-                </div>
-              )}
-            <div
-              style={{
-                display: 'flex',
-                gap: 10,
-                flexDirection: erEgen ? 'row-reverse' : 'row',
-                marginTop: erFortsettelse ? 2 : i === 0 ? 0 : 8,
-              }}
-            >
-              <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}>
-                {erFortsettelse ? (
-                  // Tom plassholder så meldingene linjerer opp mot forrige boble
-                  <div style={{ width: 26, height: 1 }} />
-                ) : (
-                  <Avatar name={navn} size={26} src={bilde} rolle={rolle} />
-                )}
-              </div>
-              <div
-                style={{
-                  maxWidth: '78%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: erEgen ? 'flex-end' : 'flex-start',
-                  minWidth: 0,
-                }}
-              >
-                {!erFortsettelse && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'baseline',
-                      gap: 8,
-                      marginBottom: 2,
-                      paddingLeft: erEgen ? 0 : 2,
-                      paddingRight: erEgen ? 2 : 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        color: 'var(--text-secondary)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {navn}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '1.2px',
-                      }}
-                    >
-                      {tid}
-                    </span>
-                  </div>
-                )}
-                <div style={{ position: 'relative' }} className="chat-boble">
-                  {editerer === m.id ? (
-                    <div
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: erEgen ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                        background: erEgen ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-                        border: '0.5px solid var(--accent)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                        minWidth: 220,
-                      }}
-                    >
-                      <textarea
-                        autoFocus
-                        value={editTekst}
-                        onChange={e => setEditTekst(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            lagreEdit(m.id)
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault()
-                            avbrytEdit()
-                          }
-                        }}
-                        maxLength={konfig.charLimit}
-                        rows={2}
-                        style={{
-                          width: '100%',
-                          resize: 'none',
-                          background: 'transparent',
-                          border: 'none',
-                          outline: 'none',
-                          color: 'var(--text-primary)',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: 13,
-                          lineHeight: 1.5,
-                          padding: '2px 4px',
-                        }}
-                      />
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: 6,
-                          justifyContent: 'flex-end',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={avbrytEdit}
-                          disabled={lagrerEdit}
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: 999,
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 9,
-                            letterSpacing: '1.4px',
-                            textTransform: 'uppercase',
-                            fontWeight: 600,
-                            cursor: lagrerEdit ? 'wait' : 'pointer',
-                          }}
-                        >
-                          Avbryt
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => lagreEdit(m.id)}
-                          disabled={lagrerEdit || !editTekst.trim()}
-                          style={{
-                            padding: '4px 12px',
-                            borderRadius: 999,
-                            background: 'var(--accent)',
-                            border: 'none',
-                            color: 'var(--accent-foreground)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 9,
-                            letterSpacing: '1.4px',
-                            textTransform: 'uppercase',
-                            fontWeight: 700,
-                            cursor:
-                              lagrerEdit || !editTekst.trim() ? 'default' : 'pointer',
-                            opacity: lagrerEdit || !editTekst.trim() ? 0.5 : 1,
-                          }}
-                        >
-                          {lagrerEdit ? 'Lagrer…' : 'Lagre'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                  <div
-                    onTouchStart={() => startLongPress(m.id)}
-                    onTouchEnd={clearLongPress}
-                    onTouchMove={clearLongPress}
-                    onTouchCancel={clearLongPress}
-                    onContextMenu={e => {
-                      // Hindrer iOS sin native callout (kopier/del) og
-                      // fungerer som desktop-høyreklikk-trigger.
-                      e.preventDefault()
-                      if (!m.id.startsWith('temp-')) setPickerFor(m.id)
-                    }}
-                    style={{
-                      padding: '7px 12px',
-                      borderRadius: erEgen ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                      background: erEgen ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-                      border: `0.5px solid ${
-                        erEgen ? 'var(--border-strong)' : 'var(--border-subtle)'
-                      }`,
-                      fontFamily: 'var(--font-body)',
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      color: 'var(--text-primary)',
-                      letterSpacing: '0.1px',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      cursor: 'default',
-                      userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      WebkitTouchCallout: 'none',
-                      touchAction: 'manipulation',
-                    }}
-                  >
-                    {m.bilde_url && (
-                      <button
-                        type="button"
-                        onClick={() => setLightboxSrc(m.bilde_url)}
-                        style={{
-                          display: 'block',
-                          padding: 0,
-                          border: 'none',
-                          background: 'none',
-                          margin: m.innhold ? '0 0 8px' : 0,
-                          cursor: 'zoom-in',
-                          maxWidth: '100%',
-                        }}
-                        aria-label="Vis bilde i full skjerm"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={m.bilde_url}
-                          alt=""
-                          loading="lazy"
-                          style={{
-                            display: 'block',
-                            maxWidth: 280,
-                            maxHeight: 280,
-                            borderRadius: 8,
-                            objectFit: 'cover',
-                          }}
-                        />
-                      </button>
-                    )}
-                    {m.video_url && (
-                      <video
-                        src={m.video_url}
-                        controls
-                        preload="metadata"
-                        playsInline
-                        style={{
-                          display: 'block',
-                          maxWidth: 280,
-                          height: 'auto',
-                          maxHeight: 280,
-                          borderRadius: 8,
-                          marginBottom: m.innhold ? 8 : 0,
-                        }}
-                      />
-                    )}
-                    {/* LinkifiedMedMentions wrapper splittPaaUrler og legger
-                        på mention-styling. Bevarer fet/accent-farge på @navn
-                        samtidig som URLer blir klikkbare. se #350 */}
-                    {m.innhold && <LinkifiedMedMentions text={m.innhold} />}
-                  </div>
-                  )}
-                  {m.fra_facebook && <MessengerBadge erEgen={erEgen} />}
-                  {/* Reaksjons-chips — flyter på bunnkanten av bobla, ikke
-                      egen linje. Negativ margin trekker dem opp slik at de
-                      overlapper bobla, padding holder dem litt inn fra
-                      kanten. Bottom-margin på .chat-boble (under) gir plass
-                      til at de stikker ut. */}
-                  {(() => {
-                    const mineReaksjoner = reaksjonerPerMelding.get(m.id)
-                    if (!mineReaksjoner || mineReaksjoner.length === 0) return null
-                    const grupper = new Map<string, { antall: number; minReaksjon: boolean }>()
-                    for (const r of mineReaksjoner) {
-                      const g = grupper.get(r.emoji) ?? { antall: 0, minReaksjon: false }
-                      g.antall += 1
-                      if (r.profil_id === brukerId) g.minReaksjon = true
-                      grupper.set(r.emoji, g)
-                    }
-                    return (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 2,
-                          marginTop: -10,
-                          paddingLeft: erEgen ? 0 : 8,
-                          paddingRight: erEgen ? 8 : 0,
-                          position: 'relative',
-                          zIndex: 1,
-                          justifyContent: erEgen ? 'flex-end' : 'flex-start',
-                        }}
-                      >
-                        {[...grupper.entries()].map(([emoji, { antall, minReaksjon }]) => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => toggleReaksjon(m.id, emoji)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3,
-                              padding: '1px 6px',
-                              borderRadius: 999,
-                              border: `0.5px solid ${minReaksjon ? 'var(--accent)' : 'var(--border)'}`,
-                              background: 'var(--bg-elevated-2)',
-                              // marginalt mindre offset i original — akseptert konsolidering
-                              boxShadow: 'var(--shadow-floating)',
-                              fontSize: 11,
-                              lineHeight: 1.2,
-                              color: 'var(--text-primary)',
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-body)',
-                            }}
-                            aria-label={`${emoji} ${antall} ${minReaksjon ? '(fjern din reaksjon)' : '(reager også)'}`}
-                          >
-                            <span>{emoji}</span>
-                            {antall > 1 && (
-                              <span
-                                style={{
-                                  fontFamily: 'var(--font-mono)',
-                                  fontSize: 9,
-                                  color: minReaksjon ? 'var(--accent)' : 'var(--text-secondary)',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {antall}
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  })()}
-                  {/* Picker — vises over bobla når long-press trigger */}
-                  {pickerFor === m.id && (
-                    <>
-                      {/* Overlay som fanger klikk utenfor */}
-                      <div
-                        onClick={() => setPickerFor(null)}
-                        style={{
-                          position: 'fixed',
-                          inset: 0,
-                          zIndex: 90,
-                          background: 'transparent',
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: 'calc(100% + 6px)',
-                          [erEgen ? 'right' : 'left']: 0,
-                          zIndex: 100,
-                          display: 'flex',
-                          gap: 4,
-                          padding: '6px 8px',
-                          borderRadius: 999,
-                          background: 'var(--bg-elevated)',
-                          border: '0.5px solid var(--border-strong)',
-                          boxShadow: 'var(--shadow-popover)',
-                        }}
-                      >
-                        {REAKSJON_EMOJIS.map(emoji => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => toggleReaksjon(m.id, emoji)}
-                            style={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: '50%',
-                              border: 'none',
-                              background: 'transparent',
-                              fontSize: 20,
-                              cursor: 'pointer',
-                              padding: 0,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                            aria-label={`Reager med ${emoji}`}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                        {erEgen && m.innhold !== null && (
-                          <>
-                            <div
-                              style={{
-                                width: '0.5px',
-                                background: 'var(--border-subtle)',
-                                margin: '4px 4px',
-                              }}
-                              aria-hidden="true"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => startEdit(m.id, m.innhold!)}
-                              style={{
-                                height: 34,
-                                borderRadius: 999,
-                                border: 'none',
-                                background: 'transparent',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: 9,
-                                color: 'var(--text-secondary)',
-                                letterSpacing: '1.4px',
-                                textTransform: 'uppercase',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                padding: '0 12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              aria-label="Rediger melding"
-                            >
-                              Rediger
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  {kanSlette && !m.id.startsWith('temp-') && (
-                    <button
-                      type="button"
-                      onClick={() => handleSlett(m.id)}
-                      className="chat-slett-knapp"
-                      style={{
-                        position: 'absolute',
-                        top: -6,
-                        [erEgen ? 'left' : 'right']: -6,
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        background: 'var(--bg-elevated)',
-                        border: '0.5px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        padding: 0,
-                        color: 'var(--danger)',
-                        opacity: 0,
-                        transition: 'opacity 120ms',
-                      }}
-                      aria-label="Slett melding"
-                    >
-                      <Icon name="x" size={10} color="var(--danger)" strokeWidth={2} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            </Fragment>
+            <ChatMeldingRad
+              key={m.id}
+              melding={m}
+              visDatoSkille={visDatoSkille}
+              erFortsettelse={erFortsettelse}
+              erFoerste={i === 0}
+              erEgen={erEgen}
+              kanSlette={kanSlette}
+              navn={profilMap.get(m.profil_id) ?? 'Ukjent'}
+              bilde={bildeMap.get(m.profil_id)}
+              rolle={rolleMap.get(m.profil_id) ?? null}
+              tid={formaterDato(m.opprettet, 'HH:mm')}
+              brukerId={brukerId}
+              charLimit={konfig.charLimit}
+              reaksjoner={reaksjonerPerMelding.get(m.id)}
+              editerer={editerer === m.id}
+              editTekst={editTekst}
+              lagrerEdit={lagrerEdit}
+              pickerAapen={pickerFor === m.id}
+              handlers={radHandlers}
+            />
           )
         })}
         <div ref={bunnenRef} />
