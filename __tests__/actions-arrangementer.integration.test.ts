@@ -26,7 +26,9 @@ const {
   mockR2StiFraUrl,
   mockSlettR2,
 } = vi.hoisted(() => {
-  const mockFrom = vi.fn()
+  // Generisk form gir typet mock.calls: [tabell: string][] i stedet for any[][]
+  // slik at filter/find på kall-argumenter typechecker uten tuple-annotasjon.
+  const mockFrom = vi.fn<(tabell: string) => unknown>()
   const mockSupabase = { from: mockFrom }
   const mockSendNyttArrangementVarsler = vi.fn().mockResolvedValue(undefined)
   const mockRevalidatePath = vi.fn()
@@ -34,7 +36,7 @@ const {
   // og vi repliserer det i stub-en for å stoppe kjøringen på riktig sted.
   // (Ekte redirect() setter i tillegg .digest = 'NEXT_REDIRECT;...' på Error-en
   // for at Next.js runtime skal gjenkjenne den, men det trenger vi ikke her.)
-  const mockRedirect = vi.fn(() => { throw new Error('NEXT_REDIRECT') })
+  const mockRedirect = vi.fn((..._args: unknown[]): never => { throw new Error('NEXT_REDIRECT') })
   // r2-spyene er her (ikke inline i vi.mock-fabrikken) slik at tester kan lese
   // mock.calls og overstyre returnverdier pr. test. Hoisted garanterer at de er
   // initialisert når vi.mock-fabrikken kjøres (som skjer før import-setningene).
@@ -196,8 +198,8 @@ describe('opprettArrangement', () => {
     ).rejects.toThrow('NEXT_REDIRECT')
 
     // Arrangement ble insertet via from('arrangementer')
-    const arrangementrFrom = mockFrom.mock.calls.find(([t]: [string]) => t === 'arrangementer')
-    expect(arrangementrFrom).toBeTruthy()
+    const arrangementerFrom = mockFrom.mock.calls.find(([t]) => t === 'arrangementer')
+    expect(arrangementerFrom).toBeTruthy()
 
     // Varslingsfunksjonen ble kalt med korrekt payload
     expect(mockSendNyttArrangementVarsler).toHaveBeenCalledWith(
@@ -222,7 +224,7 @@ describe('opprettArrangement', () => {
     ).rejects.toThrow('NEXT_REDIRECT')
 
     // arrangoransvar.update() skal ha blitt kalt (koble()-funksjonen)
-    const ansvarKall = mockFrom.mock.calls.filter(([t]: [string]) => t === 'arrangoransvar')
+    const ansvarKall = mockFrom.mock.calls.filter(([t]) => t === 'arrangoransvar')
     expect(ansvarKall.length).toBeGreaterThan(0)
   })
 
@@ -240,7 +242,7 @@ describe('opprettArrangement', () => {
     ).rejects.toThrow('NEXT_REDIRECT')
 
     // koble() er gated på malNavn !== 'Annet' — ingen arrangoransvar-kall forventet
-    const ansvarKall = mockFrom.mock.calls.filter(([t]: [string]) => t === 'arrangoransvar')
+    const ansvarKall = mockFrom.mock.calls.filter(([t]) => t === 'arrangoransvar')
     expect(ansvarKall.length).toBe(0)
   })
 
