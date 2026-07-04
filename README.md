@@ -99,29 +99,28 @@ npm run dev
 ## Arkitektur
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                   Klient (PWA i nettleser)                │
-│  React Server Components + Client Components              │
-│  Service Worker (cache, offline, push)                    │
-└────────┬─────────────────────────────────────┬───────────┘
-         │ HTTPS                                │ WSS (realtime)
-         ▼                                      │
-┌─────────────────────┐                         │
-│   Next.js på Vercel │                         │
-│   • Server Components (SSR)                  │
-│   • Server Actions (mutasjoner)              │
-│   • Route handlers (cron, API)               │
-│   • Middleware (auth-guard via cookie)       │
-└────┬──────────────────┬─────────────────┬────┘
-     │                  │                 │
-     │ supabase-js      │ aws4fetch (PUT) │ resend / web-push
-     ▼                  ▼                 ▼
-┌──────────┐       ┌──────────┐     ┌──────────────┐
-│ Postgres │       │ R2-bucket│     │ Resend / WP  │
-│ + RLS    │       │  (bilder)│     │              │
-│ + cron   │       └──────────┘     └──────────────┘
-│ + realtime│
-└──────────┘
+┌────────────────────────────────────────────────────┐
+│              Klient (PWA i nettleser)              │
+│  React Server Components + Client Components       │
+│  Service Worker (cache, offline, push)             │
+└──┬──────────────────┬──────────────────────────────┘
+   │ WSS (realtime)   │ HTTPS
+   │                  ▼
+   │    ┌────────────────────────────────────────┐
+   │    │           Next.js på Vercel            │
+   │    │  • Server Components (SSR)             │
+   │    │  • Server Actions (mutasjoner)         │
+   │    │  • Route handlers (cron, API)          │
+   │    │  • Middleware (auth-guard via cookie)  │
+   │    └──────┬──────────────┬────────────────┬─┘
+   │           │              │                │
+   │           │ supabase-js  │ aws4fetch      │ resend / web-push
+   ▼           ▼              ▼                ▼
+┌──────────────────┐    ┌───────────┐    ┌──────────────┐
+│ Postgres         │    │ R2-bucket │    │ Resend / WP  │
+│ + RLS + cron     │    │  (bilder) │    │ e-post / push│
+│ + realtime       │    └───────────┘    └──────────────┘
+└──────────────────┘
 ```
 
 **Sikkerhetsmodellen** sentrerer rundt Postgres RLS. Server Actions kjører som innlogget bruker (Supabase auth-cookie sendes med). Det betyr at selv om en server action skulle ha en logikkfeil, kan ikke en bruker lese eller skrive data RLS-policyene ikke tillater. `er_admin()`-SQL-funksjonen brukes konsekvent i policies; klient-siden har egen `kanAdministrere(rolle)`-helper for UI-rendering.
