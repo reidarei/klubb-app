@@ -11,7 +11,7 @@ Detaljert brukerbehovsspesifikasjon (use cases, roller, scope, avklarte beslutni
 ## Roller
 
 - **Admin** : oppretter medlemmer, styrer kåringer, redigerer klubbinfo, kan redigere/slette alle arrangementer.
-- **Generalsekretær**: har admin-rettigheter, men mottar ikke issue-varsler og markeres med gul glød på profilbildet.
+- **Generalsekretær**: har admin-rettigheter og markeres med gul glød på profilbildet.
 - **Medlem**: oppretter egne arrangementer, melder seg på (Ja/Nei/Kanskje), leser alt innhold.
 
 Admins og generalsekretær er også medlemmer. Tilgang håndheves i RLS — ikke bare i UI. Se **Policy: Roller** nedenfor for hvordan sjekker skal gjøres i kode.
@@ -122,16 +122,17 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 
 **Roller:** `medlem`, `admin`, `generalsekretaer`. Alle har medlem-rettigheter. Admin og generalsekretær har i tillegg admin-rettigheter (CRUD på tvers, kåringer, klubbinfo, alle arrangementer).
 
-**Matrisen (`ROLLER`) har fire felt per rolle:**
+**Matrisen (`ROLLER`) har disse feltene per rolle:**
 - `tittel` — visningsnavn i UI
 - `kanAdministrere` — har admin-rettigheter
-- `faarIssueVarsler` — mottar push/epost for nye GitHub-innspill
 - `harGulGloed` — særegen gul ring rundt avatar
+- `loeserTiebreak` — løser uavgjort i kåringspoll
+
+**Issue-/systemvarsler er IKKE rollestyrt:** hvem som mottar varsler om nye innspill og klientfeil-alarmer styres av kolonnen `profiles.faar_issue_varsler` (admin-styrt per medlem via RedigerMedlemSkjema, se migrasjon 104). Mottaker-spørringer filtrerer på `.eq('faar_issue_varsler', true)` — aldri på rolle.
 
 **Bruk disse hjelperne:**
 - `kanAdministrere(rolle)` — admin-sjekk i UI, server actions, API-ruter
 - `harGulGloed(rolle)` — avatar-styling
-- `faarIssueVarsler(rolle)` — brukes indirekte via `rollerMed('faarIssueVarsler')` for DB-spørringer
 - `tittelFor(rolle)` — visning av rolle i UI
 - `rettigheterFor(rolle)` — hele rettighetsobjektet
 - `rollerMed(rettighet)` — liste over roller som har en gitt rettighet (for `.in('rolle', …)`-filtre)

@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendVarsel } from '@/lib/varsler'
-import { rollerMed } from '@/lib/roller'
 import {
   KLIENT_FEIL_ALARM_TERSKEL,
   LOGG_FEIL_RETENSJONSDAGER,
@@ -38,12 +37,12 @@ async function handle(req: NextRequest) {
   // ── Send varsel hvis over terskel ────────────────────────────────────────
 
   if (antall > KLIENT_FEIL_ALARM_TERSKEL) {
-    // rollerMed('faarIssueVarsler') gir rollene som skal motta system-varsler.
-    // Hent profil_id-er for disse rollene.
+    // Mottakerne styres per medlem via profiles.faar_issue_varsler —
+    // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
     const { data: admins } = await admin
       .from('profiles')
       .select('id')
-      .in('rolle', rollerMed('faarIssueVarsler'))
+      .eq('faar_issue_varsler', true)
       .eq('aktiv', true)
 
     if (admins && admins.length > 0) {

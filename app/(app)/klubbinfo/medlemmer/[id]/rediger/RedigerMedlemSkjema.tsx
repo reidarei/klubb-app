@@ -23,6 +23,7 @@ type Medlem = {
   rolle: string
   aktiv: boolean
   fodselsdato: string | null
+  faar_issue_varsler: boolean
 }
 
 type NaavaerendeGeneralsekretaer = { id: string; navn: string } | null
@@ -106,6 +107,9 @@ export default function RedigerMedlemSkjema({
     medlem.rolle === 'generalsekretaer',
   )
 
+  // Innspill-varsler: admin-styrt per medlem, uavhengig av rolle (migrasjon 104).
+  const [faarIssueVarsler, setFaarIssueVarsler] = useState(medlem.faar_issue_varsler)
+
   // handleToggleGs kalles av ToggleSwitch — confirm skjer her, ikke ved submit.
   function handleToggleGs(nyVerdi: boolean) {
     if (nyVerdi) {
@@ -159,6 +163,7 @@ export default function RedigerMedlemSkjema({
         rolle,
         aktiv: aktiv === 'aktiv',
         fodselsdato: fodselsdato || undefined,
+        faar_issue_varsler: faarIssueVarsler,
       })
 
       // Steg 2: fjern GS-tittel (om nødvendig).
@@ -325,6 +330,33 @@ export default function RedigerMedlemSkjema({
             onChange={handleToggleGs}
             disabled={isPending}
             ariaLabel="Generalsekretær"
+          />
+        </div>
+
+        {/* Innspill-varsler: hvem som får push/epost om nye innspill (GitHub-
+            issues) og klientfeil-alarmer. Uavhengig av rolle — lagres ved submit
+            sammen med resten av skjemaet, ingen confirm nødvendig. */}
+        <div
+          style={{
+            padding: '10px 4px',
+            borderBottom: '0.5px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...labelStil, marginBottom: 2 }}>Innspill-varsler</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+              Får varsel om nye innspill og systemalarmer.
+            </div>
+          </div>
+          <ToggleRad
+            on={faarIssueVarsler}
+            onChange={setFaarIssueVarsler}
+            disabled={isPending}
+            ariaLabel="Innspill-varsler"
           />
         </div>
 

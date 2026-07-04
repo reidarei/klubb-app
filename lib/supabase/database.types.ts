@@ -328,6 +328,47 @@ export type Database = {
           },
         ]
       }
+      feil_logg: {
+        Row: {
+          event: string
+          id: number
+          kontekst: Json | null
+          nivaa: string
+          opprettet: string
+          profil_id: string | null
+          url: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          event: string
+          id?: number
+          kontekst?: Json | null
+          nivaa: string
+          opprettet?: string
+          profil_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          event?: string
+          id?: number
+          kontekst?: Json | null
+          nivaa?: string
+          opprettet?: string
+          profil_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feil_logg_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kaaring_vinnere: {
         Row: {
           aar: number
@@ -995,6 +1036,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv: boolean
           chat_sist_sett: string | null
           epost: string
+          faar_issue_varsler: boolean
           fodselsdato: string | null
           id: string
           navn: string
@@ -1010,6 +1052,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv?: boolean
           chat_sist_sett?: string | null
           epost: string
+          faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id: string
           navn: string
@@ -1025,6 +1068,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv?: boolean
           chat_sist_sett?: string | null
           epost?: string
+          faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id?: string
           navn?: string
@@ -1352,27 +1396,33 @@ export type Database = {
           device_type: string | null
           id: string
           metric: string
+          nav_type: string | null
           opprettet: string
           rating: string | null
           rute: string
+          transfer_size: number | null
           verdi: number
         }
         Insert: {
           device_type?: string | null
           id?: string
           metric: string
+          nav_type?: string | null
           opprettet?: string
           rating?: string | null
           rute: string
+          transfer_size?: number | null
           verdi: number
         }
         Update: {
           device_type?: string | null
           id?: string
           metric?: string
+          nav_type?: string | null
           opprettet?: string
           rating?: string | null
           rute?: string
+          transfer_size?: number | null
           verdi?: number
         }
         Relationships: []
@@ -1393,6 +1443,7 @@ export type Database = {
       }
       er_admin: { Args: never; Returns: boolean }
       er_generalsekretaer: { Args: never; Returns: boolean }
+      feil_logg_bucket: { Args: { ts: string }; Returns: string }
       fjern_generalsekretaer: {
         Args: { forventet_profil?: string }
         Returns: {

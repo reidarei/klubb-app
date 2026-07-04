@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendVarsel } from '@/lib/varsler'
 import { formaterDato } from '@/lib/dato'
-import { rollerMed } from '@/lib/roller'
 import { BASE_URL, GITHUB_ONSKE_LABEL } from '@/lib/config'
 import { logg } from '@/lib/logg'
 import crypto from 'crypto'
@@ -59,13 +58,12 @@ export async function POST(request: Request) {
       ?.trim()
       ?.slice(0, 200) ?? 'Nytt innspill i appen'
 
-    // Filter datadrevet fra rolle-matrisen: hent alle roller som har
-    // `faarIssueVarsler: true`. Slik følger filteret automatisk med hvis
-    // matrisen endres (f.eks. hvis generalsekretær senere skal få varsler).
+    // Mottakerne styres per medlem via profiles.faar_issue_varsler —
+    // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
     const { data: admins } = await admin
       .from('profiles')
       .select('id')
-      .in('rolle', rollerMed('faarIssueVarsler'))
+      .eq('faar_issue_varsler', true)
       .eq('aktiv', true)
 
     const adminIder = (admins ?? []).map(a => a.id)

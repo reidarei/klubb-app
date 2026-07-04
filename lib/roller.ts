@@ -20,8 +20,6 @@ export type Rettigheter = {
   tittel: string
   /** Har admin-rettigheter (CRUD på tvers av brukere + klubbinfo) */
   kanAdministrere: boolean
-  /** Mottar push/epost når nye innspill/issues kommer inn */
-  faarIssueVarsler: boolean
   /** Spesiell gul glød rundt profilbildet */
   harGulGloed: boolean
   /** Løser tiebreak når en kåringspoll ender uavgjort */
@@ -32,14 +30,12 @@ export const ROLLER: Record<Rolle, Rettigheter> = {
   medlem: {
     tittel: 'Medlem',
     kanAdministrere: false,
-    faarIssueVarsler: false,
     harGulGloed: false,
     loeserTiebreak: false,
   },
   admin: {
     tittel: 'Admin',
     kanAdministrere: true,
-    faarIssueVarsler: true,
     harGulGloed: false,
     loeserTiebreak: false,
   },
@@ -48,7 +44,6 @@ export const ROLLER: Record<Rolle, Rettigheter> = {
     // uten kode-endring. Rolle-koden i DB («generalsekretaer») er uendret.
     tittel: ROLLE_TITTEL_GENERALSEKRETAER,
     kanAdministrere: true,
-    faarIssueVarsler: false,
     harGulGloed: true,
     loeserTiebreak: true,
   },
@@ -72,8 +67,9 @@ export const kanAdministrere = (rolle: string | null | undefined): boolean =>
 export const harGulGloed = (rolle: string | null | undefined): boolean =>
   rettigheterFor(rolle).harGulGloed
 
-export const faarIssueVarsler = (rolle: string | null | undefined): boolean =>
-  rettigheterFor(rolle).faarIssueVarsler
+// NB: hvem som mottar issue-/systemvarsler er IKKE rollestyrt lenger —
+// det bor i profiles.faar_issue_varsler (admin-styrt per medlem, se
+// migrasjon 104). Mottaker-spørringer filtrerer på kolonnen direkte.
 
 export const loeserTiebreak = (rolle: string | null | undefined): boolean =>
   rettigheterFor(rolle).loeserTiebreak

@@ -47,7 +47,7 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   revalidatePath('/klubbinfo/medlemmer')
 }
 
-export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string }) {
+export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean }) {
   const { supabase } = await ensureAdmin()
 
   const navn = data.navn.trim()
@@ -91,6 +91,8 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
     telefon: normaliserTelefon(data.telefon),
     fodselsdato: data.fodselsdato || null,
     aktiv: data.aktiv,
+    // Hvem som mottar innspill-/systemvarsler — admin-styrt per medlem (migrasjon 104)
+    faar_issue_varsler: data.faar_issue_varsler,
     oppdatert: naa(),
   }
   // Fail-safe: rør rolle KUN hvis vi har bekreftet at gjeldende rolle ikke

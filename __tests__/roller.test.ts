@@ -4,7 +4,6 @@ import {
   VALGBARE_ROLLER,
   kanAdministrere,
   harGulGloed,
-  faarIssueVarsler,
   loeserTiebreak,
   tittelFor,
   rollerMed,
@@ -44,13 +43,8 @@ describe('roller – rettighetsmatrise', () => {
     })
   })
 
-  describe('faarIssueVarsler', () => {
-    it('kun admin får issue-varsler (ikke generalsekretær)', () => {
-      expect(faarIssueVarsler('admin')).toBe(true)
-      expect(faarIssueVarsler('generalsekretaer')).toBe(false)
-      expect(faarIssueVarsler('medlem')).toBe(false)
-    })
-  })
+  // NB: issue-/systemvarsler er ikke rollestyrt lenger — mottakerne styres av
+  // profiles.faar_issue_varsler (admin-styrt per medlem, migrasjon 104).
 
   describe('loeserTiebreak', () => {
     it('kun generalsekretær løser tiebreak', () => {
@@ -82,7 +76,6 @@ describe('roller – rettighetsmatrise', () => {
   describe('rollerMed', () => {
     it('returnerer alle roller med en gitt rettighet', () => {
       expect(rollerMed('kanAdministrere').sort()).toEqual(['admin', 'generalsekretaer'])
-      expect(rollerMed('faarIssueVarsler')).toEqual(['admin'])
       expect(rollerMed('harGulGloed')).toEqual(['generalsekretaer'])
       expect(rollerMed('loeserTiebreak')).toEqual(['generalsekretaer'])
     })
@@ -102,7 +95,6 @@ describe('roller – rettighetsmatrise', () => {
       expect(r).toEqual({
         tittel: 'Generalsekretær',
         kanAdministrere: true,
-        faarIssueVarsler: false,
         harGulGloed: true,
         loeserTiebreak: true,
       })
