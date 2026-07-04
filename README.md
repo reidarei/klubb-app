@@ -159,7 +159,7 @@ samtale (privat 1:1) ──── samtale_chat
                   + delt chat_reaksjoner-tabell
 
 arrangoransvar (hvem er ansvarlig for hvilke faste arrangementer per år)
-kaaringer / kaaring_vinnere (årets vinnere per kategori)
+kaaringmaler / kaaring_vinnere (kategorier og årets vinnere)
 varsel_logg (alle utsendte push/epost loggføres)
 feil_logg (klient-side JavaScript-feil med 30-dagers retention)
 ```
@@ -288,6 +288,7 @@ npx playwright test
 - `.github/workflows/paaminne.yml` → `/api/cron/paaminne` kl 06:00 UTC. Sender påminnelse-varsler for kommende arrangementer.
 - `.github/workflows/sjekk-klientfeil.yml` → `/api/cron/sjekk-klientfeil` kl 05:00 UTC. Sjekker om det er > 5 ubehandlede feil i `feil_logg` siste døgn; varsler admins hvis ja.
 - `.github/workflows/keepalive.yml` → pinger appen hver fredag kl 12:00 UTC, slik at Supabase free tier ikke pauser prosjektet ved inaktivitet.
+- `.github/workflows/db-backup.yml` → daglig `pg_dump` av databasen, lagret som Actions-artifact (90 dagers retention). **Free tier har ingen Supabase-backup — dette er den eneste.** Krever secret + aktivering av schedule etter oppsett (se [docs/drift.md](docs/drift.md)). Restore verifiseres med `db-restore-drill.yml` (manuell knapp, årlig drill) — se [docs/disaster-recovery.md](docs/disaster-recovery.md).
 De to første bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cron for bedre logging og synlig feilrapportering.
 
 **Migrasjoner:** kjøres lokalt med `npx supabase db push` mot prod-prosjektet. Det er **ingen CI-orkestrering** — migrasjoner er en manuell utviklerhandling.
@@ -334,6 +335,7 @@ Denne seksjonen er for teknisk kyndige som vurderer kodebasen. Den er bevisst us
 - **Server-first**. Mest dataflyt går gjennom Server Components, ikke klient-side fetch. Lavere TTFB, mindre JS over nettverket, ingen state-management i klient utover lokal interaksjon.
 - **Append-only-mønster i historikk.** Inaktive medlemmer beholdes (`aktiv = false`); kåringer og arrangoransvar har egne årstall-rader. Sletting er sjelden.
 - **Idempotent cron.** Påminnelses-jobben skiller mellom datoer og logger varsel-utsendelse, så dobbel-kjøring ikke gir dobbel-varsel.
+- **Backup med testet restore.** Daglig `pg_dump` via GitHub Actions (free tier har ingen Supabase-backup) og restore-drill som verifiserer gjenoppretting med målt RTO. Se [docs/disaster-recovery.md](docs/disaster-recovery.md).
 
 ### Pragmatiske snarveier
 
@@ -350,8 +352,7 @@ For et selskap eller team:
 
 1. **Mer CI:** dagens PR-sjekk dekker lint, typer, enhets- og integrasjonstester og bygg — men ikke DB-migrasjon-validering eller e2e.
 2. **Observability:** strukturert logging og latency-metrics utover `web-vitals` (Sentry finnes, men kun server-side).
-3. **Backup/restore-rutiner.** Supabase tar daglig backup, men det er ikke testet å restore.
-4. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
+3. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
 
 For en privat klubb på 15–20 medlemmer er dette overkill. For en kommersiell SaaS er det baseline.
 

@@ -1,0 +1,69 @@
+# Daglig logisk backup av Supabase-databasen.
+#
+# Bakgrunn: Supabase free tier har INGEN automatiske backups — uten denne
+# workflowen finnes klubbens data (kåringer, arrangementer, chat) kun i prod.
+# Dumpen lagres som GitHub Actions-artifact: privat repo, kryptert på server,
+# auto-utløp via retention-days. Gjenoppretting testes av db-restore-drill.yml.
+#
+# MERK: schedule-triggeren er bevisst kommentert ut i template-repoet. Uten
+# secreten SUPABASE_DB_URL feiler jobben hver natt og spammer eieren med
+# feil-eposter. Sett secreten (se under), test med Run workflow-knappen, og
+# fjern så kommentaren på schedule-linjene for å aktivere daglig backup.
+#
+# Secret SUPABASE_DB_URL: session pooler-URL (IPv4 — runnerne har ikke
+# IPv6, så direkte db.<ref>.supabase.co fungerer ikke herfra):
+#   postgresql://postgres.<ref>:<passord>@aws-0-<region>.pooler.supabase.com:5432/postgres
+
+name: Database-backup
+
+on:
+  # schedule:
+  #   # Daglig 03:30 UTC — utenom evt. andre cron-jobber så feil ikke forveksles
+  #   - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Supabase kjører Postgres 17 — pg_dump må være >= serverens major-versjon,
+      # og runnerens default er 16. Installer 17 fra PGDG.
+      - name: Installer PostgreSQL 17-klient
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Dump databasen
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Secret SUPABASE_DB_URL mangler — se kommentar øverst i workflowen."
+            exit 1
+          fi
+          # Custom-format (-Fc) er komprimert og gjenopprettes selektivt med
+          # pg_restore. Eksplisitt schema-liste: public (appdata), auth (brukere/
+          # innlogging), storage (fil-metadata). Full dump uten liste feiler på
+          # Supabase-interne schemas (vault, pgsodium) som postgres-rollen ikke eier.
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" \
+            --format=custom \
+            --schema=public --schema=auth --schema=storage \
+            --file="db-backup-$(date -u +%Y-%m-%d).dump"
+          ls -lh db-backup-*.dump
+
+      - name: Last opp dump som artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: db-backup-*.dump
+          # 90 dager rullerende vindu. En DB-katastrofe oppdages i praksis
+          # innen dager — vinduet er for komfort, ikke arkivering.
+          retention-days: 90
+          if-no-files-found: error

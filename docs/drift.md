@@ -109,14 +109,21 @@ Se [docs/oppsett.md](oppsett.md) for full referanse til oppsett-kommandoene.
 
 ## 5. Backup
 
-Supabase tar automatisk daglig backup av databasen. Slik finner du dem:
+> **Viktig:** Supabase **free tier har ingen automatiske backups** — det er en
+> Pro-plan-funksjon. Uten egen rutine finnes klubbens data kun i prod-databasen.
 
-1. Supabase Dashboard → ditt prosjekt → **Database** → **Backups**.
-2. Her vises daglige backups med mulighet for restore-on-demand (krever Pro-plan eller høyere) og point-in-time recovery.
+Repoet har derfor egen backup-rutine (se [disaster-recovery.md](disaster-recovery.md) for full gjenopprettingsprosedyre):
+
+1. Sett GitHub-secreten `SUPABASE_DB_URL` (session pooler-URL — se kommentar
+   øverst i `.github/workflows/db-backup.yml`).
+2. Test med **Run workflow**-knappen på Database-backup.
+3. Fjern kommentaren på `schedule:`-linjene i workflowen for daglig backup
+   (03:30 UTC). Dumpen lagres som Actions-artifact med 90 dagers retention.
+4. Kjør **Database restore-drill** (Run workflow) etter oppsett og deretter
+   årlig — den gjenoppretter siste dump i en testcontainer og verifiserer
+   dataene. Utestet backup er ingen backup.
 
 Backup av bilder (Cloudflare R2) er ikke automatisk — R2 har ingen innebygd snapshot-funksjon på fri-tier. Kritiske bilder bør kopieres manuelt ved behov.
-
-> Merk: automatisk backup finnes, men restore er ikke testet for denne appen. Test restore-prosessen på en dev-instans før du trenger den i krise.
 
 ---
 
