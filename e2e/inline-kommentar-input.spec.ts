@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 const UT_DIR = path.join('.screenshots', 'inline-kommentar-input')
 
@@ -15,7 +15,6 @@ test.describe('Inline kommentar-input på agenda (#89)', () => {
   test('kommenter direkte på agenda-kort, ikke-knapp-variant', async ({ page }) => {
     test.setTimeout(60_000)
 
-    await loggInn(page)
     await page.goto('/')
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(600)

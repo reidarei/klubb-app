@@ -22,5 +22,8 @@ export async function loggInn(page: Page): Promise<void> {
   await page.fill('input[type="email"]', TEST_EPOST)
   await page.fill('input[type="password"]', TEST_PASSORD)
   await page.click('button[type="submit"]')
-  await page.waitForURL('**/', { timeout: 15_000 })
+  // 30s timeout fordi treg /-lasting etter vellykket auth (ikke feilet innlogging)
+  // har hengt suiten — login-siden resetter ikke `laster`-tilstand ved suksess,
+  // så navigasjonen tar lengre tid enn selve auth-kallet. Se #381.
+  await page.waitForURL('**/', { timeout: 30_000 })
 }

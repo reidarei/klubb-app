@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Golden-path e2e: verifiser at en bruker kan klikke "Ja" på et
@@ -15,8 +15,6 @@ test.describe('Golden path — påmelding', () => {
   test('login → finn kommende arrangement → skift Nei → Ja → verifiser', async ({ page }) => {
     test.setTimeout(60_000)
 
-    await loggInn(page)
-
     // Gå til agenda — første side etter login
     await page.goto('/')
     await page.waitForLoadState('networkidle')
@@ -30,7 +28,10 @@ test.describe('Golden path — påmelding', () => {
       .first()
     await expect(arrangeLink).toBeVisible({ timeout: 10_000 })
     await arrangeLink.click()
-    await page.waitForLoadState('networkidle')
+    // waitForURL, ikke waitForLoadState: networkidle kan resolve FØR
+    // klient-navigasjonen starter (Next.js soft navigation), og da leser
+    // vi fortsatt '/' fra page.url(). Se #381.
+    await page.waitForURL(/\/arrangementer\/[0-9a-f-]+/, { timeout: 15_000 })
 
     const arrangementUrl = page.url()
     expect(arrangementUrl).toMatch(/\/arrangementer\/[0-9a-f-]+/)
@@ -47,10 +48,12 @@ test.describe('Golden path — påmelding', () => {
 
     async function aapneRedigering() {
       const endreKnapp = page.getByTestId('rsvp-endre')
-      // Endre-knappen finnes bare hvis brukeren allerede har et svar. Sjekk
-      // om den er synlig innen kort tid; hvis ikke, er valg-knappene allerede
-      // åpne (starttilstand: ingen svar).
-      if (await endreKnapp.isVisible().catch(() => false)) {
+      const valgKnapp = page.locator('button[data-status]').first()
+      // Vent til RSVP-blokka faktisk er hydrert — enten sammendrag (Endre)
+      // eller åpne valg-knapper. isVisible() alene svarer umiddelbart og
+      // racer mot hydrering (så vi hoppet feilaktig over Endre-klikket). #381
+      await expect(endreKnapp.or(valgKnapp)).toBeVisible({ timeout: 10_000 })
+      if (await endreKnapp.isVisible()) {
         await endreKnapp.click()
       }
     }

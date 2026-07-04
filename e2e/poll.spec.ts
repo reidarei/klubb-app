@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Visuell + funksjonell verifisering av poll-funksjonaliteten (#86).
@@ -28,19 +28,9 @@ test.describe('Poll-flyt', () => {
   test('oppretter, stemmer på og sletter en test-poll', async ({ page }) => {
     test.setTimeout(120_000)
 
-    await loggInn(page)
-
-    // 1. Agenda før poll — verifiser at "Lag avstemming"-CTA finnes
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(600)
-    await page.screenshot({ path: path.join(UT_DIR, '01-agenda-for.png'), fullPage: true })
-
-    const cta = page.getByRole('link', { name: 'Lag avstemming' })
-    await expect(cta).toBeVisible()
-
-    // 2. Gå til poll-skjema via CTA
-    await cta.click()
+    // 1. Agenda før poll — naviger direkte til /poll/ny (CTA "Lag avstemming"
+    // finnes ikke lenger i appen etter redesign av navigasjon, se #381)
+    await page.goto('/poll/ny')
     await page.waitForURL('**/poll/ny')
     await page.waitForTimeout(400)
     await page.screenshot({ path: path.join(UT_DIR, '02-ny-poll-tom.png'), fullPage: true })
@@ -66,7 +56,8 @@ test.describe('Poll-flyt', () => {
 
     // 4. Publiser
     await page.getByRole('button', { name: 'Publiser' }).click()
-    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 10_000 })
+    // 30s: opprettPoll await-er push+epost-varsler til alle medlemmer før redirect — se #381
+    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 30_000 })
     const pollUrl = page.url()
     setTestPollId(pollIdFraUrl(pollUrl))
     await page.waitForTimeout(600)

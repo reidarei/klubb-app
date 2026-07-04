@@ -33,16 +33,48 @@ export function setTestPollId(id: string) {
   testPollId = id
 }
 
+// Mønstre i `spoersmaal` som tilhører Playwright-tester. Brukes som fallback
+// når setTestPollId() aldri ble kalt (f.eks. testen feilet før opprettelse).
+const TEST_MOENSTRE = [
+  'Playwright-test %',
+  'Inline-test %',
+  'Res-test %',
+  'Komm-test %',
+  'Edit-test %',
+]
+
 export async function ryddTestPoll() {
-  if (!testPollId) return
   const env = lastEnv()
   const supabase = createClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.SUPABASE_SERVICE_ROLE_KEY,
   )
-  const { error } = await supabase.from('poll').delete().eq('id', testPollId)
-  if (error) console.error('[rydd-test-poll] Sletting feilet:', error)
-  testPollId = null
+
+  // Primær: slett via kjent ID (satt av setTestPollId)
+  if (testPollId) {
+    const { error } = await supabase.from('poll').delete().eq('id', testPollId)
+    if (error) console.error('[rydd-test-poll] ID-sletting feilet:', error)
+    testPollId = null
+  }
+
+  // Sekundær fallback: slett alle poller med test-mønster i spørsmål. Fanger
+  // opp tilfeller der testen feilet før setTestPollId() ble kalt, eller
+  // der timeout hindret cleanup fra forrige kjøring.
+  //
+  // Prefiksene i TEST_MOENSTRE er reservert for tester. Alders-guarden
+  // (opprettet < now() - 1 time) hindrer at en fersk ekte poll med
+  // kolliderende navn slettes stille via service_role — etterlatte
+  // test-poller fra en krasjet kjøring er alltid eldre enn dette og plukkes
+  // opp av neste kjøring i stedet. Se #381.
+  const timeGuard = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  for (const moenstre of TEST_MOENSTRE) {
+    const { error } = await supabase
+      .from('poll')
+      .delete()
+      .like('spoersmaal', moenstre)
+      .lt('opprettet', timeGuard)
+    if (error) console.error(`[rydd-test-poll] Mønster-sletting (${moenstre}) feilet:`, error)
+  }
 }
 
 /**

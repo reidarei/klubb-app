@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Verifiserer kommentar-funksjonalitet på arrangement + poll og at siste
@@ -23,8 +23,6 @@ test.describe('Kommentarer på arrangement og poll', () => {
   test('poll: opprett, kommenter, verifiser widget på agenda', async ({ page }) => {
     test.setTimeout(120_000)
 
-    await loggInn(page)
-
     // Opprett en 2-valgs poll (for å også teste inline-variant)
     await page.goto('/poll/ny')
     await page.waitForLoadState('networkidle')
@@ -37,7 +35,8 @@ test.describe('Kommentarer på arrangement og poll', () => {
     await altInputs.nth(1).fill('Nei')
 
     await page.getByRole('button', { name: 'Publiser' }).click()
-    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 10_000 })
+    // 30s: opprettPoll await-er push+epost-varsler til alle medlemmer før redirect — se #381
+    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 30_000 })
     const pollUrl = page.url()
     setTestPollId(pollIdFraUrl(pollUrl))
 

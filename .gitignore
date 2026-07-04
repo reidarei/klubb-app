@@ -54,3 +54,4 @@ Thumbs.db
 
 # init-admin: engangspassord skrevet til fil, må aldri committes
 /init-admin-passord.txt
+e2e/.auth/

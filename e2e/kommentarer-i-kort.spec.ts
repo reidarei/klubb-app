@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Verifiserer at kommentarer vises inline nederst i hvert arrangement/poll-
@@ -20,8 +20,6 @@ test.describe('Kommentarer inne i kort', () => {
 
   test('inline kommentar-seksjon vises på arrangement-kort og kan kollapses', async ({ page }) => {
     test.setTimeout(60_000)
-
-    await loggInn(page)
 
     await page.goto('/')
     await page.waitForLoadState('networkidle')

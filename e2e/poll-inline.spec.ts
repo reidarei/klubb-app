@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
-import { loggInn, harTestCreds } from './helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Verifiserer inline-stemming på agenda-kortet for poll med ≤ MAKS_INLINE_VALG
@@ -24,8 +24,6 @@ test.describe('Inline-stemming på agenda', () => {
   test('2-valgs poll vises med inline stemmeknapper', async ({ page }) => {
     test.setTimeout(120_000)
 
-    await loggInn(page)
-
     // Opprett en 2-valgs enkelpoll (faller innenfor MAKS_INLINE_VALG=2)
     await page.goto('/poll/ny')
     await page.waitForLoadState('networkidle')
@@ -39,7 +37,8 @@ test.describe('Inline-stemming på agenda', () => {
     await altInputs.nth(1).fill('Nei')
 
     await page.getByRole('button', { name: 'Publiser' }).click()
-    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 10_000 })
+    // 30s: opprettPoll await-er push+epost-varsler til alle medlemmer før redirect — se #381
+    await page.waitForURL(/\/poll\/[0-9a-f-]+$/, { timeout: 30_000 })
     const pollUrl = page.url()
     setTestPollId(pollIdFraUrl(pollUrl))
 
