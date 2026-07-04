@@ -2,7 +2,7 @@
 
 Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server.
 
-## Testene kjører mot OWN-TEST-INSTANSEN — aldri prod
+## Testene kjører kun mot en lokal test-instans — aldri prod
 
 All e2e kjører mot en **dedikert lokal Supabase-instans** (startet med `supabase start`). `playwright.config.ts`
 nekter å kjøre hvis `E2E_SUPABASE_URL` peker mot sky-Supabase, og dev-serveren for testene startes på egen port (3100) 
@@ -44,7 +44,7 @@ npx supabase db reset
 - Noen vanlige medlemmer
 - Arrangement-data som spec-ene verifiserer mot
 
-Etter hver test-kjøring kan du teste på nytt uden reset, eller reset hvis du vil garantert ren tilstand:
+Etter en test-kjøring kan du kjøre på nytt uten reset, eller resette hvis du vil ha garantert ren tilstand:
 
 ```bash
 npx supabase db reset

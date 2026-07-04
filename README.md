@@ -18,7 +18,9 @@ Appen er bygget med AI-assistanse. README-en dekker både hva som er gjennomtenk
 - [Datamodell](#datamodell)
 - [Sentrale designvalg](#sentrale-designvalg)
 - [Mappe-struktur](#mappe-struktur)
+- [Testing](#testing)
 - [Drift og deploy](#drift-og-deploy)
+- [Miljøvariabler](#miljøvariabler)
 - [Kritisk vurdering](#kritisk-vurdering)
 - [Lisens](#lisens)
 
@@ -30,7 +32,7 @@ Appen er bygget med AI-assistanse. README-en dekker både hva som er gjennomtenk
 - **Arrangementer** — møter og turer. Påmelding (Ja/Nei/Kanskje), kommentarer, bilde, kobling til arrangøransvar.
 - **Polls** — flervalgs-avstemninger med svarfrist.
 - **Meldinger** — Facebook-status-aktige innlegg med kommentarer og emoji-reaksjoner.
-- **Klubbchat** — én felles tråd for hele klubben. Egen chat-fane i bunnen.
+- **Klubbchat** — én felles tråd for hele klubben. Egen Chat-tab i topp-headeren.
 - **Privatmeldinger** — én-til-én-samtaler.
 - **Album** — bildedelinger knyttet til arrangementer eller stå-alone. Cover-velger, lightbox med swipe og pil-navigering.
 - **Roller og ansvar** — arrangøransvar per år, kåringer (årets vinnere innen ulike kategorier).
@@ -70,8 +72,9 @@ Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
 | Cron | GitHub Actions (`paaminne.yml`, daglig 06:00 UTC) |
 | Hosting | Vercel (Hobby) |
 | Domene | Valgfritt — konfigureres via env-vars |
+| Testing | Vitest (enhetstester) + Playwright (e2e mot lokal Supabase) |
 
-286 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~100 nummererte SQL-migrasjoner.
+~390 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~100 nummererte SQL-migrasjoner.
 
 ---
 
@@ -189,7 +192,7 @@ Alle disse er kodifisert som «policies» i [`CLAUDE.md`](./CLAUDE.md) — refer
 - **Klubbidentitet:** navn, stiftelsesdato, rolletitler i `lib/klubb-config.ts` med env-override — se [docs/klubb-tilpasning.md](docs/klubb-tilpasning.md).
 - **Bildelagring:** server actions i `lib/actions/bilde-opplasting.ts` + `lib/r2.ts`. Klient komprimerer (1600px / q0.85) før upload.
 - **Avatar:** `<Avatar>`-komponenten er bevisst enkel (kun `name`, `size`, `src`, `rolle`). Spesialtilfeller løses med lokale wrappere, ikke ved å utvide kjerne-komponenten.
-- **Observability:** Sentry integreres server-side kun (kysemeg på bundle-størrelse). Klient-side JavaScript-feil fanges opp via global error boundary og logges til `feil_logg`-tabell med automatisk 30-dagers opprydding. Daglig cron varsler admins hvis flere enn 5 feil passert tolden siste døgn.
+- **Observability:** Sentry integreres kun server-side (bevisst holdt unna klienten av hensyn til bundle-størrelse). Klient-side JavaScript-feil fanges opp via global error boundary og logges til `feil_logg`-tabell med automatisk 30-dagers opprydding. Daglig cron varsler admins hvis mer enn 5 feil er logget siste døgn.
 
 ### Chat-arkitektur
 
@@ -214,7 +217,7 @@ app/
     arrangementer/[id]/            # Arrangement-detalj + edit
     poll/[id]/, /ny/
     meldinger/[id]/, /ny/
-    chat/                          # Klubbchat (egen side, åpnes fra hamburger-meny)
+    chat/                          # Klubbchat (egen Chat-tab i topp-headeren)
     samtaler/, samtaler/[id]/      # Privat-meldinger
     album/, album/[id]/            # Bildealbum
     klubbinfo/                     # Vedtekter, medlemmer, statistikk
@@ -230,7 +233,7 @@ app/
 components/
   agenda/, arrangement/, album/, chat/, poll/   # Per-domene-komponenter
   ui/                                            # Avatar, Card, Pill, Icon, Lightbox
-  TopHeader.tsx                                  # Sticky topp-header med hamburger + profil
+  TopHeader.tsx                                  # Sticky topp-header: tabs Agenda/Chat/Klubb + profil-avatar
 
 lib/
   actions/         # Server actions — én fil per domene
@@ -253,7 +256,28 @@ scripts/         # Engangs-importer (FB-arrangementer, album), versjon-stamping
 
 __tests__/       # Vitest — fokuserte enhets-tester på utvalgte helpers
                  # (dato, roller, mention-regex, varsler)
+
+e2e/             # Playwright — kjører mot lokal Supabase-testinstans,
+                 # aldri prod (se e2e/README.md)
 ```
+
+---
+
+## Testing
+
+**Enhetstester (Vitest):** fokuserte tester på utvalgte helpers (dato, roller, mention-regex, varsler, linkify). Kjøres med `npm test`, og automatisk i CI på hver PR.
+
+**End-to-end (Playwright):** spec-er for hovedflytene — innlogging, agenda-rendering, polls og kommentarer. E2e krever en **dedikert lokal Supabase-instans**, siden testene muterer data fritt (oppretter poller, endrer RSVP-svar) og derfor aldri skal kjøre mot produksjons-databasen din:
+
+```bash
+supabase start          # lokal test-instans (Docker)
+npx supabase db reset   # kjører migrasjoner + seed-data (testbruker m.m.)
+npx playwright test
+```
+
+`playwright.config.ts` har innebygde vakter: den nekter å starte hvis `E2E_SUPABASE_URL` peker mot sky-Supabase, og test-dev-serveren startes på egen port (3100) med egen env slik at en vanlig `npm run dev` mot prod aldri gjenbrukes. Uten `E2E_*`-variablene i `.env.local` skipper alle spec-ene med tydelig melding — e2e-oppsettet er valgfritt for å bruke appen. Full oppskrift i [e2e/README.md](e2e/README.md).
+
+**Hva som ikke dekkes automatisk:** iOS-spesifikke quirks (visualViewport, safe-area, PWA focus/blur) reproduserer ikke i Chromium-runneren og må verifiseres manuelt på iPhone.
 
 ---
 
@@ -266,13 +290,14 @@ __tests__/       # Vitest — fokuserte enhets-tester på utvalgte helpers
 **Cron:** GitHub Actions kjører daglig påminnelser og error-monitoring:
 - `.github/workflows/paaminne.yml` → `/api/cron/paaminne` kl 06:00 UTC. Sender påminnelse-varsler for kommende arrangementer.
 - `.github/workflows/sjekk-klientfeil.yml` → `/api/cron/sjekk-klientfeil` kl 05:00 UTC. Sjekker om det er > 5 ubehandlede feil i `feil_logg` siste døgn; varsler admins hvis ja.
-Begge bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cron for bedre logging og synlig feilrapportering.
+- `.github/workflows/keepalive.yml` → pinger appen hver fredag kl 12:00 UTC, slik at Supabase free tier ikke pauser prosjektet ved inaktivitet.
+De to første bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cron for bedre logging og synlig feilrapportering.
 
 **Migrasjoner:** kjøres lokalt med `npx supabase db push` mot prod-prosjektet. Det er **ingen CI-orkestrering** — migrasjoner er en manuell utviklerhandling.
 
 **Secrets:** Vercel env-vars. R2-credentials er markert «Sensitive» (kan ikke pulles tilbake).
 
-**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint, TypeScript-sjekk, tester og produksjonsbygg på hver PR mot `main`. Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk`, blokker force-push og slett av branch. Da kan ingen PR merges før CI er grønn.
+**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint, TypeScript-sjekk, enhetstester og produksjonsbygg på hver PR mot `main`. E2e-testene kjører ikke i CI — de er en lokal utviklerhandling (se [Testing](#testing)). Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk`, blokker force-push og slett av branch. Da kan ingen PR merges før CI er grønn.
 
 ---
 
@@ -319,15 +344,15 @@ Disse er bevisste pragmatiske valg for et hobbyprosjekt med én utvikler — men
 
 - **`Chat.tsx` er 1500+ linjer.** Konsolidert mye via CHAT_KONFIG-refactoren, men selve komponenten er fortsatt en katedral. Sub-komponenter og custom hooks står uendret som «fase B».
 - **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
-- **Test-dekning er overflate-tynn.** Enhetstester for helpers (`dato`, `roller`, `mention-regex`, `varsler`, `linkify`, `tema-klient`). Komponenter, server actions og integrasjoner er ikke dekket. End-to-end er ikke automatisert.
+- **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers (`dato`, `roller`, `mention-regex`, `varsler`, `linkify`, `tema-klient`) og Playwright-e2e for hovedflytene (agenda, poll, kommentarer). Men laget imellom — komponenter, server actions, integrasjoner — er ikke dekket, og e2e kjører lokalt, ikke i CI.
 - **Et lite antall `as unknown as`-casts** der Supabase-genererte typer ikke matcher faktiske join-resultater. Type-løgner, men avgrenset.
 
 ### Hva en profesjonell modning ville krevd
 
 For et selskap eller team:
 
-1. **CI:** automatisk lint + test + DB-migrasjon-validering på PR.
-2. **Observability:** strukturert logging, error reporting (Sentry e.l.), latency-metrics utover `web-vitals`.
+1. **Mer CI:** dagens PR-sjekk dekker lint, typer, enhetstester og bygg — men ikke DB-migrasjon-validering eller e2e.
+2. **Observability:** strukturert logging og latency-metrics utover `web-vitals` (Sentry finnes, men kun server-side).
 3. **Backup/restore-rutiner.** Supabase tar daglig backup, men det er ikke testet å restore.
 4. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
 
