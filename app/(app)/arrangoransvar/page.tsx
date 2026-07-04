@@ -64,7 +64,7 @@ export default async function Arrangoransvar() {
     supabase.from('profiles').select('id, navn').eq('aktiv', true).order('navn'),
   ])
 
-  const aarGrupper = bygMalRader((ansvar ?? []) as unknown as AnsvarRad[])
+  const aarGrupper = bygMalRader(ansvar ?? [])
 
   // Knappen tilbyr alltid neste år som ikke har rader. Hvis ingen år finnes,
   // foreslås innevaerende år. Hvis siste år allerede er innevaerende+1 eller

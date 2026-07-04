@@ -66,8 +66,10 @@ export function useChatMeldinger({
         q = q.eq(konfig.fkFelt, fkVerdi)
       }
       if (forTidspunkt) q = q.lt('opprettet', forTidspunkt)
-      const { data } = await q
-      return data ? ([...data].reverse() as unknown as ChatMelding[]) : []
+      // Select-strengen er en runtime-union (med/uten fra_facebook) som
+      // type-parseren ikke klarer å løse — overrideTypes gir riktig form (se #364)
+      const { data } = await q.overrideTypes<ChatMelding[], { merge: false }>()
+      return data ? [...data].reverse() : []
     },
     // konfig/scope/tabell utelates bevisst — de er rent utledet av scope-feltene over,
     // og parent sender inline scope-objekter (ny identitet per render) som ville trigget

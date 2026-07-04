@@ -342,7 +342,7 @@ Disse er bevisste valg for et hobbyprosjekt med én utvikler — men en tradisjo
 - **De største komponentene er ~700 linjer.** `Chat.tsx` er delt opp (meldings- og reaksjonslogikk bor i egne hooks under `components/chat/hooks/`) og er nede i ~670 linjer, men den og arrangement-detaljsiden er fortsatt katedraler etter tradisjonell målestokk.
 - **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
 - **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers, integrasjonstester for utvalgte server actions (mocket Supabase) og Playwright-e2e for hovedflytene. Men komponentlaget imellom er ikke dekket, og e2e kjører lokalt, ikke i CI.
-- **Et lite antall `as unknown as`-casts** der Supabase-genererte typer ikke matcher faktiske join-resultater. Type-løgner, men avgrenset.
+- **Tre spørringer med manuell type-annotasjon** der Supabase-inferensen ikke når: en RPC som returnerer `json`, og to select-strenger type-parseren ikke klarer (dynamisk select-union, ø i FK-navn). Annotert med `.overrideTypes` og kommentert i koden. De historiske `as unknown as`-castene er ellers fjernet — type-inferensen har tatt dem igjen.
 
 ### Hva en profesjonell modning ville krevd
 

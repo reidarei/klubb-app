@@ -254,15 +254,6 @@ export async function hentAgendaData(
     arrangement_id: string
     profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
   }
-  type RawPollKomm = {
-    id: string
-    innhold: string | null
-    bilde_url: string | null
-    opprettet: string
-    poll_id: string
-    profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
-  }
-
   function grupperKommentarer<T extends { id: string; innhold: string | null; bilde_url: string | null; opprettet: string; profiles: RawArrKomm['profiles'] }>(
     rader: T[],
     nokkel: (r: T) => string,
@@ -292,48 +283,32 @@ export async function hentAgendaData(
   }
 
   const kommentarerPerArr = grupperKommentarer(
-    (arrKommentarer ?? []) as unknown as RawArrKomm[],
+    arrKommentarer ?? [],
     r => r.arrangement_id,
   )
   const kommentarerPerPoll = grupperKommentarer(
-    (pollKommentarer ?? []) as unknown as RawPollKomm[],
+    pollKommentarer ?? [],
     r => r.poll_id,
   )
 
   // === Meldinger: bygg MeldingRaad med reaksjoner og kommentar-antall =
-  type RawMeldKomm = {
-    id: string
-    innhold: string | null
-    bilde_url: string | null
-    opprettet: string
-    melding_id: string
-    profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
-  }
   const kommentarerPerMelding = grupperKommentarer(
-    (meldingKommentarer ?? []) as unknown as RawMeldKomm[],
+    meldingKommentarer ?? [],
     r => r.melding_id,
   )
 
   // Totalt antall kommentarer per arrangement — hentet fra arrangement_chat(count)-
   // embed på arrangementer-spørringen (#180). Samme mønster som melding_chat(count).
   // PostgREST returnerer [{ count: N }] per rad; vi leser [0]?.count ?? 0.
-  type RawArrMedCount = {
-    id: string
-    arrangement_chat: { count: number }[] | null
-  }
   const totaltPerArr = new Map<string, number>()
-  for (const a of (arrangementer ?? []) as unknown as RawArrMedCount[]) {
+  for (const a of arrangementer ?? []) {
     totaltPerArr.set(a.id, a.arrangement_chat?.[0]?.count ?? 0)
   }
 
   // Totalt antall kommentarer per poll — hentet fra poll_chat(count)-embed
   // på poll-spørringen (#180). Samme mønster som over.
-  type RawPollMedCount = {
-    id: string
-    poll_chat: { count: number }[] | null
-  }
   const totaltPerPoll = new Map<string, number>()
-  for (const p of (pollerRaad ?? []) as unknown as RawPollMedCount[]) {
+  for (const p of pollerRaad ?? []) {
     totaltPerPoll.set(p.id, p.poll_chat?.[0]?.count ?? 0)
   }
 
@@ -367,7 +342,7 @@ export async function hentAgendaData(
   // var 60, men med 75 historiske FB-meldinger holdt det ikke. count-aggregat
   // er pålitelig uansett vindu.
   const antallKommPerMelding = new Map<string, number>()
-  for (const m of (meldingerRaad ?? []) as unknown as RawMelding[]) {
+  for (const m of meldingerRaad ?? []) {
     antallKommPerMelding.set(m.id, m.melding_chat?.[0]?.count ?? 0)
   }
 
@@ -477,7 +452,7 @@ export async function hentAgendaData(
     if (cover?.bilde_url) coverPerArrangement.set(a.arrangement_id, cover.bilde_url)
   }
 
-  const arrangementerBerikt = ((arrangementer ?? []) as unknown as ArrangementRaad[]).map(a => ({
+  const arrangementerBerikt = (arrangementer ?? []).map(a => ({
     ...a,
     harAlbum: arrangementMedAlbum.has(a.id),
     // Fall tilbake til album-cover hvis arr ikke har eget bilde
@@ -486,7 +461,7 @@ export async function hentAgendaData(
 
   return {
     arrangementerBerikt,
-    ansvar: (ansvar ?? []) as unknown as UtkastRaad[],
+    ansvar: ansvar ?? [],
     profilerMedBursdag: (profilerMedBursdag ?? []) as ProfilMedBursdag[],
     poller,
     meldingerForAgenda,

@@ -33,8 +33,11 @@ export default async function PassGodkjenningerSide() {
     )
     .eq('status', 'venter')
     .order('opprettet', { ascending: true })
+    // Type-parseren i supabase-js klarer ikke FK-hint med ø i navnet
+    // (pass_tilgang_forespørsel_*_fkey) — overrideTypes gir riktig form (se #364)
+    .overrideTypes<ForespørselRad[], { merge: false }>()
 
-  const ventende = (data ?? []) as unknown as ForespørselRad[]
+  const ventende = data ?? []
 
   return (
     <div style={{ padding: '0 20px 20px' }}>

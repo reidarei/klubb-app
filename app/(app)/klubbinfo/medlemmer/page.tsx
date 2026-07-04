@@ -37,7 +37,10 @@ export default async function Medlemmer() {
     supabase.rpc('get_statistikk'),
   ])
 
-  const statistikk = stat as unknown as Statistikk | null
+  // get_statistikk returnerer `json` i DB, så generert type er bare Json.
+  // overrideTypes avviser objekt-form (Json kan være array), så en enkel
+  // as-cast er det ærligste alternativet her (se #364).
+  const statistikk = stat as Statistikk | null
   const iAarTotalt = statistikk?.i_aar_totalt ?? 0
   const deltagelseMap = new Map<string, number>()
   for (const d of statistikk?.deltagelse ?? []) {
