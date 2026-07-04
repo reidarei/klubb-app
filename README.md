@@ -294,7 +294,7 @@ De to første bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cro
 
 **Secrets:** Vercel env-vars. R2-credentials er markert «Sensitive» (kan ikke pulles tilbake).
 
-**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint, TypeScript-sjekk, enhetstester og produksjonsbygg på hver PR mot `main`. E2e-testene kjører ikke i CI — de er en lokal utviklerhandling (se [Testing](#testing)). Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk`, blokker force-push og slett av branch. Da kan ingen PR merges før CI er grønn.
+**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint, TypeScript-sjekk, enhetstester og produksjonsbygg på hver PR mot `main`. E2e-testene kjører ikke i CI — de er en lokal utviklerhandling (se [Testing](#testing)). Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk` (navnet på jobben i `pr-check.yml`), og blokker force-push og sletting av branchen. Da kan ingen PR merges før CI er grønn. Merk at status-sjekken først dukker opp i ruleset-velgeren etter at workflow-en har kjørt minst én gang — åpne en liten test-PR først, eller skriv inn navnet manuelt.
 
 ---
 
