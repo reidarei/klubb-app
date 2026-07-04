@@ -335,9 +335,9 @@ Denne seksjonen er for teknisk kyndige som vurderer kodebasen. Den er bevisst us
 - **Append-only-mønster i historikk.** Inaktive medlemmer beholdes (`aktiv = false`); kåringer og arrangoransvar har egne årstall-rader. Sletting er sjelden.
 - **Idempotent cron.** Påminnelses-jobben skiller mellom datoer og logger varsel-utsendelse, så dobbel-kjøring ikke gir dobbel-varsel.
 
-### Hva som røper at dette er AI-assistert utvikling
+### Pragmatiske snarveier
 
-Disse er bevisste pragmatiske valg for et hobbyprosjekt med én utvikler — men en gjennomgang fra tradisjonell vinkel ville flagget dem.
+Disse er bevisste valg for et hobbyprosjekt med én utvikler — men en tradisjonell gjennomgang ville flagget dem.
 
 - **`Chat.tsx` er 1500+ linjer.** Konsolidert mye via CHAT_KONFIG-refactoren, men selve komponenten er fortsatt en katedral. Sub-komponenter og custom hooks står uendret som «fase B».
 - **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
