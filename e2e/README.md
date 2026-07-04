@@ -2,32 +2,53 @@
 
 Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server.
 
-## KARANTENE: e2e/prod-muterende/
+## Testene kjører mot OWN-TEST-INSTANSEN — aldri prod
 
-Spec-er som **muterer app-data** ligger i `e2e/prod-muterende/` og kjøres ALDRI av
-standard-kommandoen. Poll-spec-ene oppretter ekte poller (som sender push/epost til
-ALLE medlemmer), og golden-path endrer test-brukerens faktiske RSVP-svar.
+All e2e kjører mot en **dedikert lokal Supabase-instans** (startet med `supabase start`). `playwright.config.ts`
+nekter å kjøre hvis `E2E_SUPABASE_URL` peker mot sky-Supabase, og dev-serveren for testene startes på egen port (3100) 
+med env-overstyring — en vanlig `npm run dev` mot prod kan aldri gjenbrukes.
 
-De kan kun kjøres ved å sette et eksplisitt miljøflagg — uten flagget eksisterer
-ikke engang prosjektet i Playwright-configen:
-
-```bash
-E2E_TILLAT_PROD_MUTASJON=ja npx playwright test --project prod-muterende
-```
-
-Gjør ALDRI dette uten å først ha slått på `test_modus` i varsel-innstillingene
-(admin-UI), og vit at pollene/RSVP-endringene fortsatt skjer i ekte data.
+**Bakgrunn:** testene må kunne mutere data fritt (opprette poller, endre RSVP-svar) uten å påvirke ekte data. En test-instans 
+isolerer disse endringene fullstendig.
 
 ## Førstegangs-oppsett
 
-Test-suiten logger inn som en ekte bruker. Du må legge inn test-brukerens innlogging i `.env.local`:
+Start din lokale Supabase-instans:
+
+```bash
+supabase start
+```
+
+Supabase CLI vil skrive ut tilkoblings-detaljer. Legg disse inn i `.env.local`:
 
 ```
-TEST_EPOST=<test-brukerens e-post>
-TEST_PASSORD=<test-brukerens passord>
+E2E_SUPABASE_URL=http://127.0.0.1:54321
+E2E_SUPABASE_ANON_KEY=<publishable-nøkkel fra supabase start-output>
+E2E_SUPABASE_SERVICE_KEY=<secret-nøkkel fra supabase start-output>
 ```
 
-Mangler en av dem, skipper alle spec-er med en tydelig melding. Det betyr ingen «stille feil i første assertion» når en agent uten creds prøver å kjøre suiten.
+Innloggingsbrukeren (`e2e-admin@klubb.test`, passord `e2e-lokal-hemmelighet`) er automatisk seedet i test-instansen 
+og settes av configen — du trenger ikke å oppgi TEST_EPOST/TEST_PASSORD. Mangler E2E-variablene, skipper alle spec-er med tydelig melding.
+
+## Opprettelse og reset av test-instansen
+
+Når du har startet `supabase start`, kjør migrasjoner og seed-data:
+
+```bash
+npx supabase db push
+npx supabase db reset
+```
+
+`db reset` kjører alle migrasjoner og fyller inn test-data fra `supabase/seed.sql`. Seed-data inneholder:
+- Test-bruker (`e2e-admin@klubb.test`)
+- Noen vanlige medlemmer
+- Arrangement-data som spec-ene verifiserer mot
+
+Etter hver test-kjøring kan du teste på nytt uden reset, eller reset hvis du vil garantert ren tilstand:
+
+```bash
+npx supabase db reset
+```
 
 ## Kjøre testene
 
