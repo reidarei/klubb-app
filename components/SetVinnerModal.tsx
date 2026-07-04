@@ -109,8 +109,11 @@ export default function SetVinnerModal({
 
   if (!aapen) return null
 
-  const options = type === 'profil' ? medlemmer : arrangementer
-  const labelKey = type === 'profil' ? 'navn' : 'tittel'
+  // Mapper til felles { id, label }-form per gren — TS kan ikke indeksere en
+  // union av arrays med en union av nøkler, så narrowing må skje før sammenslåing.
+  const options = type === 'profil'
+    ? medlemmer.map(m => ({ id: m.id, label: m.navn }))
+    : arrangementer.map(a => ({ id: a.id, label: a.tittel }))
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto" style={{ background: 'var(--overlay-soft)' }}>
@@ -143,7 +146,7 @@ export default function SetVinnerModal({
               <option value="">— Velg —</option>
               {options.map(o => (
                 <option key={o.id} value={o.id}>
-                  {(o as any)[labelKey]}
+                  {o.label}
                 </option>
               ))}
             </select>

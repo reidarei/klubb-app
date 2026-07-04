@@ -52,12 +52,9 @@ export async function oppdaterBursdagsgratulasjon(aktiv: boolean) {
   if (!kanAdministrere(profil?.rolle) || !bruker) return
 
   const supabase = await createServerClient()
-  // bursdagsgratulasjon_aktiv finnes etter migrasjon 100; payload castes til any
-  // til TypeScript er regenerert mot ny databasestruktur. Castet smalt rundt
-  // selve payload-objektet slik at resten av query-kjeden beholder typene.
   await supabase
     .from('profiles')
-    .update({ bursdagsgratulasjon_aktiv: aktiv } as any)
+    .update({ bursdagsgratulasjon_aktiv: aktiv })
     .eq('id', bruker.id)
 
   revalidatePath('/innstillinger')

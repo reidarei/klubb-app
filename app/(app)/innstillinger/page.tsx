@@ -118,9 +118,8 @@ export default async function Innstillinger() {
       .eq('aktiv', true)
       .in('rolle', rollerMed('kanAdministrere'))
       .order('navn'),
-    // bursdagsgratulasjon_aktiv finnes etter migrasjon 100; cast via any
-    // til TypeScript er regenerert mot ny databasestruktur.
-    (admin.from('profiles') as any)
+    admin
+      .from('profiles')
       .select('bursdagsgratulasjon_aktiv')
       .eq('id', bruker.id)
       .maybeSingle(),
@@ -341,7 +340,7 @@ export default async function Innstillinger() {
         beskrivelse="Disse togglene gjelder kun for deg — andre admins har sine egne."
       >
         <BursdagsgratulasjonToggle
-          aktiv={(egenProfil as any)?.bursdagsgratulasjon_aktiv ?? false}
+          aktiv={egenProfil?.bursdagsgratulasjon_aktiv ?? false}
         />
       </InnstillingsKort>
 
