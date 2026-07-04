@@ -54,7 +54,7 @@ export function IKveldChip({ children = 'I KVELD' }: { children?: ReactNode }) {
         alignItems: 'center',
         padding: '4px 10px',
         fontSize: 10,
-        fontWeight: 700,
+        fontWeight: 600,
         fontFamily: 'var(--font-body)',
         letterSpacing: '1.2px',
         borderRadius: 999,

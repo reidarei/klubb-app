@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import VitalsLogger from '@/components/VitalsLogger'
 import TemaSync from '@/components/TemaSync'
 import FeilFangst from '@/components/FeilFangst'
@@ -10,9 +9,13 @@ import { TEMA_STORAGE_KEY } from '@/lib/konstanter'
 import { lesTemaFraCookie, resolveServerTema } from '@/lib/tema-server'
 import './globals.css'
 
+// Font-diett (#391): hver vekt = egen woff2-fil som må lastes på kald start
+// (iOS kaster PWA-cachen etter lengre inaktivitet). 700 er droppet — de få
+// stedene som brukte den er flyttet til 600. Ikke legg til vekter uten å
+// veie mot kald-last-kostnaden.
 const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600'],
   variable: '--font-inter',
   display: 'swap',
 })
@@ -24,9 +27,12 @@ const instrument = Instrument_Serif({
   display: 'swap',
 })
 
+// Mono brukes nesten utelukkende som 600 (små uppercase-etiketter). De få
+// 400/500-stedene får 600 via CSS font-matching (eneste tilgjengelige vekt)
+// — visuelt likt på 10-11px. Sparer to font-filer på kald start. (#391)
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: '600',
   variable: '--font-jetbrains',
   display: 'swap',
 })
@@ -133,7 +139,10 @@ if (resolved === 'light' || resolved === 'dark') {
             {KLUBB_KORTNAVN} fungerer best i portrett-modus.
           </div>
         </div>
-        <SpeedInsights />
+        {/* Vercel Speed Insights er bevisst fjernet (#391): hele brukerflåten
+            er iOS-PWA der ITP blokkerer beacon-en — scriptet kostet en request
+            på hver kald start uten å levere data. VitalsLogger (egen endpoint,
+            slipper gjennom ITP) er eneste RUM-kilde. */}
         <VitalsLogger />
       </body>
     </html>

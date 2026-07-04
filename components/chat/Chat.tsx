@@ -544,7 +544,7 @@ export default function Chat({
               color: 'var(--text-primary)',
               border: 'none',
               fontSize: 14,
-              fontWeight: 700,
+              fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',

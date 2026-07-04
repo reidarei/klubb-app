@@ -22,12 +22,32 @@ export default function VitalsLogger() {
   rutRef.current = pathname
 
   useEffect(() => {
+    // Kaldstart-diagnostikk (#391): nav_type + transfer_size fra Navigation
+    // Timing skiller cache-tom kaldstart (transfer_size > 0) fra cache-varm
+    // (0 = dokumentet kom fra SW/HTTP-cache). Leses én gang — navigasjons-
+    // entry-en gjelder hele sidelasten uansett hvilken metric som fyrer.
+    let navType: string | null = null
+    let transferSize: number | null = null
+    try {
+      const nav = performance.getEntriesByType('navigation')[0] as
+        | PerformanceNavigationTiming
+        | undefined
+      if (nav) {
+        navType = nav.type
+        transferSize = nav.transferSize
+      }
+    } catch {
+      // Eldre nettlesere uten Navigation Timing L2 — feltene forblir null
+    }
+
     function send(metric: Metric) {
       const payload = JSON.stringify({
         rute: rutRef.current,
         metric: metric.name,
         verdi: metric.value,
         rating: metric.rating,
+        nav_type: navType,
+        transfer_size: transferSize,
       })
 
       // sendBeacon er best — garantert å fyres selv når siden unloades.

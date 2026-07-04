@@ -380,7 +380,7 @@ export default async function Innstillinger() {
                 color: 'var(--accent-foreground)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
-                fontWeight: 700,
+                fontWeight: 600,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',

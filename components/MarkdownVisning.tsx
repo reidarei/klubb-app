@@ -6,7 +6,7 @@ export default function MarkdownVisning({ innhold }: { innhold: string }) {
     const deler = tekst.split(/(\*\*[^*]+\*\*)/)
     return deler.map((del, i) => {
       if (del.startsWith('**') && del.endsWith('**')) {
-        return <strong key={i} style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{del.slice(2, -2)}</strong>
+        return <strong key={i} style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{del.slice(2, -2)}</strong>
       }
       if (del.startsWith('*') && del.endsWith('*') && del.length > 2) {
         return <em key={i} style={{ color: 'var(--text-secondary)' }}>{del.slice(1, -1)}</em>
@@ -23,7 +23,7 @@ export default function MarkdownVisning({ innhold }: { innhold: string }) {
 
     if (linje.startsWith('# ')) {
       elementer.push(
-        <h1 key={i} style={{ color: 'var(--text-primary)', fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.75rem', marginTop: '1rem' }}>
+        <h1 key={i} style={{ color: 'var(--text-primary)', fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.75rem', marginTop: '1rem' }}>
           {linje.slice(2)}
         </h1>
       )

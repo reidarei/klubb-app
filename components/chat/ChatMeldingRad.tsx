@@ -244,7 +244,7 @@ export default function ChatMeldingRad({
                     fontSize: 9,
                     letterSpacing: '1.4px',
                     textTransform: 'uppercase',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     cursor:
                       lagrerEdit || !editTekst.trim() ? 'default' : 'pointer',
                     opacity: lagrerEdit || !editTekst.trim() ? 0.5 : 1,

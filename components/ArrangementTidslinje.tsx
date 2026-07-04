@@ -333,7 +333,7 @@ export default function ArrangementTidslinje({
               border: '2px dashed var(--border)',
               color: 'var(--text-tertiary)',
               fontSize: '24px',
-              fontWeight: 700,
+              fontWeight: 600,
             }}
           >
             ?

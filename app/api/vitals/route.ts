@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const { rute, metric, verdi, rating } = body as Record<string, unknown>
+  const { rute, metric, verdi, rating, nav_type, transfer_size } = body as Record<string, unknown>
 
   // Validering — avvis alt som ikke matcher. Tabellen har CHECK-constraints
   // som uansett vil avvise ugyldig data, men vi gir tydeligere feil her.
@@ -47,6 +47,18 @@ export async function POST(req: NextRequest) {
   }
   const rens = (rating && GYLDIGE_RATING.includes(rating as Rating)) ? (rating as Rating) : null
 
+  // Kaldstart-felter (#391) — valgfrie, valideres mot samme sett som
+  // CHECK-constrainten i migrasjon 103. Ugyldige verdier blir null, ikke 400:
+  // diagnostikk-felter skal aldri velte selve metric-innsendingen.
+  const GYLDIGE_NAV = ['navigate', 'reload', 'back_forward', 'prerender'] as const
+  const navType = GYLDIGE_NAV.includes(nav_type as (typeof GYLDIGE_NAV)[number])
+    ? (nav_type as (typeof GYLDIGE_NAV)[number])
+    : null
+  const transferSize =
+    typeof transfer_size === 'number' && Number.isFinite(transfer_size) && transfer_size >= 0
+      ? transfer_size
+      : null
+
   const device_type = parseDevice(req.headers.get('user-agent'))
 
   // Bruk admin-klient for insert siden RLS ikke har insert-policy
@@ -57,6 +69,8 @@ export async function POST(req: NextRequest) {
     verdi,
     rating: rens,
     device_type,
+    nav_type: navType,
+    transfer_size: transferSize,
   })
 
   if (error) {
