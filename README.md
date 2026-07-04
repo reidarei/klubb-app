@@ -4,7 +4,7 @@
 
 Privat web-app for vennegjenger som vil ha et felles sted for arrangementspåmelding, klubbchat og kåringer — uten å være avhengig av Facebook.
 
-Appen er bygget med AI-assistanse. README-en dekker både hva som er gjennomtenkt og hva som er pragmatiske snarveier — se [Kritisk vurdering](#kritisk-vurdering) nederst.
+README-en dekker både hva som er gjennomtenkt og hva som er pragmatiske snarveier — se [Kritisk vurdering](#kritisk-vurdering) nederst.
 
 ---
 
