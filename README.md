@@ -251,8 +251,8 @@ supabase/migrations/  # ~100 nummererte SQL-filer
 scripts/         # Engangs-importer (FB-arrangementer, album), versjon-stamping
                  # NB: scripts/-mappen må auditeres individuelt før open source-kopiering
 
-__tests__/       # Vitest — fokuserte enhets-tester på utvalgte helpers
-                 # (dato, roller, mention-regex, varsler)
+__tests__/       # Vitest — enhets-tester for helpers (dato, roller, mention-regex,
+                 # varsler m.fl.) + integrasjonstester for server actions (mocket Supabase)
 
 e2e/             # Playwright — kjører mot lokal Supabase-testinstans,
                  # aldri prod (se e2e/README.md)
@@ -262,7 +262,7 @@ e2e/             # Playwright — kjører mot lokal Supabase-testinstans,
 
 ## Testing
 
-**Enhetstester (Vitest):** fokuserte tester på utvalgte helpers (dato, roller, mention-regex, varsler, linkify). Kjøres med `npm test`, og automatisk i CI på hver PR.
+**Enhetstester og integrasjonstester (Vitest):** helpers (dato, roller, mention-regex, varsler, linkify m.fl.) og server actions (påmeldinger, arrangementer, chat-reaksjoner) med mocket Supabase-klient. Kjøres med `npm test`, og automatisk i CI på hver PR.
 
 **End-to-end (Playwright):** spec-er for hovedflytene — innlogging, agenda-rendering, polls og kommentarer. E2e krever en **dedikert lokal Supabase-instans**, siden testene muterer data fritt (oppretter poller, endrer RSVP-svar) og derfor aldri skal kjøre mot produksjons-databasen din:
 
@@ -311,7 +311,7 @@ npm run sjekk-miljo
 Skriptet sjekker tre nivåer:
 
 - **Kritisk** (Supabase, R2, VAPID) — appen/kjernefunksjoner starter ikke uten disse.
-- **Anbefalt** (Resend, CRON_SECRET, GitHub-token, SENTRY_DSN) — appen starter, men e-post, påminnelsesvarsler, innspill-funksjonen eller error reporting mangler.
+- **Anbefalt** (Resend, CRON_SECRET, GitHub-token) — appen starter, men e-post, påminnelsesvarsler eller innspill-funksjonen mangler.
 - **Valgfri** (klubbidentitet m.m.) — har defaults, vises kun hvis eksplisitt satt.
 
 **CRON_SECRET** settes to steder med samme verdi: i Vercel env-vars (runtime-sjekken i cron-endepunktet) og som GitHub Actions-secret (workflow-en som sender headeren). Mismatch eller manglende verdi gir 401 fra cron-endepunktet.
@@ -339,16 +339,16 @@ Denne seksjonen er for teknisk kyndige som vurderer kodebasen. Den er bevisst us
 
 Disse er bevisste valg for et hobbyprosjekt med én utvikler — men en tradisjonell gjennomgang ville flagget dem.
 
-- **`Chat.tsx` er 1500+ linjer.** Konsolidert mye via CHAT_KONFIG-refactoren, men selve komponenten er fortsatt en katedral. Sub-komponenter og custom hooks står uendret som «fase B».
+- **De største komponentene er ~700 linjer.** `Chat.tsx` er delt opp (meldings- og reaksjonslogikk bor i egne hooks under `components/chat/hooks/`) og er nede i ~670 linjer, men den og arrangement-detaljsiden er fortsatt katedraler etter tradisjonell målestokk.
 - **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
-- **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers (`dato`, `roller`, `mention-regex`, `varsler`, `linkify`, `tema-klient`) og Playwright-e2e for hovedflytene (agenda, poll, kommentarer). Men laget imellom — komponenter, server actions, integrasjoner — er ikke dekket, og e2e kjører lokalt, ikke i CI.
+- **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers, integrasjonstester for utvalgte server actions (mocket Supabase) og Playwright-e2e for hovedflytene. Men komponentlaget imellom er ikke dekket, og e2e kjører lokalt, ikke i CI.
 - **Et lite antall `as unknown as`-casts** der Supabase-genererte typer ikke matcher faktiske join-resultater. Type-løgner, men avgrenset.
 
 ### Hva en profesjonell modning ville krevd
 
 For et selskap eller team:
 
-1. **Mer CI:** dagens PR-sjekk dekker lint, typer, enhetstester og bygg — men ikke DB-migrasjon-validering eller e2e.
+1. **Mer CI:** dagens PR-sjekk dekker lint, typer, enhets- og integrasjonstester og bygg — men ikke DB-migrasjon-validering eller e2e.
 2. **Observability:** strukturert logging og latency-metrics utover `web-vitals` (Sentry finnes, men kun server-side).
 3. **Backup/restore-rutiner.** Supabase tar daglig backup, men det er ikke testet å restore.
 4. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
