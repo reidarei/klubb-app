@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { harTestCreds } from './helpers/auth'
+import { harTestCreds } from '../helpers/auth'
 
 /**
  * Golden-path e2e: verifiser at en bruker kan klikke "Ja" på et

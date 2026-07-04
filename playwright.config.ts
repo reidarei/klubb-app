@@ -52,6 +52,12 @@ export default defineConfig({
       // en implisitt avhengighet — vi vil ikke at auth.setup.ts skal kjøres to
       // ganger (én gang som setup-prosjekt, én gang her). Se #381.
       testMatch: /\.spec\.ts$/,
+      // KARANTENE: spec-er i e2e/prod-muterende/ muterer prod-data (oppretter
+      // poller som varsler ALLE medlemmer, endrer RSVP på ekte arrangementer).
+      // De skal ALDRI kjøres av standard-kommandoen — kun via prod-muterende-
+      // prosjektet under, som krever eksplisitt miljøflagg. Se #386 og
+      // hendelsen 2026-07-04 der testkjøringer sendte push til hele klubben.
+      testIgnore: /prod-muterende/,
       use: {
         // Bevisst INGEN devices['Desktop Chrome']-spread her: prosjekt-use
         // overstyrer global use, og desktop-presetet ville byttet ut
@@ -61,5 +67,21 @@ export default defineConfig({
       },
       dependencies: ['setup'],
     },
+    // Karantene-prosjektet finnes kun når E2E_TILLAT_PROD_MUTASJON=ja er satt —
+    // uten flagget kjenner ikke Playwright igjen prosjektnavnet engang, så
+    // hverken `npx playwright test` eller `--project prod-muterende` kan
+    // treffe prod ved et uhell. Fjernes når test-instansen (#386) er på plass.
+    ...(process.env.E2E_TILLAT_PROD_MUTASJON === 'ja'
+      ? [
+          {
+            name: 'prod-muterende',
+            testMatch: /prod-muterende[\\/].*\.spec\.ts$/,
+            use: {
+              storageState: 'e2e/.auth/state.json',
+            },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
   ],
 })

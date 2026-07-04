@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
-import { harTestCreds } from './helpers/auth'
+import { setTestPollId, ryddTestPoll, pollIdFraUrl } from '../helpers/rydd-test-poll'
+import { harTestCreds } from '../helpers/auth'
 
 const UT_DIR = path.join('.screenshots', 'edit-kommentar')
 

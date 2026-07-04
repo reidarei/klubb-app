@@ -2,6 +2,22 @@
 
 Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server.
 
+## KARANTENE: e2e/prod-muterende/
+
+Spec-er som **muterer app-data** ligger i `e2e/prod-muterende/` og kjøres ALDRI av
+standard-kommandoen. Poll-spec-ene oppretter ekte poller (som sender push/epost til
+ALLE medlemmer), og golden-path endrer test-brukerens faktiske RSVP-svar.
+
+De kan kun kjøres ved å sette et eksplisitt miljøflagg — uten flagget eksisterer
+ikke engang prosjektet i Playwright-configen:
+
+```bash
+E2E_TILLAT_PROD_MUTASJON=ja npx playwright test --project prod-muterende
+```
+
+Gjør ALDRI dette uten å først ha slått på `test_modus` i varsel-innstillingene
+(admin-UI), og vit at pollene/RSVP-endringene fortsatt skjer i ekte data.
+
 ## Førstegangs-oppsett
 
 Test-suiten logger inn som en ekte bruker. Du må legge inn test-brukerens innlogging i `.env.local`:
