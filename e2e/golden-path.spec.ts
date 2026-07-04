@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { harTestCreds } from '../helpers/auth'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Golden-path e2e: verifiser at en bruker kan klikke "Ja" på et
@@ -27,7 +27,10 @@ test.describe('Golden path — påmelding', () => {
       .locator('a[href^="/arrangementer/"]:not([href*="/ny"]):not([href*="/rediger"])')
       .first()
     await expect(arrangeLink).toBeVisible({ timeout: 10_000 })
-    await arrangeLink.click()
+    // Klikk øvre venstre hjørne, ikke midten: kortets midtpunkt kan lande i
+    // den inline kommentar-seksjonen, som bevisst stopper klikk-propagering
+    // (så man kan skrive uten å navigere) — da uteblir navigasjonen. Se #386.
+    await arrangeLink.click({ position: { x: 24, y: 24 } })
     // waitForURL, ikke waitForLoadState: networkidle kan resolve FØR
     // klient-navigasjonen starter (Next.js soft navigation), og da leser
     // vi fortsatt '/' fra page.url(). Se #381.
@@ -59,16 +62,38 @@ test.describe('Golden path — påmelding', () => {
     }
 
     async function velg(status: 'ja' | 'nei' | 'kanskje') {
-      await aapneRedigering()
-      const knapp = page.locator(`button[data-status="${status}"]`)
-      await expect(knapp).toBeVisible({ timeout: 8_000 })
-      await knapp.click()
+      // toPass-retry rundt HELE interaksjonen: den optimistiske RSVP-
+      // oppdateringen kan re-rendre knappene akkurat idet vi klikker, og da
+      // forsvinner klikket uten effekt. Gjenta valg + verifisering til
+      // data-svar faktisk stemmer. Se #386 (suite-flake).
+      await expect(async () => {
+        await aapneRedigering()
+        const knapp = page.locator(`button[data-status="${status}"]`)
+        await expect(knapp).toBeVisible({ timeout: 8_000 })
+        // VENT PÅ SERVER-RUNDTUREN, ikke bare optimistisk UI: data-svar
+        // oppdateres umiddelbart klient-side, men server-actionen ligger i
+        // transition-kø — en reload før POST-en har gått ut KANSELLERER den,
+        // og svaret blir aldri lagret (trace-verifisert rotårsak, #386).
+        const actionRespons = page.waitForResponse(
+          r => r.request().method() === 'POST' && /\/arrangementer\//.test(r.url()),
+          { timeout: 15_000 },
+        )
+        await knapp.click()
+        await actionRespons
+        await expect(page.getByTestId('rsvp-endre')).toHaveAttribute('data-svar', status, {
+          timeout: 5_000,
+        })
+      }).toPass({ timeout: 45_000 })
     }
 
     async function verifiserAktivt(status: 'ja' | 'nei' | 'kanskje') {
       // Etter valg vises Endre-knappen med data-svar=<status>. Auto-retry-
-      // assertion venter uten sleep.
-      await expect(page.getByTestId('rsvp-endre')).toHaveAttribute('data-svar', status)
+      // assertion venter uten sleep. 15s (ikke default 5s): server action +
+      // revalidatePath + re-render tar tidvis lengre enn 5s mot dev-server
+      // og test-instans over LAN — dette var suite-flake-kilden. Se #386.
+      await expect(page.getByTestId('rsvp-endre')).toHaveAttribute('data-svar', status, {
+        timeout: 15_000,
+      })
     }
 
     await velg('nei')

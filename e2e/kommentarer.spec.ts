@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { setTestPollId, ryddTestPoll, pollIdFraUrl } from '../helpers/rydd-test-poll'
-import { harTestCreds } from '../helpers/auth'
+import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
+import { harTestCreds } from './helpers/auth'
 
 /**
  * Verifiserer kommentar-funksjonalitet på arrangement + poll og at siste
@@ -60,8 +60,11 @@ test.describe('Kommentarer på arrangement og poll', () => {
     await page.screenshot({ path: path.join(UT_DIR, '03-agenda-inline.png'), fullPage: true })
     await expect(page.getByText(kommentar).first()).toBeVisible()
 
-    // Kommenter-knappen på inline poll-kortet skal finnes
-    await expect(page.locator('[aria-label="Kommenter"]').first()).toBeVisible()
+    // Inline kommentar-input på kortet skal finnes. (Den gamle
+    // aria-label="Kommenter"-knappen ble fjernet i #89 — inline-input
+    // erstattet den; jf. inline-kommentar-input.spec.ts som asserterer
+    // at knappen er borte.)
+    await expect(page.locator('input[placeholder="Skriv en kommentar…"]').first()).toBeVisible()
 
     // Cleanup håndteres av test.afterEach(ryddTestPoll). poll_chat-raden
     // cascade-slettes sammen med pollen via FK on delete cascade.

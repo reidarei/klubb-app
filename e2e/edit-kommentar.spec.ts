@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
-import { setTestPollId, ryddTestPoll, pollIdFraUrl } from '../helpers/rydd-test-poll'
-import { harTestCreds } from '../helpers/auth'
+import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
+import { harTestCreds } from './helpers/auth'
 
 const UT_DIR = path.join('.screenshots', 'edit-kommentar')
 
@@ -40,14 +40,30 @@ test.describe('Redigere egne meldinger inline', () => {
     await page.screenshot({ path: path.join(UT_DIR, '01-posted.png'), fullPage: true })
     await expect(page.getByText(original)).toBeVisible()
 
-    // Trigger picker via høyreklikk (desktop-ekvivalent til long-press)
+    // Reload før picker-gesten: pickeren åpner kun for BEKREFTEDE meldinger
+    // (temp-id-er ignoreres i ChatMeldingRad), og temp→bekreftet-byttet
+    // avhenger av realtime — som kan være treg rett etter container-restart.
+    // Etter reload rendres meldingen bekreftet fra serveren, deterministisk.
+    // Denne specen tester redigering, ikke realtime. Se #386.
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(original)).toBeVisible()
+
+    // Trigger picker via høyreklikk (desktop-ekvivalent til long-press).
+    // toPass-retry: realtime-oppdateringen kan re-rendre boblen akkurat idet
+    // vi høyreklikker, og da åpner pickeren aldri — gjenta hele gesten til
+    // Rediger-knappen faktisk er synlig i stedet for å vente på en knapp
+    // som aldri kommer. Se #386 (suite-flake).
     const boble = page.getByText(original).first()
-    await boble.click({ button: 'right' })
-    await page.waitForTimeout(400)
+    const redigerKnapp = page.getByRole('button', { name: 'Rediger melding' })
+    await expect(async () => {
+      await boble.click({ button: 'right' })
+      await expect(redigerKnapp).toBeVisible({ timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
     await page.screenshot({ path: path.join(UT_DIR, '02-picker.png'), fullPage: true })
 
     // Klikk Rediger
-    await page.getByRole('button', { name: 'Rediger melding' }).click()
+    await redigerKnapp.click()
     await page.waitForTimeout(300)
     await page.screenshot({ path: path.join(UT_DIR, '03-edit-mode.png'), fullPage: true })
 

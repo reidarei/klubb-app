@@ -1,13 +1,14 @@
 import type { Page } from '@playwright/test'
 
 /**
- * Felles innloggingshelper for e2e-tester. Tidligere ble samme `loggInn`
- * duplisert i hver spec-fil med en hardkodet placeholder-passord-default, som
- * stille feilet ved første assertion. Nå sentralisert: hvis creds mangler,
- * skal spec-en kalle `test.skip(!harTestCreds(), ...)` slik at årsaken er
- * tydelig i rapporten.
+ * Felles innloggingshelper for e2e-tester. Hvis creds mangler, skal spec-en
+ * kalle `test.skip(!harTestCreds(), ...)` slik at årsaken er tydelig i
+ * rapporten.
  *
- * Sett `TEST_EPOST` og `TEST_PASSORD` i `.env.local`. Se `e2e/README.md`.
+ * TEST_EPOST/TEST_PASSORD settes av playwright.config.ts til den seedede
+ * testbrukeren (supabase/seed.sql) når E2E_SUPABASE_* er konfigurert — og
+ * nullstilles når test-instansen mangler, slik at alle specs skipper.
+ * Se docs/test-instans.md og e2e/README.md.
  */
 
 export const TEST_EPOST = process.env.TEST_EPOST ?? ''

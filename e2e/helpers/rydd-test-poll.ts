@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
-import fs from 'node:fs'
-import path from 'node:path'
 
 /**
  * Felles cleanup-helper for e2e-tester som oppretter poller. Bruker
  * admin-klienten så sletting fungerer selv om UI feilet halvveis i testen.
  * Viktig: kall via `test.afterEach(ryddTestPoll)` — IKKE som siste steg i
  * testen. Cleanup på slutten kjøres ikke når en assertion før feiler.
+ *
+ * Kjører mot TEST-INSTANSEN (E2E_SUPABASE_*, se docs/test-instans.md) — aldri
+ * prod. playwright.config.ts garanterer at URL-en ikke peker mot sky-Supabase.
  *
  * Bruk:
  *   test.afterEach(ryddTestPoll)
@@ -15,19 +16,6 @@ import path from 'node:path'
  */
 
 let testPollId: string | null = null
-
-function lastEnv(): Record<string, string> {
-  const envPath = path.resolve('.env.local')
-  const env: Record<string, string> = {}
-  for (const linje of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmet = linje.trim()
-    if (!trimmet || trimmet.startsWith('#')) continue
-    const eq = trimmet.indexOf('=')
-    if (eq === -1) continue
-    env[trimmet.slice(0, eq).trim()] = trimmet.slice(eq + 1).trim()
-  }
-  return env
-}
 
 export function setTestPollId(id: string) {
   testPollId = id
@@ -44,11 +32,15 @@ const TEST_MOENSTRE = [
 ]
 
 export async function ryddTestPoll() {
-  const env = lastEnv()
-  const supabase = createClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY,
-  )
+  const url = process.env.E2E_SUPABASE_URL
+  const serviceKey = process.env.E2E_SUPABASE_SERVICE_KEY
+  if (!url || !serviceKey) {
+    // Uten test-instans kjører ingen specs (skip i harTestCreds) — men vær
+    // eksplisitt om hvorfor cleanup ikke gjør noe hvis vi likevel havner her.
+    console.warn('[rydd-test-poll] E2E_SUPABASE_* mangler — hopper over cleanup')
+    return
+  }
+  const supabase = createClient(url, serviceKey)
 
   // Primær: slett via kjent ID (satt av setTestPollId)
   if (testPollId) {
@@ -58,21 +50,15 @@ export async function ryddTestPoll() {
   }
 
   // Sekundær fallback: slett alle poller med test-mønster i spørsmål. Fanger
-  // opp tilfeller der testen feilet før setTestPollId() ble kalt, eller
-  // der timeout hindret cleanup fra forrige kjøring.
-  //
-  // Prefiksene i TEST_MOENSTRE er reservert for tester. Alders-guarden
-  // (opprettet < now() - 1 time) hindrer at en fersk ekte poll med
-  // kolliderende navn slettes stille via service_role — etterlatte
-  // test-poller fra en krasjet kjøring er alltid eldre enn dette og plukkes
-  // opp av neste kjøring i stedet. Se #381.
-  const timeGuard = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  // opp tilfeller der testen feilet før setTestPollId() ble kalt, eller der
+  // timeout hindret cleanup fra forrige kjøring. Test-instansen har ingen
+  // ekte data å skåne, så mønster-slettingen trenger ingen alders-guard
+  // lenger (den fantes da suiten kjørte mot prod — se #381/#386).
   for (const moenstre of TEST_MOENSTRE) {
     const { error } = await supabase
       .from('poll')
       .delete()
       .like('spoersmaal', moenstre)
-      .lt('opprettet', timeGuard)
     if (error) console.error(`[rydd-test-poll] Mønster-sletting (${moenstre}) feilet:`, error)
   }
 }
