@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { randomInt } from 'node:crypto'
 import { sendEpost, velkommenEpostHtml } from '@/lib/epost'
 import { NextResponse } from 'next/server'
 import { ensureAdmin } from '@/lib/auth'
@@ -7,7 +8,8 @@ import { KLUBB_NAVN } from '@/lib/klubb-config'
 
 function genererPassord() {
   const tegn = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  return Array.from({ length: 12 }, () => tegn[Math.floor(Math.random() * tegn.length)]).join('')
+  // CSPRNG (randomInt) — passord skal ikke genereres med Math.random, se #411
+  return Array.from({ length: 12 }, () => tegn[randomInt(tegn.length)]).join('')
 }
 
 export async function POST(request: Request) {
