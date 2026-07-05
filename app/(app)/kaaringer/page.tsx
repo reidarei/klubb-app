@@ -28,7 +28,7 @@ export default async function Kaaringer() {
       .select(
         `
         id, mal_id, aar, begrunnelse,
-        profil_id, profiles (navn),
+        profil_id, profiles!kaaring_vinnere_profil_id_fkey (navn),
         arrangement_id, arrangementer (tittel)
       `,
       )
