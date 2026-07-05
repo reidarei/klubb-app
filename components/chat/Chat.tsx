@@ -12,7 +12,6 @@ import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
 import BildeLightbox from '@/components/ui/BildeLightbox'
-import { genererFilnavn } from '@/lib/bilde-utils'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import {
   beregnMentionSøk,
@@ -236,7 +235,6 @@ export default function Chat({
       if (filUploadKopi) {
         const fd = new FormData()
         fd.append('fil', filUploadKopi)
-        fd.append('filnavn', genererFilnavn(filUploadKopi))
         fd.append('kategori', 'chat')
         const res = await lastOppBilde(fd)
         bildeUrl = res.url

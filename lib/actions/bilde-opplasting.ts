@@ -2,7 +2,13 @@
 
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
-import { bildeSti, BILDE_KATEGORIER, type BildeKategori } from '@/lib/bilde-utils'
+import {
+  bildeSti,
+  BILDE_KATEGORIER,
+  type BildeKategori,
+  EXT_FRA_BILDE_MIME,
+  nyttR2Filnavn,
+} from '@/lib/bilde-utils'
 import { logg } from '@/lib/logg'
 
 // Maksstørrelse mot R2 — komprimering på klienten skal holde filer godt
@@ -13,29 +19,30 @@ const MAKS_BYTES = 5 * 1024 * 1024
 // Tillatte MIME-typer. Klient-komprimering produserer alltid JPEG, men vi
 // godtar et lite spillerom for å støtte rå-opplasting (f.eks. ny upload-
 // flyt som ikke komprimerer enda).
-const TILLATTE_TYPER = ['image/jpeg', 'image/png', 'image/webp']
+const TILLATTE_TYPER = Object.keys(EXT_FRA_BILDE_MIME)
 
 function erKategori(v: unknown): v is BildeKategori {
   return typeof v === 'string' && (BILDE_KATEGORIER as readonly string[]).includes(v)
 }
 
 // Last opp et bilde til R2 i gitt kategori. Returnerer public URL.
-// FormData skal inneholde `fil`, `filnavn` og `kategori`. Filnavn genereres
-// på klienten via genererFilnavn() — server validerer kun at det finnes.
+// FormData skal inneholde `fil` og `kategori`. Filnavnet genereres
+// server-side fra validert MIME-type — klient-oppgitt filnavn brukes ikke.
 export async function lastOppBilde(formData: FormData): Promise<{ url: string }> {
   try {
     await ensureInnlogget()
 
     const fil = formData.get('fil')
-    const filnavn = formData.get('filnavn')
     const kategori = formData.get('kategori')
 
     if (!(fil instanceof File)) throw new Error('Mangler fil')
-    if (typeof filnavn !== 'string' || !filnavn.trim()) throw new Error('Mangler filnavn')
     if (!erKategori(kategori)) throw new Error('Ugyldig kategori')
     if (fil.size > MAKS_BYTES) throw new Error(`Filen er for stor (maks ${MAKS_BYTES / 1024 / 1024} MB)`)
     if (!TILLATTE_TYPER.includes(fil.type)) throw new Error('Ugyldig filtype')
 
+    // Filnavn utledes fra validert MIME — aldri fra klient-oppgitt verdi.
+    const ext = EXT_FRA_BILDE_MIME[fil.type]
+    const filnavn = nyttR2Filnavn(ext)
     const data = new Uint8Array(await fil.arrayBuffer())
     const sti = bildeSti(kategori, filnavn)
     const url = await lastOppR2(sti, data, fil.type)

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { oppdaterEgenProfil } from '@/lib/actions/profil'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import { createClient } from '@/lib/supabase/client'
-import { genererFilnavn } from '@/lib/bilde-utils'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Avatar from '@/components/ui/Avatar'
@@ -157,7 +156,6 @@ export default function RedigerProfilForm({
       if (bildeFil) {
         const fd = new FormData()
         fd.append('fil', bildeFil)
-        fd.append('filnavn', genererFilnavn(bildeFil))
         fd.append('kategori', 'profiler')
         try {
           const res = await lastOppBilde(fd)

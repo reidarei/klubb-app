@@ -2,7 +2,7 @@
 
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
-import { videoSti, VIDEO_KATEGORIER, type VideoKategori } from '@/lib/bilde-utils'
+import { videoSti, VIDEO_KATEGORIER, type VideoKategori, EXT_FRA_VIDEO_MIME, nyttR2Filnavn } from '@/lib/bilde-utils'
 import { logg } from '@/lib/logg'
 
 // Maksstørrelse for video. 50 MB er en pragmatisk grense som rommer korte
@@ -10,43 +10,33 @@ import { logg } from '@/lib/logg'
 // store råfiler slipper gjennom.
 const MAKS_BYTES = 50 * 1024 * 1024
 
-// Tillatte (MIME, ekstensjon)-par. Vi krysssjekker for å hindre at en
-// klient sender f.eks. .mov-ekstensjon med video/mp4-MIME (eller motsatt).
-// mp4 er standard; quicktime (.mov) er det iPhones produserer som default.
-const TILLATTE_PAR: ReadonlyArray<{ mime: string; ext: string }> = [
-  { mime: 'video/mp4', ext: 'mp4' },
-  { mime: 'video/quicktime', ext: 'mov' },
-]
+// Tillatte MIME-typer for video. mp4 er standard; quicktime er det iPhones
+// produserer som default. Endelsen utledes server-side fra MIME — aldri fra
+// klient-oppgitt filnavn.
+const TILLATTE_MIME = Object.keys(EXT_FRA_VIDEO_MIME)
 
 function erKategori(v: unknown): v is VideoKategori {
   return typeof v === 'string' && (VIDEO_KATEGORIER as readonly string[]).includes(v)
 }
 
-function ekstensjon(filnavn: string): string {
-  const idx = filnavn.lastIndexOf('.')
-  if (idx < 0) return ''
-  return filnavn.slice(idx + 1).toLowerCase()
-}
-
 // Last opp en video til R2 i gitt kategori. Returnerer public URL.
-// FormData skal inneholde `fil`, `filnavn` og `kategori`. Filnavn genereres
-// på klienten — server validerer kun at det finnes og har lovlig endelse.
+// FormData skal inneholde `fil` og `kategori`. Filnavnet genereres
+// server-side fra validert MIME-type — klient-oppgitt filnavn brukes ikke.
 export async function lastOppVideo(formData: FormData): Promise<{ url: string }> {
   try {
     await ensureInnlogget()
 
     const fil = formData.get('fil')
-    const filnavn = formData.get('filnavn')
     const kategori = formData.get('kategori')
 
     if (!(fil instanceof File)) throw new Error('Mangler fil')
-    if (typeof filnavn !== 'string' || !filnavn.trim()) throw new Error('Mangler filnavn')
     if (!erKategori(kategori)) throw new Error('Ugyldig kategori')
     if (fil.size > MAKS_BYTES) throw new Error(`Filen er for stor (maks ${MAKS_BYTES / 1024 / 1024} MB)`)
-    const ext = ekstensjon(filnavn)
-    if (!TILLATTE_PAR.some((p) => p.mime === fil.type && p.ext === ext)) {
-      throw new Error('Ugyldig filtype eller filendelse')
-    }
+    if (!TILLATTE_MIME.includes(fil.type)) throw new Error('Ugyldig filtype')
+
+    // Filnavn utledes fra validert MIME — aldri fra klient-oppgitt verdi.
+    const ext = EXT_FRA_VIDEO_MIME[fil.type]
+    const filnavn = nyttR2Filnavn(ext)
 
     // Send Blob direkte til R2 — sparer en ekstra kopi i minnet (50 MB ×).
     // lastOppR2 leser size fra Blob og setter Content-Length korrekt.

@@ -14,7 +14,6 @@ import Placeholder from '@/components/ui/Placeholder'
 import BildeBytterKnapp from '@/components/BildeBytterKnapp'
 import TypeVelger, { type MalValg } from '@/components/arrangement/TypeVelger'
 import { formaterDato, datetimeLocalTilIso } from '@/lib/dato'
-import { genererFilnavn } from '@/lib/bilde-utils'
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -149,7 +148,6 @@ export default function NyttArrangementSkjema({
         if (bildeFil) {
           const fd = new FormData()
           fd.append('fil', bildeFil)
-          fd.append('filnavn', genererFilnavn(bildeFil))
           fd.append('kategori', 'arrangementer')
           const res = await lastOppBilde(fd)
           bildeUrl = res.url

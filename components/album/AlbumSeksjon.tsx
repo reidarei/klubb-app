@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import AlbumLightbox from '@/components/album/AlbumLightbox'
-import { komprimer, lagThumbnail, genererFilnavn } from '@/lib/bilde-utils'
+import { komprimer, lagThumbnail } from '@/lib/bilde-utils'
 import { opprettAlbum, lastOppAlbumBilde } from '@/lib/actions/album'
 
 export type AlbumBildeForGrid = {
@@ -30,7 +30,6 @@ const PARALLELL_OPPLAST = 3
 async function opplastEn(albumId: string, fil: File): Promise<void> {
   const komp = await komprimer(fil)
   const thumb = await lagThumbnail(fil)
-  const filnavn = genererFilnavn(komp)
 
   // Hent dimensjoner fra det komprimerte bildet for layout uten skift
   const dims = await new Promise<{ bredde: number; hoyde: number }>(resolve => {
@@ -48,7 +47,6 @@ async function opplastEn(albumId: string, fil: File): Promise<void> {
   fd.set('albumId', albumId)
   fd.set('fil', komp)
   fd.set('thumb', thumb)
-  fd.set('filnavn', filnavn)
   fd.set('bredde', String(dims.bredde))
   fd.set('hoyde', String(dims.hoyde))
   await lastOppAlbumBilde(fd)

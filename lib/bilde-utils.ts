@@ -1,6 +1,9 @@
-// Klient-side bildeprosessering. Brukes både ved opplasting til R2 og til
-// gammel Supabase-storage-flyt (under utfasing). Kjører i nettleseren via
-// Canvas API — ingen server-side-prosessering.
+// Bilde-hjelpere delt mellom klient og server.
+//   - Klient-side: komprimer()/lagThumbnail() skalerer via Canvas API i
+//     nettleseren (ingen server-side bildeprosessering).
+//   - Server-side: nyttR2Filnavn/bildeSti/videoSti/albumSti genererer og
+//     saniterer R2-objektnøkler. Disse kalles KUN fra server actions
+//     (lib/actions/*) — ikke fra klient — så klient-filnavn aldri styrer nøkkelen.
 
 // Maks lang side ved hovedbilde-komprimering. 1600px gir god kvalitet på
 // store skjermer mens det holder filstørrelsen ned (~200-800 KB JPEG).
@@ -14,10 +17,61 @@ const THUMB_LANG_SIDE_PX = 400
 // merkbart kvalitetstap, betydelig mindre fil enn 0.95.
 const JPEG_KVALITET = 0.85
 
-export function genererFilnavn(fil: File): string {
-  const ext = fil.name.split('.').pop() || 'jpg'
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+// MIME-type til fil-endelse for bilder. Brukes på server-siden for å
+// utlede endelse fra validert MIME — aldri fra klient-oppgitt filnavn.
+export const EXT_FRA_BILDE_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
 }
+
+// MIME-type til fil-endelse for video. mp4 er standard; quicktime (.mov)
+// er det iPhones produserer som default.
+export const EXT_FRA_VIDEO_MIME: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+}
+
+// Generer et unikt filnavn på serveren basert på validert mime-ext.
+// Date.now() + tilfeldig suffix gir praktisk unikhet — ikke en hemmelighet,
+// bare en kollisjons-buffer. Kalles kun server-side, aldri fra klient.
+//
+// Suffikset bruker Web Crypto (global `crypto`, ingen import) fremfor
+// Math.random().toString(36).slice(2): sistnevnte kan i teorien gi tom streng
+// (Math.random()===0 → '0'.slice(2)===''), noe Copilot flagget som flaky-test-
+// risiko. crypto.randomUUID() returnerer alltid en velformet UUID, så
+// suffikset er garantert ikke-tomt og har høyere entropi. Vi bruker den globale
+// Web Crypto-varianten — ikke `node:crypto` — fordi denne modulen også
+// bundles på klienten (komprimer/lagThumbnail), og et `node:`-import ville
+// brutt klient-bygget. crypto.randomUUID() finnes i både browser og Node 20+.
+export function nyttR2Filnavn(ext: string): string {
+  const suffiks = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  return `${Date.now()}-${suffiks}.${ext}`
+}
+
+// Whitelist for gyldige filnavn-tegn. Blokkerer path-traversal (../),
+// skjulte filer (.secret) og mappekomponenter (/).
+const GYLDIG_FILNAVN = /^[A-Za-z0-9._-]+$/
+
+function validerFilnavn(filnavn: string): void {
+  if (
+    filnavn.includes('/') ||
+    filnavn.includes('\\') ||
+    filnavn.includes('..') ||
+    filnavn.startsWith('.') ||
+    !GYLDIG_FILNAVN.test(filnavn)
+  ) {
+    throw new Error(`Ugyldig filnavn: ${filnavn}`)
+  }
+}
+
+// Generisk UUID-form (8-4-4-4-12 hex) — brukes til å validere albumId
+// server-side. albumId kommer fra FormData og kan ikke stoles på. Vi
+// håndhever bevisst ikke v4/variant-bits (ankringen ^...$ + hex-form er nok
+// til å blokkere path-traversal og injeksjon). `i`-flagget gjør den case-
+// insensitiv så uppercase-UUID-er også godtas, selv om vår egen
+// gen_random_uuid() alltid gir lowercase.
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Bildekategorier i R2 — én topp-mappe per type. Holder bucket-en organisert
 // og gjør det enkelt å se hva en fil hører til. Legg til ny kategori her
@@ -25,8 +79,11 @@ export function genererFilnavn(fil: File): string {
 export const BILDE_KATEGORIER = ['arrangementer', 'profiler', 'meldinger', 'chat', 'album'] as const
 export type BildeKategori = (typeof BILDE_KATEGORIER)[number]
 
-// Lag en unik path innen kategorien.
+// Lag en unik path innen kategorien. Kaster hvis filnavn inneholder
+// path-traversal eller ulovlige tegn (defense-in-depth — uavhengig av
+// om kalleren allerede bruker nyttR2Filnavn).
 export function bildeSti(kategori: BildeKategori, filnavn: string): string {
+  validerFilnavn(filnavn)
   return `${kategori}/${filnavn}`
 }
 
@@ -36,8 +93,21 @@ export function bildeSti(kategori: BildeKategori, filnavn: string): string {
 export const VIDEO_KATEGORIER = ['chat', 'album'] as const
 export type VideoKategori = (typeof VIDEO_KATEGORIER)[number]
 
+// Lag en unik path for video innen kategorien. Kaster ved ulovlig filnavn.
 export function videoSti(kategori: VideoKategori, filnavn: string): string {
+  validerFilnavn(filnavn)
   return `video/${kategori}/${filnavn}`
+}
+
+// Lag en unik path for et album-bilde. Validerer albumId mot UUID-regex og
+// filnavn mot whitelist — begge kan komme fra klient/FormData og kan ikke
+// stoles på. R2-sti: album/{albumId}/{filnavn}
+export function albumSti(albumId: string, filnavn: string): string {
+  if (!UUID_REGEX.test(albumId)) {
+    throw new Error(`Ugyldig albumId: ${albumId}`)
+  }
+  validerFilnavn(filnavn)
+  return `album/${albumId}/${filnavn}`
 }
 
 // Felles helper: skalerer et bilde til maks `maks` på lang side, returnerer

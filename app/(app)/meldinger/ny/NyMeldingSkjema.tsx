@@ -9,7 +9,7 @@ import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
-import { komprimer, genererFilnavn } from '@/lib/bilde-utils'
+import { komprimer } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
 
 const inputStil: CSSProperties = {
@@ -207,7 +207,6 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           const komprimert = await komprimer(bilde.fil)
           const fd = new FormData()
           fd.append('fil', komprimert)
-          fd.append('filnavn', genererFilnavn(komprimert))
           fd.append('kategori', 'meldinger')
           const res = await lastOppBilde(fd)
           opplastede.push(res.url)

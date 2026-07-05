@@ -3,13 +3,22 @@
 import { revalidatePath } from 'next/cache'
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
+import { albumSti, EXT_FRA_BILDE_MIME, nyttR2Filnavn } from '@/lib/bilde-utils'
 
-// Album-server actions. Bilder lastes opp via egen flyt: klient genererer
+// Album-server actions. Bilder lastes opp via egen flyt: klient komprimerer
 // både hovedbilde og thumbnail, server tar imot begge i samme call og lagrer
-// dem under `album/{album_id}/...` i R2 + en rad i album_bilde.
+// dem under `album/{album_id}/...` i R2 + en rad i album_bilde. Filnavn
+// genereres server-side fra validert MIME — klient-oppgitt navn ignoreres.
 
 const MAKS_BYTES = 5 * 1024 * 1024
-const TILLATTE_TYPER = ['image/jpeg', 'image/png', 'image/webp']
+// Egen, strammere grense for thumbnail. En thumb er en 400px-avledning
+// (JPEG q0.85, typisk <150 KB) — er blobben større enn dette er den per
+// definisjon ikke en gyldig thumb, og skal avvises før opplasting.
+const MAKS_THUMB_BYTES = 1 * 1024 * 1024
+// Utled tillatte MIME-typer fra EXT_FRA_BILDE_MIME i stedet for å hardkode
+// dem — samme mønster som bilde-opplasting.ts. Garanterer at hver godkjent
+// MIME har en kjent ext, så `ext` aldri blir undefined → filnavn `...undefined`.
+const TILLATTE_TYPER = Object.keys(EXT_FRA_BILDE_MIME)
 
 export async function opprettAlbum(input: {
   tittel: string
@@ -42,28 +51,48 @@ export async function lastOppAlbumBilde(formData: FormData): Promise<{ id: strin
   const albumId = formData.get('albumId')
   const fil = formData.get('fil')
   const thumb = formData.get('thumb')
-  const filnavn = formData.get('filnavn')
   const breddeRaw = formData.get('bredde')
   const hoydeRaw = formData.get('hoyde')
 
   if (typeof albumId !== 'string' || !albumId) throw new Error('Mangler albumId')
   if (!(fil instanceof File)) throw new Error('Mangler fil')
-  if (typeof filnavn !== 'string' || !filnavn.trim()) throw new Error('Mangler filnavn')
   if (fil.size > MAKS_BYTES) throw new Error(`Filen er for stor (maks ${MAKS_BYTES / 1024 / 1024} MB)`)
   if (!TILLATTE_TYPER.includes(fil.type)) throw new Error('Ugyldig filtype')
 
   const bredde = breddeRaw ? parseInt(String(breddeRaw)) : null
   const hoyde = hoydeRaw ? parseInt(String(hoydeRaw)) : null
 
+  // Filnavn genereres server-side fra validert MIME. albumSti validerer
+  // at albumId er UUID og filnavn er lovlig — begge kan komme fra klient.
+  const ext = EXT_FRA_BILDE_MIME[fil.type]
+  const filnavn = nyttR2Filnavn(ext)
+  const sti = albumSti(albumId, filnavn)
+
   const data = new Uint8Array(await fil.arrayBuffer())
-  const sti = `album/${albumId}/${filnavn}`
   const url = await lastOppR2(sti, data, fil.type)
 
   let thumbUrl: string | null = null
   if (thumb instanceof File && thumb.size > 0) {
+    // Thumb kommer også fra FormData og kan ikke stoles på — valider størrelse
+    // og type før opplasting, samme mønster som hovedbildet over. Uten dette
+    // kunne en innlogget bruker laste opp en vilkårlig stor/ugyldig blob under
+    // vår R2-nøkkel. Semantikken «thumb er valgfri» bevares: er thumb tom eller
+    // fraværende hoppes blokka over (thumbUrl forblir null).
+    if (thumb.size > MAKS_THUMB_BYTES) {
+      throw new Error(`Thumbnail er for stor (maks ${MAKS_THUMB_BYTES / 1024 / 1024} MB)`)
+    }
+    // Krev jpeg spesifikt: lagThumbnail() produserer alltid jpeg, og vi lagrer
+    // med .jpg-nøkkel + Content-Type image/jpeg. Å godta png/webp her ville
+    // lagre de bytene bak en jpeg-etikett (endelse/Content-Type-mismatch).
+    if (thumb.type !== 'image/jpeg') throw new Error('Ugyldig thumbnail-filtype (må være JPEG)')
     const thumbData = new Uint8Array(await thumb.arrayBuffer())
-    const thumbSti = `album/${albumId}/thumb_${filnavn}`
-    thumbUrl = await lastOppR2(thumbSti, thumbData, thumb.type)
+    // lagThumbnail() produserer alltid image/jpeg, så thumb-nøkkelen får sin
+    // egen `.jpg`-endelse — ikke hovedbildets ext. Ellers kunne et png/webp-
+    // hovedbilde gi thumb-nøkkel `...thumb_....png` med jpeg-innhold (endelse
+    // ↔ Content-Type-mismatch). Eget random-suffiks + thumb_-prefiks holder
+    // nøkkelen distinkt fra hovedbildet.
+    const thumbSti = albumSti(albumId, 'thumb_' + nyttR2Filnavn('jpg'))
+    thumbUrl = await lastOppR2(thumbSti, thumbData, 'image/jpeg')
   }
 
   const { data: rad, error } = await supabase
