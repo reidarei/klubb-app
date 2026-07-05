@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import SetVinnerModal from '@/components/SetVinnerModal'
 
@@ -114,11 +115,20 @@ export default function KaaringerVisning({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {maler.map(mal => {
           const v = vinnerForMal(mal.id)
+          // Historiske vinnere fra FB-importen kan mangle begge referansene
+          // (delt seier, eller møter uten arrangement-rad) — da bærer
+          // begrunnelse-feltet vinnerteksten og vises som hovedlinje.
           const vinnerNavn = v
-            ? v.profil_id
-              ? v.profiles?.navn
-              : v.arrangementer?.tittel
+            ? (v.profil_id ? v.profiles?.navn : v.arrangementer?.tittel) ?? v.begrunnelse
             : null
+          // Begrunnelsen vises som egen linje kun når den ikke allerede ER hovedlinjen
+          const visBegrunnelse = v?.begrunnelse && v.begrunnelse !== vinnerNavn
+          // Vinner med referanse er klikkbar: profil → medlemsside, arrangement → arrangementsside
+          const lenke = v?.profil_id
+            ? `/klubbinfo/medlemmer/${v.profil_id}`
+            : v?.arrangement_id
+              ? `/arrangementer/${v.arrangement_id}`
+              : null
           const erArrangement = !!v?.arrangement_id
           const ikonNavn = vinnerNavn
             ? erArrangement
@@ -185,9 +195,22 @@ export default function KaaringerVisning({
                           letterSpacing: '-0.2px',
                         }}
                       >
-                        {vinnerNavn}
+                        {lenke ? (
+                          <Link
+                            href={lenke}
+                            style={{
+                              color: 'inherit',
+                              textDecoration: 'none',
+                              borderBottom: '1px solid var(--border-strong)',
+                            }}
+                          >
+                            {vinnerNavn}
+                          </Link>
+                        ) : (
+                          vinnerNavn
+                        )}
                       </div>
-                      {v?.begrunnelse && (
+                      {visBegrunnelse && (
                         <div
                           style={{
                             fontFamily: 'var(--font-display)',
@@ -198,7 +221,7 @@ export default function KaaringerVisning({
                             lineHeight: 1.4,
                           }}
                         >
-                          «{v.begrunnelse}»
+                          «{v?.begrunnelse}»
                         </div>
                       )}
                     </>
