@@ -36,6 +36,13 @@ export default function KaaringKort({
 }) {
   const [modalApen, setModalApen] = useState(false)
 
+  // Historiske vinnere fra FB-importen kan mangle både profil- og arrangement-
+  // referanse (delt seier, eller møter som ikke finnes som arrangement-rad).
+  // Da bærer begrunnelse-feltet vinnerteksten og vises som hovedlinje.
+  const hovedtekst = vinner
+    ? (vinner.profil_id ? vinner.profiles?.navn : vinner.arrangementer?.tittel) ?? null
+    : null
+
   return (
     <>
       <Card>
@@ -47,9 +54,9 @@ export default function KaaringKort({
             {vinner ? (
               <div>
                 <p className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
-                  {vinner.profil_id ? vinner.profiles?.navn : vinner.arrangementer?.tittel}
+                  {hovedtekst ?? vinner.begrunnelse}
                 </p>
-                {vinner.begrunnelse && (
+                {hovedtekst && vinner.begrunnelse && (
                   <p className="text-xs mt-0.5 italic" style={{ color: 'var(--text-secondary)' }}>
                     «{vinner.begrunnelse}»
                   </p>
