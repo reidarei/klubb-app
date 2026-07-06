@@ -288,7 +288,7 @@ create policy "..." on public.<tabell> ...;
 
 **Sekvenser:** Hvis tabellen har en `serial`/`identity`-kolonne brukt fra klient, husk `grant usage, select on sequence public.<tabell>_<kol>_seq to authenticated;`.
 
-**Eksisterende tabeller:** Beholder grants automatisk frem til 30. oktober 2026. Audit + opprydding tracket i eget issue.
+**Grants-opprydding:** Migrasjonene som følger med (grants-audit + `alter default privileges ... revoke all on tables/sequences/functions from anon`) trimmer eksisterende tabeller til minste privilegium og skrur av anon-default på public-schema, så nye tabeller ikke arver anon-grants. `authenticated`-default røres ikke (RLS backstopper; Supabase fjerner uansett alle default-grants 30. oktober 2026). Følg malen over for nye tabeller.
 
 ## Policy: Visuell verifikasjon
 
