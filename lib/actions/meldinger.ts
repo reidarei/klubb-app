@@ -18,11 +18,29 @@ export async function opprettMelding(input: {
   album_id?: string | null
   /** Spotlight-bilde fra valgt album. Null = bruk album.cover_bilde_id. */
   album_spotlight_bilde_id?: string | null
+  /** Festedato: innlegget holdes øverst på agenda t.o.m. denne datoen.
+   * Format: YYYY-MM-DD. Null = ikke festet. Mig. 109 / #419. */
+  aktuell_dato?: string | null
 }) {
   const tekst = input.innhold.trim()
   const bilder = (input.bilde_urls ?? []).slice(0, MELDING_MAKS_BILDER)
   const albumId = input.album_id ?? null
   const spotlightId = input.album_spotlight_bilde_id ?? null
+  // Valider YYYY-MM-DD-format OG at datoen faktisk er reell; forkast ugyldig
+  // verdi i stedet for å lagre støy. Regexen alene slipper velformaterte men
+  // umulige datoer videre til insert → hard Postgres-feil. To lag fanger dem:
+  //  - Date.parse === NaN forkaster grovt ugyldige (2026-13-45, 2026-00-10)
+  //  - round-trip-sjekken forkaster roll-over-datoer som Date godtar men ruller
+  //    videre (2026-02-30 → 3. mars, 2026-04-31 → 1. mai). new Date tolker
+  //    YYYY-MM-DD som UTC-midnatt, så slice(0,10) skal matche input eksakt.
+  const kandidatDato = input.aktuell_dato
+  const aktuellDato =
+    kandidatDato &&
+    /^\d{4}-\d{2}-\d{2}$/.test(kandidatDato) &&
+    !Number.isNaN(Date.parse(kandidatDato)) &&
+    new Date(kandidatDato).toISOString().slice(0, 10) === kandidatDato
+      ? kandidatDato
+      : null
 
   // Album-spotlight og egne opplastede bilder utelukker hverandre — UI
   // håndhever det også, men vi avviser her som forsvar i dybden.
@@ -54,6 +72,7 @@ export async function opprettMelding(input: {
       innhold: tekst || null,
       album_id: albumId,
       album_spotlight_bilde_id: spotlightId,
+      aktuell_dato: aktuellDato,
     })
     .select('id')
     .single()

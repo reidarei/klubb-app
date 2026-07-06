@@ -17,6 +17,7 @@ function lagMelding(
   opprettetDagerSiden: number,
   aktivitetDagerSiden: number,
   arkivertTidspunkt: string | null = null,
+  aktuellDato: string | null = null,
 ): MeldingRaad {
   const naaMs = NAA_FAST.getTime()
   return {
@@ -31,6 +32,7 @@ function lagMelding(
     antallKommentarer: 0,
     albumSpotlight: null,
     arkivert_tidspunkt: arkivertTidspunkt,
+    aktuell_dato: aktuellDato,
   }
 }
 
@@ -99,5 +101,110 @@ describe('byggAgenda — arkivering', () => {
     const tidligereMelding = agenda.tidligere.find(t => t.kind === 'melding')
     // sortIso skal være arkiveringstidspunktet, ikke sist_aktivitet
     expect(tidligereMelding?.sortIso).toBe(arkivertTidspunkt)
+  })
+})
+
+describe('byggAgenda — festede meldinger (#419)', () => {
+  // NAA_FAST = 2026-04-25T12:00:00Z; dagensDate = '2026-04-25'
+
+  it('festet innlegg med gammel aktivitet vises i levende meldinger', () => {
+    // sist_aktivitet 8 dager gammel (over MELDING_LEVENDE_DAGER = 3.5), men
+    // aktuell_dato er fremtidig → innlegget skal festes øverst
+    const melding = lagMelding(8, 8, null, '2026-05-10')
+
+    const agenda = byggAgenda({
+      arrangementer: [],
+      ansvar: [],
+      profilerMedBursdag: [],
+      meldinger: [melding],
+      meg: 'p',
+      naa: NAA_FAST,
+      aar: 2026,
+    })
+
+    expect(agenda.meldinger).toHaveLength(1)
+    expect(agenda.meldinger[0].data.id).toBe('m1')
+    expect(agenda.tidligere.filter(t => t.kind === 'melding')).toHaveLength(0)
+  })
+
+  it('festet t.o.m. i dag: aktuell_dato lik dagens dato er fortsatt festet (>=-grensen)', () => {
+    // aktuell_dato === NAA_FAST-datoen (2026-04-25). Dette er selve >=-vs->-
+    // grensen: festet t.o.m. aktuell_dato, faller først dagen etter. Gammel
+    // sist_aktivitet (8 dager) → utenfor levetidsvinduet, så kun festingen kan
+    // holde den øverst.
+    const melding = lagMelding(8, 8, null, '2026-04-25')
+
+    const agenda = byggAgenda({
+      arrangementer: [],
+      ansvar: [],
+      profilerMedBursdag: [],
+      meldinger: [melding],
+      meg: 'p',
+      naa: NAA_FAST,
+      aar: 2026,
+    })
+
+    expect(agenda.meldinger).toHaveLength(1)
+    expect(agenda.meldinger[0].data.id).toBe('m1')
+    expect(agenda.tidligere.filter(t => t.kind === 'melding')).toHaveLength(0)
+  })
+
+  it('innlegg med passert aktuell_dato og gammel aktivitet havner i tidligere', () => {
+    // aktuell_dato 2026-04-20 < NAA_FAST 2026-04-25 → passert festedato
+    // sist_aktivitet 8 dager gammel → utenfor levetidsvinduet
+    const melding = lagMelding(8, 8, null, '2026-04-20')
+
+    const agenda = byggAgenda({
+      arrangementer: [],
+      ansvar: [],
+      profilerMedBursdag: [],
+      meldinger: [melding],
+      meg: 'p',
+      naa: NAA_FAST,
+      aar: 2026,
+    })
+
+    expect(agenda.meldinger).toHaveLength(0)
+    expect(agenda.tidligere.filter(t => t.kind === 'melding')).toHaveLength(1)
+  })
+
+  it('festet innlegg som utløper soonest er øverst', () => {
+    // m1 utløper 2026-04-28 (3 dager frem), m2 utløper 2026-05-10 (15 dager frem)
+    // Input-lista er [m2, m1] — sorteringen skal gi m1 (kortere aktuell_dato) øverst
+    const m1 = { ...lagMelding(1, 1, null, '2026-04-28'), id: 'fest-kort' }
+    const m2 = { ...lagMelding(1, 1, null, '2026-05-10'), id: 'fest-lang' }
+
+    const agenda = byggAgenda({
+      arrangementer: [],
+      ansvar: [],
+      profilerMedBursdag: [],
+      meldinger: [m2, m1],
+      meg: 'p',
+      naa: NAA_FAST,
+      aar: 2026,
+    })
+
+    expect(agenda.meldinger).toHaveLength(2)
+    // Stigende aktuell_dato → utløper soonest er øverst
+    expect(agenda.meldinger[0].data.id).toBe('fest-kort')
+    expect(agenda.meldinger[1].data.id).toBe('fest-lang')
+  })
+
+  it('festet innlegg med arkivert_tidspunkt havner i tidligere, ikke meldinger', () => {
+    // aktuell_dato er fremtidig, men arkivert_tidspunkt er satt → Tidligere overstyrer
+    const melding = lagMelding(1, 0, NAA_FAST.toISOString(), '2026-05-10')
+
+    const agenda = byggAgenda({
+      arrangementer: [],
+      ansvar: [],
+      profilerMedBursdag: [],
+      meldinger: [melding],
+      meg: 'p',
+      naa: NAA_FAST,
+      aar: 2026,
+    })
+
+    expect(agenda.meldinger).toHaveLength(0)
+    expect(agenda.tidligere.filter(t => t.kind === 'melding')).toHaveLength(1)
   })
 })

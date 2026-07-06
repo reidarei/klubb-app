@@ -65,7 +65,7 @@ export default async function TidligereSide({
   let meldQuery = supabase
     .from('meldinger')
     .select(
-      `id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt, fra_facebook, profil_id,
+      `id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt, aktuell_dato, fra_facebook, profil_id,
        profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
        melding_bilder (bilde_url, rekkefoelge),
        melding_chat (count),
@@ -134,6 +134,7 @@ export default async function TidligereSide({
     opprettet: string
     sist_aktivitet: string
     arkivert_tidspunkt: string | null
+    aktuell_dato: string | null
     fra_facebook: boolean | null
     profil_id: string
     profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
@@ -144,7 +145,7 @@ export default async function TidligereSide({
   }
 
   // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
-  const meldinger: MeldingRaad[] = (meldSide as RawMelding[]).map(m => ({
+  const meldinger: MeldingRaad[] = meldSide.map((m: RawMelding) => ({
     id: m.id,
     innhold: m.innhold,
     opprettet: m.opprettet,
@@ -163,6 +164,7 @@ export default async function TidligereSide({
     reaksjoner: [], // reaksjoner hentes ikke på /tidligere for å holde siden rask
     antallKommentarer: (m.melding_chat?.[0] as { count: number } | undefined)?.count ?? 0,
     albumSpotlight: tilAlbumSpotlight(m.album, m.spotlight),
+    aktuell_dato: m.aktuell_dato,
   }))
 
   // Bygg items for arrangmenter

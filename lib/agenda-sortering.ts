@@ -144,6 +144,9 @@ export type MeldingRaad = {
   // Satt av forfatter/admin for å flytte innlegget til Tidligere umiddelbart.
   // Null = ikke arkivert. Mig. 099.
   arkivert_tidspunkt: string | null
+  // Valgfritt festedato-felt; null = ikke festet. >= dagens dato = festet øverst,
+  // uavhengig av MELDING_LEVENDE_DAGER. Mig. 109 / #419.
+  aktuell_dato: string | null
 }
 
 // === Resultat-typer ===============================================
@@ -258,6 +261,19 @@ export function erMeldingLevende(m: MeldingRaad, naa: Date): boolean {
   const dag = 24 * 60 * 60 * 1000
   const aktivitetAlder = naa.getTime() - new Date(m.sist_aktivitet).getTime()
   return aktivitetAlder <= MELDING_LEVENDE_DAGER * dag
+}
+
+// Returnerer true når innlegget er «festet» øverst på agenda: aktuell_dato er
+// satt, er >= dagens dato, og innlegget er ikke arkivert. Sammenligning som
+// streng er korrekt for ISO-datoformat (YYYY-MM-DD sorterer leksikografisk).
+// Mig. 109 / #419.
+export function erFestet(m: MeldingRaad, naa: Date): boolean {
+  if (!m.aktuell_dato || m.arkivert_tidspunkt) return false
+  const y = naa.getFullYear()
+  const mo = String(naa.getMonth() + 1).padStart(2, '0')
+  const d = String(naa.getDate()).padStart(2, '0')
+  const dagensDate = `${y}-${mo}-${d}`
+  return m.aktuell_dato >= dagensDate
 }
 
 // Mapper et PollRaad til PollKortData. `avsluttet` styrer visningen —
@@ -412,22 +428,38 @@ export function byggAgenda(input: {
   // sist_aktivitet desc — nye kommentarer dytter den opp (reaksjoner teller
   // ikke, se mig. 060).
   //
-  // En melding er levende KUN hvis den er innenfor tidsvinduet OG ikke
-  // arkivert. Arkiverte meldinger havner i Tidligere uansett alder. (#312)
+  // En melding er levende KUN hvis den IKKE er arkivert OG (er festet ELLER
+  // er innenfor tidsvinduet). Festede innlegg (#419) holder seg øverst selv om
+  // MELDING_LEVENDE_DAGER er passert. Arkiverte meldinger havner i Tidligere
+  // uansett alder. (#312)
   const levendeRaad = meldingerRaad.filter(
-    m => erMeldingLevende(m, naa) && !m.arkivert_tidspunkt,
+    m => !m.arkivert_tidspunkt && (erFestet(m, naa) || erMeldingLevende(m, naa)),
   )
   const ikkeLevendeRaad = meldingerRaad.filter(
-    m => !erMeldingLevende(m, naa) || !!m.arkivert_tidspunkt,
+    m => !!m.arkivert_tidspunkt || (!erFestet(m, naa) && !erMeldingLevende(m, naa)),
   )
 
-  const meldinger: AgendaItem[] = levendeRaad
-    .map(m => ({
-      kind: 'melding' as const,
-      sortIso: m.sist_aktivitet,
-      data: tilMeldingKort(m, false),
-    }))
-    .sort((a, b) => b.sortIso.localeCompare(a.sortIso))
+  // Festede innlegg (aktuell_dato >= i dag) sorteres øverst: stigende på aktuell_dato
+  // (utløper soonest = øverst), sekundært sist_aktivitet desc ved lik dato.
+  const festede = levendeRaad
+    .filter(m => erFestet(m, naa))
+    .sort((a, b) => {
+      const datoDiff = (a.aktuell_dato ?? '').localeCompare(b.aktuell_dato ?? '')
+      if (datoDiff !== 0) return datoDiff
+      return b.sist_aktivitet.localeCompare(a.sist_aktivitet)
+    })
+
+  // Øvrige levende innlegg sorteres på sist_aktivitet desc (som i dag)
+  const oevrige = levendeRaad
+    .filter(m => !erFestet(m, naa))
+    .sort((a, b) => b.sist_aktivitet.localeCompare(a.sist_aktivitet))
+
+  // Festede øverst, deretter øvrige. sortIso = sist_aktivitet (uendret).
+  const meldinger: AgendaItem[] = [...festede, ...oevrige].map(m => ({
+    kind: 'melding' as const,
+    sortIso: m.sist_aktivitet,
+    data: tilMeldingKort(m, false),
+  }))
 
   const tidligereMelding: TidligereItem[] = ikkeLevendeRaad.map(m => ({
     kind: 'melding' as const,

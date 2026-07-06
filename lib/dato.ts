@@ -39,6 +39,16 @@ export function norskDatoNaa(): Date {
 }
 
 /**
+ * Dagens dato (norsk tidssone) som "YYYY-MM-DD"-streng. Bruk denne i stedet for
+ * `new Date().toISOString().slice(0, 10)` — sistnevnte gir UTC-dato og kan bomme
+ * med én dag rundt midnatt norsk tid. Nyttig for min/max på <input type="date">
+ * og andre steder «hvilken kalenderdag er det i Norge» skal uttrykkes som streng.
+ */
+export function iDagOslo(): string {
+  return formatInTimeZone(new Date(), TIDSSONE, 'yyyy-MM-dd')
+}
+
+/**
  * Parse en ISO-dato til norsk dato (bare dag, uten klokkeslett).
  * Viktig for "er dette arrangement i dag?"-sjekker.
  */

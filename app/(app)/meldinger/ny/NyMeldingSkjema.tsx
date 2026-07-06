@@ -11,6 +11,7 @@ import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { komprimer } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
+import { iDagOslo } from '@/lib/dato'
 
 const inputStil: CSSProperties = {
   width: '100%',
@@ -54,6 +55,7 @@ type Props = {
 
 export default function NyMeldingSkjema({ albumer }: Props) {
   const [innhold, setInnhold] = useState('')
+  const [aktuellDato, setAktuellDato] = useState('')
   const [bilder, setBilder] = useState<BildeItem[]>([])
   const [feil, setFeil] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -174,6 +176,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
             innhold,
             album_id: valgtAlbum!.id,
             album_spotlight_bilde_id: valgtSpotlightId,
+            aktuell_dato: aktuellDato || null,
           })
         } catch (err) {
           if (
@@ -212,7 +215,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           opplastede.push(res.url)
         }
 
-        await opprettMelding({ innhold, bilde_urls: opplastede })
+        await opprettMelding({ innhold, bilde_urls: opplastede, aktuell_dato: aktuellDato || null })
       } catch (err) {
         // NEXT_REDIRECT er ikke en ekte feil — la Next.js håndtere redirect
         if (
@@ -544,6 +547,34 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           </div>
         </SkjemaSeksjon>
       )}
+
+      <SkjemaSeksjon label="Aktuell dato (valgfritt)">
+        <div style={{ padding: '10px 4px' }}>
+          <input
+            type="date"
+            value={aktuellDato}
+            onChange={e => setAktuellDato(e.target.value)}
+            disabled={isPending}
+            // Sperr for fortidsdatoer i velgeren. Må bruke norsk kalenderdato
+            // (ikke UTC), ellers kan «i dag» bli «i går» rundt midnatt norsk tid
+            // og skjemaet slipper gjennom en fortidsdato. Se tidssone-policyen.
+            min={iDagOslo()}
+            style={{ ...inputStil, colorScheme: 'dark' }}
+          />
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '1.2px',
+              textTransform: 'uppercase',
+              marginTop: 6,
+            }}
+          >
+            Holder innlegget festet øverst til datoen er passert
+          </div>
+        </div>
+      </SkjemaSeksjon>
 
       {/* Modal-aktig album-liste — enkel inline overlay. Lukke ved klikk på
           backdrop eller på et album. Vi bruker ingen <dialog>-tag for å unngå

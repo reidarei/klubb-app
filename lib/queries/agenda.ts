@@ -151,7 +151,7 @@ export async function hentAgendaData(
         // kommentaren faller innenfor melding_chat-limit-vinduet under.
         // Album-spotlight (#214): album + spotlight-bilde embed-es via
         // ALBUM_SPOTLIGHT_SELECT så samme select brukes alle steder.
-        `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id, arkivert_tidspunkt,
+        `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id, arkivert_tidspunkt, aktuell_dato,
          profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
          melding_bilder (bilde_url, rekkefoelge),
          melding_chat (count),
@@ -328,6 +328,7 @@ export async function hentAgendaData(
     fra_facebook: boolean | null
     profil_id: string
     arkivert_tidspunkt: string | null
+    aktuell_dato: string | null
     profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
     melding_bilder: { bilde_url: string; rekkefoelge: number }[] | null
     melding_chat: { count: number }[] | null
@@ -430,6 +431,7 @@ export async function hentAgendaData(
       antallKommentarer: antallKommPerMelding.get(m.id) ?? 0,
       albumSpotlight: tilAlbumSpotlight(m.album, m.spotlight),
       arkivert_tidspunkt: m.arkivert_tidspunkt,
+      aktuell_dato: m.aktuell_dato,
     }
   })
 

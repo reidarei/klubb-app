@@ -630,6 +630,7 @@ export type Database = {
       }
       meldinger: {
         Row: {
+          aktuell_dato: string | null
           album_id: string | null
           album_spotlight_bilde_id: string | null
           arkivert_tidspunkt: string | null
@@ -642,6 +643,7 @@ export type Database = {
           sist_aktivitet: string
         }
         Insert: {
+          aktuell_dato?: string | null
           album_id?: string | null
           album_spotlight_bilde_id?: string | null
           arkivert_tidspunkt?: string | null
@@ -654,6 +656,7 @@ export type Database = {
           sist_aktivitet?: string
         }
         Update: {
+          aktuell_dato?: string | null
           album_id?: string | null
           album_spotlight_bilde_id?: string | null
           arkivert_tidspunkt?: string | null
