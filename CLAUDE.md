@@ -275,7 +275,8 @@ create table public.<tabell> (
 alter table public.<tabell> enable row level security;
 
 -- Data API-tilgang (kreves fra 2026-10-30 på vårt prosjekt)
-grant select                          on public.<tabell> to anon;
+-- IKKE grant til anon: en privat klubb-app har normalt ingen offentlige flater.
+-- Legg kun anon-grant til hvis en konkret ikke-innlogget flate faktisk trenger det.
 grant select, insert, update, delete  on public.<tabell> to authenticated;
 grant select, insert, update, delete  on public.<tabell> to service_role;
 
@@ -283,7 +284,7 @@ grant select, insert, update, delete  on public.<tabell> to service_role;
 create policy "..." on public.<tabell> ...;
 ```
 
-**Justér scope per tabell:** Mange tabeller skal ikke gi `anon` SELECT (vi har ingen offentlige flater). Tilpass grants til hva som faktisk brukes — minste privilegium. `service_role` bypasses RLS uansett, men trenger fortsatt grants for å se tabellen via PostgREST.
+**Justér scope per tabell — minste privilegium:** Gi `authenticated` kun de kommandoene tabellens RLS-policyer faktisk tillater (én grant per policy-kommando). `anon` skal normalt ikke ha noe (ingen offentlige flater). `service_role` bypasser RLS uansett, men trenger fortsatt grants for å se tabellen via PostgREST.
 
 **Sekvenser:** Hvis tabellen har en `serial`/`identity`-kolonne brukt fra klient, husk `grant usage, select on sequence public.<tabell>_<kol>_seq to authenticated;`.
 
