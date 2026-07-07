@@ -6,14 +6,14 @@ Denne guiden beskriver hvordan du setter opp en ny instans av appen fra bunnen a
 
 ## Oversikt over komponenter
 
-| Komponent | Hva det er | Hvor du oppretter det |
-|---|---|---|
-| **Vercel** | Hosting og CI/CD | vercel.com |
-| **Supabase** | Database (Postgres + RLS), Auth, Realtime | supabase.com |
-| **Cloudflare R2** | Bildelagring (S3-kompatibel, CDN) | dash.cloudflare.com |
-| **Resend** | Transaksjonell e-post | resend.com |
-| **VAPID-nøkler** | Web Push (push-varsler) | genereres lokalt |
-| **GitHub Actions-cron** | Daglig påminnelsesjobb | `.github/workflows/paaminne.yml` (i repoet, men `schedule` er av som standard — se §9) |
+| Komponent | Hva det er | Hvor du oppretter det | kostnad |
+|---|---|---|---|
+| **Vercel** | Hosting og CI/CD | vercel.com | Gratis hobby plan |
+| **Supabase** | Database (Postgres + RLS), Auth, Realtime | supabase.com | Free plan |
+| **Cloudflare R2** | Bildelagring (S3-kompatibel, CDN) | dash.cloudflare.com | Free plan |
+| **Resend** | Transaksjonell e-post | resend.com | Free plan |
+| **VAPID-nøkler** | Web Push (push-varsler) | genereres lokalt | |
+| **GitHub Actions-cron** | Daglig påminnelsesjobb | `.github/workflows/paaminne.yml` (i repoet, men `schedule` er av som standard — se §9) | |
 
 ---
 
