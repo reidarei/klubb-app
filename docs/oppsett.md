@@ -14,6 +14,7 @@ Denne guiden beskriver hvordan du setter opp en ny instans av appen fra bunnen a
 | **Resend** | Transaksjonell e-post | resend.com | Free plan |
 | **VAPID-nøkler** | Web Push (push-varsler) | genereres lokalt | |
 | **GitHub Actions-cron** | Daglig påminnelsesjobb | `.github/workflows/paaminne.yml` (i repoet, men `schedule` er av som standard — se §9) | |
+| **Anthropic** _(valgfri)_ | AI-datoforslag | console.anthropic.com | Free tier |
 
 ---
 
@@ -103,6 +104,8 @@ Sjekk `sjekk-miljo`-scriptet for alle påkrevde variabler. Kritiske er:
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `NEXT_PUBLIC_R2_PUBLIC_URL`
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
 - `RESEND_API_KEY`
+
+**Valgfritt — Anthropic (AI-datoforslag):** Uten `ANTHROPIC_API_KEY` kjører appen fullt ut; AI-datoforslag-funksjonen er da deaktivert. Hvis du vil aktivere det, opprett API-nøkkel på console.anthropic.com.
 
 ---
 
