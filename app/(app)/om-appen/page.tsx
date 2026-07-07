@@ -92,12 +92,18 @@ export default function OmAppen() {
         <Avsnitt overskrift="Ingen tracking">
           Vi har ingen annonser, ingen Google Analytics, ingen Facebook-
           piksler, ingen «cookies» som følger deg på tvers av nettsteder.
-          Eneste eksterne tjeneste er Vercel sin Web Vitals (anonyme
-          ytelsesmålinger uten brukerdata).
+          Ytelsesmålinger (anonyme, uten brukerdata) går til Vercel.
+        </Avsnitt>
+        <Avsnitt overskrift="AI-funksjoner">
+          Når du trykker «Foreslå fra teksten» på et innlegg, sendes teksten
+          i det innlegget til Anthropic (AI-leverandør i USA) for å tolke en
+          eventuell dato. Dette skjer bare når du selv ber om det — ingen
+          tekst sendes automatisk.
         </Avsnitt>
         <Avsnitt overskrift="Hvor data ligger" siste>
           Database og fillagring hos Supabase i Dublin (EU). Hosting hos
-          Vercel, også Dublin-region. Data forlater ikke EU-området.
+          Vercel, også Dublin-region. All annen data (utenom AI-funksjoner
+          nevnt over) forblir innen EU.
         </Avsnitt>
       </section>
 

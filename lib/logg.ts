@@ -15,6 +15,7 @@
 //   vitals.insert.feilet        — web-vitals-rad feiler i DB
 //   github.webhook.feilet       — webhook-konfigurasjons- eller varselfeil
 //   bli-utvikler.issue.feilet   — GitHub Issue-oppretting feiler
+//   ai.datoforslag.feilet       — Anthropic dato-forslag feiler (auth/transient)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

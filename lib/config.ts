@@ -45,6 +45,13 @@ export const KJENT_PROD_SUPABASE_URL = 'https://tdlfswmxezjdnxcbbiwn.supabase.co
 // slik at DSN-en ikke lekker til klient-bundlen. Brukes av lib/logg.ts og sentry.server.config.ts.
 export const SENTRY_DSN = process.env.SENTRY_DSN ?? ''
 
+// Anthropic API-nøkkel for LLM-funksjoner (dato-forslag m.fl.). Server-only —
+// ALDRI NEXT_PUBLIC_-prefiks. Tom nøkkel = feature no-op: kallClaude() returnerer
+// null uten å sende noe, og build lykkes uten secret satt.
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
+// Modell brukt av dato-forslag og andre LLM-kall. Kan overstyres per instans.
+export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
+
 // GitHub-repo som backer «innspill»-funksjonen. Issues med label
 // GITHUB_ONSKE_LABEL behandles som brukerønsker.
 export const GITHUB_REPO =

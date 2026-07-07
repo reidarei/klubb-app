@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { BASE_URL } from '@/lib/config'
 import { INNLEGG_MAKS_LENGDE, INNLEGG_MIN_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
-import { naa } from '@/lib/dato'
+import { naa, erGyldigKalenderdato } from '@/lib/dato'
 import { logg } from '@/lib/logg'
 
 export async function opprettMelding(input: {
@@ -26,21 +26,10 @@ export async function opprettMelding(input: {
   const bilder = (input.bilde_urls ?? []).slice(0, MELDING_MAKS_BILDER)
   const albumId = input.album_id ?? null
   const spotlightId = input.album_spotlight_bilde_id ?? null
-  // Valider YYYY-MM-DD-format OG at datoen faktisk er reell; forkast ugyldig
-  // verdi i stedet for å lagre støy. Regexen alene slipper velformaterte men
-  // umulige datoer videre til insert → hard Postgres-feil. To lag fanger dem:
-  //  - Date.parse === NaN forkaster grovt ugyldige (2026-13-45, 2026-00-10)
-  //  - round-trip-sjekken forkaster roll-over-datoer som Date godtar men ruller
-  //    videre (2026-02-30 → 3. mars, 2026-04-31 → 1. mai). new Date tolker
-  //    YYYY-MM-DD som UTC-midnatt, så slice(0,10) skal matche input eksakt.
+  // Valider YYYY-MM-DD-format via erGyldigKalenderdato (se lib/dato.ts) —
+  // fanger format-feil, ugyldige verdier og roll-over-datoer i ett kall.
   const kandidatDato = input.aktuell_dato
-  const aktuellDato =
-    kandidatDato &&
-    /^\d{4}-\d{2}-\d{2}$/.test(kandidatDato) &&
-    !Number.isNaN(Date.parse(kandidatDato)) &&
-    new Date(kandidatDato).toISOString().slice(0, 10) === kandidatDato
-      ? kandidatDato
-      : null
+  const aktuellDato = kandidatDato && erGyldigKalenderdato(kandidatDato) ? kandidatDato : null
 
   // Album-spotlight og egne opplastede bilder utelukker hverandre — UI
   // håndhever det også, men vi avviser her som forsvar i dybden.

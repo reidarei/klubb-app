@@ -10,8 +10,9 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
 import { createClient } from '@/lib/supabase/client'
 import { komprimer } from '@/lib/bilde-utils'
-import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
-import { iDagOslo } from '@/lib/dato'
+import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
+import { iDagOslo, formaterDato } from '@/lib/dato'
+import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
 
 const inputStil: CSSProperties = {
   width: '100%',
@@ -61,6 +62,16 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // AI dato-forslag — tilstand for henting, forslaget og om brukeren har avvist det
+  const [henterForslag, setHenterForslag] = useState(false)
+  const [forslag, setForslag] = useState<string | null>(null)
+  const [forslagAvvist, setForslagAvvist] = useState(false)
+  // Generasjons-token mot stale forslag. En server action kan ikke avbrytes
+  // via AbortSignal, så vi kan ikke «kansellere» et kall i flukt. I stedet
+  // bumper vi denne telleren ved ny henting, tekst-endring og avvisning — et
+  // svar som lander med utdatert gen droppes. Dekker både stale-tekst-racet og
+  // svar som lander etter at brukeren avviste.
+  const forslagGenRef = useRef(0)
   // Sentralt register over aktive blob-URL-er. Bruker ref + Set fordi
   // cleanup-funksjonen i useEffect ellers lukker over et tomt snapshot
   // av `bilder` (deps=[]). Settet holder seg "levende" mellom rendere.
@@ -128,6 +139,37 @@ export default function NyMeldingSkjema({ albumer }: Props) {
     setValgtAlbum(null)
     setValgtSpotlightId(null)
     setAlbumBilder([])
+  }
+
+  async function hentForslag() {
+    // Ny generasjon for dette kallet. Bump'es igjen av onChange/avvis mens
+    // kallet er i flukt — da matcher ikke gen lenger og svaret droppes.
+    const gen = ++forslagGenRef.current
+    // Et eksplisitt knappetrykk er en fersk intensjon og skal overstyre en
+    // tidligere ×-avvisning — ellers ville chip-en forblitt skjult av
+    // `forslag && !forslagAvvist` helt til brukeren endret teksten.
+    setForslagAvvist(false)
+    // Skjul et evt. tidligere forslag mens vi henter et nytt — ellers kan
+    // brukeren rekke å trykke «Bruk» på en utdatert chip mens kallet er i
+    // flukt (Copilot-funn, PR #425).
+    setForslag(null)
+    setHenterForslag(true)
+    try {
+      const r = await foreslaaAktuellDato(innhold)
+      // Drop svaret hvis en nyere henting, tekst-endring eller avvisning
+      // har skjedd i mellomtiden.
+      if (gen !== forslagGenRef.current) return
+      // Sett ubetinget fra resultatet: et re-kall som returnerer null (ingen
+      // dato / stille feil) skal nullstille en gammel chip, ikke la det forrige
+      // forslaget henge igjen og se ferskt ut.
+      setForslag(r?.dato ?? null)
+    } catch {
+      // Stille feil — brukeren ser bare at ingenting skjedde
+    } finally {
+      // Knappen er disabled mens henterForslag er true, så det er aldri to
+      // hentForslag i flukt samtidig — denne er alltid den aktive spinneren.
+      setHenterForslag(false)
+    }
   }
 
   function fjernBilde(idx: number) {
@@ -243,6 +285,9 @@ export default function NyMeldingSkjema({ albumer }: Props) {
 
   const tegnIgjen = INNLEGG_MAKS_LENGDE - innhold.length
   const kanLeggeTilFlere = bilder.length < MELDING_MAKS_BILDER
+  // Forslag-knappen er sperret mens et kall pågår eller teksten er for kort.
+  // Løftet til variabel så `disabled` og `cursor` deler samme sannhet.
+  const forslagKnappDisabled = henterForslag || innhold.trim().length < DATO_FORSLAG_MIN_TEGN
   const visUploadSeksjon = !valgtAlbum
   const visAlbumvelger = bilder.length === 0
 
@@ -261,7 +306,15 @@ export default function NyMeldingSkjema({ albumer }: Props) {
         <div style={{ padding: '10px 4px' }}>
           <textarea
             value={innhold}
-            onChange={e => setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))}
+            onChange={e => {
+              setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))
+              // Invalider et in-flight forslag: teksten er endret, så et svar
+              // som lander nå gjelder gammel tekst og skal droppes.
+              forslagGenRef.current++
+              // Stale forslag på gammel tekst skal ikke henge igjen
+              if (forslagAvvist) setForslagAvvist(false)
+              if (forslag) setForslag(null)
+            }}
             placeholder="Skriv her…"
             style={inputStil}
           />
@@ -561,6 +614,107 @@ export default function NyMeldingSkjema({ albumer }: Props) {
             min={iDagOslo()}
             style={{ ...inputStil, colorScheme: 'dark' }}
           />
+
+          {/* Foreslå dato fra innholdsteksten via AI */}
+          <button
+            type="button"
+            onClick={hentForslag}
+            disabled={forslagKnappDisabled}
+            style={{
+              marginTop: 10,
+              padding: '7px 14px',
+              background: 'transparent',
+              border: '0.5px solid var(--border)',
+              borderRadius: 999,
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              cursor: forslagKnappDisabled ? 'default' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {henterForslag ? (
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--text-tertiary)',
+                  letterSpacing: '1.2px',
+                }}
+              >
+                Tenker…
+              </span>
+            ) : (
+              'Foreslå fra teksten'
+            )}
+          </button>
+
+          {/* Chip med foreslått dato — vises til brukeren godtar eller avviser */}
+          {forslag && !forslagAvvist && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 10,
+                padding: '6px 12px',
+                background: 'var(--bg-elevated)',
+                border: '0.5px solid var(--accent)',
+                borderRadius: 999,
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                color: 'var(--text-primary)',
+              }}
+            >
+              <span>Foreslått: {formaterDato(forslag, 'EEE d. MMM')}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAktuellDato(forslag)
+                  setForslag(null)
+                }}
+                style={{
+                  background: 'var(--accent)',
+                  border: 'none',
+                  borderRadius: 999,
+                  color: 'var(--bg)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                Bruk
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Bump gen så et svar som fortsatt er i flukt (bruker rakk å
+                  // avvise før det landet) droppes i stedet for å dukke opp igjen.
+                  forslagGenRef.current++
+                  setForslag(null)
+                  setForslagAvvist(true)
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: '0 2px',
+                  cursor: 'pointer',
+                }}
+                aria-label="Avvis forslag"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               fontFamily: 'var(--font-mono)',

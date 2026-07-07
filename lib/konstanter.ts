@@ -102,6 +102,10 @@ export const LOGG_KONTEKST_MAKS_KB = 4
 // Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
 
+// Minste tekstlengde før dato-forslag-knappen aktiveres og server-action
+// godtar kallet. Speiles i UI (knapp disables) og server (action-terskel).
+export const DATO_FORSLAG_MIN_TEGN = 15
+
 // Tema-valg — «dark» er default for alle eksisterende brukere.
 // Cookie er HttpOnly og speiles til localStorage for klient-synk.
 export const TEMA_COOKIE = 'tema' as const

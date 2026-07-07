@@ -118,6 +118,22 @@ export function formaterDatoSkille(iso: string): string {
 }
 
 /**
+ * Valider at en streng er en lovlig kalender-dato på formen YYYY-MM-DD.
+ * Tre lag: (1) regexen forkaster feil format, (2) Date.parse === NaN forkaster
+ * grovt ugyldige verdier (2026-13-45), (3) round-trip-sjekken forkaster
+ * roll-over-datoer som Date godtar men ruller videre — f.eks. 2026-02-30
+ * → 3. mars. new Date(s) tolker YYYY-MM-DD som UTC-midnatt, så slice(0,10)
+ * skal matche input eksakt for en reell dato.
+ */
+export function erGyldigKalenderdato(s: string): boolean {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+    !Number.isNaN(Date.parse(s)) &&
+    new Date(s).toISOString().slice(0, 10) === s
+  )
+}
+
+/**
  * Konverter ISO-dato til datetime-local verdi i norsk tidssone.
  * Brukes for å pre-fylle <input type="datetime-local"> med riktig tid.
  */
