@@ -6,8 +6,14 @@
 // f.eks. «https://vg.no» ikke får »-tegnet med i URLen. se #350
 const TRAILING_TEGNSETTING = /[.,)!\]?;:»"'“”‘’]+$/
 
-// Regex som treffer http(s)-URLer og www.-prefiks URLer.
-const URL_REGEX = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/g
+// Regex som treffer http(s)-URLer, www.-prefiks URLer og naken-domeneform m/kuratert TLD-liste.
+// TLD-lista er nødvendig fordi new URL() ikke filtrerer ut falske positiver som «min.side»;
+// «f.eks.no» uten mellomrom er akseptert lav-skade tradeoff. se #426
+// Akseptert lav-skade: rene tall-labels (2.no) og e-post-domener (foo@bar.com → bar.com)
+// linkifiseres også — å kreve bokstav i label ville tynget regexen for marginal gevinst.
+// Naken form tar også valgfri port (:8080) og sti/query/fragment, så
+// «example.com?x=1» linkifiseres helt — ikke bare domenedelen. se #427-review
+const URL_REGEX = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+|(?:[a-z0-9-]+\.)+(?:no|com|org|net|io|dev|app|me|co|eu|info|biz|tv|gg|xyz)\b(?::\d+)?(?:[/?#][^\s<>"]*)?)/gi
 
 export type LinkDel =
   | { type: 'tekst'; verdi: string }
@@ -34,8 +40,12 @@ export function splittPaaUrler(tekst: string): LinkDel[] {
       raaUrl = raaUrl.slice(0, raaUrl.length - kuttTekst.length)
     }
 
-    // Prepend https:// for www.-form slik at URL-objektet kan validere
-    const href = raaUrl.startsWith('http') ? raaUrl : `https://${raaUrl}`
+    // Prepend https:// for prefiks-løse former (www. og nakne domener) slik
+    // at URL-objektet kan validere.
+    // Case-insensitiv sjekk: i-flagget i URL_REGEX gjør at uppercase-protokoll
+    // (Https://, HTTPS://) også matcher — startsWith('http') var case-sensitiv og
+    // ville da prependet https:// → «https://Https://vg.no» med feil vert. se #426-review
+    const href = /^https?:\/\//i.test(raaUrl) ? raaUrl : `https://${raaUrl}`
 
     // Sanering: kun http(s) slippes gjennom — stenger javascript: og lignende
     let gyldig = false
