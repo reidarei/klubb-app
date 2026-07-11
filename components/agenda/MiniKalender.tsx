@@ -1,22 +1,26 @@
 'use client'
 
-// Kompakt månedskalender på agenda-forsiden (#429).
-// Viser fylte sirkler på dager med arrangement, outline-sirkler ellers.
-// Kun visning i v1 — ingen klikk på enkeltdager.
+// Mikro-månedskalender i agenda-headeren (#429).
+// Ligger i luken mellom dato-blokka og NyFAB, med samme høyde som datoen —
+// derfor prikke-format: fylt prikk = dag med arrangement, outline = tom dag,
+// accent-ring = i dag. Ingen dagtall (plassen tillater det ikke, og issuet
+// beskrev nettopp fylte/tomme sirkler). Kun visning — ingen klikk på dager.
 
 import { useMemo, useState, type CSSProperties } from 'react'
 import { byggMaanedsGrid, harInnhold } from '@/lib/mini-kalender'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import Icon from '@/components/ui/Icon'
 
-// Ukedags-forkortelser for header-rad, mandag-først.
-const UKEDAGER = ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø']
+// Kort månedsnavn til mikro-labelen. Småbokstaver med vilje: CSS textTransform
+// versaliserer visuelt, mens skjermlesere får normal tekst (all-caps kan leses
+// bokstav for bokstav av noen SR-er).
+const MAANED_KORT = [
+  'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
+  'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+]
 
-// Månedsnavn — bruker nb-locale manuelt for å holde komponenten enkel
-// (unngår date-fns-locale-import i klient-bundle). Småbokstaver med vilje:
-// CSS textTransform gjør versaliseringen visuelt, mens skjermlesere får
-// normal tekst (all-caps kan leses bokstav for bokstav av noen SR-er).
-const MAANEDSNAVN = [
+// Fulle månedsnavn til skjermleser-annonsering av månedsskifte.
+const MAANED_FULL = [
   'januar', 'februar', 'mars', 'april', 'mai', 'juni',
   'juli', 'august', 'september', 'oktober', 'november', 'desember',
 ]
@@ -34,21 +38,23 @@ type Props = {
 // tomt = ærlig ingenting planlagt.
 const MIN_OFFSET = -AGENDA_VINDU_MND
 
+// Prikke-geometri — 6 px prikker med 2 px gap gir maks 6 ukerader ≈ 46 px,
+// som sammen med mikro-raden over matcher header-datoens ~60 px høyde.
+const PRIKK = 6
+const GAP = 2
+
 export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
   const [maanedOffset, setMaanedOffset] = useState(0)
 
-  // Beregn hvilken måned som vises basert på offset fra iDag sin måned.
   // iDag er en date-only-streng (yyyy-MM-dd); `new Date(iDag)` ville tolket den
   // som UTC-midnatt (ES-spec), og påfølgende getMonth() i maskinens lokale TZ
   // kan da bomme på måneden den 1. i negative UTC-offset + gi SSR/klient-avvik.
-  // Vi parser strengen manuelt og bygger måneden med den lokale konstruktøren,
-  // som er TZ-nøytral for rene kalender-formål.
+  // Vi parser strengen manuelt og bygger måneden med den lokale konstruktøren.
   const [aar, maaned1] = iDag.split('-').map(Number)
   const visDato = new Date(aar, maaned1 - 1 + maanedOffset, 1)
   const visAar = visDato.getFullYear()
   const visMaaned0 = visDato.getMonth() // 0-basert
 
-  // Bygg grid én gang per synlig måned.
   const grid = useMemo(
     () => byggMaanedsGrid(visAar, visMaaned0),
     [visAar, visMaaned0],
@@ -57,29 +63,15 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
   // Set for O(1)-oppslag — bygges kun når arrangementDatoer endrer seg.
   const datoSett = useMemo(() => new Set(arrangementDatoer), [arrangementDatoer])
 
-  const månedstittel = `${MAANEDSNAVN[visMaaned0]} ${visAar}`
-
-  // Kan vi bla lenger bakover, eller er vi ved datavinduets bakre kant?
   const kanBakover = maanedOffset > MIN_OFFSET
-
-  // Måned til skjermleser-labels («15. juli – arrangement»).
-  const maanedNavnLavr = MAANEDSNAVN[visMaaned0]
-
-  const monoMikro: CSSProperties = {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 10,
-    fontWeight: 600,
-    color: 'var(--text-tertiary)',
-    letterSpacing: '2px',
-    textTransform: 'uppercase',
-  }
 
   const chevronKnapp: CSSProperties = {
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    color: 'var(--text-secondary)',
-    padding: '4px 6px',
+    color: 'var(--text-tertiary)',
+    // Rommelig trykkflate rundt et lite ikon — viktigere på mobil enn desktop.
+    padding: '2px 4px',
     display: 'flex',
     alignItems: 'center',
     lineHeight: 0,
@@ -88,37 +80,61 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
   return (
     <div
       style={{
-        marginBottom: 20,
-        paddingBottom: 16,
-        borderBottom: '0.5px solid var(--border-subtle)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+        // Fast størrelse: prikke-grid-et kan ikke krympe uten å deformeres,
+        // så vi holder det stivt. Trangt først under ~360px viewport —
+        // smalere enn noen av klubbens enheter.
+        flexShrink: 0,
       }}
     >
-      {/* Topprad: forrige-pil, månedstittel, neste-pil */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 10,
-        }}
-      >
+      {/* Mikro-rad: forrige-pil, kort månedsnavn, neste-pil */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <button
           type="button"
           style={{
             ...chevronKnapp,
-            // Dempet + ikke-klikkbar når vi er ved datavinduets bakre kant.
             ...(kanBakover ? {} : { opacity: 0.3, cursor: 'default' }),
           }}
           onClick={() => setMaanedOffset(o => Math.max(MIN_OFFSET, o - 1))}
           disabled={!kanBakover}
           aria-label="Forrige måned"
         >
-          {/* chevron-ikonet peker høyre; roteres 180° for å peke venstre.
-              aria-hidden: knappen bærer selv labelen — ikonet er ren dekor. */}
-          <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} aria-hidden="true" focusable="false" />
+          {/* chevron peker høyre; roteres for venstre. aria-hidden: dekor. */}
+          <Icon name="chevron" size={10} style={{ transform: 'rotate(180deg)' }} aria-hidden="true" focusable="false" />
         </button>
 
-        <span style={monoMikro} aria-live="polite">{månedstittel}</span>
+        {/* aria-live annonserer TEKST-endringer, ikke aria-label — derfor
+            ligger fullt månedsnavn+år som visuelt skjult tekst i live-regionen,
+            mens kort-labelen er skjult for skjermlesere. */}
+        <span
+          aria-live="polite"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 8,
+            fontWeight: 600,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '1.5px',
+            textTransform: 'uppercase',
+          }}
+        >
+          <span aria-hidden="true">{MAANED_KORT[visMaaned0]}</span>
+          <span
+            style={{
+              // sr-only: synlig for skjermlesere, usynlig visuelt
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              overflow: 'hidden',
+              clipPath: 'inset(50%)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {`${MAANED_FULL[visMaaned0]} ${visAar}`}
+          </span>
+        </span>
 
         <button
           type="button"
@@ -126,95 +142,56 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
           onClick={() => setMaanedOffset(o => o + 1)}
           aria-label="Neste måned"
         >
-          <Icon name="chevron" size={14} aria-hidden="true" focusable="false" />
+          <Icon name="chevron" size={10} aria-hidden="true" focusable="false" />
         </button>
       </div>
 
-      {/* Ukedags-header */}
+      {/* Prikke-grid: 7 kolonner (man–søn), én prikk per dag */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
-          gap: 4,
-          justifyItems: 'center',
-          marginBottom: 4,
-        }}
-      >
-        {UKEDAGER.map(dag => (
-          <span key={dag} style={{ ...monoMikro, letterSpacing: '0.5px', fontSize: 9 }}>
-            {dag}
-          </span>
-        ))}
-      </div>
-
-      {/* Dag-celler */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
-          gap: 4,
-          justifyItems: 'center',
+          gridTemplateColumns: `repeat(7, ${PRIKK}px)`,
+          gap: GAP,
         }}
       >
         {grid.map((nokkel, idx) => {
           if (nokkel === null) {
-            // Tom celle for å justere mandag-først
-            return <div key={`tom-${idx}`} style={{ width: 26, height: 26 }} />
+            // Tom celle for mandag-først-justering
+            return <div key={`tom-${idx}`} style={{ width: PRIKK, height: PRIKK }} />
           }
 
           const harArr = harInnhold(nokkel, datoSett)
           const erIdag = nokkel === iDag
           const dagtall = parseInt(nokkel.slice(-2), 10)
 
-          // Skjermleser-label kun for dager som «betyr noe» (arrangement/i dag).
-          // Vanlige tomme dager forblir uannonsert for å unngå støy.
+          // Skjermleser-label kun for dager som «betyr noe» — resten skjules
+          // fra a11y-treet så ikke 30 løse prikker annonseres som støy.
           let celleLabel: string | undefined
-          if (harArr && erIdag) celleLabel = `${dagtall}. ${maanedNavnLavr} – arrangement, i dag`
-          else if (harArr) celleLabel = `${dagtall}. ${maanedNavnLavr} – arrangement`
-          else if (erIdag) celleLabel = `${dagtall}. ${maanedNavnLavr} – i dag`
-
-          // Fylt sirkel (arrangement) vs. outline-sirkel (tom dag)
-          const sirkelStil: CSSProperties = harArr
-            ? {
-                background: 'var(--text-primary)',
-                color: 'var(--bg)',
-                border: 'none',
-              }
-            : {
-                background: 'transparent',
-                color: 'var(--text-tertiary)',
-                border: '0.5px solid var(--border)',
-              }
-
-          // Diskret accent-ring for i-dag, uansett om det er arrangement eller ei
-          const idagStil: CSSProperties = erIdag
-            ? { boxShadow: '0 0 0 1.5px var(--accent)' }
-            : {}
+          if (harArr && erIdag) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – arrangement, i dag`
+          else if (harArr) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – arrangement`
+          else if (erIdag) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – i dag`
 
           return (
             <div
               key={nokkel}
               aria-label={celleLabel}
               role={celleLabel ? 'img' : undefined}
-              // Dager uten label skjules helt fra a11y-treet — ellers leser
-              // skjermlesere opp alle dagtallene som løse tall (støy).
               aria-hidden={celleLabel ? undefined : true}
               style={{
-                width: 26,
-                height: 26,
+                width: PRIKK,
+                height: PRIKK,
                 borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                fontWeight: harArr ? 600 : 400,
-                ...sirkelStil,
-                ...idagStil,
+                // border-box: borderen skal ligge INNENFOR 6px-sporet, ellers
+                // blir outline-prikker større enn grid-cellene og overlapper.
+                boxSizing: 'border-box',
+                // Fylt prikk = arrangement; outline = tom dag (Tema-policy: tokens)
+                ...(harArr
+                  ? { background: 'var(--text-primary)' }
+                  : { border: '0.5px solid var(--border-strong)' }),
+                // Diskret accent-ring for i dag
+                ...(erIdag ? { boxShadow: '0 0 0 1px var(--accent)' } : {}),
               }}
-            >
-              {dagtall}
-            </div>
+            />
           )
         })}
       </div>

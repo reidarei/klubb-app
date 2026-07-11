@@ -126,10 +126,11 @@ export default async function Forside() {
           </h1>
         </div>
 
+        {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
+        <MiniKalender arrangementDatoer={arrangementDatoer} iDag={iDagOslo()} />
+
         <NyFAB />
       </header>
-
-      <MiniKalender arrangementDatoer={arrangementDatoer} iDag={iDagOslo()} />
 
       <PushPaaminnelse />
 
