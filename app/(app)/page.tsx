@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
-import { formaterDato, norskAar, norskDatoNaa } from '@/lib/dato'
+import { formaterDato, norskAar, norskDatoNaa, norskDatoNokkel, iDagOslo } from '@/lib/dato'
 import { subMonths } from 'date-fns'
 import SectionLabel from '@/components/ui/SectionLabel'
 import PushPaaminnelse from './PushPaaminnelse'
@@ -14,6 +14,7 @@ import InnspillKnapp from '@/components/agenda/InnspillKnapp'
 import PollKort from '@/components/agenda/PollKort'
 import MeldingKort from '@/components/agenda/MeldingKort'
 import NyFAB from '@/components/agenda/NyFAB'
+import MiniKalender from '@/components/agenda/MiniKalender'
 import RsvpInline from '@/components/agenda/RsvpInline'
 import { byggAgenda } from '@/lib/agenda-sortering'
 import { kanAdministrere } from '@/lib/roller'
@@ -71,6 +72,12 @@ export default async function Forside() {
   const minNavn = minProfil?.navn ?? undefined
   const erAdmin = kanAdministrere(minRolle)
 
+  // Unike dager med minst ett arrangement — brukes av MiniKalender (#429).
+  // Ren in-memory map over allerede-hentede data; ingen ekstra spørring.
+  const arrangementDatoer = [...new Set(
+    arrangementerBerikt.map(a => norskDatoNokkel(a.start_tidspunkt))
+  )]
+
   // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
   // Følger M5-referansen fra #190.
   const naaIso = new Date().toISOString()
@@ -121,6 +128,8 @@ export default async function Forside() {
 
         <NyFAB />
       </header>
+
+      <MiniKalender arrangementDatoer={arrangementDatoer} iDag={iDagOslo()} />
 
       <PushPaaminnelse />
 

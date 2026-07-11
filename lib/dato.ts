@@ -79,14 +79,22 @@ export function aarHvisAvvik(iso: string): string {
 }
 
 /**
+ * Dag-nøkkel i norsk tidssone — «yyyy-MM-dd»-streng for en ISO-dato.
+ * Et arrangement kl 00:30 norsk tid skal telle på riktig dag, ikke UTC-dagen
+ * før. Brukes av MiniKalender og erSammeNorskeDag. Se #429.
+ */
+export function norskDatoNokkel(iso: string): string {
+  return formatInTimeZone(new Date(iso), TIDSSONE, 'yyyy-MM-dd')
+}
+
+/**
  * Sammenligner om to ISO-tidspunkter faller på samme norske kalenderdag.
  * Viktig: bruker Oslo-tidssone så en melding sendt 01:30 norsk tid teller
  * som "i dag", ikke "i går" basert på UTC.
  */
 export function erSammeNorskeDag(isoA: string, isoB: string): boolean {
-  const a = formatInTimeZone(new Date(isoA), TIDSSONE, 'yyyy-MM-dd')
-  const b = formatInTimeZone(new Date(isoB), TIDSSONE, 'yyyy-MM-dd')
-  return a === b
+  // Delegerer til norskDatoNokkel — unngår duplisert formatInTimeZone-kall.
+  return norskDatoNokkel(isoA) === norskDatoNokkel(isoB)
 }
 
 /**
