@@ -38,10 +38,10 @@ type Props = {
 // tomt = ærlig ingenting planlagt.
 const MIN_OFFSET = -AGENDA_VINDU_MND
 
-// Prikke-geometri — velgerne og månedslabelen ligger i en smal side-kolonne
-// (ikke over grid-et), så prikkene kan bruke hele header-høyden: 6 ukerader à
-// 8 px + 2 px gap ≈ 58 px, som matcher dato-blokkas ~60 px.
-const PRIKK = 8
+// Prikke-geometri — 10 px prikker: headeren har rom til at kalenderen er
+// litt høyere enn dato-blokka (Reidar-feedback på #429). Velgerne flankerer
+// grid-et horisontalt; månedslabelen står vanlig (horisontalt) over prikkene.
+const PRIKK = 10
 const GAP = 2
 
 export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
@@ -79,20 +79,73 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
   }
 
   // Grid-høyden styrer side-kolonnens høyde så chevrons/label fordeles jevnt.
-  const gridHoyde = 6 * PRIKK + 5 * GAP
-
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 5,
+        gap: 3,
         // Fast størrelse: prikke-grid-et kan ikke krympe uten å deformeres,
-        // så vi holder det stivt. Trangt først under ~360px viewport —
-        // smalere enn noen av klubbens enheter.
+        // så vi holder det stivt.
         flexShrink: 0,
       }}
     >
+      {/* Venstre velger — flankerer kalenderen (Reidar-feedback på #429) */}
+      <button
+        type="button"
+        style={{
+          ...chevronKnapp,
+          ...(kanBakover ? {} : { opacity: 0.3, cursor: 'default' }),
+        }}
+        onClick={() => setMaanedOffset(o => Math.max(MIN_OFFSET, o - 1))}
+        disabled={!kanBakover}
+        aria-label="Forrige måned"
+      >
+        {/* chevron peker høyre; roteres for venstre. aria-hidden: dekor. */}
+        <Icon name="chevron" size={11} style={{ transform: 'rotate(180deg)' }} aria-hidden="true" focusable="false" />
+      </button>
+
+      {/* Midt-kolonne: horisontal månedslabel over prikke-grid-et */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 3,
+        }}
+      >
+        {/* aria-live annonserer TEKST-endringer, ikke aria-label — derfor
+            ligger fullt månedsnavn+år som visuelt skjult tekst i live-regionen,
+            mens kort-labelen er skjult for skjermlesere. */}
+        <span aria-live="polite">
+          <span
+            aria-hidden="true"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              fontWeight: 600,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '1.5px',
+              textTransform: 'uppercase',
+            }}
+          >
+            {MAANED_KORT[visMaaned0]}
+          </span>
+          <span
+            style={{
+              // sr-only: synlig for skjermlesere, usynlig visuelt
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              overflow: 'hidden',
+              clipPath: 'inset(50%)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {`${MAANED_FULL[visMaaned0]} ${visAar}`}
+          </span>
+        </span>
+
       {/* Prikke-grid: 7 kolonner (man–søn), én prikk per dag */}
       <div
         style={{
@@ -142,75 +195,17 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
           )
         })}
       </div>
-
-      {/* Side-kolonne: forrige-pil øverst, vertikal månedslabel i midten,
-          neste-pil nederst — frigjør hele høyden til prikke-grid-et. */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: gridHoyde,
-        }}
-      >
-        <button
-          type="button"
-          style={{
-            ...chevronKnapp,
-            ...(kanBakover ? {} : { opacity: 0.3, cursor: 'default' }),
-          }}
-          onClick={() => setMaanedOffset(o => Math.max(MIN_OFFSET, o - 1))}
-          disabled={!kanBakover}
-          aria-label="Forrige måned"
-        >
-          {/* chevron peker høyre; roteres for å peke opp/bakover. aria-hidden: dekor. */}
-          <Icon name="chevron" size={9} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true" focusable="false" />
-        </button>
-
-        {/* aria-live annonserer TEKST-endringer, ikke aria-label — derfor
-            ligger fullt månedsnavn+år som visuelt skjult tekst i live-regionen,
-            mens den vertikale kort-labelen er skjult for skjermlesere. */}
-        <span aria-live="polite">
-          <span
-            aria-hidden="true"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 7,
-              fontWeight: 600,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1px',
-              textTransform: 'uppercase',
-              // Vertikal tekst leses ovenfra og ned langs side-kolonnen
-              writingMode: 'vertical-rl',
-            }}
-          >
-            {MAANED_KORT[visMaaned0]}
-          </span>
-          <span
-            style={{
-              // sr-only: synlig for skjermlesere, usynlig visuelt
-              position: 'absolute',
-              width: 1,
-              height: 1,
-              overflow: 'hidden',
-              clipPath: 'inset(50%)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {`${MAANED_FULL[visMaaned0]} ${visAar}`}
-          </span>
-        </span>
-
-        <button
-          type="button"
-          style={chevronKnapp}
-          onClick={() => setMaanedOffset(o => o + 1)}
-          aria-label="Neste måned"
-        >
-          <Icon name="chevron" size={9} style={{ transform: 'rotate(90deg)' }} aria-hidden="true" focusable="false" />
-        </button>
       </div>
+
+      {/* Høyre velger */}
+      <button
+        type="button"
+        style={chevronKnapp}
+        onClick={() => setMaanedOffset(o => o + 1)}
+        aria-label="Neste måned"
+      >
+        <Icon name="chevron" size={11} aria-hidden="true" focusable="false" />
+      </button>
     </div>
   )
 }
