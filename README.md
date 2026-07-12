@@ -2,7 +2,7 @@
 
 > **This project is intentionally in Norwegian** — UI text, code identifiers, table/column names, commit messages, and documentation are all in Norwegian. It was built for a Norwegian-speaking private club and is published as-is. You're welcome to fork it and translate it for your own club.
 
-Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten med arrangementer og påmelding, chat, bilder, kåringer og statistikk — uten å være avhengig av Facebook. Appen skal kunne driftes med gratis-tjenester.
+Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten med arrangementer og påmelding, chat, bilder, kåringer og statistikk — uten å være avhengig av Facebook, eller andre tjenester. Appen skal kunne driftes med gratis-tjenester.
 
 ---
 
