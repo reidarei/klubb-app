@@ -38,10 +38,10 @@ type Props = {
 // tomt = ærlig ingenting planlagt.
 const MIN_OFFSET = -AGENDA_VINDU_MND
 
-// Prikke-geometri — 10 px prikker: headeren har rom til at kalenderen er
-// litt høyere enn dato-blokka (Reidar-feedback på #429). Velgerne flankerer
-// grid-et horisontalt; månedslabelen står vanlig (horisontalt) over prikkene.
-const PRIKK = 10
+// Prikke-geometri — 12 px prikker: månedslabelen bor til høyre (midtstilt i
+// høyden) i stedet for over grid-et, så prikkene kan bruke all høyden headeren
+// gir (Reidar-feedback på #429). Velgerne flankerer grid-et horisontalt.
+const PRIKK = 12
 const GAP = 2
 
 export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
@@ -105,47 +105,6 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
         <Icon name="chevron" size={11} style={{ transform: 'rotate(180deg)' }} aria-hidden="true" focusable="false" />
       </button>
 
-      {/* Midt-kolonne: horisontal månedslabel over prikke-grid-et */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 3,
-        }}
-      >
-        {/* aria-live annonserer TEKST-endringer, ikke aria-label — derfor
-            ligger fullt månedsnavn+år som visuelt skjult tekst i live-regionen,
-            mens kort-labelen er skjult for skjermlesere. */}
-        <span aria-live="polite">
-          <span
-            aria-hidden="true"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 8,
-              fontWeight: 600,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1.5px',
-              textTransform: 'uppercase',
-            }}
-          >
-            {MAANED_KORT[visMaaned0]}
-          </span>
-          <span
-            style={{
-              // sr-only: synlig for skjermlesere, usynlig visuelt
-              position: 'absolute',
-              width: 1,
-              height: 1,
-              overflow: 'hidden',
-              clipPath: 'inset(50%)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {`${MAANED_FULL[visMaaned0]} ${visAar}`}
-          </span>
-        </span>
-
       {/* Prikke-grid: 7 kolonner (man–søn), én prikk per dag */}
       <div
         style={{
@@ -195,7 +154,6 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
           )
         })}
       </div>
-      </div>
 
       {/* Høyre velger */}
       <button
@@ -206,6 +164,39 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
       >
         <Icon name="chevron" size={11} aria-hidden="true" focusable="false" />
       </button>
+
+      {/* Månedslabel til høyre, midtstilt i høyden (ytre flex har alignItems
+          center). aria-live annonserer TEKST-endringer, ikke aria-label —
+          derfor ligger fullt månedsnavn+år som visuelt skjult tekst i
+          live-regionen, mens kort-labelen er skjult for skjermlesere. */}
+      <span aria-live="polite">
+        <span
+          aria-hidden="true"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 8,
+            fontWeight: 600,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '1.5px',
+            textTransform: 'uppercase',
+          }}
+        >
+          {MAANED_KORT[visMaaned0]}
+        </span>
+        <span
+          style={{
+            // sr-only: synlig for skjermlesere, usynlig visuelt
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            overflow: 'hidden',
+            clipPath: 'inset(50%)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {`${MAANED_FULL[visMaaned0]} ${visAar}`}
+        </span>
+      </span>
     </div>
   )
 }
