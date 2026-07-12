@@ -1,13 +1,12 @@
 'use client'
 
 // Mikro-månedskalender i agenda-headeren (#429).
-// Ligger i luken mellom dato-blokka og NyFAB, med samme høyde som datoen —
-// derfor prikke-format: fylt prikk = dag med arrangement, outline = tom dag,
-// accent-ring = i dag. Ingen dagtall (plassen tillater det ikke, og issuet
-// beskrev nettopp fylte/tomme sirkler). Kun visning — ingen klikk på dager.
+// Ligger i luken mellom dato-blokka og NyFAB: 🍺 = dag med arrangement,
+// 🎂 = bursdag, outline-prikk = tom dag, accent-ring = i dag.
+// Kun visning — ingen klikk på dager.
 
 import { useMemo, useState, type CSSProperties } from 'react'
-import { byggMaanedsGrid, harInnhold } from '@/lib/mini-kalender'
+import { byggMaanedsGrid, harInnhold, harBursdag } from '@/lib/mini-kalender'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import Icon from '@/components/ui/Icon'
 
@@ -28,6 +27,8 @@ const MAANED_FULL = [
 type Props = {
   /** yyyy-MM-dd-nøkler for dager med minst ett arrangement */
   arrangementDatoer: string[]
+  /** MM-dd-nøkler for medlemsbursdager (uten år — de gjentar seg årlig) */
+  bursdagMMDD: string[]
   /** Dagens dato i norsk tidssone som yyyy-MM-dd (fra iDagOslo() — deterministisk render) */
   iDag: string
 }
@@ -44,7 +45,7 @@ const MIN_OFFSET = -AGENDA_VINDU_MND
 const PRIKK = 12
 const GAP = 2
 
-export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
+export default function MiniKalender({ arrangementDatoer, bursdagMMDD, iDag }: Props) {
   const [maanedOffset, setMaanedOffset] = useState(0)
 
   // iDag er en date-only-streng (yyyy-MM-dd); `new Date(iDag)` ville tolket den
@@ -63,6 +64,7 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
 
   // Set for O(1)-oppslag — bygges kun når arrangementDatoer endrer seg.
   const datoSett = useMemo(() => new Set(arrangementDatoer), [arrangementDatoer])
+  const bursdagSett = useMemo(() => new Set(bursdagMMDD), [bursdagMMDD])
 
   const kanBakover = maanedOffset > MIN_OFFSET
 
@@ -120,15 +122,25 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
           }
 
           const harArr = harInnhold(nokkel, datoSett)
+          const harBdag = harBursdag(nokkel, bursdagSett)
           const erIdag = nokkel === iDag
           const dagtall = parseInt(nokkel.slice(-2), 10)
 
           // Skjermleser-label kun for dager som «betyr noe» — resten skjules
           // fra a11y-treet så ikke 30 løse prikker annonseres som støy.
-          let celleLabel: string | undefined
-          if (harArr && erIdag) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – arrangement, i dag`
-          else if (harArr) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – arrangement`
-          else if (erIdag) celleLabel = `${dagtall}. ${MAANED_FULL[visMaaned0]} – i dag`
+          const deler: string[] = []
+          if (harArr) deler.push('arrangement')
+          if (harBdag) deler.push('bursdag')
+          if (erIdag) deler.push('i dag')
+          const celleLabel = deler.length > 0
+            ? `${dagtall}. ${MAANED_FULL[visMaaned0]} – ${deler.join(', ')}`
+            : undefined
+
+          // Ikon-dager: 🍺 for arrangement, 🎂 for bursdag. Kolliderer de på
+          // samme dag vinner arrangementet (én celle rommer ett ikon) — a11y-
+          // labelen over nevner uansett begge. Emoji er bevisst valgt over
+          // SVG-ikoner her: gjenkjennbare på 12px og brukes ellers i appen.
+          const ikon = harArr ? '🍺' : harBdag ? '🎂' : null
 
           return (
             <div
@@ -139,18 +151,22 @@ export default function MiniKalender({ arrangementDatoer, iDag }: Props) {
               style={{
                 width: PRIKK,
                 height: PRIKK,
-                borderRadius: '50%',
-                // border-box: borderen skal ligge INNENFOR prikk-sporet, ellers
-                // blir outline-prikker større enn grid-cellene og overlapper.
                 boxSizing: 'border-box',
-                // Fylt prikk = arrangement; outline = tom dag (Tema-policy: tokens)
-                ...(harArr
-                  ? { background: 'var(--text-primary)' }
-                  : { border: '0.5px solid var(--border-strong)' }),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                // Ikon-dager viser emoji; tomme dager en outline-prikk
+                // (border-box: borderen skal ligge INNENFOR prikk-sporet).
+                ...(ikon ? {} : { border: '0.5px solid var(--border-strong)' }),
                 // Diskret accent-ring for i dag
                 ...(erIdag ? { boxShadow: '0 0 0 1px var(--accent)' } : {}),
+                fontSize: PRIKK - 1,
+                lineHeight: 1,
               }}
-            />
+            >
+              {ikon}
+            </div>
           )
         })}
       </div>

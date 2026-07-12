@@ -78,6 +78,15 @@ export default async function Forside() {
     arrangementerBerikt.map(a => norskDatoNokkel(a.start_tidspunkt))
   )]
 
+  // Bursdager som MM-dd-nøkler (uten år — de gjentar seg årlig, og
+  // kalenderen kan blas på tvers av år). fodselsdato er en date-kolonne
+  // (yyyy-MM-dd), så slice(5) gir måned-dag direkte.
+  const bursdagMMDD = [...new Set(
+    profilerMedBursdag
+      .filter(p => p.fodselsdato)
+      .map(p => p.fodselsdato!.slice(5))
+  )]
+
   // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
   // Følger M5-referansen fra #190.
   const naaIso = new Date().toISOString()
@@ -127,7 +136,7 @@ export default async function Forside() {
         </div>
 
         {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
-        <MiniKalender arrangementDatoer={arrangementDatoer} iDag={iDagOslo()} />
+        <MiniKalender arrangementDatoer={arrangementDatoer} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} />
 
         <NyFAB />
       </header>

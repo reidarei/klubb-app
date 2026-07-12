@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { byggMaanedsGrid, harInnhold } from '@/lib/mini-kalender'
+import { byggMaanedsGrid, harInnhold, harBursdag } from '@/lib/mini-kalender'
 import { norskDatoNokkel } from '@/lib/dato'
 
 describe('byggMaanedsGrid', () => {
@@ -83,5 +83,19 @@ describe('norskDatoNokkel — tidssone-kanttest', () => {
   it('vintertid: UTC 23:30 gir norsk dag +1', () => {
     // 2026-01-10T23:30:00Z = 11. januar 00:30 CET (UTC+1)
     expect(norskDatoNokkel('2026-01-10T23:30:00Z')).toBe('2026-01-11')
+  })
+})
+
+describe('harBursdag (#429-oppfølging)', () => {
+  it('matcher på måned-dag uavhengig av år', () => {
+    const sett = new Set(['07-15', '12-24'])
+    expect(harBursdag('2026-07-15', sett)).toBe(true)
+    expect(harBursdag('2031-07-15', sett)).toBe(true) // annet år — fortsatt treff
+    expect(harBursdag('2026-12-24', sett)).toBe(true)
+    expect(harBursdag('2026-07-16', sett)).toBe(false)
+  })
+
+  it('tomt sett gir aldri treff', () => {
+    expect(harBursdag('2026-07-15', new Set())).toBe(false)
   })
 })

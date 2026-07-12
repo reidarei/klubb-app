@@ -36,3 +36,12 @@ export function byggMaanedsGrid(aar: number, maaned0: number): (string | null)[]
 export function harInnhold(dagNokkel: string, datoSett: Set<string>): boolean {
   return datoSett.has(dagNokkel)
 }
+
+/**
+ * Returnerer true dersom dagens måned-dag matcher en bursdag.
+ * Bursdager gjentar seg årlig, så settet holder MM-dd-nøkler (uten år) —
+ * da virker oppslaget uansett hvilket år kalenderen er blad til.
+ */
+export function harBursdag(dagNokkel: string, mmddSett: Set<string>): boolean {
+  return mmddSett.has(dagNokkel.slice(5))
+}
