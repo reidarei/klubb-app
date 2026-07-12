@@ -1,6 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { formaterDato, TIDSSONE } from '@/lib/dato'
 import { BASE_URL } from '@/lib/config'
 import { KLUBB_NAVN, KLUBB_KORTNAVN, KLUBB_DOMENE } from '@/lib/klubb-config'
 
@@ -13,9 +12,12 @@ function escapeIcs(s: string): string {
     .replace(/\r\n|\n|\r/g, '\\n')
 }
 
-// Formatter til .ics lokal tid i norsk tidssone: YYYYMMDDTHHMMSS
-function formatIcsDate(iso: string): string {
-  return formaterDato(iso, "yyyyMMdd'T'HHmmss")
+// Formatter til .ics UTC-tid: YYYYMMDDTHHMMSSZ. UTC med Z-suffiks er bevisst
+// valgt over TZID-form: en gyldig TZID krever en full VTIMEZONE-definisjon
+// (RFC 5545 krever minst én STANDARD/DAYLIGHT-subkomponent), mens UTC
+// parses av alle klienter og vises i brukerens lokale tid uansett. se #429-ics
+function formatIcsDateUtc(iso: string): string {
+  return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,14 +46,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     `PRODID:-//${escapeIcs(KLUBB_NAVN)}//NO`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `BEGIN:VTIMEZONE`,
-    `TZID:${TIDSSONE}`,
-    `END:VTIMEZONE`,
+    // Merk: ingen VTIMEZONE — en tom blokk (uten STANDARD/DAYLIGHT) er
+    // RFC-brudd og fikk strenge parsere til å nekte. UTC-tider trenger den ikke.
     'BEGIN:VEVENT',
     `UID:${id}@${KLUBB_DOMENE}`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`,
-    `DTSTART;TZID=${TIDSSONE}:${formatIcsDate(arr.start_tidspunkt)}`,
-    `DTEND;TZID=${TIDSSONE}:${formatIcsDate(sluttIso)}`,
+    `DTSTAMP:${formatIcsDateUtc(new Date().toISOString())}`,
+    `DTSTART:${formatIcsDateUtc(arr.start_tidspunkt)}`,
+    `DTEND:${formatIcsDateUtc(sluttIso)}`,
     `SUMMARY:${escapeIcs(arr.tittel)}`,
     `DESCRIPTION:${escapeIcs(beskrivelseDeler.join('\n'))}`,
     ...(arr.oppmoetested ? [`LOCATION:${escapeIcs(arr.oppmoetested)}`] : []),
@@ -68,7 +69,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return new NextResponse(ics, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filnavn}"`,
+      // inline, IKKE attachment: installert iOS-PWA har ingen nedlastings-
+      // behandler, så attachment ga «Safari kan ikke laste ned denne filen».
+      // Inline åpner kalender-forhåndsvisningen direkte — bedre UX uansett.
+      'Content-Disposition': `inline; filename="${filnavn}"`,
     },
   })
 }
