@@ -32,7 +32,7 @@ export default function InnskuddEditor({ innskudd, profiler }: Props) {
     try {
       await opprettInnskudd({
         profil_id: formData.get('profil_id') as string,
-        belop: parseInt(formData.get('belop') as string, 10),
+        belop: parseFloat(formData.get('belop') as string),
         dato: formData.get('dato') as string,
       })
     } catch (e) {
@@ -46,7 +46,7 @@ export default function InnskuddEditor({ innskudd, profiler }: Props) {
       await oppdaterInnskudd({
         id,
         profil_id: formData.get('profil_id') as string,
-        belop: parseInt(formData.get('belop') as string, 10),
+        belop: parseFloat(formData.get('belop') as string),
         dato: formData.get('dato') as string,
       })
       setRedigerer(null)
@@ -107,7 +107,7 @@ export default function InnskuddEditor({ innskudd, profiler }: Props) {
             style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10 }}
           >
             <ProfilVelger defaultValue={inn.profil_id} />
-            <Input name="belop" label="Beløp (kr)" type="number" min={0} defaultValue={inn.belop} required />
+            <Input name="belop" label="Beløp (kr)" type="number" min={0} step={0.01} defaultValue={inn.belop} required />
             <Input name="dato" label="Dato" type="date" defaultValue={inn.dato} required />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="primary">Lagre</Button>
@@ -152,7 +152,7 @@ export default function InnskuddEditor({ innskudd, profiler }: Props) {
           Legg til innskudd
         </div>
         <ProfilVelger />
-        <Input name="belop" label="Beløp (kr)" type="number" min={0} defaultValue={0} required />
+        <Input name="belop" label="Beløp (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Input name="dato" label="Dato" type="date" required />
         <Button type="submit" variant="primary">Legg til</Button>
       </form>

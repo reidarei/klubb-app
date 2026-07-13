@@ -17,7 +17,7 @@ export default function KontantEditor({ saldo }: Props) {
     setFeil(null)
     setOk(false)
     try {
-      await oppdaterKontantSaldo(parseInt(formData.get('saldo') as string, 10))
+      await oppdaterKontantSaldo(parseFloat(formData.get('saldo') as string))
       setOk(true)
     } catch (e) {
       setFeil(e instanceof Error ? e.message : 'Ukjent feil')
@@ -36,6 +36,7 @@ export default function KontantEditor({ saldo }: Props) {
         label="Saldo på konto (kr)"
         type="number"
         min={0}
+        step={0.01}
         defaultValue={saldo}
         required
       />

@@ -27,8 +27,8 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
       await opprettVerdipapir({
         navn: formData.get('navn') as string,
         type: formData.get('type') as 'aksje' | 'fond',
-        verdi: parseInt(formData.get('verdi') as string, 10),
-        anskaffelsesverdi: parseInt(formData.get('anskaffelsesverdi') as string, 10),
+        verdi: parseFloat(formData.get('verdi') as string),
+        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
       })
     } catch (e) {
       setFeil(e instanceof Error ? e.message : 'Ukjent feil')
@@ -42,8 +42,8 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         id,
         navn: formData.get('navn') as string,
         type: formData.get('type') as 'aksje' | 'fond',
-        verdi: parseInt(formData.get('verdi') as string, 10),
-        anskaffelsesverdi: parseInt(formData.get('anskaffelsesverdi') as string, 10),
+        verdi: parseFloat(formData.get('verdi') as string),
+        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
       })
       setRedigerer(null)
     } catch (e) {
@@ -102,8 +102,8 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
           >
             <Input name="navn" label="Navn" defaultValue={v.navn} required />
             <TypeVelger defaultValue={v.type} />
-            <Input name="verdi" label="Verdi (kr)" type="number" min={0} defaultValue={v.verdi} required />
-            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} defaultValue={v.anskaffelsesverdi} required />
+            <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={v.verdi} required />
+            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={v.anskaffelsesverdi} required />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="primary">Lagre</Button>
               <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
@@ -148,8 +148,8 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         </div>
         <Input name="navn" label="Navn" placeholder="F.eks. DNB Global Indeks" required />
         <TypeVelger />
-        <Input name="verdi" label="Verdi (kr)" type="number" min={0} defaultValue={0} required />
-        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} defaultValue={0} required />
+        <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
+        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Button type="submit" variant="primary">Legg til</Button>
       </form>
     </div>

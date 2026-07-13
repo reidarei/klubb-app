@@ -34,8 +34,11 @@ async function skrivHistorikk(
 // ─── Validering ──────────────────────────────────────────────────────────────
 
 function validerBelop(verdi: number, feltnavn = 'Beløp') {
-  if (!Number.isInteger(verdi) || verdi < 0)
-    throw new Error(`${feltnavn} må være et ikke-negativt heltall`)
+  // Maks to desimaler (øre) — DB-kolonnene er numeric(12,2). Toleransen på 1e-6
+  // fanger flyttall-støy fra parseFloat (6612.20 kan bli 6612.199999...).
+  const oere = verdi * 100
+  if (!Number.isFinite(verdi) || verdi < 0 || Math.abs(oere - Math.round(oere)) > 1e-6)
+    throw new Error(`${feltnavn} må være et ikke-negativt beløp med maks to desimaler`)
 }
 
 function validerNavn(navn: string, feltnavn = 'Navn') {

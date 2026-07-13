@@ -25,8 +25,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
     try {
       await opprettEiendom({
         navn: formData.get('navn') as string,
-        markedsverdi: parseInt(formData.get('markedsverdi') as string, 10),
-        anskaffelsesverdi: parseInt(formData.get('anskaffelsesverdi') as string, 10),
+        markedsverdi: parseFloat(formData.get('markedsverdi') as string),
+        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
       })
     } catch (e) {
       setFeil(e instanceof Error ? e.message : 'Ukjent feil')
@@ -39,8 +39,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
       await oppdaterEiendom({
         id,
         navn: formData.get('navn') as string,
-        markedsverdi: parseInt(formData.get('markedsverdi') as string, 10),
-        anskaffelsesverdi: parseInt(formData.get('anskaffelsesverdi') as string, 10),
+        markedsverdi: parseFloat(formData.get('markedsverdi') as string),
+        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
       })
       setRedigerer(null)
     } catch (e) {
@@ -73,8 +73,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
             style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10 }}
           >
             <Input name="navn" label="Navn" defaultValue={e.navn} required />
-            <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} defaultValue={e.markedsverdi} required />
-            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} defaultValue={e.anskaffelsesverdi} required />
+            <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.markedsverdi} required />
+            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.anskaffelsesverdi} required />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="primary">Lagre</Button>
               <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
@@ -116,8 +116,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
           Legg til eiendom
         </div>
         <Input name="navn" label="Navn" placeholder="F.eks. Skogshytta, Ljørdalen" required />
-        <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} defaultValue={0} required />
-        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} defaultValue={0} required />
+        <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
+        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Button type="submit" variant="primary">Legg til</Button>
       </form>
     </div>

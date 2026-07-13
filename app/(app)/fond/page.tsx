@@ -12,13 +12,17 @@ import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
 
-const kr = (n: number) => `${n.toLocaleString('nb')} kr`
+// Hele kroner vises uten desimaler; beløp med øre får alltid to (aldri «6 612,2 kr»)
+const desimaler = (n: number) => (Number.isInteger(n) ? 0 : 2)
+
+const kr = (n: number) =>
+  `${n.toLocaleString('nb', { minimumFractionDigits: desimaler(n), maximumFractionDigits: 2 })} kr`
 
 const prosent = (n: number) =>
   `${n > 0 ? '+' : ''}${n.toLocaleString('nb', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
 
 const signKr = (n: number) =>
-  `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('nb')} kr`
+  `${n > 0 ? '+' : n < 0 ? '−' : ''}${kr(Math.abs(n))}`
 
 const retningFarge = (n: number) =>
   n > 0 ? 'var(--success)' : n < 0 ? 'var(--danger)' : 'var(--text-secondary)'
@@ -65,7 +69,7 @@ export default async function FondSide() {
     supabase.from('fond_verdipapir').select('*').order('navn'),
     supabase
       .from('fond_innskudd')
-      .select('*, profiles(navn, bilde_url, rolle)')
+      .select('*, profiles(navn, visningsnavn, bilde_url, rolle)')
       .order('dato', { ascending: false }),
     supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
   ])
@@ -476,9 +480,10 @@ export default async function FondSide() {
               </div>
               {innskuddListe.map((inn, i) => {
                 // Supabase join returnerer profiles som objekt (eller null)
-                const p = inn.profiles as { navn: string; bilde_url: string | null; rolle: string | null } | null
+                const p = inn.profiles as { navn: string; visningsnavn: string; bilde_url: string | null; rolle: string | null } | null
                 const navn = p?.navn ?? 'Ukjent'
-                const fornavn = navn.split(' ')[0]
+                // Kallenavnet er det gutta kjenner hverandre som — fullt navn kun som Avatar-hue-kilde
+                const kallenavn = p?.visningsnavn ?? navn.split(' ')[0]
                 return (
                   <div
                     key={inn.id}
@@ -493,7 +498,7 @@ export default async function FondSide() {
                     <Avatar name={navn} size={28} src={p?.bilde_url ?? null} rolle={p?.rolle ?? null} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>
-                        {fornavn}
+                        {kallenavn}
                       </div>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-tertiary)' }}>
                         Innskudd {formaterDato(inn.dato, 'd. MMM yyyy')}
