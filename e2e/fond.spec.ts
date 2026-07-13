@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import fs from 'node:fs'
 import { harTestCreds } from './helpers/auth'
 
@@ -36,5 +36,25 @@ test.describe('Fond-fane', () => {
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
     await page.waitForTimeout(150)
     await page.screenshot({ path: `${UT_DIR}/fond-light.png`, fullPage: true })
+  })
+
+  test('ny-prikk på Fond-taben forsvinner etter første besøk', async ({ page }) => {
+    // Fersk context per test (storageState-fila er uendret), så fond_fane_sett
+    // finnes ikke i localStorage — prikken skal vises på agendaen.
+    await page.goto('/')
+    const fondTab = page.locator('nav a[href="/fond"]')
+    await expect(fondTab).toBeVisible()
+    await expect(fondTab.locator('span[aria-hidden="true"]')).toBeVisible()
+    await page.screenshot({ path: `${UT_DIR}/fond-ny-prikk.png` })
+
+    // Første besøk på /fond markerer fanen som sett
+    await fondTab.click()
+    await page.waitForURL('**/fond')
+
+    // Tilbake på agendaen skal prikken være borte — og bli borte
+    await page.goto('/')
+    await expect(fondTab).toBeVisible()
+    await expect(fondTab.locator('span[aria-hidden="true"]')).toHaveCount(0)
+    await page.screenshot({ path: `${UT_DIR}/fond-prikk-borte.png` })
   })
 })

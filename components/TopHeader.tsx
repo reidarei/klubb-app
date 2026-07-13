@@ -21,12 +21,15 @@ const TABS: Tab[] = [
   { href: '/', label: 'Agenda', nokkel: 'agenda', prefikser: ['/poll', '/arrangementer', '/meldinger'] },
   // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
   { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
-  // Fond-tab er kun synlig for admin i testfasen (#443) — åpnes for alle når godkjent i prod.
-  // Fond-taben er alltid synlig for admin. For vanlige medlemmer styres
-  // synligheten av bryteren i /innstillinger (app_innstillinger.fond_fane, #447).
-  { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
   { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
+  // Fond ligger bevisst lengst til høyre (Reidars ønske). Alltid synlig for admin;
+  // for vanlige medlemmer styres synligheten av bryteren i /innstillinger (#447).
+  { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
 ]
+
+// localStorage-nøkkel for «har sett Fond-fanen» — ny-prikken vises til første besøk.
+// Per enhet (som tema-valget); prikken kan dukke opp igjen på en annen enhet, det er greit.
+const FOND_SETT_KEY = 'fond_fane_sett'
 
 function erAktiv(tab: Tab, pathname: string): boolean {
   if (tab.href === '/') {
@@ -65,6 +68,24 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
   // men vis Fond-taben for alle hvis visFond-flagget er skrudd på (#447).
   const synligeTabs = TABS.filter(t => !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond))
+  const fondSynlig = synligeTabs.some(t => t.nokkel === 'fond')
+
+  // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
+  // deretter aldri igjen (per enhet). Settes i effect — localStorage finnes ikke
+  // under SSR, og prikken skal ikke gi hydration-mismatch.
+  const [nyFondPrikk, setNyFondPrikk] = useState(false)
+  useEffect(() => {
+    if (!fondSynlig) return
+    try {
+      if (pathname.startsWith('/fond')) {
+        // Første besøk registrert — prikken er gjort jobben sin og forsvinner for godt
+        localStorage.setItem(FOND_SETT_KEY, '1')
+        setNyFondPrikk(false)
+      } else if (!localStorage.getItem(FOND_SETT_KEY)) {
+        setNyFondPrikk(true)
+      }
+    } catch { /* localStorage utilgjengelig (privat modus e.l.) — da vises ingen prikk */ }
+  }, [pathname, fondSynlig])
 
   // Referanser for å måle pill-posisjon relativt til tabs-containeren
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -199,8 +220,11 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
 
           {synligeTabs.map(tab => {
             const aktiv = erAktiv(tab, pathname)
-            // Prikken vises kun for Chat-taben, og aldri når taben er aktiv
-            const visPrikk = tab.nokkel === 'chat' && ulestChat && !aktiv
+            // Prikk på Chat = uleste meldinger; prikk på Fond = ny fane brukeren
+            // ikke har besøkt ennå. Aldri når taben er aktiv.
+            const visPrikk =
+              (tab.nokkel === 'chat' && ulestChat && !aktiv) ||
+              (tab.nokkel === 'fond' && nyFondPrikk && !aktiv)
             const tabStil: CSSProperties = {
               position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk og z-index over pill
               zIndex: 1, // løft tekst over pill-bakgrunnen
@@ -244,7 +268,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                         boxShadow: '0 0 0 2px var(--bg-header)',
                       }}
                     />
-                    {/* Sr-only — behold "Chat" som accessible name, legg ulest-info
+                    {/* Sr-only — behold tab-navnet som accessible name, legg tilleggsinfo
                         som ekstra tekst for skjermlesere uten å overstyre. */}
                     <span
                       style={{
@@ -256,7 +280,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      (ulest)
+                      {tab.nokkel === 'fond' ? '(ny)' : '(ulest)'}
                     </span>
                   </>
                 )}
