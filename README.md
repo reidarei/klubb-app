@@ -26,10 +26,10 @@ Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten
 
 ## Funksjonalitet
 
-- **Agenda** — kronologisk feed av arrangementer, polls, meldinger (innlegg) og bursdager. Ser kommende, i dag, og tidligere ting i ett blikk.
-- **Arrangementer** — møter og turer. Påmelding (Ja/Nei/Kanskje), kommentarer, bilde, kobling til arrangøransvar.
+- **Agenda** — kronologisk feed av arrangementer, polls, meldinger (innlegg) og bursdager. Ser kommende, i dag, og tidligere ting i ett blikk. Mikro-månedskalender i headeren med arrangement- og bursdagsmarkering.
+- **Arrangementer** — møter og turer. Påmelding (Ja/Nei/Kanskje), kommentarer, bilde, kobling til arrangøransvar, «Legg til i kalender» (ICS).
 - **Polls** — flervalgs-avstemninger med svarfrist.
-- **Meldinger** — Facebook-status-aktige innlegg med kommentarer og emoji-reaksjoner.
+- **Meldinger** — Facebook-status-aktige innlegg med kommentarer og emoji-reaksjoner. Valgfri «aktuell dato» fester et innlegg øverst på agendaen til datoen er passert — med AI-forslag fra innleggsteksten (valgfritt, krever Anthropic-nøkkel).
 - **Klubbchat** — én felles tråd for hele klubben. Egen Chat-tab i topp-headeren.
 - **Privatmeldinger** — én-til-én-samtaler.
 - **Album** — bildedelinger knyttet til arrangementer eller stå-alone. Cover-velger, lightbox med swipe og pil-navigering.
@@ -67,12 +67,13 @@ Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
 | Bildelagring | Cloudflare R2 (S3-kompatibel), `aws4fetch` for signing |
 | E-post | Resend |
 | Push | Web Push (VAPID) via `web-push` |
+| AI (valgfritt) | Anthropic Claude Haiku for datoforslag — rå `fetch`, ingen SDK; av uten API-nøkkel |
 | Cron | GitHub Actions (`paaminne.yml`, daglig 06:00 UTC) |
 | Hosting | Vercel (Hobby) |
 | Domene | Valgfritt — konfigureres via env-vars |
 | Testing | Vitest (enhetstester) + Playwright (e2e mot lokal Supabase) |
 
-~390 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~100 nummererte SQL-migrasjoner.
+~400 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~110 nummererte SQL-migrasjoner.
 
 ---
 
@@ -246,7 +247,7 @@ lib/
   r2.ts            # Cloudflare R2 upload/slett
   bilde-utils.ts   # Klient-side komprimering, kategorisering
 
-supabase/migrations/  # ~100 nummererte SQL-filer
+supabase/migrations/  # ~110 nummererte SQL-filer
 
 scripts/         # Engangs-importer (FB-arrangementer, album), versjon-stamping
                  # NB: scripts/-mappen må auditeres individuelt før open source-kopiering
@@ -319,6 +320,8 @@ Skriptet sjekker tre nivåer:
 
 **SENTRY_DSN** (valgfri) — client-ID for Sentry error tracking. Uten den kjører appen helt fint, men uten server-side error reporting. Opprett en egen Sentry-konto for din instans og lim inn DSN-en her. Klient-side JavaScript-feil logges lokalt til `feil_logg`-tabellen uansett.
 
+**ANTHROPIC_API_KEY** (valgfri) — aktiverer AI-datoforslag i «Nytt innlegg». Uten den er funksjonen usynlig no-op. `ANTHROPIC_MODEL` kan overstyre modellvalget (default `claude-haiku-4-5`). Kostnad: brøkdeler av øre per forslag.
+
 **APP_URL** settes kun som GitHub Actions-secret (peker workflow-en til prod-URL) — den brukes ikke av appen i runtime og hører ikke hjemme i `.env.local`.
 
 ---
@@ -344,7 +347,7 @@ Disse er bevisste valg for et hobbyprosjekt med én utvikler — men en tradisjo
 - **De største komponentene er ~700 linjer.** `Chat.tsx` er delt opp (meldings- og reaksjonslogikk bor i egne hooks under `components/chat/hooks/`) og er nede i ~670 linjer, men den og arrangement-detaljsiden er fortsatt katedraler etter tradisjonell målestokk.
 - **Styling via inline `style={{...}}` med CSS-variabler.** Komponenter bruker tokens (`var(--accent)` osv), ikke hardkodede verdier — men styling er skrevet som inline-objekter, ikke CSS-moduler.
 - **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers, integrasjonstester for utvalgte server actions (mocket Supabase) og Playwright-e2e for hovedflytene. Men komponentlaget imellom er ikke dekket, og e2e kjører lokalt, ikke i CI.
-- **Tre spørringer med manuell type-annotasjon** der Supabase-inferensen ikke når: en RPC som returnerer `json`, og to select-strenger type-parseren ikke klarer (dynamisk select-union, ø i FK-navn). Annotert med `.overrideTypes` og kommentert i koden. De historiske `as unknown as`-castene er ellers fjernet — type-inferensen har tatt dem igjen.
+- **Tre spørringer med manuell type-annotasjon** der Supabase-inferensen ikke når: en RPC som returnerer `json`, og to select-strenger type-parseren ikke klarer (dynamisk select-union, ø i FK-navn). Manuelt annotert (to via `.overrideTypes`, RPC-en med eksplisitt type) og kommentert i koden. De historiske `as unknown as`-castene er ellers fjernet — type-inferensen har tatt dem igjen.
 
 ### Hva en profesjonell modning ville krevd
 
