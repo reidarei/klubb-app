@@ -4,21 +4,25 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
-import { harGulGloed } from '@/lib/roller'
+import { harGulGloed, kanAdministrere } from '@/lib/roller'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
 
 type Tab = {
   href: string
   label: string
-  nokkel: 'agenda' | 'chat' | 'klubb'
+  nokkel: 'agenda' | 'chat' | 'fond' | 'klubb'
   /** Path-prefikser som markerer denne tab-en som aktiv. */
   prefikser: string[]
+  /** Kun synlig for admin-brukere (brukes i testfase-gating per #443). */
+  kunAdmin?: boolean
 }
 
 const TABS: Tab[] = [
   { href: '/', label: 'Agenda', nokkel: 'agenda', prefikser: ['/poll', '/arrangementer', '/meldinger'] },
   // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
   { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
+  // Fond-tab er kun synlig for admin i testfasen (#443) — åpnes for alle når godkjent i prod.
+  { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
   { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
 ]
 
@@ -54,6 +58,10 @@ type Props = {
 export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false }: Props) {
   const pathname = usePathname()
 
+  // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere.
+  // kanAdministrere er en ren funksjon (ingen async) — trygg å kalle klient-side.
+  const synligeTabs = TABS.filter(t => !t.kunAdmin || kanAdministrere(rolle))
+
   // Referanser for å måle pill-posisjon relativt til tabs-containeren
   const tabsRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLAnchorElement | null>>(new Map())
@@ -75,7 +83,8 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   const maalPill = () => {
     const container = tabsRef.current
     if (!container) return
-    const aktivTab = TABS.find(t => erAktiv(t, pathname))
+    // Bruk synligeTabs — pill skal måles mot faktisk rendret tab-element
+    const aktivTab = synligeTabs.find(t => erAktiv(t, pathname))
     if (!aktivTab) {
       setPillRect(null)
       return
@@ -181,7 +190,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             />
           )}
 
-          {TABS.map(tab => {
+          {synligeTabs.map(tab => {
             const aktiv = erAktiv(tab, pathname)
             // Prikken vises kun for Chat-taben, og aldri når taben er aktiv
             const visPrikk = tab.nokkel === 'chat' && ulestChat && !aktiv

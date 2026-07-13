@@ -369,6 +369,145 @@ export type Database = {
           },
         ]
       }
+      fond_eiendom: {
+        Row: {
+          anskaffelsesverdi: number
+          id: string
+          markedsverdi: number
+          navn: string
+          oppdatert: string
+        }
+        Insert: {
+          anskaffelsesverdi: number
+          id?: string
+          markedsverdi: number
+          navn: string
+          oppdatert?: string
+        }
+        Update: {
+          anskaffelsesverdi?: number
+          id?: string
+          markedsverdi?: number
+          navn?: string
+          oppdatert?: string
+        }
+        Relationships: []
+      }
+      fond_innskudd: {
+        Row: {
+          belop: number
+          dato: string
+          id: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          belop: number
+          dato: string
+          id?: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          belop?: number
+          dato?: string
+          id?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_innskudd_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_kontant: {
+        Row: {
+          id: number
+          oppdatert: string
+          saldo: number
+        }
+        Insert: {
+          id?: number
+          oppdatert?: string
+          saldo?: number
+        }
+        Update: {
+          id?: number
+          oppdatert?: string
+          saldo?: number
+        }
+        Relationships: []
+      }
+      fond_verdi_historikk: {
+        Row: {
+          endret_av: string | null
+          gammel_verdi: number
+          id: number
+          kilde: string
+          kilde_id: string | null
+          ny_verdi: number
+          tidspunkt: string
+        }
+        Insert: {
+          endret_av?: string | null
+          gammel_verdi: number
+          id?: number
+          kilde: string
+          kilde_id?: string | null
+          ny_verdi: number
+          tidspunkt?: string
+        }
+        Update: {
+          endret_av?: string | null
+          gammel_verdi?: number
+          id?: number
+          kilde?: string
+          kilde_id?: string | null
+          ny_verdi?: number
+          tidspunkt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_verdi_historikk_endret_av_fkey"
+            columns: ["endret_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_verdipapir: {
+        Row: {
+          anskaffelsesverdi: number
+          id: string
+          navn: string
+          oppdatert: string
+          type: string
+          verdi: number
+        }
+        Insert: {
+          anskaffelsesverdi: number
+          id?: string
+          navn: string
+          oppdatert?: string
+          type: string
+          verdi: number
+        }
+        Update: {
+          anskaffelsesverdi?: number
+          id?: string
+          navn?: string
+          oppdatert?: string
+          type?: string
+          verdi?: number
+        }
+        Relationships: []
+      }
       kaaring_vinnere: {
         Row: {
           aar: number
