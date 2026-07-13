@@ -164,6 +164,10 @@ arrangoransvar (hvem er ansvarlig for hvilke faste arrangementer per år)
 kaaringmaler / kaaring_vinnere (kategorier og årets vinnere)
 varsel_logg (alle utsendte push/epost loggføres)
 feil_logg (klient-side JavaScript-feil med 30-dagers retention)
+
+fond_eiendom, fond_verdipapir, fond_kontant, fond_innskudd ─ fond_verdi_historikk
+  (Fond-styring: eiendommer, verdipapirer, kontantbeholdning,
+   medlemsinnskudd og verdihistorikk. Admin-editering.)
 ```
 
 Alle tabeller har RLS slått på. Policy-mønsteret er typisk:
