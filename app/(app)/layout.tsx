@@ -9,21 +9,23 @@ import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { harUlestChat, harUlestVarsler } from '@/lib/ulest'
+import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 async function HeaderMedProfil() {
   const profil = await getProfil()
   const user = await getInnloggetBruker() // cachet via React cache()
-  // Ulest-prikkene er nice-to-have. Vi sluker feil fra ulest-spørringene så en
+  // Ulest-prikkene og fond-flagget er nice-to-have. Vi sluker feil så en
   // forbigående DB-feil aldri kræsjer headeren — verste utfall er at prikken
-  // ikke vises et øyeblikk. De to spørringene kjøres parallelt for å unngå
-  // serielle DB-runder.
+  // ikke vises, eller at Fond-taben skjules for et øyeblikk for vanlige medlemmer.
+  // Alle tre spørringene kjøres parallelt for å unngå serielle DB-runder.
   const supabase = await createServerClient()
-  const [ulestChat, ulestVarsler] = user
+  const [ulestChat, ulestVarsler, visFond] = user
     ? await Promise.all([
         harUlestChat(supabase, user.id, profil?.chat_sist_sett ?? null).catch(() => false),
         harUlestVarsler(supabase, user.id).catch(() => false),
+        hentAppFlagg(supabase, FOND_FANE).catch(() => false),
       ])
-    : [false, false]
+    : [false, false, false]
 
   return (
     <TopHeader
@@ -32,6 +34,7 @@ async function HeaderMedProfil() {
       rolle={profil?.rolle ?? null}
       ulestChat={ulestChat}
       ulestVarsler={ulestVarsler}
+      visFond={visFond}
     />
   )
 }

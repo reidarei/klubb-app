@@ -117,6 +117,27 @@ export type Database = {
           },
         ]
       }
+      app_innstillinger: {
+        Row: {
+          aktiv: boolean
+          beskrivelse: string | null
+          noekkel: string
+          oppdatert: string
+        }
+        Insert: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          noekkel: string
+          oppdatert?: string
+        }
+        Update: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          noekkel?: string
+          oppdatert?: string
+        }
+        Relationships: []
+      }
       arrangement_chat: {
         Row: {
           arrangement_id: string

@@ -8,6 +8,7 @@ import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { formaterDato } from '@/lib/dato'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
+import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
 
@@ -43,12 +44,15 @@ function Avkastning({ kroner, pst, size = 12 }: { kroner: number; pst: number; s
 // ─── Side (async RSC) ─────────────────────────────────────────────────────────
 
 export default async function FondSide() {
-  const profil = await getProfil()
-  // Testfase-gating: fanen er kun synlig for admin (#443).
-  // Når Reidar har godkjent i prod fjernes dette og alle aktive medlemmer får tilgang.
-  if (!kanAdministrere(profil?.rolle)) return notFound()
-
   const supabase = await createServerClient()
+  // Hent profil og fond-flagget parallelt — unngår sekvensiell DB-runde.
+  const [profil, fondFane] = await Promise.all([
+    getProfil(),
+    hentAppFlagg(supabase, FOND_FANE),
+  ])
+  // Gating: admin har alltid tilgang. Vanlige medlemmer får tilgang når
+  // bryteren i /innstillinger (app_innstillinger.fond_fane) er skrudd på (#447).
+  if (!kanAdministrere(profil?.rolle) && !fondFane) return notFound()
 
   // Hent alle fond-data parallelt
   const [

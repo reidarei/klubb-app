@@ -11,8 +11,10 @@ import VarselLogg from './VarselLogg'
 import ArrangementmalerAdmin from '@/components/ArrangementmalerAdmin'
 import KaaringMalAdmin from '@/components/KaaringMalAdmin'
 import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
+import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
+import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 const innstillingLabels: Record<string, string> = {
   // Arrangementer
@@ -87,6 +89,7 @@ export default async function Innstillinger() {
     { data: vitalsRader },
     { data: adminProfiler },
     { data: egenProfil },
+    fondFaneAktiv,
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -123,6 +126,7 @@ export default async function Innstillinger() {
       .select('bursdagsgratulasjon_aktiv')
       .eq('id', bruker.id)
       .maybeSingle(),
+    hentAppFlagg(supabase, FOND_FANE),
   ])
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
@@ -332,6 +336,20 @@ export default async function Innstillinger() {
           </InnstillingsKort>
         )
       })()}
+
+      {/* Funksjoner — app-vide på/av-flagg */}
+      <InnstillingsKort
+        tittel="Funksjoner"
+        oppsummering={fondFaneAktiv ? 'Fond: synlig for alle' : 'Fond: kun admin'}
+        beskrivelse="Skru funksjoner av og på for alle medlemmer. Admin har alltid tilgang uavhengig av bryteren."
+      >
+        <FunksjonToggle
+          noekkel={FOND_FANE}
+          aktiv={fondFaneAktiv}
+          beskrivelse="Fond-fanen synlig for alle"
+          last
+        />
+      </InnstillingsKort>
 
       {/* Automatisering — per-admin toggles */}
       <InnstillingsKort

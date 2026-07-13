@@ -22,6 +22,8 @@ const TABS: Tab[] = [
   // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
   { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
   // Fond-tab er kun synlig for admin i testfasen (#443) — åpnes for alle når godkjent i prod.
+  // Fond-taben er alltid synlig for admin. For vanlige medlemmer styres
+  // synligheten av bryteren i /innstillinger (app_innstillinger.fond_fane, #447).
   { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
   { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
 ]
@@ -42,6 +44,8 @@ type Props = {
   ulestChat?: boolean
   /** True hvis det finnes uleste varsler i varsel_logg for denne brukeren. */
   ulestVarsler?: boolean
+  /** True hvis Fond-fanen er skrudd på for vanlige medlemmer (app_innstillinger.fond_fane). */
+  visFond?: boolean
 }
 
 /**
@@ -55,12 +59,12 @@ type Props = {
  * #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Se
  * Policy: Navigasjon i CLAUDE.md.
  */
-export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false }: Props) {
+export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false }: Props) {
   const pathname = usePathname()
 
-  // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere.
-  // kanAdministrere er en ren funksjon (ingen async) — trygg å kalle klient-side.
-  const synligeTabs = TABS.filter(t => !t.kunAdmin || kanAdministrere(rolle))
+  // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
+  // men vis Fond-taben for alle hvis visFond-flagget er skrudd på (#447).
+  const synligeTabs = TABS.filter(t => !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond))
 
   // Referanser for å måle pill-posisjon relativt til tabs-containeren
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -103,10 +107,13 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // SSR-render finnes ikke pill (pillRect er null) — den popper inn umiddelbart
   // etter hydrering. Knapt synlig og vurdert akseptabelt for å unngå at vi må
   // duplisere aktiv-logikken i en SSR-fallback. Se #200-review.
+  // synligeTabs.length i deps: når Fond-taben dukker opp/forsvinner (visFond
+  // endres uten navigasjon) skifter tab-bredden, så pill må re-måles selv om
+  // pathname er uendret. #447-review.
   useLayoutEffect(() => {
     maalPill()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
+  }, [pathname, synligeTabs.length])
 
   // Re-mål ved resize (f.eks. rotering av telefon). rAF-throttles så vi ikke
   // gjør getBoundingClientRect 60+ ganger i sekundet under desktop-window-drag.
