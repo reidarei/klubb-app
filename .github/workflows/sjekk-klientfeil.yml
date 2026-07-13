@@ -6,8 +6,11 @@
 name: Daglig klientfeil-sjekk
 
 on:
-  schedule:
-    - cron: '0 5 * * *'
+  # schedule:
+  #   # Kjøres daglig 05:00 UTC. Aktiveres først når secretene APP_URL og
+  #   # CRON_SECRET er satt (docs/oppsett.md §9) — uten dem feiler jobben
+  #   # hver natt og spammer eieren med feil-eposter.
+  #   - cron: '0 5 * * *'
   workflow_dispatch: # Kan kjøres manuelt fra GitHub
 
 jobs:
