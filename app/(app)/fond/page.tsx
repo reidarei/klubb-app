@@ -501,7 +501,9 @@ export default async function FondSide() {
                         {kallenavn}
                       </div>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        Innskudd {formaterDato(inn.dato, 'd. MMM yyyy')}
+                        {/* «Per»-formulering (ikke «Innskudd») — beløpene er øyeblikksbilder av
+                            hver innskyters andel, ikke enkeltinnskudd. Reidars eksakte tekst. */}
+                        Per {formaterDato(inn.dato, 'd. MMMM')}
                       </div>
                     </div>
                     <span
