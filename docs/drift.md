@@ -44,7 +44,17 @@ Apper som kjører mot `localhost` blokkerer varsler automatisk (for å unngå at
 
 ---
 
-## 3. Varsel-feilsøking
+## 3. Funksjonsflagg
+
+Appen har en generell `app_innstillinger`-tabell for admin-kontrollerte on/off-bryteren. Disse styres fra **Innstillinger** (kun synlig for admins).
+
+### Fond-fanen
+
+Fond-fanen er av som default (kun synlig for admin). Når bryteren **«Vis Fond-fanen for alle medlemmer»** slås på under **Innstillinger**, blir fanen synlig for alle medlemmer. Dette er nyttig når klubben aktiverer Fond-styring eller ønsker en testfase der kun admin ser det.
+
+---
+
+## 4. Varsel-feilsøking
 
 ### varsel_logg-tabellen
 
@@ -86,7 +96,7 @@ LIMIT 50;
 
 ---
 
-## 4. Migrasjoner ved oppgradering
+## 5. Migrasjoner ved oppgradering
 
 Når du oppdaterer kodebasen fra repoet, sjekk alltid om det er nye migrasjoner:
 
@@ -107,7 +117,7 @@ Se [docs/oppsett.md](oppsett.md) for full referanse til oppsett-kommandoene.
 
 ---
 
-## 5. Backup
+## 6. Backup
 
 > **Viktig:** Supabase **free tier har ingen automatiske backups** — det er en
 > Pro-plan-funksjon. Uten egen rutine finnes klubbens data kun i prod-databasen.
@@ -127,7 +137,7 @@ Backup av bilder (Cloudflare R2) er ikke automatisk — R2 har ingen innebygd sn
 
 ---
 
-## 6. Sikkerhet
+## 7. Sikkerhet
 
 En fullstendig gjennomgang av sikkerhetsmodellen er dokumentert i [docs/sikkerhetsgjennomgang-2026-06.md](sikkerhetsgjennomgang-2026-06.md). Viktigste punkter for løpende drift:
 
