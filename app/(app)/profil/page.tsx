@@ -9,8 +9,10 @@ import VarslerInnstillinger from '@/components/VarslerInnstillinger'
 import VarslerListe from '@/components/profil/VarslerListe'
 import PassInfoKort from '@/components/profil/PassInfoKort'
 import UtseendeValg from '@/components/profil/UtseendeValg'
-import { tittelFor } from '@/lib/roller'
+import { kanAdministrere, tittelFor } from '@/lib/roller'
 import { lesTemaFraCookie } from '@/lib/tema-server'
+import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
+import { formaterKr, summerKroner } from '@/lib/belop'
 import LoggUtKnapp from './LoggUtKnapp'
 
 const KLUBBEN_START_AAR = 2007
@@ -32,6 +34,8 @@ export default async function Profil() {
     { count: antallUlesteVarsler },
     { data: passInfo },
     { count: ulestPrivat },
+    { data: fondInnskudd },
+    fondFane,
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -87,11 +91,25 @@ export default async function Profil() {
       .select('id', { count: 'exact', head: true })
       .eq('lest', false)
       .neq('profil_id', user!.id),
+    // Egne kontant-innskudd i fondet — summeres til «Min andel av fondet».
+    // Kun kontanter (bevisst — eiendom/verdipapir-andeler regnes ikke, jf. #443).
+    supabase
+      .from('fond_innskudd')
+      .select('belop')
+      .eq('profil_id', user!.id),
+    // Samme synlighetsregel som Fond-taben: admin alltid, medlemmer når bryteren er på
+    hentAppFlagg(supabase, FOND_FANE),
   ])
 
   const navn = profil?.navn ?? 'Ukjent'
   const rolle = tittelFor(profil?.rolle)
   const ulest = ulestPrivat ?? 0
+
+  // «Min andel av fondet» = summen av egne kontant-innskudd. Følger samme
+  // synlighetsregel som Fond-taben (#447): admin ser den alltid, medlemmer
+  // først når fond_fane-bryteren er skrudd på.
+  const minAndel = summerKroner((fondInnskudd ?? []).map(r => Number(r.belop)))
+  const visFondAndel = kanAdministrere(profil?.rolle) || fondFane
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -244,6 +262,42 @@ export default async function Profil() {
             </div>
           ))}
         </div>
+
+        {/* Min andel av fondet — egen rad (etiketten er for lang som tredje stat-kolonne) */}
+        {visFondAndel && (
+          <div
+            style={{
+              marginTop: 20,
+              paddingTop: 20,
+              borderTop: '0.5px solid var(--border-subtle)',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 24,
+                fontWeight: 500,
+                color: 'var(--accent)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {formaterKr(minAndel)}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: 'var(--text-tertiary)',
+                letterSpacing: '1.5px',
+                textTransform: 'uppercase',
+                marginTop: 2,
+                fontWeight: 600,
+              }}
+            >
+              Min andel av fondet
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Privatmeldinger — flyttes hit fra /chat (#256) slik at lenken

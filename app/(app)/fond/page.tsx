@@ -7,16 +7,14 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { formaterDato } from '@/lib/dato'
+import { formaterKr } from '@/lib/belop'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
 
-// Hele kroner vises uten desimaler; beløp med øre får alltid to (aldri «6 612,2 kr»)
-const desimaler = (n: number) => (Number.isInteger(n) ? 0 : 2)
-
-const kr = (n: number) =>
-  `${n.toLocaleString('nb', { minimumFractionDigits: desimaler(n), maximumFractionDigits: 2 })} kr`
+// Delt formattering i lib/belop.ts — brukes også av profil-sidens fond-andel
+const kr = formaterKr
 
 const prosent = (n: number) =>
   `${n > 0 ? '+' : ''}${n.toLocaleString('nb', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
