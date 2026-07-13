@@ -37,6 +37,7 @@ Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten
 - **Klubbinfo** — vedtekter, medlemsliste, statistikk, historikk.
 - **Bursdager og klubbjubileum** dukker opp automatisk på agendaen.
 - **Push-varsler** og **e-post-påminnelser** for nye arrangementer, kommentarer, mentions og påminnelser om RSVP.
+- **Mørk/lys modus** — brukervalgt tema (System/Mørk/Lys) fra profilsiden. «System» følger enhetens preferanse, valget huskes per enhet.
 - **PWA** — installerbar på mobil (Safari/Chrome), service worker for offline-fallback.
 
 ---
@@ -188,6 +189,7 @@ Alle disse er kodifisert som «policies» i [`CLAUDE.md`](./CLAUDE.md) — refer
 - **Konstanter:** tegnegrenser og dag-vinduer i `lib/konstanter.ts`. Ingen hardkodede magiske tall.
 - **Konfig:** miljø-avhengige verdier (BASE_URL, R2_PUBLIC_URL, GitHub-repo, VAPID-kontakt) i `lib/config.ts`.
 - **Klubbidentitet:** navn, stiftelsesdato, rolletitler i `lib/klubb-config.ts` med env-override — se [docs/klubb-tilpasning.md](docs/klubb-tilpasning.md).
+- **Tema:** alle farger er tokens i `app/globals.css` per `data-theme` (dark/light). Brukervalget (System/Mørk/Lys) lagres i localStorage + cookie; serveren rendrer riktig tema i SSR og et pre-hydration-script hindrer feil-tema-blink ved oppstart.
 - **Bildelagring:** server actions i `lib/actions/bilde-opplasting.ts` + `lib/r2.ts`. Klient komprimerer (1600px / q0.85) før upload.
 - **Avatar:** `<Avatar>`-komponenten er bevisst enkel (kun `name`, `size`, `src`, `rolle`). Spesialtilfeller løses med lokale wrappere, ikke ved å utvide kjerne-komponenten.
 - **Observability:** Sentry integreres kun server-side (bevisst holdt unna klienten av hensyn til bundle-størrelse). Klient-side JavaScript-feil fanges opp via global error boundary og logges til `feil_logg`-tabell med automatisk 30-dagers opprydding. Daglig cron varsler admins hvis mer enn 5 feil er logget siste døgn.
