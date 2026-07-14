@@ -290,8 +290,8 @@ function matchProfil(
 export async function hentPublisertOppgjor(): Promise<OppgjorDiff> {
   const { supabase } = await ensureAdmin()
 
-  const { FOND_OPPGJOR_REPO } = await import('@/lib/config')
-  if (!FOND_OPPGJOR_REPO)
+  const { FOND_OPPGJOR_URL } = await import('@/lib/config')
+  if (!FOND_OPPGJOR_URL)
     throw new Error('Henting av oppgjør er ikke konfigurert')
 
   const { hentOppgjor } = await import('@/lib/fond-oppgjor')
@@ -365,8 +365,8 @@ export async function hentPublisertOppgjor(): Promise<OppgjorDiff> {
 export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<void> {
   const { supabase, user } = await ensureAdmin()
 
-  const { FOND_OPPGJOR_REPO } = await import('@/lib/config')
-  if (!FOND_OPPGJOR_REPO)
+  const { FOND_OPPGJOR_URL } = await import('@/lib/config')
+  if (!FOND_OPPGJOR_URL)
     throw new Error('Henting av oppgjør er ikke konfigurert')
 
   // Re-valider ALT server-side — stol aldri blindt på klient-payload.

@@ -52,16 +52,14 @@ export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
 // Modell brukt av dato-forslag og andre LLM-kall. Kan overstyres per instans.
 export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
 
-// Eksternt repo som publiserer fond-oppgjør (eier/repo-streng). Server-only —
-// ALDRI NEXT_PUBLIC_-prefiks (inneholder repo-navn som er klubb-spesifikt).
+// Base-URL for RESTful oppgjørs-API (f.eks. https://oppgjor.example.com).
 // Tom streng = hent-oppgjør-funksjonen er av (feature-flag-mønster fra #420).
-export const FOND_OPPGJOR_REPO = process.env.FOND_OPPGJOR_REPO ?? ''
+// Server-only — ALDRI NEXT_PUBLIC_-prefiks.
+export const FOND_OPPGJOR_URL = process.env.FOND_OPPGJOR_URL ?? ''
 
-// Token for å lese det private fond-repoet. Faller tilbake til GITHUB_TOKEN
-// hvis ikke satt separat (nyttig når GITHUB_TOKEN er fine-grained og kun
-// dekker app-repoet — det private fond-repoet kan trenge eget token). Server-only.
-export const FOND_OPPGJOR_TOKEN =
-  process.env.FOND_OPPGJOR_TOKEN ?? process.env.GITHUB_TOKEN ?? ''
+// Lesenøkkel (Bearer) for oppgjørs-API-et. Server-only — ALDRI NEXT_PUBLIC_-prefiks.
+// INGEN fallback til GITHUB_TOKEN (dette er et separat API, ikke GitHub).
+export const FOND_OPPGJOR_API_NOKKEL = process.env.FOND_OPPGJOR_API_NOKKEL ?? ''
 
 // GitHub-repo som backer «innspill»-funksjonen. Issues med label
 // GITHUB_ONSKE_LABEL behandles som brukerønsker.

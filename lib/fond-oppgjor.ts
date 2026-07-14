@@ -1,7 +1,7 @@
 // Server-only modul — hentet kun i server actions, aldri fra klient-kode.
-// Isolerer hentingen slik at kilden (GitHub) er byttbar uten at resten av appen endres.
+// Isolerer hentingen slik at kilden (RESTful API) er byttbar uten at resten av appen endres.
 
-import { FOND_OPPGJOR_REPO, FOND_OPPGJOR_TOKEN } from './config'
+import { FOND_OPPGJOR_URL, FOND_OPPGJOR_API_NOKKEL } from './config'
 
 // JSON-kontrakten vi forventer fra kilden. Versjon 1 er den eneste gyldige nå.
 export type Oppgjor = {
@@ -80,39 +80,35 @@ export function validerOppgjor(u: unknown): Oppgjor {
 }
 
 /**
- * Henter oppgjør fra GitHub Contents API og returnerer validert Oppgjor.
+ * Henter oppgjør fra RESTful API og returnerer validert Oppgjor.
  * Kaller kun fra server-side kode (server actions / route handlers).
  */
 export async function hentOppgjor(): Promise<Oppgjor> {
-  const url = `https://api.github.com/repos/${FOND_OPPGJOR_REPO}/contents/publisert/oppgjor.json`
+  // Strip trailing slash fra base-URL — «https://host//v1/oppgjor» kan 404-e
+  // hos API-gateways, og feilen ville først vist seg ved manuelt env-oppsett
+  const url = `${FOND_OPPGJOR_URL.replace(/\/+$/, '')}/v1/oppgjor`
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${FOND_OPPGJOR_TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      Authorization: `Bearer ${FOND_OPPGJOR_API_NOKKEL}`,
+      Accept: 'application/json',
+      // Cloudflares bot-beskyttelse foran API-et 403-er tomme/generiske UA-er;
+      // Node fetch sender minimal UA — eksplisitt UA er påkrevd (se #457).
+      'User-Agent': 'klubb-app-fond/1',
     },
     cache: 'no-store', // alltid ferske data ved admin-kall
   })
 
+  if (res.status === 401)
+    throw new Error('Feil API-nøkkel for oppgjørs-kilden')
   if (res.status === 404)
     throw new Error('Fant ikke publisert oppgjør i kilden')
   if (!res.ok)
     throw new Error(`Kunne ikke hente oppgjør (HTTP ${res.status})`)
 
-  const data = (await res.json()) as { content?: string }
-
-  if (!data.content)
-    throw new Error('GitHub-svaret mangler «content»-felt')
-
-  // GitHub bryter base64-innholdet med linjeskift (\n) — disse må fjernes
-  // før atob/Buffer.from kan dekode korrekt.
-  const base64 = data.content.replace(/\s/g, '')
-  const json = Buffer.from(base64, 'base64').toString('utf-8')
-
   let parsed: unknown
   try {
-    parsed = JSON.parse(json)
+    parsed = await res.json()
   } catch {
     throw new Error('Innholdet fra kilden er ikke gyldig JSON')
   }

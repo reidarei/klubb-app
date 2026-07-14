@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
-import { FOND_OPPGJOR_REPO } from '@/lib/config'
+import { FOND_OPPGJOR_URL } from '@/lib/config'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Card from '@/components/ui/Card'
 import EiendomEditor from '@/components/fond/EiendomEditor'
@@ -51,7 +51,7 @@ export default async function FondRediger() {
           det som oppdateres automatisk skal ikke friste til enkeltredigering).
           Uten konfigurasjonen (klubb-app/test) er manuell redigering eneste
           vei, og seksjonene vises i vanlig rekkefølge uten overstyrings-ramme. */}
-      {FOND_OPPGJOR_REPO && (
+      {FOND_OPPGJOR_URL && (
         <section style={{ marginBottom: 28 }}>
           <SectionLabel>Hent publisert oppgjør</SectionLabel>
           <Card>
@@ -71,7 +71,7 @@ export default async function FondRediger() {
         <VerdipapirEditor verdipapirer={verdipapirer ?? []} />
       </section>
 
-      {FOND_OPPGJOR_REPO && (
+      {FOND_OPPGJOR_URL && (
         <div style={{ margin: '36px 0 20px' }}>
           <SectionLabel>Overstyre manuelt</SectionLabel>
           <p
