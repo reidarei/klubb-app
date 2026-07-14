@@ -193,23 +193,29 @@ export default async function FondSide() {
           ))}
         </div>
 
-        {/* Diskret lenke til admin-redigering */}
-        <div style={{ marginTop: 16 }}>
-          <Link
-            href="/fond/rediger"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: 'var(--text-tertiary)',
-              textDecoration: 'none',
-              letterSpacing: '1.5px',
-              textTransform: 'uppercase',
-              opacity: 0.7,
-            }}
-          >
-            Rediger →
-          </Link>
-        </div>
+        {/* Rediger-knapp — kun for admin (medlemmer har ikke tilgang til /fond/rediger).
+            Synlig pille i profil-sidens stil; den gamle 9px-lenken var usynlig på mobil. */}
+        {kanAdministrere(profil?.rolle) && (
+          <div style={{ marginTop: 18 }}>
+            <Link
+              href="/fond/rediger"
+              style={{
+                display: 'inline-block',
+                padding: '8px 14px',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 999,
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
+              Rediger fondet
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Eiendommer */}
