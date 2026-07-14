@@ -45,6 +45,50 @@ export default async function FondRediger() {
         </div>
       </div>
 
+      {/* Med oppgjørs-henting konfigurert er den PRIMÆRVEIEN for innskudd og
+          saldo — den står øverst, og de manuelle editorene for de samme
+          tallene flyttes nederst under «Overstyre manuelt» (Reidars bestilling:
+          det som oppdateres automatisk skal ikke friste til enkeltredigering).
+          Uten konfigurasjonen (klubb-app/test) er manuell redigering eneste
+          vei, og seksjonene vises i vanlig rekkefølge uten overstyrings-ramme. */}
+      {FOND_OPPGJOR_REPO && (
+        <section style={{ marginBottom: 28 }}>
+          <SectionLabel>Hent publisert oppgjør</SectionLabel>
+          <Card>
+            <HentOppgjor />
+          </Card>
+        </section>
+      )}
+
+      {/* Eiendommer og verdipapirer dekkes ikke av oppgjøret — alltid manuelle */}
+      <section style={{ marginBottom: 28 }}>
+        <SectionLabel count={eiendommer?.length ?? 0}>Eiendommer</SectionLabel>
+        <EiendomEditor eiendommer={eiendommer ?? []} />
+      </section>
+
+      <section style={{ marginBottom: 28 }}>
+        <SectionLabel count={verdipapirer?.length ?? 0}>Aksjer og fond</SectionLabel>
+        <VerdipapirEditor verdipapirer={verdipapirer ?? []} />
+      </section>
+
+      {FOND_OPPGJOR_REPO && (
+        <div style={{ margin: '36px 0 20px' }}>
+          <SectionLabel>Overstyre manuelt</SectionLabel>
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              lineHeight: 1.5,
+              margin: 0,
+            }}
+          >
+            Innskudd og saldo oppdateres normalt via «Hent publisert oppgjør» øverst.
+            Rediger enkeltvis kun når du vet at kilden ikke skal gjelde.
+          </p>
+        </div>
+      )}
+
       {/* Kontantbeholdning */}
       <section style={{ marginBottom: 28 }}>
         <SectionLabel>Kontantbeholdning</SectionLabel>
@@ -53,33 +97,11 @@ export default async function FondRediger() {
         </Card>
       </section>
 
-      {/* Eiendommer */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={eiendommer?.length ?? 0}>Eiendommer</SectionLabel>
-        <EiendomEditor eiendommer={eiendommer ?? []} />
-      </section>
-
-      {/* Verdipapirer */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={verdipapirer?.length ?? 0}>Aksjer og fond</SectionLabel>
-        <VerdipapirEditor verdipapirer={verdipapirer ?? []} />
-      </section>
-
       {/* Innskudd */}
       <section style={{ marginBottom: 28 }}>
         <SectionLabel count={innskudd?.length ?? 0}>Innskudd</SectionLabel>
         <InnskuddEditor innskudd={innskudd ?? []} profiler={profiler ?? []} />
       </section>
-
-      {/* Hent publisert oppgjør — vises kun når FOND_OPPGJOR_REPO er konfigurert */}
-      {FOND_OPPGJOR_REPO && (
-        <section>
-          <SectionLabel>Hent publisert oppgjør</SectionLabel>
-          <Card>
-            <HentOppgjor />
-          </Card>
-        </section>
-      )}
     </div>
   )
 }
