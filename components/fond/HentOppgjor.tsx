@@ -41,12 +41,9 @@ export default function HentOppgjor() {
     setSuksess(false)
     setDiff(null)
     startHent(async () => {
-      try {
-        const resultat = await hentPublisertOppgjor()
-        setDiff(resultat)
-      } catch (e) {
-        setFeil(e instanceof Error ? e.message : 'Ukjent feil ved henting')
-      }
+      const resultat = await hentPublisertOppgjor()
+      if (resultat.ok) setDiff(resultat.diff)
+      else setFeil(resultat.feil)
     })
   }
 
@@ -66,13 +63,9 @@ export default function HentOppgjor() {
       })),
     }
     startSkriv(async () => {
-      try {
-        await skrivPublisertOppgjor(payload)
-        setSuksess(true)
-        setDiff(null) // nullstill diff etter suksess
-      } catch (e) {
-        setFeil(e instanceof Error ? e.message : 'Ukjent feil ved skriving')
-      }
+      const resultat = await skrivPublisertOppgjor(payload)
+      if (resultat.ok) { setSuksess(true); setDiff(null) }
+      else setFeil(resultat.feil)
     })
   }
 

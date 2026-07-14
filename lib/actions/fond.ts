@@ -287,167 +287,200 @@ function matchProfil(
   return treff[0]
 }
 
-export async function hentPublisertOppgjor(): Promise<OppgjorDiff> {
+export async function hentPublisertOppgjor(): Promise<
+  { ok: true; diff: OppgjorDiff } | { ok: false; feil: string }
+> {
+  // ensureAdmin() kastes UTENFOR try/catch — uautoriserte kall skal propagere som
+  // vanlig feil (401/403), ikke pakkes inn som { ok: false } (Policy: Auth).
   const { supabase } = await ensureAdmin()
 
-  const { FOND_OPPGJOR_URL } = await import('@/lib/config')
-  if (!FOND_OPPGJOR_URL)
-    throw new Error('Henting av oppgjør er ikke konfigurert')
+  // Next.js maskerer feilmeldinger kastet fra server actions i prod (se #459),
+  // så resten av funksjonen returnerer { ok: false, feil: ... } i stedet for å kaste.
+  try {
+    const { FOND_OPPGJOR_URL } = await import('@/lib/config')
+    if (!FOND_OPPGJOR_URL)
+      throw new Error('Henting av oppgjør er ikke konfigurert')
 
-  const { hentOppgjor } = await import('@/lib/fond-oppgjor')
-  const oppgjor = await hentOppgjor()
+    const { hentOppgjor } = await import('@/lib/fond-oppgjor')
+    const oppgjor = await hentOppgjor()
 
-  // Hent alle aktive profiler for å matche visningsnavn → profil_id
-  const { data: profiler } = await supabase
-    .from('profiles')
-    .select('id, visningsnavn')
-    .eq('aktiv', true)
+    // Hent alle aktive profiler for å matche visningsnavn → profil_id
+    const { data: profiler } = await supabase
+      .from('profiles')
+      .select('id, visningsnavn')
+      .eq('aktiv', true)
 
-  const profilListe = profiler ?? []
+    const profilListe = profiler ?? []
 
-  // Bygg opp én rad per andel; ukjent navn → kast umiddelbart
-  const raderUtenAppVerdi: {
-    profil_id: string
-    visningsnavn: string
-    hentetVerdi: number
-  }[] = []
+    // Bygg opp én rad per andel; ukjent navn → kast umiddelbart
+    const raderUtenAppVerdi: {
+      profil_id: string
+      visningsnavn: string
+      hentetVerdi: number
+    }[] = []
 
-  for (const andel of oppgjor.andeler) {
-    const match = matchProfil(profilListe, andel.visningsnavn)
-    raderUtenAppVerdi.push({
-      profil_id: match.id,
-      visningsnavn: andel.visningsnavn,
-      hentetVerdi: andel.belop,
-    })
-  }
-
-  // Hent alle innskudd-rader og kontant-saldo fra appen
-  const { data: innskuddRader } = await supabase
-    .from('fond_innskudd')
-    .select('id, profil_id, belop')
-
-  const { data: kontant } = await supabase
-    .from('fond_kontant')
-    .select('saldo')
-    .eq('id', 1)
-    .maybeSingle()
-
-  const alleInnskudd = innskuddRader ?? []
-
-  // Bygg diff-rader: slå opp app-verdi og tell rader per profil
-  const rader: OppgjorDiff['rader'] = raderUtenAppVerdi.map((r) => {
-    const egneRader = alleInnskudd.filter((i) => i.profil_id === r.profil_id)
-    const antallRader = egneRader.length
-    // Kun entydig ved nøyaktig én rad — 0 (ingen rad enda) og >1 (blokkerende
-    // duplikat) gir begge null appVerdi. Number() fordi PostgREST kan serialisere
-    // numeric som string.
-    const appVerdi = antallRader === 1 ? Number(egneRader[0].belop) : null
-    return {
-      profil_id: r.profil_id,
-      visningsnavn: r.visningsnavn,
-      appVerdi,
-      hentetVerdi: r.hentetVerdi,
-      antallRader,
+    for (const andel of oppgjor.andeler) {
+      const match = matchProfil(profilListe, andel.visningsnavn)
+      raderUtenAppVerdi.push({
+        profil_id: match.id,
+        visningsnavn: andel.visningsnavn,
+        hentetVerdi: andel.belop,
+      })
     }
-  })
 
-  return {
-    snapshot_dato: oppgjor.snapshot_dato,
-    generert: oppgjor.generert,
-    saldo: {
-      app: Number(kontant?.saldo ?? 0),
-      hentet: oppgjor.saldo,
-    },
-    rader,
+    // Hent alle innskudd-rader og kontant-saldo fra appen
+    const { data: innskuddRader } = await supabase
+      .from('fond_innskudd')
+      .select('id, profil_id, belop')
+
+    const { data: kontant } = await supabase
+      .from('fond_kontant')
+      .select('saldo')
+      .eq('id', 1)
+      .maybeSingle()
+
+    const alleInnskudd = innskuddRader ?? []
+
+    // Bygg diff-rader: slå opp app-verdi og tell rader per profil
+    const rader: OppgjorDiff['rader'] = raderUtenAppVerdi.map((r) => {
+      const egneRader = alleInnskudd.filter((i) => i.profil_id === r.profil_id)
+      const antallRader = egneRader.length
+      // Kun entydig ved nøyaktig én rad — 0 (ingen rad enda) og >1 (blokkerende
+      // duplikat) gir begge null appVerdi. Number() fordi PostgREST kan serialisere
+      // numeric som string.
+      const appVerdi = antallRader === 1 ? Number(egneRader[0].belop) : null
+      return {
+        profil_id: r.profil_id,
+        visningsnavn: r.visningsnavn,
+        appVerdi,
+        hentetVerdi: r.hentetVerdi,
+        antallRader,
+      }
+    })
+
+    return {
+      ok: true,
+      diff: {
+        snapshot_dato: oppgjor.snapshot_dato,
+        generert: oppgjor.generert,
+        saldo: {
+          app: Number(kontant?.saldo ?? 0),
+          hentet: oppgjor.saldo,
+        },
+        rader,
+      },
+    }
+  } catch (e) {
+    return { ok: false, feil: e instanceof Error ? e.message : 'Ukjent feil ved henting av oppgjør' }
   }
 }
 
-export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<void> {
+export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
+  { ok: true } | { ok: false; feil: string }
+> {
+  // ensureAdmin() kastes UTENFOR try/catch — uautoriserte kall skal propagere som
+  // vanlig feil (401/403), ikke pakkes inn som { ok: false } (Policy: Auth).
   const { supabase, user } = await ensureAdmin()
 
-  const { FOND_OPPGJOR_URL } = await import('@/lib/config')
-  if (!FOND_OPPGJOR_URL)
-    throw new Error('Henting av oppgjør er ikke konfigurert')
+  // Next.js maskerer feilmeldinger kastet fra server actions i prod (se #459),
+  // så resten av funksjonen returnerer { ok: false, feil: ... } i stedet for å kaste.
+  try {
+    const { FOND_OPPGJOR_URL } = await import('@/lib/config')
+    if (!FOND_OPPGJOR_URL)
+      throw new Error('Henting av oppgjør er ikke konfigurert')
 
-  // Re-valider ALT server-side — stol aldri blindt på klient-payload.
-  // Bevisst ingen re-henting fra kilden her (TOCTOU-herding utenfor scope, #453):
-  // payload re-valideres fullt, kun admin, «det du så er det som skrives».
-  const { validerOppgjor } = await import('@/lib/fond-oppgjor')
-  const oppgjor = validerOppgjor(oppgjorPayload)
+    // Re-valider ALT server-side — stol aldri blindt på klient-payload.
+    // Bevisst ingen re-henting fra kilden her (TOCTOU-herding utenfor scope, #453):
+    // payload re-valideres fullt, kun admin, «det du så er det som skrives».
+    const { validerOppgjor } = await import('@/lib/fond-oppgjor')
+    const oppgjor = validerOppgjor(oppgjorPayload)
 
-  const { data: profiler } = await supabase
-    .from('profiles')
-    .select('id, visningsnavn')
-    .eq('aktiv', true)
+    const { data: profiler } = await supabase
+      .from('profiles')
+      .select('id, visningsnavn')
+      .eq('aktiv', true)
 
-  const profilListe = profiler ?? []
+    const profilListe = profiler ?? []
 
-  // Match alle andeler til profiler — kast hvis ukjent eller tvetydig navn
-  const matchede: { profil_id: string; visningsnavn: string; belop: number }[] = []
-  for (const andel of oppgjor.andeler) {
-    const match = matchProfil(profilListe, andel.visningsnavn)
-    matchede.push({ profil_id: match.id, visningsnavn: andel.visningsnavn, belop: andel.belop })
-  }
+    // Match alle andeler til profiler — kast hvis ukjent eller tvetydig navn
+    const matchede: { profil_id: string; visningsnavn: string; belop: number }[] = []
+    for (const andel of oppgjor.andeler) {
+      const match = matchProfil(profilListe, andel.visningsnavn)
+      matchede.push({ profil_id: match.id, visningsnavn: andel.visningsnavn, belop: andel.belop })
+    }
 
-  // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving
-  const { data: alleInnskudd } = await supabase
-    .from('fond_innskudd')
-    .select('id, profil_id')
+    // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving
+    const { data: alleInnskudd } = await supabase
+      .from('fond_innskudd')
+      .select('id, profil_id')
 
-  const alleRader = alleInnskudd ?? []
-  for (const m of matchede) {
-    const antall = alleRader.filter((i) => i.profil_id === m.profil_id).length
-    if (antall > 1)
-      throw new Error(
-        `${m.visningsnavn} har ${antall} innskudd-rader — rydd manuelt i editoren først`,
-      )
-  }
-
-  // Skriv andeler — upsert per profil (update hvis rad finnes, insert ellers).
-  // snapshot_dato overstyrer alltid dato — det er snapshot-semantikken (#453).
-  for (const m of matchede) {
-    const eksisterende = alleRader.find((i) => i.profil_id === m.profil_id)
-    if (eksisterende) {
-      const { error } = await supabase
-        .from('fond_innskudd')
-        .update({ belop: m.belop, dato: oppgjor.snapshot_dato })
-        .eq('id', eksisterende.id)
-      if (error)
+    const alleRader = alleInnskudd ?? []
+    for (const m of matchede) {
+      const antall = alleRader.filter((i) => i.profil_id === m.profil_id).length
+      if (antall > 1)
         throw new Error(
-          `Feil ved oppdatering av ${m.visningsnavn}: ${error.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
-        )
-    } else {
-      const { error } = await supabase
-        .from('fond_innskudd')
-        .insert({ profil_id: m.profil_id, belop: m.belop, dato: oppgjor.snapshot_dato })
-      if (error)
-        throw new Error(
-          `Feil ved opprettelse av rad for ${m.visningsnavn}: ${error.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
+          `${m.visningsnavn} har ${antall} innskudd-rader — rydd manuelt i editoren først`,
         )
     }
+
+    // Skriv andeler — upsert per profil (update hvis rad finnes, insert ellers).
+    // snapshot_dato overstyrer alltid dato — det er snapshot-semantikken (#453).
+    for (const m of matchede) {
+      const eksisterende = alleRader.find((i) => i.profil_id === m.profil_id)
+      if (eksisterende) {
+        const { error } = await supabase
+          .from('fond_innskudd')
+          .update({ belop: m.belop, dato: oppgjor.snapshot_dato })
+          .eq('id', eksisterende.id)
+        if (error)
+          throw new Error(
+            `Feil ved oppdatering av ${m.visningsnavn}: ${error.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
+          )
+      } else {
+        const { error } = await supabase
+          .from('fond_innskudd')
+          .insert({ profil_id: m.profil_id, belop: m.belop, dato: oppgjor.snapshot_dato })
+        if (error)
+          throw new Error(
+            `Feil ved opprettelse av rad for ${m.visningsnavn}: ${error.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
+          )
+      }
+    }
+
+    // Skriv saldo via skrivHistorikk-logikken fra oppdaterKontantSaldo (historikk-logging inkludert)
+    const { data: gammelKontant } = await supabase
+      .from('fond_kontant')
+      .select('saldo')
+      .eq('id', 1)
+      .single()
+
+    const { error: kontantFeil } = await supabase
+      .from('fond_kontant')
+      .upsert({ id: 1, saldo: oppgjor.saldo, oppdatert: naa() }, { onConflict: 'id' })
+    if (kontantFeil)
+      throw new Error(
+        `Feil ved oppdatering av saldo: ${kontantFeil.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
+      )
+
+    await skrivHistorikk(supabase, user.id, 'kontant', null, Number(gammelKontant?.saldo ?? 0), oppgjor.saldo)
+
+    // Cache-revalidering skjer i egen indre try/catch: DB-skrivingen (innskudd +
+    // saldo + historikk) er allerede fullført her, så suksess skal reflektere
+    // DB-tilstand, ikke cache-tilstand. En revalidatePath som kaster må aldri
+    // velte et vellykket oppgjør til { ok: false } (se #459).
+    try {
+      revalidatePath('/fond')
+      revalidatePath('/fond/rediger')
+      revalidatePath('/profil')
+      revalidatePath('/', 'layout')
+    } catch {
+      // Bevisst svelget — revalidering er best-effort etter en fullført skriving.
+    }
+
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, feil: e instanceof Error ? e.message : 'Ukjent feil ved skriving av oppgjør' }
   }
-
-  // Skriv saldo via skrivHistorikk-logikken fra oppdaterKontantSaldo (historikk-logging inkludert)
-  const { data: gammelKontant } = await supabase
-    .from('fond_kontant')
-    .select('saldo')
-    .eq('id', 1)
-    .single()
-
-  const { error: kontantFeil } = await supabase
-    .from('fond_kontant')
-    .upsert({ id: 1, saldo: oppgjor.saldo, oppdatert: naa() }, { onConflict: 'id' })
-  if (kontantFeil)
-    throw new Error(
-      `Feil ved oppdatering av saldo: ${kontantFeil.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
-    )
-
-  await skrivHistorikk(supabase, user.id, 'kontant', null, Number(gammelKontant?.saldo ?? 0), oppgjor.saldo)
-
-  revalidatePath('/fond')
-  revalidatePath('/fond/rediger')
-  revalidatePath('/profil')
-  revalidatePath('/', 'layout')
 }
 
 export async function oppdaterKontantSaldo(nySaldo: number) {
