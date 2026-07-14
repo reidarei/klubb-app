@@ -3,12 +3,14 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
+import { FOND_OPPGJOR_REPO } from '@/lib/config'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Card from '@/components/ui/Card'
 import EiendomEditor from '@/components/fond/EiendomEditor'
 import VerdipapirEditor from '@/components/fond/VerdipapirEditor'
 import InnskuddEditor from '@/components/fond/InnskuddEditor'
 import KontantEditor from '@/components/fond/KontantEditor'
+import HentOppgjor from '@/components/fond/HentOppgjor'
 
 export default async function FondRediger() {
   const profil = await getProfil()
@@ -64,10 +66,20 @@ export default async function FondRediger() {
       </section>
 
       {/* Innskudd */}
-      <section>
+      <section style={{ marginBottom: 28 }}>
         <SectionLabel count={innskudd?.length ?? 0}>Innskudd</SectionLabel>
         <InnskuddEditor innskudd={innskudd ?? []} profiler={profiler ?? []} />
       </section>
+
+      {/* Hent publisert oppgjør — vises kun når FOND_OPPGJOR_REPO er konfigurert */}
+      {FOND_OPPGJOR_REPO && (
+        <section>
+          <SectionLabel>Hent publisert oppgjør</SectionLabel>
+          <Card>
+            <HentOppgjor />
+          </Card>
+        </section>
+      )}
     </div>
   )
 }

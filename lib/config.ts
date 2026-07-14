@@ -52,6 +52,17 @@ export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
 // Modell brukt av dato-forslag og andre LLM-kall. Kan overstyres per instans.
 export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
 
+// Eksternt repo som publiserer fond-oppgjør (eier/repo-streng). Server-only —
+// ALDRI NEXT_PUBLIC_-prefiks (inneholder repo-navn som er klubb-spesifikt).
+// Tom streng = hent-oppgjør-funksjonen er av (feature-flag-mønster fra #420).
+export const FOND_OPPGJOR_REPO = process.env.FOND_OPPGJOR_REPO ?? ''
+
+// Token for å lese det private fond-repoet. Faller tilbake til GITHUB_TOKEN
+// hvis ikke satt separat (nyttig når GITHUB_TOKEN er fine-grained og kun
+// dekker app-repoet — det private fond-repoet kan trenge eget token). Server-only.
+export const FOND_OPPGJOR_TOKEN =
+  process.env.FOND_OPPGJOR_TOKEN ?? process.env.GITHUB_TOKEN ?? ''
+
 // GitHub-repo som backer «innspill»-funksjonen. Issues med label
 // GITHUB_ONSKE_LABEL behandles som brukerønsker.
 export const GITHUB_REPO =
