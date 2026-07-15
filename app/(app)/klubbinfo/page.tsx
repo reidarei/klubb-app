@@ -25,10 +25,12 @@ export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  const { count: antallMedlemmer } = await supabase
-    .from('profiles')
-    .select('id', { count: 'exact', head: true })
-    .eq('aktiv', true)
+  // To count-spørringer i parallell — sekvensielt ville lagt en ekstra
+  // rundtur til Supabase på responstiden (jf. ytelseskravet).
+  const [{ count: antallMedlemmer }, { count: antallAlbum }] = await Promise.all([
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
+    supabase.from('album').select('id', { count: 'exact', head: true }),
+  ])
 
   const antallAar = norskAar() - KLUBBEN_START_AAR + 1
 
@@ -59,6 +61,13 @@ export default async function Klubbinfo() {
       title: 'Kåringer',
       sub: 'Årets hederspriser',
       href: '/kaaringer',
+    },
+    {
+      icon: 'image',
+      title: 'Bildene',
+      sub: 'Album fra turer og møter',
+      meta: antallAlbum ? String(antallAlbum) : undefined,
+      href: '/album',
     },
     {
       icon: 'doc',
