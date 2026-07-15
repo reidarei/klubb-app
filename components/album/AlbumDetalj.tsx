@@ -41,7 +41,7 @@ export default function AlbumDetalj({
           fontSize: 13,
         }}
       >
-        Ingen bilder i albumet ennå.
+        Ingen bilder i albumet ennå. Last opp første bilde under.
       </div>
     )
   }

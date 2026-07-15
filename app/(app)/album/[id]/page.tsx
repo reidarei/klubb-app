@@ -3,6 +3,7 @@ import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import AlbumDetalj from '@/components/album/AlbumDetalj'
+import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import AlbumTittel from '@/components/album/AlbumTittel'
 import TillatLandskap from '@/components/album/TillatLandskap'
 import { kanAdministrere } from '@/lib/roller'
@@ -107,6 +108,12 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
         kanRedigere={kanRedigere}
         coverBildeId={album.cover_bilde_id}
       />
+
+      {/* Alle medlemmer kan bidra med bilder — ikke bare eier/admin. Det er
+          hele poenget med delte album (RLS tillater det allerede). */}
+      <div style={{ marginTop: 12 }}>
+        <AlbumOpplaster albumId={album.id} />
+      </div>
     </div>
   )
 }
