@@ -6,21 +6,31 @@ import { iDagOslo, erGyldigKalenderdato } from '@/lib/dato'
 import { logg } from '@/lib/logg'
 import { DATO_FORSLAG_MIN_TEGN, INNLEGG_MAKS_LENGDE } from '@/lib/konstanter'
 
+// Diskriminert resultat (#462): klienten må kunne skille «modellen fant ingen
+// dato» (vis «Fant ingen dato i teksten») fra tekniske feil (vis «Prøv igjen»).
+// Før kollapset alt til null og brukeren så bare at ingenting skjedde.
+export type DatoForslagResultat =
+  | { dato: string }
+  | { dato: null; grunn: 'ingen_dato' | 'feil' }
+
+const INGEN_DATO: DatoForslagResultat = { dato: null, grunn: 'ingen_dato' }
+const FEIL: DatoForslagResultat = { dato: null, grunn: 'feil' }
+
 /**
  * Trekk ut én relevant fremtidig dato fra et innlegg-utkast.
  * Kaller Anthropic med prefill-teknikk (assistant-rollen starter med '{')
  * for å tvinge JSON-output uten markdown-wrapping.
- * Returnerer null ved alle feil, manglende konfig, for kort tekst og
- * ugyldig / fortidsdato i LLM-svaret.
+ * Returnerer grunn 'ingen_dato' når teksten ikke gir noen brukbar fremtidig
+ * dato, og 'feil' ved manglende konfig, API-feil, timeout og parse-feil.
  */
 export async function foreslaaAktuellDato(
   tekst: string,
-): Promise<{ dato: string } | null> {
+): Promise<DatoForslagResultat> {
   await ensureInnlogget()
 
   const t = tekst.trim()
   // Korte tekster har ikke nok kontekst til meningsfull dato-tolkning.
-  if (t.length < DATO_FORSLAG_MIN_TEGN) return null
+  if (t.length < DATO_FORSLAG_MIN_TEGN) return INGEN_DATO
 
   // Kapp til INNLEGG_MAKS_LENGDE slik at vi ikke sender mer enn det som
   // uansett er gyldig innlegg-innhold til Anthropic.
@@ -41,7 +51,9 @@ export async function foreslaaAktuellDato(
 
   try {
     const text = await kallClaude({ system, messages, maxTokens: 24 })
-    if (!text) return null
+    // null = tom API-nøkkel (feature av) eller tom respons — teknisk utfall,
+    // ikke «ingen dato i teksten».
+    if (!text) return FEIL
 
     // Rekonstruer komplett JSON med det ledende '{' vi satte i prefill.
     // Prefill echoes normalt ikke tilbake, men enkelte modeller/gjennomkjøringer
@@ -54,26 +66,30 @@ export async function foreslaaAktuellDato(
     try {
       parsed = JSON.parse(json)
     } catch {
-      return null
+      // Modellen leverte ikke gyldig JSON — teknisk utfall, retry kan hjelpe.
+      return FEIL
     }
 
     // Forvent { dato: string | null } — alt annet er uventet og forkastes.
     // typeof-sjekken under dekker manglende `dato` (undefined → forkastet), så
     // vi trenger ingen egen `in`-sjekk (som dessuten treffer prototype-kjeden).
-    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed || typeof parsed !== 'object') return FEIL
 
     const { dato } = parsed as { dato: unknown }
-    if (!dato || typeof dato !== 'string') return null
+    // Modellen svarte eksplisitt {"dato":null} — teksten har ingen dato.
+    if (!dato || typeof dato !== 'string') return INGEN_DATO
 
-    // Valideringskjede — alle tre må passere:
+    // Valideringskjede — alle tre må passere. Avvisning her betyr at modellen
+    // fant en dato vi ikke kan bruke (fortid, ugyldig, for langt frem) — fra
+    // brukerens ståsted er det «ingen brukbar dato», ikke en teknisk feil.
     // 1. Gyldig YYYY-MM-DD kalender-dato (fanger format-feil og roll-over).
-    if (!erGyldigKalenderdato(dato)) return null
+    if (!erGyldigKalenderdato(dato)) return INGEN_DATO
     // 2. Fremtidsfilter — modellen kan ikke returnere fortids-dato.
-    if (dato < iDag) return null
+    if (dato < iDag) return INGEN_DATO
     // 3. ~2-års sanity-cap — hindrer at modellen fester noe 40 år frem i tid.
     const [aarStr, ...rest] = iDag.split('-')
     const cap = [String(Number(aarStr) + 2), ...rest].join('-')
-    if (dato > cap) return null
+    if (dato > cap) return INGEN_DATO
 
     return { dato }
   } catch (err) {
@@ -92,6 +108,6 @@ export async function foreslaaAktuellDato(
         ctx: { status },
       })
     }
-    return null
+    return FEIL
   }
 }

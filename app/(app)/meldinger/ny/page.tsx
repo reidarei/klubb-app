@@ -11,7 +11,7 @@ export default async function NyMelding() {
   const { data: albumer } = await supabase
     .from('album')
     .select(
-      `id, tittel,
+      `id, tittel, cover_bilde_id,
        cover:album_bilde!album_cover_fk (bilde_url, thumb_url),
        antall:album_bilde!album_bilde_album_id_fkey (count)`,
     )
@@ -20,6 +20,7 @@ export default async function NyMelding() {
   type Rad = {
     id: string
     tittel: string
+    cover_bilde_id: string | null
     cover: { bilde_url: string; thumb_url: string | null } | { bilde_url: string; thumb_url: string | null }[] | null
     antall: { count: number }[] | null
   }
@@ -31,6 +32,8 @@ export default async function NyMelding() {
       tittel: a.tittel,
       thumb: cover?.thumb_url ?? cover?.bilde_url ?? null,
       antall: a.antall?.[0]?.count ?? 0,
+      // Sendes med så skjemaet kan defaulte spotlight til omslagsbildet (#461)
+      coverBildeId: a.cover_bilde_id,
     }
   })
 

@@ -36,9 +36,10 @@ export async function kallClaude({
       system,
       messages,
     }),
-    // 4 sekunder timeout om ingen signal er oppgitt — hindrer at ett tregt
-    // Anthropic-kall blokkerer en server action urimelig lenge.
-    signal: signal ?? AbortSignal.timeout(4000),
+    // 8 sekunder timeout om ingen signal er oppgitt — hindrer at ett tregt
+    // Anthropic-kall blokkerer en server action urimelig lenge. Var 4 s, men
+    // cold start + API-kø kunne ryke på det selv når alt var friskt (#462).
+    signal: signal ?? AbortSignal.timeout(8000),
   })
 
   // fetch() kaster IKKE på HTTP-feil (401, 429, 5xx) — res.ok må sjekkes

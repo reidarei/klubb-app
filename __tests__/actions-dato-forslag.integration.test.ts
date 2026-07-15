@@ -95,16 +95,17 @@ afterEach(() => {
 // --- Test-cases ---
 
 describe('foreslaaAktuellDato', () => {
-  it('returnerer null uten fetch når tekst er under 15 tegn', async () => {
+  it('returnerer ingen_dato uten fetch når tekst er under 15 tegn', async () => {
     const res = await foreslaaAktuellDato('kort tekst')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
-  it('returnerer null uten fetch når ANTHROPIC_API_KEY er tom', async () => {
+  it('returnerer feil uten fetch når ANTHROPIC_API_KEY er tom', async () => {
+    // Feature av (tom nøkkel) er et teknisk utfall, ikke «ingen dato» (#462)
     mockAnthropicApiKey.mockReturnValue('')
     const res = await foreslaaAktuellDato('Dette er en tilstrekkelig lang tekst for test')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'feil' })
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
@@ -127,33 +128,35 @@ describe('foreslaaAktuellDato', () => {
     expect(res).toEqual({ dato: '2026-08-01' })
   })
 
-  it('returnerer null for fortidsdato fra LLM', async () => {
-    // 2026-07-01 er 6 dager før FROSSET_DATO → fremtidsfilteret skal avvise den
+  it('returnerer ingen_dato for fortidsdato fra LLM', async () => {
+    // 2026-07-01 er 6 dager før FROSSET_DATO → fremtidsfilteret skal avvise den.
+    // Fra brukerens ståsted er «modellen fant bare en fortidsdato» det samme
+    // som «ingen brukbar dato» — ikke en teknisk feil (#462).
     mockFetch.mockImplementation(lagFetchMock('"dato":"2026-07-01"}'))
     const res = await foreslaaAktuellDato('Dette handlet om et arrangement vi hadde 1. juli')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
   })
 
-  it('returnerer null for roll-over-dato (2026-02-30)', async () => {
+  it('returnerer ingen_dato for roll-over-dato (2026-02-30)', async () => {
     // 2026-02-30 eksisterer ikke — erGyldigKalenderdato skal avvise den før
     // fremtidsfilteret i det hele tatt kjører.
     mockFetch.mockImplementation(lagFetchMock('"dato":"2026-02-30"}'))
     const res = await foreslaaAktuellDato('Vi setter av 30. februar til den store festen')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
   })
 
-  it('returnerer null for dato mer enn 2 år frem', async () => {
+  it('returnerer ingen_dato for dato mer enn 2 år frem', async () => {
     // FROSSET_DATO=2026-07-07 → cap=2028-07-07. 2029-01-01 er fremtidig og gyldig,
     // men overskrider 2-års-cap-en → skal avvises av sanity-cap-en, ikke fremtidsfilteret.
     mockFetch.mockImplementation(lagFetchMock('"dato":"2029-01-01"}'))
     const res = await foreslaaAktuellDato('La oss planlegge noe stort til nyttår 2029 en gang')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
   })
 
-  it('returnerer null og kaller logg.feil med transient-fingerprint ved 429', async () => {
+  it('returnerer feil og kaller logg.feil med transient-fingerprint ved 429', async () => {
     mockFetch.mockImplementation(lagFetchMock('', false, 429))
     const res = await foreslaaAktuellDato('Vi planlegger noe spennende til neste helg i november')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'feil' })
     expect(mockLoggFeil).toHaveBeenCalledOnce()
     const [, , opts] = mockLoggFeil.mock.calls[0]
     expect(opts.fingerprint).toBe('ai.datoforslag.transient')
@@ -161,10 +164,10 @@ describe('foreslaaAktuellDato', () => {
     expect(opts).not.toHaveProperty('sample')
   })
 
-  it('returnerer null og kaller logg.feil med auth-fingerprint ved 401', async () => {
+  it('returnerer feil og kaller logg.feil med auth-fingerprint ved 401', async () => {
     mockFetch.mockImplementation(lagFetchMock('', false, 401))
     const res = await foreslaaAktuellDato('Vi planlegger noe spennende til neste helg i november')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'feil' })
     expect(mockLoggFeil).toHaveBeenCalledOnce()
     const [, , opts] = mockLoggFeil.mock.calls[0]
     expect(opts.fingerprint).toBe('ai.datoforslag.auth')
@@ -172,25 +175,25 @@ describe('foreslaaAktuellDato', () => {
     expect(opts).not.toHaveProperty('sample')
   })
 
-  it('returnerer null uten å logge feil når LLM svarer {"dato":null}', async () => {
+  it('returnerer ingen_dato uten å logge feil når LLM svarer {"dato":null}', async () => {
     // Den vanligste ikke-feil-null-veien i prod: modellen finner ingen dato.
     // Prefill strippet '{', så content-text = '"dato":null}' → { dato: null }.
     mockFetch.mockImplementation(lagFetchMock('"dato":null}'))
     const res = await foreslaaAktuellDato('Bare en generell prat uten noen konkret dato nevnt')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
     // Dette er et gyldig svar (res.ok=true), ikke en infrastruktur-feil —
     // logg.feil skal IKKE kalles.
     expect(mockLoggFeil).not.toHaveBeenCalled()
   })
 
-  it('returnerer null og logger transient med undefined status når fetch rejecter', async () => {
+  it('returnerer feil og logger transient med undefined status når fetch rejecter', async () => {
     // Nettverksfeil / AbortError (timeout): fetch kaster en Error uten .status.
     // Dette er den sikkerhetsrelevante transient-grenen der status er undefined.
     const nettverksfeil = new Error('The operation was aborted')
     nettverksfeil.name = 'AbortError'
     mockFetch.mockRejectedValue(nettverksfeil)
     const res = await foreslaaAktuellDato('Vi planlegger noe spennende til neste helg i november')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'feil' })
     expect(mockLoggFeil).toHaveBeenCalledOnce()
     const [, , opts] = mockLoggFeil.mock.calls[0]
     expect(opts.fingerprint).toBe('ai.datoforslag.transient')
@@ -199,11 +202,12 @@ describe('foreslaaAktuellDato', () => {
     expect(opts).not.toHaveProperty('sample')
   })
 
-  it('returnerer null ved malformed JSON fra LLM', async () => {
-    // Sender ugyldig JSON-fragment — parse skal feile stille
+  it('returnerer feil ved malformed JSON fra LLM', async () => {
+    // Sender ugyldig JSON-fragment — parse feiler og rapporteres som teknisk
+    // utfall (retry kan hjelpe), men logges ikke (LLM-hallusinasjon, ikke infra).
     mockFetch.mockImplementation(lagFetchMock('IKKE_GYLDIG_JSON'))
     const res = await foreslaaAktuellDato('Hei gutta, vi møtes i Oslo til helga for en tur')
-    expect(res).toBeNull()
+    expect(res).toEqual({ dato: null, grunn: 'feil' })
     // Malformed JSON er ikke en Anthropic-feil (res.ok=true) — logg.feil
     // skal IKKE kalles for dette (det er LLM-hallusinasjon, ikke infrastruktur-feil)
     expect(mockLoggFeil).not.toHaveBeenCalled()

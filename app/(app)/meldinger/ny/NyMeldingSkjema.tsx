@@ -42,6 +42,8 @@ export type AlbumValg = {
   tittel: string
   thumb: string | null
   antall: number
+  /** Albumets omslagsbilde — brukes som default spotlight (#461) */
+  coverBildeId: string | null
 }
 
 type AlbumBilde = {
@@ -66,6 +68,9 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   const [henterForslag, setHenterForslag] = useState(false)
   const [forslag, setForslag] = useState<string | null>(null)
   const [forslagAvvist, setForslagAvvist] = useState(false)
+  // Feedback når hentingen ikke ga noe forslag («fant ingen dato» / teknisk
+  // feil) — før feilet dette stille og knappen så bare død ut (#462).
+  const [forslagInfo, setForslagInfo] = useState<string | null>(null)
   // Generasjons-token mot stale forslag. En server action kan ikke avbrytes
   // via AbortSignal, så vi kan ikke «kansellere» et kall i flukt. I stedet
   // bumper vi denne telleren ved ny henting, tekst-endring og avvisning — et
@@ -115,8 +120,15 @@ export default function NyMeldingSkjema({ albumer }: Props) {
       .then(({ data }) => {
         if (cancelled) return
         setAlbumBilder(data ?? [])
-        // Default-spotlight = første bilde
-        if (data && data.length > 0) setValgtSpotlightId(data[0].id)
+        // Default-spotlight = omslagsbildet hvis albumet har ett (#461),
+        // ellers første bilde. some()-sjekken vokter mot et cover_bilde_id
+        // som peker på et slettet bilde.
+        if (data && data.length > 0) {
+          const cover = valgtAlbum.coverBildeId
+          setValgtSpotlightId(
+            cover && data.some(b => b.id === cover) ? cover : data[0].id,
+          )
+        }
         setHenterAlbumBilder(false)
       })
     return () => {
@@ -153,18 +165,32 @@ export default function NyMeldingSkjema({ albumer }: Props) {
     // brukeren rekke å trykke «Bruk» på en utdatert chip mens kallet er i
     // flukt (Copilot-funn, PR #425).
     setForslag(null)
+    setForslagInfo(null)
     setHenterForslag(true)
     try {
       const r = await foreslaaAktuellDato(innhold)
       // Drop svaret hvis en nyere henting, tekst-endring eller avvisning
       // har skjedd i mellomtiden.
       if (gen !== forslagGenRef.current) return
-      // Sett ubetinget fra resultatet: et re-kall som returnerer null (ingen
-      // dato / stille feil) skal nullstille en gammel chip, ikke la det forrige
-      // forslaget henge igjen og se ferskt ut.
-      setForslag(r?.dato ?? null)
+      // Eksplisitt null-sjekk (ikke truthiness) — det er null-literalen som
+      // diskriminerer unionen, så TS kan narrowe til { grunn } i else-grenen.
+      if (r.dato !== null) {
+        setForslag(r.dato)
+      } else {
+        // Skill «modellen fant ingen dato» fra tekniske feil — begge var
+        // usynlige før og knappen så bare død ut (#462).
+        setForslag(null)
+        setForslagInfo(
+          r.grunn === 'ingen_dato'
+            ? 'Fant ingen dato i teksten.'
+            : 'Klarte ikke å hente forslag. Prøv igjen.',
+        )
+      }
     } catch {
-      // Stille feil — brukeren ser bare at ingenting skjedde
+      // Server action kastet (nettverk, auth) — samme melding som teknisk feil.
+      if (gen === forslagGenRef.current) {
+        setForslagInfo('Klarte ikke å hente forslag. Prøv igjen.')
+      }
     } finally {
       // Knappen er disabled mens henterForslag er true, så det er aldri to
       // hentForslag i flukt samtidig — denne er alltid den aktive spinneren.
@@ -314,6 +340,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
               // Stale forslag på gammel tekst skal ikke henge igjen
               if (forslagAvvist) setForslagAvvist(false)
               if (forslag) setForslag(null)
+              if (forslagInfo) setForslagInfo(null)
             }}
             placeholder="Skriv her…"
             style={inputStil}
@@ -650,6 +677,21 @@ export default function NyMeldingSkjema({ albumer }: Props) {
               'Foreslå fra teksten'
             )}
           </button>
+
+          {/* Feedback når hentingen ikke ga forslag — «ingen dato» eller
+              teknisk feil. Forsvinner ved ny henting og tekst-endring. */}
+          {forslagInfo && !henterForslag && (
+            <div
+              style={{
+                marginTop: 8,
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+              }}
+            >
+              {forslagInfo}
+            </div>
+          )}
 
           {/* Chip med foreslått dato — vises til brukeren godtar eller avviser */}
           {forslag && !forslagAvvist && (
