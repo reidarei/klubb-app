@@ -10,7 +10,7 @@ import Icon from '@/components/ui/Icon'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
 import MeldingReaksjoner, { type ReaksjonGruppe } from '@/components/agenda/MeldingReaksjoner'
 import type { ChatProfil } from '@/lib/mention'
-import type { AlbumSpotlight } from '@/lib/melding-spotlight'
+import type { AlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { arkiverMelding, avarkiverMelding } from '@/lib/actions/meldinger'
@@ -35,9 +35,9 @@ export type MeldingKortData = {
   antallKommentarer: number
   /** Visuell dempning når kortet ligger i Tidligere-seksjonen */
   tidligere: boolean
-  /** Album-spotlight: når satt erstatter spotlight-bildet vanlig bilde-grid
-   * og en CTA-pille lenker til albumet. Se #214. */
-  albumSpotlight: AlbumSpotlight | null
+  /** Albumkort: når satt erstatter albumets omslagsbilde vanlig bilde-grid
+   * og en CTA-pille lenker til albumet. Se #214, forenklet i #463. */
+  albumKort: AlbumKort | null
 }
 
 function relativTid(iso: string): string {
@@ -142,12 +142,12 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   //   1 bilde  → full bredde, 4:3
   //   2–4      → 2×2-grid (kvadratiske celler)
   //   5+       → de 4 første i 2×2 med «+N»-overlay på 4. celle
-  // Hvis melding.albumSpotlight er satt overstyres dette helt — vi viser
-  // spotlight-bildet + CTA-pille i stedet for grid.
+  // Hvis melding.albumKort er satt overstyres dette helt — vi viser
+  // albumets omslagsbilde + CTA-pille i stedet for grid.
   const wrapperBunn =
     !melding.tidligere && (melding.reaksjoner.length > 0 || pickerApen) ? 10 : 0
-  const spotlight = melding.albumSpotlight
-  const antallBilder = spotlight ? 0 : melding.bilder.length
+  const albumKort = melding.albumKort
+  const antallBilder = albumKort ? 0 : melding.bilder.length
   const visOverlay = antallBilder > 4
   const bildeGrid = melding.bilder.slice(0, 4) // maks 4 vises
 
@@ -309,7 +309,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               lineHeight: 1.4,
               whiteSpace: 'pre-wrap',
               wordWrap: 'break-word',
-              marginBottom: antallBilder > 0 || spotlight
+              marginBottom: antallBilder > 0 || albumKort
                 ? 10
                 : !melding.tidligere && (melding.reaksjoner.length > 0 || pickerApen)
                   ? 8
@@ -319,11 +319,11 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             <Linkified text={melding.innhold ?? ''} />
           </div>
 
-          {/* Album-spotlight: én stort bilde + CTA-pille som lenker til
-              hele albumet. Erstatter vanlig bilde-grid. Se #214. */}
-          {spotlight && (
+          {/* Albumkort: albumets omslagsbilde + CTA-pille som lenker til
+              hele albumet. Erstatter vanlig bilde-grid. Se #214, #463. */}
+          {albumKort && (
             <div style={{ marginBottom: wrapperBunn }}>
-              {spotlight.bildeUrl && (
+              {albumKort.bildeUrl && (
                 <div
                   style={{
                     position: 'relative',
@@ -335,7 +335,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   }}
                 >
                   <Image
-                    src={spotlight.bildeUrl}
+                    src={albumKort.bildeUrl}
                     alt=""
                     fill
                     sizes="(max-width: 512px) 100vw, 512px"
@@ -346,7 +346,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               {/* CTA-pille — stopPropagation hindrer at trykk på pillen også
                   trigger Link-en rundt hele kortet (Link → /meldinger/[id]). */}
               <Link
-                href={`/album/${spotlight.albumId}`}
+                href={`/album/${albumKort.albumId}`}
                 onClick={e => e.stopPropagation()}
                 style={{
                   display: 'inline-flex',
@@ -368,8 +368,8 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   Se hele albumet
                   <span style={{ color: 'var(--text-tertiary)' }}>
                     {' · '}
-                    {spotlight.albumTittel}
-                    {spotlight.antallBilder > 0 && ` (${spotlight.antallBilder})`}
+                    {albumKort.albumTittel}
+                    {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
                   </span>
                 </span>
               </Link>

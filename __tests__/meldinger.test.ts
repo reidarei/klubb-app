@@ -30,7 +30,7 @@ function lagMelding(
     forfatter: { id: 'p', navn: 'Ola', bilde_url: null, rolle: null },
     reaksjoner: [],
     antallKommentarer: 0,
-    albumSpotlight: null,
+    albumKort: null,
     arkivert_tidspunkt: arkivertTidspunkt,
     aktuell_dato: aktuellDato,
   }

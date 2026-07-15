@@ -45,7 +45,7 @@ import type { BursdagData } from '@/components/agenda/BursdagKort'
 import type { KlubbJubileumData } from '@/components/agenda/KlubbJubileumKort'
 import type { PollKortData } from '@/components/agenda/PollKort'
 import type { MeldingKortData } from '@/components/agenda/MeldingKort'
-import type { AlbumSpotlight } from '@/lib/melding-spotlight'
+import type { AlbumKort } from '@/lib/melding-album'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
 
 // Stiftelsesdato — brukes til å beregne neste jubileumsdag på agendaen.
@@ -138,9 +138,9 @@ export type MeldingRaad = {
   }
   reaksjoner: { emoji: string; profilIder: string[] }[]
   antallKommentarer: number
-  // Album-spotlight: hvis satt, er innlegget en lenke til et album
-  // og spotlight-bildet erstatter ev. egne bilder. Se #214.
-  albumSpotlight: AlbumSpotlight | null
+  // Albumkort: hvis satt, er innlegget en lenke til et album og albumets
+  // omslagsbilde erstatter ev. egne bilder. Se #214, forenklet i #463.
+  albumKort: AlbumKort | null
   // Satt av forfatter/admin for å flytte innlegget til Tidligere umiddelbart.
   // Null = ikke arkivert. Mig. 099.
   arkivert_tidspunkt: string | null
@@ -248,7 +248,7 @@ export function tilMeldingKort(m: MeldingRaad, tidligere: boolean): MeldingKortD
     forfatter: m.forfatter,
     reaksjoner: m.reaksjoner,
     antallKommentarer: m.antallKommentarer,
-    albumSpotlight: m.albumSpotlight,
+    albumKort: m.albumKort,
     tidligere,
   }
 }

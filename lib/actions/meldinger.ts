@@ -13,11 +13,10 @@ import { logg } from '@/lib/logg'
 export async function opprettMelding(input: {
   innhold: string
   bilde_urls?: string[]
-  /** Album-spotlight: gjør innlegget til en lenke til et eksisterende album.
-   * Kan ikke kombineres med egne opplastede bilder — enten/eller. */
+  /** Albumkobling: gjør innlegget til en lenke til et eksisterende album —
+   * visningen bruker alltid albumets omslagsbilde (#463). Kan ikke
+   * kombineres med egne opplastede bilder — enten/eller. */
   album_id?: string | null
-  /** Spotlight-bilde fra valgt album. Null = bruk album.cover_bilde_id. */
-  album_spotlight_bilde_id?: string | null
   /** Festedato: innlegget holdes øverst på agenda t.o.m. denne datoen.
    * Format: YYYY-MM-DD. Null = ikke festet. Mig. 109 / #419. */
   aktuell_dato?: string | null
@@ -25,29 +24,25 @@ export async function opprettMelding(input: {
   const tekst = input.innhold.trim()
   const bilder = (input.bilde_urls ?? []).slice(0, MELDING_MAKS_BILDER)
   const albumId = input.album_id ?? null
-  const spotlightId = input.album_spotlight_bilde_id ?? null
   // Valider YYYY-MM-DD-format via erGyldigKalenderdato (se lib/dato.ts) —
   // fanger format-feil, ugyldige verdier og roll-over-datoer i ett kall.
   const kandidatDato = input.aktuell_dato
   const aktuellDato = kandidatDato && erGyldigKalenderdato(kandidatDato) ? kandidatDato : null
 
-  // Album-spotlight og egne opplastede bilder utelukker hverandre — UI
+  // Albumkobling og egne opplastede bilder utelukker hverandre — UI
   // håndhever det også, men vi avviser her som forsvar i dybden.
   if (albumId && bilder.length > 0) {
     throw new Error('Kan ikke laste opp egne bilder samtidig som du lenker til et album')
   }
-  if (spotlightId && !albumId) {
-    throw new Error('Spotlight-bilde krever at album er valgt')
-  }
 
-  // Hvis det IKKE er album-spotlight: minst enten tekst eller ett bilde kreves.
-  // Album-spotlight er gyldig uten egen tekst — bildet og lenken til albumet
-  // er innholdet.
-  const harSpotlight = !!albumId
-  if (!harSpotlight && bilder.length === 0 && (tekst.length < INNLEGG_MIN_LENGDE || tekst.length > INNLEGG_MAKS_LENGDE)) {
+  // Hvis det IKKE er en albumkobling: minst enten tekst eller ett bilde kreves.
+  // Albumkobling er gyldig uten egen tekst — omslagsbildet og lenken til
+  // albumet er innholdet.
+  const harAlbum = !!albumId
+  if (!harAlbum && bilder.length === 0 && (tekst.length < INNLEGG_MIN_LENGDE || tekst.length > INNLEGG_MAKS_LENGDE)) {
     throw new Error(`Innholdet må være ${INNLEGG_MIN_LENGDE}–${INNLEGG_MAKS_LENGDE} tegn`)
   }
-  if ((bilder.length > 0 || harSpotlight) && tekst.length > INNLEGG_MAKS_LENGDE) {
+  if ((bilder.length > 0 || harAlbum) && tekst.length > INNLEGG_MAKS_LENGDE) {
     throw new Error(`Innholdet kan maks være ${INNLEGG_MAKS_LENGDE} tegn`)
   }
 
@@ -60,7 +55,6 @@ export async function opprettMelding(input: {
       // Null-innhold er OK når bildet bærer innlegget
       innhold: tekst || null,
       album_id: albumId,
-      album_spotlight_bilde_id: spotlightId,
       aktuell_dato: aktuellDato,
     })
     .select('id')

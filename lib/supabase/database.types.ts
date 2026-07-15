@@ -792,7 +792,6 @@ export type Database = {
         Row: {
           aktuell_dato: string | null
           album_id: string | null
-          album_spotlight_bilde_id: string | null
           arkivert_tidspunkt: string | null
           fra_facebook: boolean
           id: string
@@ -805,7 +804,6 @@ export type Database = {
         Insert: {
           aktuell_dato?: string | null
           album_id?: string | null
-          album_spotlight_bilde_id?: string | null
           arkivert_tidspunkt?: string | null
           fra_facebook?: boolean
           id?: string
@@ -818,7 +816,6 @@ export type Database = {
         Update: {
           aktuell_dato?: string | null
           album_id?: string | null
-          album_spotlight_bilde_id?: string | null
           arkivert_tidspunkt?: string | null
           fra_facebook?: boolean
           id?: string
@@ -834,13 +831,6 @@ export type Database = {
             columns: ["album_id"]
             isOneToOne: false
             referencedRelation: "album"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meldinger_album_spotlight_bilde_id_fkey"
-            columns: ["album_spotlight_bilde_id"]
-            isOneToOne: false
-            referencedRelation: "album_bilde"
             referencedColumns: ["id"]
           },
           {

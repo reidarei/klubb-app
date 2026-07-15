@@ -1,17 +1,16 @@
 import { createServerClient } from '@/lib/supabase/server'
 import NyMeldingSkjema, { type AlbumValg } from './NyMeldingSkjema'
 
-// Henter en lett oversikt over album så brukeren kan lage en album-spotlight
-// (#214 — første case). Detaljerte bildelister lastes lazyt fra klienten når
-// brukeren faktisk velger et album — vi vil ikke dra inn alle bilder fra
-// alle album på serveren bare for å åpne ny-melding-siden.
+// Henter en lett oversikt over album så brukeren kan koble innlegget til et
+// eksisterende album (#214, forenklet i #463 — visningen bruker alltid
+// albumets omslagsbilde, ingen egen bilde-velger).
 export default async function NyMelding() {
   const supabase = await createServerClient()
 
   const { data: albumer } = await supabase
     .from('album')
     .select(
-      `id, tittel, cover_bilde_id,
+      `id, tittel,
        cover:album_bilde!album_cover_fk (bilde_url, thumb_url),
        antall:album_bilde!album_bilde_album_id_fkey (count)`,
     )
@@ -20,7 +19,6 @@ export default async function NyMelding() {
   type Rad = {
     id: string
     tittel: string
-    cover_bilde_id: string | null
     cover: { bilde_url: string; thumb_url: string | null } | { bilde_url: string; thumb_url: string | null }[] | null
     antall: { count: number }[] | null
   }
@@ -32,8 +30,6 @@ export default async function NyMelding() {
       tittel: a.tittel,
       thumb: cover?.thumb_url ?? cover?.bilde_url ?? null,
       antall: a.antall?.[0]?.count ?? 0,
-      // Sendes med så skjemaet kan defaulte spotlight til omslagsbildet (#461)
-      coverBildeId: a.cover_bilde_id,
     }
   })
 

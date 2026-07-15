@@ -9,7 +9,7 @@ import {
   type MeldingRaad,
 } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from './poll'
-import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
+import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import type { ChatProfil } from '@/lib/mention'
 
 type DB = SupabaseClient<Database>
@@ -149,13 +149,13 @@ export async function hentAgendaData(
         // melding_chat(count) returnerer aggregert antall kommentarer per
         // melding via PostgREST — billig og uavhengig av om den enkelte
         // kommentaren faller innenfor melding_chat-limit-vinduet under.
-        // Album-spotlight (#214): album + spotlight-bilde embed-es via
-        // ALBUM_SPOTLIGHT_SELECT så samme select brukes alle steder.
+        // Albumkobling (#214, forenklet i #463): album embed-es via
+        // ALBUM_KORT_SELECT så samme select brukes alle steder.
         `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id, arkivert_tidspunkt, aktuell_dato,
          profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
          melding_bilder (bilde_url, rekkefoelge),
          melding_chat (count),
-         ${ALBUM_SPOTLIGHT_SELECT}`,
+         ${ALBUM_KORT_SELECT}`,
       )
       .gte('sist_aktivitet', cutoffIso)
       .order('sist_aktivitet', { ascending: false }),
@@ -318,7 +318,6 @@ export async function hentAgendaData(
     cover: { bilde_url: string; thumb_url: string | null } | { bilde_url: string; thumb_url: string | null }[] | null
     antall: { count: number }[] | null
   } | null
-  type RawSpotlightEmbed = { bilde_url: string; thumb_url: string | null } | { bilde_url: string; thumb_url: string | null }[] | null
 
   type RawMelding = {
     id: string
@@ -333,7 +332,6 @@ export async function hentAgendaData(
     melding_bilder: { bilde_url: string; rekkefoelge: number }[] | null
     melding_chat: { count: number }[] | null
     album: RawAlbumEmbed | RawAlbumEmbed[]
-    spotlight: RawSpotlightEmbed
   }
 
   // antallKommentarer per melding kommer nå fra count-aggregatet på selve
@@ -429,7 +427,7 @@ export async function hentAgendaData(
       },
       reaksjoner,
       antallKommentarer: antallKommPerMelding.get(m.id) ?? 0,
-      albumSpotlight: tilAlbumSpotlight(m.album, m.spotlight),
+      albumKort: tilAlbumKort(m.album),
       arkivert_tidspunkt: m.arkivert_tidspunkt,
       aktuell_dato: m.aktuell_dato,
     }

@@ -8,7 +8,6 @@ import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
-import { createClient } from '@/lib/supabase/client'
 import { komprimer } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
 import { iDagOslo, formaterDato } from '@/lib/dato'
@@ -42,14 +41,6 @@ export type AlbumValg = {
   tittel: string
   thumb: string | null
   antall: number
-  /** Albumets omslagsbilde — brukes som default spotlight (#461) */
-  coverBildeId: string | null
-}
-
-type AlbumBilde = {
-  id: string
-  bilde_url: string
-  thumb_url: string | null
 }
 
 type Props = {
@@ -82,13 +73,11 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   // av `bilder` (deps=[]). Settet holder seg "levende" mellom rendere.
   const blobUrlerRef = useRef<Set<string>>(new Set())
 
-  // Album-spotlight: enten/eller mot egne opplastede bilder. Når valgtAlbum
-  // er satt, skjules opplaster-seksjonen og motsatt.
+  // Albumkobling: enten/eller mot egne opplastede bilder. Når valgtAlbum
+  // er satt, skjules opplaster-seksjonen og motsatt. Innlegget viser da
+  // alltid albumets omslagsbilde — ingen egen bilde-velger her (#463).
   const [valgtAlbum, setValgtAlbum] = useState<AlbumValg | null>(null)
-  const [valgtSpotlightId, setValgtSpotlightId] = useState<string | null>(null)
   const [albumModusApen, setAlbumModusApen] = useState(false)
-  const [albumBilder, setAlbumBilder] = useState<AlbumBilde[]>([])
-  const [henterAlbumBilder, setHenterAlbumBilder] = useState(false)
 
   // Revokér alle gjenværende blob-URL-er ved unmount
   useEffect(() => {
@@ -98,43 +87,6 @@ export default function NyMeldingSkjema({ albumer }: Props) {
       settet.clear()
     }
   }, [])
-
-  // Når et album er valgt, hent bildelisten lazyt fra klienten. Vi vil ikke
-  // sende ALLE bilder for ALLE album til hver bruker som åpner skjemaet —
-  // for klubben er volumet håndterbart, men prinsippet skalerer dårlig.
-  useEffect(() => {
-    if (!valgtAlbum) {
-      setAlbumBilder([])
-      setValgtSpotlightId(null)
-      return
-    }
-    let cancelled = false
-    setHenterAlbumBilder(true)
-    const supabase = createClient()
-    supabase
-      .from('album_bilde')
-      .select('id, bilde_url, thumb_url')
-      .eq('album_id', valgtAlbum.id)
-      .order('rekkefolge', { ascending: true })
-      .order('opprettet', { ascending: true })
-      .then(({ data }) => {
-        if (cancelled) return
-        setAlbumBilder(data ?? [])
-        // Default-spotlight = omslagsbildet hvis albumet har ett (#461),
-        // ellers første bilde. some()-sjekken vokter mot et cover_bilde_id
-        // som peker på et slettet bilde.
-        if (data && data.length > 0) {
-          const cover = valgtAlbum.coverBildeId
-          setValgtSpotlightId(
-            cover && data.some(b => b.id === cover) ? cover : data[0].id,
-          )
-        }
-        setHenterAlbumBilder(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [valgtAlbum])
 
   function velgAlbum(album: AlbumValg) {
     // Bytt til album-modus: kast eventuelle valgte egne bilder
@@ -149,8 +101,6 @@ export default function NyMeldingSkjema({ albumer }: Props) {
 
   function fjernAlbumvalg() {
     setValgtAlbum(null)
-    setValgtSpotlightId(null)
-    setAlbumBilder([])
   }
 
   async function hentForslag() {
@@ -236,14 +186,13 @@ export default function NyMeldingSkjema({ albumer }: Props) {
       return
     }
 
-    // Album-spotlight: ingen opplasting trengs. Bare send album_id + spotlight.
+    // Albumkobling: ingen opplasting trengs. Bare send album_id.
     if (harAlbum) {
       startTransition(async () => {
         try {
           await opprettMelding({
             innhold,
             album_id: valgtAlbum!.id,
-            album_spotlight_bilde_id: valgtSpotlightId,
             aktuell_dato: aktuellDato || null,
           })
         } catch (err) {
@@ -477,7 +426,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
         </SkjemaSeksjon>
       )}
 
-      {/* Album-spotlight: enten/eller mot egne bilder. Hvis bruker har valgt
+      {/* Albumkobling: enten/eller mot egne bilder. Hvis bruker har valgt
           egne bilder allerede, skjules denne — og motsatt. */}
       {(visAlbumvelger || valgtAlbum) && albumer.length > 0 && (
         <SkjemaSeksjon label="Eller lenk til et album">
@@ -513,115 +462,42 @@ export default function NyMeldingSkjema({ albumer }: Props) {
                   borderRadius: 'var(--radius-card)',
                   padding: 12,
                   background: 'var(--bg-elevated)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                 }}
               >
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 10,
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 15,
+                    color: 'var(--text-primary)',
+                    fontWeight: 500,
+                    minWidth: 0,
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 15,
-                        color: 'var(--text-primary)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {valgtAlbum.tittel}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 10,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '1.2px',
-                        textTransform: 'uppercase',
-                        marginTop: 2,
-                      }}
-                    >
-                      Velg spotlight-bilde
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={fjernAlbumvalg}
-                    disabled={isPending}
-                    style={{
-                      background: 'transparent',
-                      border: '0.5px solid var(--border)',
-                      borderRadius: 999,
-                      padding: '4px 10px',
-                      color: 'var(--text-secondary)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      letterSpacing: '1.2px',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Bytt
-                  </button>
+                  {valgtAlbum.tittel}
                 </div>
-
-                {henterAlbumBilder && (
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      color: 'var(--text-tertiary)',
-                    }}
-                  >
-                    Henter bilder…
-                  </div>
-                )}
-
-                {!henterAlbumBilder && albumBilder.length > 0 && (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: 6,
-                    }}
-                  >
-                    {albumBilder.map(b => {
-                      const valgt = valgtSpotlightId === b.id
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => setValgtSpotlightId(b.id)}
-                          disabled={isPending}
-                          style={{
-                            position: 'relative',
-                            padding: 0,
-                            aspectRatio: '1/1',
-                            borderRadius: 'var(--radius-card)',
-                            overflow: 'hidden',
-                            background: 'var(--bg-elevated-2)',
-                            border: valgt
-                              ? '2px solid var(--accent)'
-                              : '0.5px solid var(--border-subtle)',
-                            cursor: 'pointer',
-                          }}
-                          aria-label="Velg som spotlight"
-                        >
-                          <Image
-                            src={b.thumb_url ?? b.bilde_url}
-                            alt=""
-                            fill
-                            sizes="33vw"
-                            style={{ objectFit: 'cover' }}
-                          />
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={fjernAlbumvalg}
+                  disabled={isPending}
+                  style={{
+                    background: 'transparent',
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '4px 10px',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '1.2px',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  Bytt
+                </button>
               </div>
             )}
           </div>

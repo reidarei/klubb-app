@@ -10,7 +10,7 @@ import Chat from '@/components/chat/Chat'
 import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
 import SlettMeldingKnapp from './SlettMeldingKnapp'
 import SlettBildeKnapp from './SlettBildeKnapp'
-import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
+import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { Linkified } from '@/lib/linkify'
@@ -37,7 +37,6 @@ type MeldingRad = {
   // Sorteres på rekkefoelge her — flat liste av bilder
   melding_bilder: { id: string; bilde_url: string; rekkefoelge: number }[] | null
   album: RawAlbumEmbed | RawAlbumEmbed[]
-  spotlight: CoverObj | CoverObj[] | null
 }
 
 type ReaksjonRad = {
@@ -69,7 +68,7 @@ export default async function MeldingDetalj({
         `id, innhold, opprettet, fra_facebook, profil_id,
          profiles!meldinger_profil_id_fkey(navn, bilde_url, rolle),
          melding_bilder(id, bilde_url, rekkefoelge),
-         ${ALBUM_SPOTLIGHT_SELECT}`,
+         ${ALBUM_KORT_SELECT}`,
       )
       .eq('id', id)
       .single<MeldingRad>(),
@@ -115,11 +114,11 @@ export default async function MeldingDetalj({
     (a, b) => a.rekkefoelge - b.rekkefoelge,
   )
 
-  // Album-spotlight (#214): hvis innlegget peker til et album, viser vi
-  // spotlight-bildet og en CTA-pille til albumet i stedet for vanlig
-  // bilde-grid. Egne bilder er ikke mulig på album-spotlight-innlegg, så
-  // vi trenger ikke å vise begge.
-  const spotlight = tilAlbumSpotlight(melding.album, melding.spotlight)
+  // Albumkobling (#214, forenklet i #463): hvis innlegget peker til et
+  // album, viser vi albumets omslagsbilde og en CTA-pille til albumet i
+  // stedet for vanlig bilde-grid. Egne bilder er ikke mulig på
+  // albumkoblede innlegg, så vi trenger ikke å vise begge.
+  const albumKort = tilAlbumKort(melding.album)
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -196,11 +195,12 @@ export default async function MeldingDetalj({
           <Linkified text={melding.innhold ?? ''} />
         </div>
 
-        {/* Album-spotlight: stort bilde + CTA-pille som lenker til albumet.
-            Brukes når innlegget er en lenke til et eksisterende album. */}
-        {spotlight && (
+        {/* Albumkort: stort bilde (albumets omslag) + CTA-pille som lenker
+            til albumet. Brukes når innlegget er en lenke til et eksisterende
+            album. */}
+        {albumKort && (
           <div style={{ marginBottom: 16 }}>
-            {spotlight.bildeUrl && (
+            {albumKort.bildeUrl && (
               <div
                 style={{
                   position: 'relative',
@@ -212,7 +212,7 @@ export default async function MeldingDetalj({
                 }}
               >
                 <Image
-                  src={spotlight.bildeUrl}
+                  src={albumKort.bildeUrl}
                   alt=""
                   fill
                   sizes="(max-width: 512px) 100vw, 512px"
@@ -222,7 +222,7 @@ export default async function MeldingDetalj({
               </div>
             )}
             <Link
-              href={`/album/${spotlight.albumId}`}
+              href={`/album/${albumKort.albumId}`}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -243,8 +243,8 @@ export default async function MeldingDetalj({
                 Se hele albumet
                 <span style={{ color: 'var(--text-tertiary)' }}>
                   {' · '}
-                  {spotlight.albumTittel}
-                  {spotlight.antallBilder > 0 && ` (${spotlight.antallBilder})`}
+                  {albumKort.albumTittel}
+                  {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
                 </span>
               </span>
             </Link>
@@ -253,7 +253,7 @@ export default async function MeldingDetalj({
 
         {/* Bilder sortert på rekkefoelge. Hvert bilde har slett-knapp for
             eier/admin (ikke for FB-importerte innlegg). */}
-        {!spotlight && bilder.length > 0 && (
+        {!albumKort && bilder.length > 0 && (
           <div
             style={{
               display: 'flex',

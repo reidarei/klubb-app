@@ -121,6 +121,17 @@ export async function lastOppAlbumBilde(formData: FormData): Promise<{ id: strin
   // Bumper oppdatert på album så agendakort kan reflektere endring
   await supabase.from('album').update({ oppdatert: new Date().toISOString() }).eq('id', albumId)
 
+  // Første opplastede bilde blir albumets omslag automatisk (#463) — sørger for
+  // at innleggskort alltid har et cover å vise. `.is('cover_bilde_id', null)`
+  // gjør settingen betinget: et manuelt valgt omslag (via lightbox) overskrives
+  // aldri, og ved parallell opplasting (AlbumOpplaster kjører 3 samtidige
+  // workers) vinner én rad — resten blir no-op.
+  await supabase
+    .from('album')
+    .update({ cover_bilde_id: rad.id })
+    .eq('id', albumId)
+    .is('cover_bilde_id', null)
+
   revalidatePath(`/album/${albumId}`)
   return { id: rad.id, url }
 }

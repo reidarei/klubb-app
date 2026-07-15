@@ -10,7 +10,7 @@ import { dekodeCursor, enkodeCursor } from '@/lib/tidligere-cursor'
 import { tilKort, tilMeldingKort, tilPollKort } from '@/lib/agenda-sortering'
 import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
-import { ALBUM_SPOTLIGHT_SELECT, tilAlbumSpotlight } from '@/lib/melding-spotlight'
+import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { naa } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
 import ArrangementKort from '@/components/agenda/ArrangementKort'
@@ -69,7 +69,7 @@ export default async function TidligereSide({
        profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
        melding_bilder (bilde_url, rekkefoelge),
        melding_chat (count),
-       ${ALBUM_SPOTLIGHT_SELECT}`,
+       ${ALBUM_KORT_SELECT}`,
     )
     .order('sist_aktivitet', { ascending: false })
     .order('id', { ascending: false })
@@ -141,7 +141,6 @@ export default async function TidligereSide({
     melding_bilder: { bilde_url: string; rekkefoelge: number }[] | null
     melding_chat: { count: number }[] | null
     album: RawAlbumEmbed | RawAlbumEmbed[]
-    spotlight: CoverObj | CoverObj[] | null
   }
 
   // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
@@ -163,7 +162,7 @@ export default async function TidligereSide({
     },
     reaksjoner: [], // reaksjoner hentes ikke på /tidligere for å holde siden rask
     antallKommentarer: (m.melding_chat?.[0] as { count: number } | undefined)?.count ?? 0,
-    albumSpotlight: tilAlbumSpotlight(m.album, m.spotlight),
+    albumKort: tilAlbumKort(m.album),
     aktuell_dato: m.aktuell_dato,
   }))
 
