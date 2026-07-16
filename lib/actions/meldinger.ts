@@ -150,17 +150,32 @@ export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
 
 // Reaksjoner på selve innlegget. Egen tabell `melding_reaksjon` for å
 // holde dem adskilt fra chat_reaksjoner som er på kommentar-nivå.
+// Bytte av reaksjon som delete+insert, ikke upsert (#472): UPDATE er verken
+// grantet eller RLS-tillatt på tabellen. Konsumenten her (useMeldingReaksjoner
+// i lib/reaksjoner-hook.ts) re-henter via router.refresh() etter mutasjonen —
+// den lytter ikke på realtime. Vi holder likevel delete+insert-mønsteret
+// konsistent med chat-flaten (leggTilReaksjon i chat.ts), som ER realtime og
+// trenger separate DELETE- og INSERT-events for at useChatReaksjoner skal
+// oppdatere riktig. Delete UTEN emoji-filter fjerner brukerens eventuelle
+// andre emoji på meldingen, slik at ny emoji faktisk bytter i stedet for å
+// legge seg ved siden av. Unik-constrainten fra mig. 114 er sikkerhetsnett
+// mot racet der to raske bytter fra samme bruker treffer nesten samtidig.
 export async function leggTilMeldingReaksjon(meldingId: string, emoji: string) {
   const { supabase, user } = await ensureInnlogget()
 
-  const { error } = await supabase
+  const { error: sletteFeil } = await supabase
     .from('melding_reaksjon')
-    .upsert(
-      { melding_id: meldingId, profil_id: user.id, emoji },
-      { onConflict: 'melding_id,profil_id,emoji', ignoreDuplicates: true },
-    )
+    .delete()
+    .eq('melding_id', meldingId)
+    .eq('profil_id', user.id)
 
-  if (error) throw new Error(error.message)
+  if (sletteFeil) throw new Error(sletteFeil.message)
+
+  const { error: innsettingFeil } = await supabase
+    .from('melding_reaksjon')
+    .insert({ melding_id: meldingId, profil_id: user.id, emoji })
+
+  if (innsettingFeil) throw new Error(innsettingFeil.message)
 }
 
 export async function fjernMeldingReaksjon(meldingId: string, emoji: string) {

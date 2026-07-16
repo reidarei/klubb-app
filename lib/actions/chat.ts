@@ -185,17 +185,30 @@ export async function slettChatMelding(
 // Reaksjoner — felles for alle scopes via chat_reaksjoner-tabellen.
 // melding_id peker til id-en i den underliggende chat-tabellen (RLS
 // håndhever at brukeren kun kan legge til/fjerne egne reaksjoner).
+// Bytte av reaksjon som delete+insert, ikke upsert (#472): realtime-hooken
+// (useChatReaksjoner) håndterer kun INSERT/DELETE, ikke UPDATE — og UPDATE er
+// verken grantet eller RLS-tillatt på tabellen. Delete UTEN emoji-filter
+// fjerner brukerens eventuelle andre emoji på meldingen, slik at ny emoji
+// faktisk bytter. Rekkefølgen delete→insert gir DELETE- så INSERT-events som
+// useChatReaksjoner allerede håndterer riktig. Unik-constrainten fra mig. 114
+// er sikkerhetsnett mot racet der to raske bytter fra samme bruker treffer
+// nesten samtidig.
 export async function leggTilReaksjon(meldingId: string, emoji: string) {
   const { supabase, user } = await ensureInnlogget()
 
-  const { error } = await supabase
+  const { error: sletteFeil } = await supabase
     .from('chat_reaksjoner')
-    .upsert(
-      { melding_id: meldingId, profil_id: user.id, emoji },
-      { onConflict: 'melding_id,profil_id,emoji' },
-    )
+    .delete()
+    .eq('melding_id', meldingId)
+    .eq('profil_id', user.id)
 
-  if (error) throw new Error(error.message)
+  if (sletteFeil) throw new Error(sletteFeil.message)
+
+  const { error: innsettingFeil } = await supabase
+    .from('chat_reaksjoner')
+    .insert({ melding_id: meldingId, profil_id: user.id, emoji })
+
+  if (innsettingFeil) throw new Error(innsettingFeil.message)
 }
 
 export async function fjernReaksjon(meldingId: string, emoji: string) {

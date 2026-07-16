@@ -136,6 +136,12 @@ export function useChatReaksjoner(
     const alleredePaa = reaksjoner.some(
       r => r.melding_id === meldingId && r.profil_id === brukerId && r.emoji === emoji,
     )
+    // Brukerens eksisterende reaksjon(er) på meldingen — trengs for rollback:
+    // et bytte fjerner dem optimistisk, så ved feil må de legges tilbake.
+    const brukerensForrige = reaksjoner.filter(
+      r => r.melding_id === meldingId && r.profil_id === brukerId,
+    )
+
     // Optimistisk oppdatering
     if (alleredePaa) {
       setReaksjoner(prev =>
@@ -144,8 +150,17 @@ export function useChatReaksjoner(
         ),
       )
     } else {
+      // Én reaksjon per bruker (#472): fjern brukerens eventuelle andre emoji
+      // på meldingen FØR den nye legges til. Uten dette vises både gammel og
+      // ny emoji fram til realtime-DELETE-eventet lander. Speiler invarianten
+      // «fjern brukeren fra alle grupper først» i lib/reaksjoner-hook.ts. Her
+      // er state en flat liste, så vi filtrerer på (melding_id, profil_id).
+      // Filteret er idempotent: en påfølgende realtime-DELETE for den gamle
+      // emojien blir et no-op, ingen dobbelt-fjerning.
       setReaksjoner(prev => [
-        ...prev,
+        ...prev.filter(
+          r => !(r.melding_id === meldingId && r.profil_id === brukerId),
+        ),
         { melding_id: meldingId, profil_id: brukerId, emoji },
       ])
     }
@@ -164,11 +179,15 @@ export function useChatReaksjoner(
           { melding_id: meldingId, profil_id: brukerId, emoji },
         ])
       } else {
-        setReaksjoner(prev =>
-          prev.filter(
+        // Fjern den nye emojien og gjenopprett brukerens forrige reaksjon(er).
+        // Serverkallet feilet, så ingen realtime-event rakk å røre disse radene
+        // — ingen duplikat-risiko ved re-innsetting.
+        setReaksjoner(prev => [
+          ...prev.filter(
             r => !(r.melding_id === meldingId && r.profil_id === brukerId && r.emoji === emoji),
           ),
-        )
+          ...brukerensForrige,
+        ])
       }
     }
   }

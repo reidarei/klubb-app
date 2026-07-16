@@ -1,8 +1,9 @@
 /**
  * Integrasjonstester for reaksjons-actions i lib/actions/chat.ts.
  *
- * Tester leggTilReaksjon og fjernReaksjon — insert/delete mot
- * chat_reaksjoner med korrekt payload.
+ * Tester leggTilReaksjon og fjernReaksjon mot chat_reaksjoner. Siden #472
+ * bytter leggTilReaksjon fra upsert til delete+insert (én reaksjon per
+ * bruker — ny emoji bytter, i stedet for å legge seg ved siden av).
  *
  * NB: vi.mock()-fabrikker hoistes av Vitest — variabler som fabrikken
  * trenger MÅ deklareres via vi.hoisted(). Se actions-arrangementer.integration.test.ts.
@@ -54,13 +55,33 @@ beforeEach(() => {
 })
 
 describe('leggTilReaksjon', () => {
-  it('gjør upsert med korrekt payload mot chat_reaksjoner', async () => {
-    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+  it('sletter brukerens eksisterende reaksjon (uten emoji-filter), deretter insert med ny emoji', async () => {
+    const deleteEqKall: Array<{ col: string; val: string }> = []
+    const insertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+    // Rekkefølgen delete→insert er selve poenget: den gir DELETE- så INSERT-
+    // realtime-events, som useChatReaksjoner er avhengig av. Fang sekvensen.
+    const kallSekvens: string[] = []
+    let deleteKalt = false
 
     mockFrom.mockImplementation((tabell: string) => {
       expect(tabell).toBe('chat_reaksjoner')
       const chain = lagChain(null)
-      chain.upsert = upsertSpy
+
+      chain.delete = vi.fn(() => {
+        deleteKalt = true
+        kallSekvens.push('delete')
+        return chain
+      })
+      // Delete skal IKKE filtrere på emoji — det er poenget med bytte-
+      // logikken: brukerens eventuelle andre emoji på meldingen skal fjernes.
+      chain.eq = vi.fn((col: string, val: string) => {
+        deleteEqKall.push({ col, val })
+        return chain
+      })
+      chain.insert = vi.fn((arg: unknown) => {
+        kallSekvens.push('insert')
+        return insertSpy(arg)
+      })
       chain.then = (resolve: (v: unknown) => void) =>
         Promise.resolve({ data: null, error: null }).then(resolve)
       return chain
@@ -68,27 +89,50 @@ describe('leggTilReaksjon', () => {
 
     await leggTilReaksjon('melding-001', '👍')
 
-    // Payload og konflikt-nøkkel skal matche tabellens unique constraint
-    expect(upsertSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        melding_id: 'melding-001',
-        profil_id: 'bruker-789',
-        emoji: '👍',
-      }),
-      expect.objectContaining({ onConflict: 'melding_id,profil_id,emoji' })
+    expect(deleteKalt).toBe(true)
+    // Delete MÅ skje før insert — ellers ryker realtime-event-sekvensen.
+    expect(kallSekvens).toEqual(['delete', 'insert'])
+    expect(deleteEqKall).toHaveLength(2)
+    expect(deleteEqKall).toEqual(
+      expect.arrayContaining([
+        { col: 'melding_id', val: 'melding-001' },
+        { col: 'profil_id', val: 'bruker-789' },
+      ])
     )
+    expect(deleteEqKall.some((k) => k.col === 'emoji')).toBe(false)
+
+    expect(insertSpy).toHaveBeenCalledWith({
+      melding_id: 'melding-001',
+      profil_id: 'bruker-789',
+      emoji: '👍',
+    })
   })
 
-  it('kaster ved DB-feil', async () => {
+  it('kaster ved DB-feil på delete', async () => {
     mockFrom.mockImplementation(() => {
       const chain = lagChain(null)
-      chain.upsert = vi.fn().mockReturnValue(chain)
+      chain.delete = vi.fn().mockReturnValue(chain)
+      chain.eq = vi.fn().mockReturnValue(chain)
       chain.then = (resolve: (v: unknown) => void) =>
-        Promise.resolve({ data: null, error: { message: 'Upsert-feil reaksjon' } }).then(resolve)
+        Promise.resolve({ data: null, error: { message: 'Delete-feil reaksjon' } }).then(resolve)
       return chain
     })
 
-    await expect(leggTilReaksjon('melding-001', '👍')).rejects.toThrow('Upsert-feil reaksjon')
+    await expect(leggTilReaksjon('melding-001', '👍')).rejects.toThrow('Delete-feil reaksjon')
+  })
+
+  it('kaster ved DB-feil på insert', async () => {
+    mockFrom.mockImplementation(() => {
+      const chain = lagChain(null)
+      chain.delete = vi.fn().mockReturnValue(chain)
+      chain.eq = vi.fn().mockReturnValue(chain)
+      chain.insert = vi.fn().mockResolvedValue({ data: null, error: { message: 'Insert-feil reaksjon' } })
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+
+    await expect(leggTilReaksjon('melding-001', '👍')).rejects.toThrow('Insert-feil reaksjon')
   })
 })
 
