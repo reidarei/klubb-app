@@ -215,7 +215,10 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               >
                 {melding.forfatter.navn}
               </span>
+              {/* suppressHydrationWarning: relativ tid kan krysse minutt-grense mellom server-render
+                  og hydrering, se #466 */}
               <span
+                suppressHydrationWarning
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 9,

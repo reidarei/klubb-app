@@ -457,7 +457,12 @@ export default function KommentarerPaaKort({
                     >
                       {k.avsender.navn}
                     </span>
+                    {/* relativTid regnes ut i render (formatDistanceToNowStrict); server-render og hydrering
+                        skjer sekunder fra hverandre, og krysser vi en minutt-grense i det vinduet blir
+                        teksten ulik → hydration-feil (React #418, logget i feil_logg — se #466). suppressHydrationWarning
+                        er Reacts tiltenkte mekanisme for tidsstempler. */}
                     <span
+                      suppressHydrationWarning
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: 10,
