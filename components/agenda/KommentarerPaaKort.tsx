@@ -9,7 +9,7 @@ import { sendChatMelding } from '@/lib/actions/chat'
 import type { ChatScope } from '@/lib/chat-konfig'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { CHAT_MAKS_LENGDE } from '@/lib/konstanter'
+import { CHAT_MAKS_LENGDE, LONG_PRESS_MS, LONG_PRESS_BEVEGELSE_PX } from '@/lib/konstanter'
 import { naa } from '@/lib/dato'
 import {
   beregnMentionSøk,
@@ -141,6 +141,7 @@ export default function KommentarerPaaKort({
   brukerNavn,
   brukerBildeUrl,
   brukerRolle,
+  tommel,
 }: {
   kommentarer: KommentarKortData[]
   scope: KommentarScope
@@ -157,6 +158,11 @@ export default function KommentarerPaaKort({
   brukerBildeUrl?: string | null
   /** Innlogget brukers rolle — trengs for gul glød på optimistisk rad. se #316 */
   brukerRolle?: string | null
+  /** Tommel opp-knapp (MeldingTommel) plassert til venstre for input-pillen.
+   * Kun sendt inn av MeldingKort — poll-/arrangement-kort har ingen
+   * kort-nivå-reaksjoner i DB ennå. KommentarerPaaKort er ren layout-vert
+   * her og eier ingen reaksjons-state selv. Se #468. */
+  tommel?: ReactNode
 }) {
   const visTall = totaltAntall ?? kommentarer.length
   const [apen, setApen] = useState(!startKollapset)
@@ -233,18 +239,19 @@ export default function KommentarerPaaKort({
     setPressetId(kommentarId)
     longPressRef.current = setTimeout(() => {
       setAktivReaksjonId(kommentarId)
-    }, 350)
+    }, LONG_PRESS_MS)
   }, [])
 
-  // Cancel timer hvis fingeren beveger seg > 10 px — tolkes som scroll-intensjon,
-  // ikke long-press. Terskelen matcher iOS' egne heuristikker for tap-vs-scroll.
+  // Cancel timer hvis fingeren beveger seg mer enn LONG_PRESS_BEVEGELSE_PX —
+  // tolkes som scroll-intensjon, ikke long-press. Terskelen matcher iOS' egne
+  // heuristikker for tap-vs-scroll.
   const sjekkBevegelse = useCallback((e: React.PointerEvent) => {
     const start = longPressStartRef.current
     if (!start || longPressRef.current === null) return
     const dx = e.clientX - start.x
     const dy = e.clientY - start.y
-    if (dx * dx + dy * dy > 100) {
-      // > 10 px unna startpunkt
+    if (dx * dx + dy * dy > LONG_PRESS_BEVEGELSE_PX ** 2) {
+      // mer enn LONG_PRESS_BEVEGELSE_PX unna startpunkt
       clearTimeout(longPressRef.current)
       longPressRef.current = null
       longPressStartRef.current = null
@@ -516,10 +523,15 @@ export default function KommentarerPaaKort({
           når det ikke er kommentarer ennå) */}
       {(apen || kommentarer.length === 0) && (
         <div style={{ marginTop: kommentarer.length > 0 ? 10 : 0 }} onClick={stopp}>
-        {/* Mention-velger ligger over selve input-pillen så chips ikke krysser
-            den runde rammen. Komponenten returnerer null når det ikke er
-            forslag, så ingen tom margin. */}
+        {/* Mention-velger ligger over hele raden (tommel + pille) så chips
+            ikke krysser den runde rammen. Komponenten returnerer null når
+            det ikke er forslag, så ingen tom margin. */}
         <MentionVelger forslag={mentionForslag} onVelg={velgMention} />
+        {/* Tommel (hvis sendt inn) + input-pille i samme rad. Uten tommel-prop
+            er dette identisk med tidligere layout — ingen ekstra wrapper-
+            effekt for poll-/arrangement-kort. Se #468. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {tommel}
         <div
           style={{
             display: 'flex',
@@ -529,6 +541,8 @@ export default function KommentarerPaaKort({
             border: '0.5px solid var(--border)',
             borderRadius: 999,
             background: 'var(--bg-elevated)',
+            flex: 1,
+            minWidth: 0,
           }}
           onClick={stopp}
         >
@@ -583,6 +597,7 @@ export default function KommentarerPaaKort({
           >
             <Icon name="arrowRight" size={12} color="#0a0a0a" strokeWidth={2.5} />
           </button>
+        </div>
         </div>
         </div>
       )}

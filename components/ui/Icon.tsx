@@ -5,7 +5,7 @@ export type IkonNavn =
   | 'chevron' | 'chevronDown' | 'chevronUp' | 'bell' | 'message' | 'clock' | 'users'
   | 'doc' | 'building' | 'chart' | 'cog' | 'arrowRight' | 'checkmark'
   | 'x' | 'send' | 'list' | 'search' | 'cake' | 'cigar' | 'wine' | 'crown'
-  | 'sparkle' | 'diamond' | 'flame' | 'image'
+  | 'sparkle' | 'diamond' | 'flame' | 'image' | 'thumbsUp'
 
 const PATHS: Record<IkonNavn, React.ReactNode> = {
   calendar: <path d="M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />,
@@ -40,6 +40,9 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   diamond: <path d="M6 3h12l4 6-10 12L2 9l4-6z M2 9h20 M12 3l-2 6 2 12 2-12-2-6z" />,
   flame: <path d="M12 2s4 4 4 8a4 4 0 01-8 0c0-1 1-2 2-2-3 4 1 6 2 6s3-1 3-4c0-3-3-5-3-8z" />,
   image: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></>,
+  // Én sammenhengende path (Feather-stil) — fungerer både som stroke-outline
+  // (ureagert tommel) og fylt med fill-prop (reagert med 👍). Se #468.
+  thumbsUp: <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />,
 }
 
 type Props = {

@@ -8,7 +8,11 @@ import Avatar from '@/components/ui/Avatar'
 import Card from '@/components/ui/Card'
 import Icon from '@/components/ui/Icon'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
-import MeldingReaksjoner, { type ReaksjonGruppe } from '@/components/agenda/MeldingReaksjoner'
+import ReaksjonBadges from '@/components/agenda/ReaksjonBadges'
+import MeldingTommel from '@/components/agenda/MeldingTommel'
+import type { ReaksjonGruppe } from '@/lib/reaksjoner'
+import { useMeldingReaksjoner } from '@/lib/reaksjoner-hook'
+import { LONG_PRESS_MS } from '@/lib/konstanter'
 import type { ChatProfil } from '@/lib/mention'
 import type { AlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -44,10 +48,6 @@ function relativTid(iso: string): string {
   return formatDistanceToNowStrict(new Date(iso), { locale: nb, addSuffix: true })
 }
 
-// 350 ms vinner kappløpet mot iOS sin innebygde link-preview (~500 ms).
-// Hadde vi ligget på 500 ms ville Safari-menyen kunne dukke opp først.
-const LONG_PRESS_MS = 350
-
 type Props = {
   melding: MeldingKortData
   brukerId: string
@@ -76,6 +76,15 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   const longPressFired = useRef(false)
   const router = useRouter()
   const [, startTransition] = useTransition()
+
+  // Reaksjons-state eies her (single source of truth) og deles med både
+  // MeldingReaksjoner (badge-raden) og MeldingTommel (like-knappen), slik at
+  // begge oppdateres i samme frame ved optimistisk toggle. se #468
+  const meldingReaksjoner = useMeldingReaksjoner({
+    meldingId: melding.id,
+    brukerId,
+    initial: melding.reaksjoner,
+  })
 
   // Forfatter eller admin kan flytte innlegget mellom levende og Tidligere.
   // FB-importerte innlegg har ingen ekte forfatter i klubben og kan ikke flyttes.
@@ -145,7 +154,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   // Hvis melding.albumKort er satt overstyres dette helt — vi viser
   // albumets omslagsbilde + CTA-pille i stedet for grid.
   const wrapperBunn =
-    !melding.tidligere && (melding.reaksjoner.length > 0 || pickerApen) ? 10 : 0
+    !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) ? 10 : 0
   const albumKort = melding.albumKort
   const antallBilder = albumKort ? 0 : melding.bilder.length
   const visOverlay = antallBilder > 4
@@ -314,7 +323,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               wordWrap: 'break-word',
               marginBottom: antallBilder > 0 || albumKort
                 ? 10
-                : !melding.tidligere && (melding.reaksjoner.length > 0 || pickerApen)
+                : !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen)
                   ? 8
                   : 0,
             }}
@@ -475,14 +484,17 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
           )}
 
           {/* Reaksjons-rad — vises kun hvis det finnes reaksjoner eller
-              picker er åpen. Picker styres av long-press over. */}
-          {!melding.tidligere && (
-            <MeldingReaksjoner
-              meldingId={melding.id}
+              picker er åpen. Picker styres av long-press over. Bruker
+              ReaksjonBadges direkte med state delt fra meldingReaksjoner-hooken
+              (samme som MeldingTommel) — ingen «+»-knapp på agenda. Se #468/F5. */}
+          {!melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) && (
+            <ReaksjonBadges
               brukerId={brukerId}
-              reaksjoner={melding.reaksjoner}
-              pickerApen={pickerApen}
-              lukkPicker={() => setPickerApen(false)}
+              reaksjoner={meldingReaksjoner.reaksjoner}
+              toggle={meldingReaksjoner.toggle}
+              isPending={meldingReaksjoner.isPending}
+              apen={pickerApen}
+              lukk={() => setPickerApen(false)}
             />
           )}
         </div>
@@ -495,6 +507,14 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             totaltAntall={melding.antallKommentarer}
             profiler={profiler}
             brukerId={brukerId}
+            tommel={
+              <MeldingTommel
+                brukerId={brukerId}
+                reaksjoner={meldingReaksjoner.reaksjoner}
+                toggle={meldingReaksjoner.toggle}
+                isPending={meldingReaksjoner.isPending}
+              />
+            }
           />
         )}
       </Card>

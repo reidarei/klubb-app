@@ -80,6 +80,17 @@ export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const
 // Brukes i Chat.tsx, MeldingReaksjoner.tsx og KommentarReaksjoner.tsx.
 export const REAKSJON_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '🙌'] as const
 
+// Long-press-varighet før reaksjons-picker åpnes. 350 ms vinner kappløpet mot
+// iOS sin innebygde link-preview (~500 ms) og er over accidental-touch-
+// terskelen, men merkes umiddelbart som «noe skjer». Brukes av MeldingTommel,
+// MeldingKort og KommentarerPaaKort. se #468.
+export const LONG_PRESS_MS = 350
+
+// Bevegelsesterskel (px) før et hold tolkes som scroll-intensjon og long-press-
+// timeren avbrytes. Sammenlign kvadrert avstand mot LONG_PRESS_BEVEGELSE_PX ** 2
+// for å slippe kvadratrot. se #359-review / #468.
+export const LONG_PRESS_BEVEGELSE_PX = 10
+
 // ─── FEILLOGGING / OBSERVABILITY ─────────────────────────────────────────────
 
 // Antall klient-feil vi tillater per IP+profil per minutt via /api/logg-feil.
