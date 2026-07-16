@@ -39,9 +39,13 @@ export default function KommentarReaksjoner({
   // Sync inn ferske server-props etter router.refresh(). Uten dette blir en
   // rollback fanget på den *første* initial-verdien, og senere server-
   // oppdateringer ignoreres når komponent-instansen ikke remountes. se #359.
+  // isPending-guarden hindrer at en refresh fra annen kilde overskriver
+  // optimistisk state mens en toggle er in-flight — samme fiks som i
+  // lib/reaksjoner-hook.ts (#468/F2).
   useEffect(() => {
+    if (isPending) return
     setReaksjoner(initial)
-  }, [initial])
+  }, [initial, isPending])
 
   function stopp(e: MouseEvent) {
     e.preventDefault()

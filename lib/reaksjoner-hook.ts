@@ -33,14 +33,15 @@ export function useMeldingReaksjoner({
   // og etterfølgende server-oppdateringer ignoreres når komponent-instansen
   // ikke remountes. se #359.
   //
-  // Kjent, akseptert race (pre-eksisterende): hvis en router.refresh() fra en
-  // *annen* kilde (kommentar-send, arkivering, toggle på et annet kort) lander
-  // mens en toggle her er in-flight, gir ny initial-ref en kort glitch før
-  // neste refresh selvkorrigerer. Smal timing + selvhelende → bevisst ikke
-  // adressert. se #468/F2.
+  // isPending-guarden lukker et race (#468/F2): en refresh fra *annen* kilde
+  // (kommentar-send, toggle på annet kort) kunne lande med data hentet før vår
+  // toggle committet, og overskrive den optimistiske visningen. Mens en toggle
+  // er in-flight ignoreres derfor innkommende initial; når transitionen er
+  // ferdig (isPending → false) re-kjører effekten og syncer ferskeste initial.
   useEffect(() => {
+    if (isPending) return
     setReaksjoner(initial)
-  }, [initial])
+  }, [initial, isPending])
 
   function toggle(emoji: string) {
     const finnes = reaksjoner.find(r => r.emoji === emoji)
