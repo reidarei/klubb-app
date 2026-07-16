@@ -316,7 +316,8 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   : 0,
             }}
           >
-            <Linkified text={melding.innhold ?? ''} />
+            {/* inneILenke: kortet er en <a>, ekte lenker i teksten ville nøstet <a>-i-<a> (#465) */}
+            <Linkified text={melding.innhold ?? ''} inneILenke />
           </div>
 
           {/* Albumkort: albumets omslagsbilde + CTA-pille som lenker til
@@ -343,12 +344,29 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   />
                 </div>
               )}
-              {/* CTA-pille — stopPropagation hindrer at trykk på pillen også
-                  trigger Link-en rundt hele kortet (Link → /meldinger/[id]). */}
-              <Link
-                href={`/album/${albumKort.albumId}`}
-                onClick={e => e.stopPropagation()}
+              {/* CTA-pille — <span role="link"> og ikke <Link>: hele kortet er
+                  allerede en <a>, og <a>-i-<a> er ugyldig HTML. Parseren
+                  auto-lukker da den ytre i server-HTML-en og hydreringen
+                  krasjer med React #418 (se #465). Samme mønster som
+                  KommentarMiniatyr. preventDefault + stopPropagation hindrer
+                  at trykket også trigger kort-Link-en (→ /meldinger/[id]). */}
+              <span
+                role="link"
+                tabIndex={0}
+                onClick={e => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  router.push(`/album/${albumKort.albumId}`)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    router.push(`/album/${albumKort.albumId}`)
+                  }
+                }}
                 style={{
+                  cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
@@ -372,7 +390,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                     {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
                   </span>
                 </span>
-              </Link>
+              </span>
             </div>
           )}
 

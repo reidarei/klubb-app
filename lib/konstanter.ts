@@ -91,9 +91,9 @@ export const LOGG_FEIL_RATE_LIMIT_PER_MIN = 10
 export const LOGG_FEIL_RETENSJONSDAGER = 30
 
 // Antall klientfeil siste 24t som trigger admin-varsel i sjekk-klientfeil-cron.
-// 0 = varsle på alle feil (>= 1 feil siste døgn). Startet lavt for å bygge
-// intuisjon om baseline; strammes eventuelt inn senere.
-export const KLIENT_FEIL_ALARM_TERSKEL = 0
+// Varsler ved > terskel, altså fra og med 4 feil. Startet på 0 (alle feil) for å
+// bygge intuisjon om baseline; hevet til 3 etter at baseline viste seg støyete.
+export const KLIENT_FEIL_ALARM_TERSKEL = 3
 
 // Maksimal størrelse på kontekst-JSON sendt til /api/logg-feil (i KB).
 // Hindrer at store payloads metter tabellen — typisk stacktrace er < 2 KB.

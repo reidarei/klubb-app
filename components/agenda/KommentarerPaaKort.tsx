@@ -67,10 +67,11 @@ export function detaljUrl(scope: KommentarScope): string {
 
 // Returnerer kun tekst-noden — bilde-miniatyr håndteres separat i raden av
 // KommentarMiniatyr. Beholder null-guard mot tom rad (se #281) og snippet-
-// avkorting av URL-treff (se #350).
+// avkorting av URL-treff (se #350). inneILenke: kommentarene rendres inni
+// kortets ytre <a>, så ekte lenker ville nøstet <a>-i-<a> (#465).
 function visningsInnhold(k: { innhold: string | null }): ReactNode {
   const tekst = snippet(k.innhold)
-  if (tekst) return <Linkified text={tekst} />
+  if (tekst) return <Linkified text={tekst} inneILenke />
   return null
 }
 
