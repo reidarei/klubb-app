@@ -410,7 +410,10 @@ export default function ChatMeldingRad({
               </div>
             )
           })()}
-          {/* Picker — vises over bobla når long-press trigger */}
+          {/* Picker — vises over bobla når long-press trigger.
+              Bevisst ikke ReaksjonPicker (#471): side-forankring etter
+              erEgen, klikk-fanger-overlay og innebygd Rediger-knapp ville
+              krevd for mange props. */}
           {pickerAapen && (
             <>
               {/* Overlay som fanger klikk utenfor */}

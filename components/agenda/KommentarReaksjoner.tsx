@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { leggTilReaksjon, fjernReaksjon } from '@/lib/actions/chat'
-import { REAKSJON_EMOJIS } from '@/lib/konstanter'
+import ReaksjonPicker from '@/components/agenda/ReaksjonPicker'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
 type Props = {
@@ -138,49 +138,17 @@ export default function KommentarReaksjoner({
       })}
 
       {/* Picker — åpnes ved hover (desktop) eller long-press/tap (mobil),
-          styrt av forelderen via pickerApen. Posisjonert over raden. */}
+          styrt av forelderen via pickerApen. Bruker nå delt ReaksjonPicker
+          (#471) — liten visuell endring (2 px posisjon, 30 px knapper) er
+          bevisst konsolidering. */}
       {pickerApen && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 'calc(100% + 4px)',
-            left: 0,
-            display: 'flex',
-            gap: 4,
-            padding: '6px 8px',
-            background: 'var(--bg-elevated-2)',
-            border: '0.5px solid var(--border)',
-            borderRadius: 999,
-            boxShadow: 'var(--shadow-popover)',
-            zIndex: 10,
+        <ReaksjonPicker
+          isPending={isPending}
+          onVelg={emoji => {
+            lukkPicker()
+            toggle(emoji)
           }}
-        >
-          {REAKSJON_EMOJIS.map(emoji => (
-            <button
-              key={emoji}
-              type="button"
-              disabled={isPending}
-              onClick={e => {
-                stopp(e)
-                lukkPicker()
-                toggle(emoji)
-              }}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: 'transparent',
-                border: 'none',
-                fontSize: 16,
-                // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
-                cursor: 'pointer',
-                padding: 0,
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+        />
       )}
     </div>
   )
