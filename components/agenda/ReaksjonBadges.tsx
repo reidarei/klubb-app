@@ -72,8 +72,10 @@ export default function ReaksjonBadges({
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
-              cursor: isPending ? 'default' : 'pointer',
-              opacity: isPending ? 0.6 : 1,
+              // Bevisst ingen dimming under isPending: optimistisk visning skal
+              // se ferdig ut umiddelbart — serverturen skal ikke synes (#472-oppf.).
+              // disabled beholdes for å hindre dobbel-fyring.
+              cursor: 'pointer',
             }}
           >
             <span>{r.emoji}</span>

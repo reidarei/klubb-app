@@ -127,8 +127,8 @@ export default function KommentarReaksjoner({
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 11,
-              cursor: isPending ? 'default' : 'pointer',
-              opacity: isPending ? 0.6 : 1,
+              // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
+              cursor: 'pointer',
             }}
           >
             <span>{r.emoji}</span>
@@ -172,9 +172,9 @@ export default function KommentarReaksjoner({
                 background: 'transparent',
                 border: 'none',
                 fontSize: 16,
-                cursor: isPending ? 'default' : 'pointer',
+                // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
+                cursor: 'pointer',
                 padding: 0,
-                opacity: isPending ? 0.6 : 1,
               }}
             >
               {emoji}

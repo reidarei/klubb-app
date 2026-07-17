@@ -162,8 +162,9 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
           justifyContent: 'center',
           background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated)',
           border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
-          cursor: isPending ? 'default' : 'pointer',
-          opacity: isPending ? 0.6 : 1,
+          // Ingen dimming under isPending — den optimistiske tilstanden skal se
+          // ferdig ut umiddelbart, serverturen skal ikke synes (#472-oppf.)
+          cursor: 'pointer',
           transform: pressetAktiv ? 'scale(0.92)' : 'scale(1)',
           transition: 'transform 120ms ease-out',
           padding: 0,

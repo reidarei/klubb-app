@@ -53,9 +53,9 @@ export default function ReaksjonPicker({
             background: 'transparent',
             border: 'none',
             fontSize: 18,
-            cursor: isPending ? 'default' : 'pointer',
+            // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
+            cursor: 'pointer',
             padding: 0,
-            opacity: isPending ? 0.6 : 1,
           }}
         >
           {emoji}
