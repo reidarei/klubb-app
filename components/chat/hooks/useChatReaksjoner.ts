@@ -152,11 +152,13 @@ export function useChatReaksjoner(
     } else {
       // Én reaksjon per bruker (#472): fjern brukerens eventuelle andre emoji
       // på meldingen FØR den nye legges til. Uten dette vises både gammel og
-      // ny emoji fram til realtime-DELETE-eventet lander. Speiler invarianten
-      // «fjern brukeren fra alle grupper først» i lib/reaksjoner-hook.ts. Her
-      // er state en flat liste, så vi filtrerer på (melding_id, profil_id).
-      // Filteret er idempotent: en påfølgende realtime-DELETE for den gamle
-      // emojien blir et no-op, ingen dobbelt-fjerning.
+      // ny emoji fram til realtime-DELETE-eventet lander. Den grupperte
+      // invarianten bor nå i lib/reaksjoner.ts (toggleReaksjonGrupper) —
+      // flat-liste-varianten her er bevisst egen pga realtime-modellen: state
+      // er en flat liste, så vi filtrerer på (melding_id, profil_id) i stedet
+      // for å transformere ReaksjonGruppe[]. Filteret er idempotent: en
+      // påfølgende realtime-DELETE for den gamle emojien blir et no-op, ingen
+      // dobbelt-fjerning. Se #475.
       setReaksjoner(prev => [
         ...prev.filter(
           r => !(r.melding_id === meldingId && r.profil_id === brukerId),

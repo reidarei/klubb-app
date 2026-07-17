@@ -2,27 +2,31 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-// #469 (reaksjoner på arrangement/poll) bør parametrisere disse to inn som
-// { leggTil, fjern } i stedet for å klone hele hooken — ~5-8 linjer. Ikke gjort
-// nå fordi generaliteten ennå ikke trengs (YAGNI); denne noten hindrer at
-// #469-koderen kloner uten å vurdere parametrisering.
 import { leggTilMeldingReaksjon, fjernMeldingReaksjon } from '@/lib/actions/meldinger'
-import type { ReaksjonGruppe } from '@/lib/reaksjoner'
+import { harBrukerReagert, toggleReaksjonGrupper, type ReaksjonGruppe } from '@/lib/reaksjoner'
 
 /**
- * Delt optimistisk reaksjons-logikk for et innlegg (melding). Ekstrahert fra
- * MeldingReaksjoner slik at MeldingKort kan holde reaksjons-state ett sted
- * og dele den mellom badge-raden (MeldingReaksjoner) og tommel-knappen
- * (MeldingTommel) — begge må oppdateres i samme frame. Se #468.
+ * Delt optimistisk reaksjons-logikk for grupperte reaksjoner (ReaksjonGruppe[]).
+ * Generisk over hvilken tabell/action-par som brukes — leggTil/fjern er
+ * caller-oppgitte server actions. Ekstrahert fra MeldingReaksjoner slik at
+ * MeldingKort kan holde reaksjons-state ett sted og dele den mellom
+ * badge-raden (MeldingReaksjoner) og tommel-knappen (MeldingTommel) — begge
+ * må oppdateres i samme frame. Se #468. Parametrisert i #475 slik at
+ * KommentarReaksjoner (chat_reaksjoner) kan bruke samme hook som
+ * meldinger (melding_reaksjon).
  */
-export function useMeldingReaksjoner({
-  meldingId,
+export function useReaksjoner({
+  id,
   brukerId,
   initial,
+  leggTil,
+  fjern,
 }: {
-  meldingId: string
+  id: string
   brukerId: string
   initial: ReaksjonGruppe[]
+  leggTil: (id: string, emoji: string) => Promise<unknown>
+  fjern: (id: string, emoji: string) => Promise<unknown>
 }) {
   const [reaksjoner, setReaksjoner] = useState<ReaksjonGruppe[]>(initial)
   const [isPending, startTransition] = useTransition()
@@ -44,34 +48,16 @@ export function useMeldingReaksjoner({
   }, [initial, isPending])
 
   function toggle(emoji: string) {
-    const finnes = reaksjoner.find(r => r.emoji === emoji)
-    const harReagert = finnes?.profilIder.includes(brukerId) ?? false
+    const harReagert = harBrukerReagert(reaksjoner, brukerId, emoji)
 
-    setReaksjoner(prev => {
-      // Én reaksjon per bruker: fjern brukeren fra alle grupper før en
-      // eventuell ny legges til.
-      const utenBruker = prev.map(r => ({
-        ...r,
-        profilIder: r.profilIder.filter(p => p !== brukerId),
-      }))
-      const ferdig = harReagert
-        ? utenBruker
-        : utenBruker.map(r => r.emoji === emoji ? { ...r, profilIder: [...r.profilIder, brukerId] } : r)
-
-      const harGruppe = ferdig.some(r => r.emoji === emoji)
-      const utvidet = !harReagert && !harGruppe
-        ? [...ferdig, { emoji, profilIder: [brukerId] }]
-        : ferdig
-
-      return utvidet.filter(r => r.profilIder.length > 0)
-    })
+    setReaksjoner(prev => toggleReaksjonGrupper(prev, brukerId, emoji))
 
     startTransition(async () => {
       try {
         if (harReagert) {
-          await fjernMeldingReaksjon(meldingId, emoji)
+          await fjern(id, emoji)
         } else {
-          await leggTilMeldingReaksjon(meldingId, emoji)
+          await leggTil(id, emoji)
         }
         router.refresh()
       } catch {
@@ -81,4 +67,26 @@ export function useMeldingReaksjoner({
   }
 
   return { reaksjoner, toggle, isPending }
+}
+
+/**
+ * Tynn wrapper rundt useReaksjoner for meldinger (melding_reaksjon-tabellen).
+ * Holder kallestedene i MeldingReaksjoner.tsx og MeldingKort.tsx uendret.
+ */
+export function useMeldingReaksjoner({
+  meldingId,
+  brukerId,
+  initial,
+}: {
+  meldingId: string
+  brukerId: string
+  initial: ReaksjonGruppe[]
+}) {
+  return useReaksjoner({
+    id: meldingId,
+    brukerId,
+    initial,
+    leggTil: leggTilMeldingReaksjon,
+    fjern: fjernMeldingReaksjon,
+  })
 }

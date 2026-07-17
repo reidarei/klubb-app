@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useTransition, useEffect, type MouseEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { type MouseEvent } from 'react'
 import { leggTilReaksjon, fjernReaksjon } from '@/lib/actions/chat'
+import { useReaksjoner } from '@/lib/reaksjoner-hook'
 import ReaksjonPicker from '@/components/agenda/ReaksjonPicker'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
@@ -32,61 +32,17 @@ export default function KommentarReaksjoner({
   pickerApen,
   lukkPicker,
 }: Props) {
-  const [reaksjoner, setReaksjoner] = useState<ReaksjonGruppe[]>(initial)
-  const [isPending, startTransition] = useTransition()
-  const router = useRouter()
-
-  // Sync inn ferske server-props etter router.refresh(). Uten dette blir en
-  // rollback fanget på den *første* initial-verdien, og senere server-
-  // oppdateringer ignoreres når komponent-instansen ikke remountes. se #359.
-  // isPending-guarden hindrer at en refresh fra annen kilde overskriver
-  // optimistisk state mens en toggle er in-flight — samme fiks som i
-  // lib/reaksjoner-hook.ts (#468/F2).
-  useEffect(() => {
-    if (isPending) return
-    setReaksjoner(initial)
-  }, [initial, isPending])
+  const { reaksjoner, toggle, isPending } = useReaksjoner({
+    id: meldingId,
+    brukerId,
+    initial,
+    leggTil: leggTilReaksjon,
+    fjern: fjernReaksjon,
+  })
 
   function stopp(e: MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-  }
-
-  function toggle(emoji: string) {
-    const finnes = reaksjoner.find(r => r.emoji === emoji)
-    const harReagert = finnes?.profilIder.includes(brukerId) ?? false
-
-    // Optimistisk oppdatering: legg til eller fjern brukerens stemme
-    // umiddelbart — rollback til initial ved server-feil.
-    setReaksjoner(prev => {
-      const utenBruker = prev.map(r => ({
-        ...r,
-        profilIder: r.profilIder.filter(p => p !== brukerId),
-      }))
-      const ferdig = harReagert
-        ? utenBruker
-        : utenBruker.map(r => r.emoji === emoji ? { ...r, profilIder: [...r.profilIder, brukerId] } : r)
-
-      const harGruppe = ferdig.some(r => r.emoji === emoji)
-      const utvidet = !harReagert && !harGruppe
-        ? [...ferdig, { emoji, profilIder: [brukerId] }]
-        : ferdig
-
-      return utvidet.filter(r => r.profilIder.length > 0)
-    })
-
-    startTransition(async () => {
-      try {
-        if (harReagert) {
-          await fjernReaksjon(meldingId, emoji)
-        } else {
-          await leggTilReaksjon(meldingId, emoji)
-        }
-        router.refresh()
-      } catch {
-        setReaksjoner(initial)
-      }
-    })
   }
 
   // Ingen reaksjoner og picker er lukket → tom komponent (sparer vertikalt rom)
