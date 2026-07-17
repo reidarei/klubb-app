@@ -8,7 +8,7 @@ import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { formaterDato } from '@/lib/dato'
 import { formaterKr } from '@/lib/belop'
-import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
+import { KLUBB_KORTNAVN, FOND_KONTONUMMER, FOND_FAST_TREKK_FORSLAG } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
@@ -525,6 +525,35 @@ export default async function FondSide() {
                 )
               })}
             </>
+          )}
+
+          {/* Oppfordring om fast trekk — Michaels ønske (#477). Skjules når
+              instansen ikke har satt fondskonto (tom FOND_KONTONUMMER). */}
+          {FOND_KONTONUMMER && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderTop: '0.5px solid var(--border-subtle)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.5,
+              }}
+            >
+              Har du ikke fast trekk ennå? Sett opp et fast trekk på f.eks.{' '}
+              {FOND_FAST_TREKK_FORSLAG} i måneden til konto{' '}
+              <span
+                style={{
+                  fontVariantNumeric: 'tabular-nums',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {FOND_KONTONUMMER}
+              </span>
+              {' '}— så vokser fondet av seg sjæl.
+            </div>
           )}
         </Card>
       </section>

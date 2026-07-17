@@ -55,6 +55,14 @@ export const KLUBB_MEDLEMMER_TITTEL =
 export const ROLLE_TITTEL_GENERALSEKRETAER =
   process.env.NEXT_PUBLIC_ROLLE_TITTEL_GENERALSEKRETAER ?? 'Generalsekretær'
 
+// Fondets bankkonto + foreslått månedlig fast trekk — vises som oppfordring
+// under innskuddsfordelingen på fondssiden. Tom streng (default) skjuler
+// blokka; sett env-varene når klubben har egen fondskonto.
+export const FOND_KONTONUMMER =
+  process.env.NEXT_PUBLIC_FOND_KONTONUMMER ?? ''
+export const FOND_FAST_TREKK_FORSLAG =
+  process.env.NEXT_PUBLIC_FOND_FAST_TREKK_FORSLAG ?? '500 kr'
+
 // Brand-farger — kan overstyres av andre klubber via NEXT_PUBLIC_KLUBB_FARGE_*-
 // env-vars. Standard-defaults er sand/gull (som originalen), men sett dine egne
 // for å gi klubben sin egen visuell identitet. Se docs/tema-arkitektur.md §4.
