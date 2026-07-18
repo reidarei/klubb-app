@@ -1,9 +1,11 @@
+import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import Chat from '@/components/chat/Chat'
 import ChatAutoScrollScript from '@/components/chat/ChatAutoScrollScript'
 import { kanAdministrere } from '@/lib/roller'
 import { markerChatSett } from '@/lib/actions/ulest'
+import { hentAppFlagg, CHAT_FANE } from '@/lib/app-innstillinger'
 
 // Klubb-chat: én felles kronologisk tråd for hele klubben.
 // Initial-last er siste 30 meldinger (i desc-rekkefølge fra DB, reversert til
@@ -15,14 +17,21 @@ export default async function KlubbChatSide() {
     getProfil(),
   ])
 
-  const [{ data: siste }, { data: profiler }] = await Promise.all([
+  // Flagget hentes parallelt med chat-dataene — gating skjer før render, og
+  // innholdet er ikke hemmelig når fanen er av (bare skjult), så det er trygt.
+  const [{ data: siste }, { data: profiler }, chatFane] = await Promise.all([
     supabase
       .from('klubb_chat')
       .select('id, profil_id, innhold, bilde_url, video_url, opprettet, fra_facebook')
       .order('opprettet', { ascending: false })
       .limit(30),
     supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
+    hentAppFlagg(supabase, CHAT_FANE, true),
   ])
+
+  // Gating som på /fond, men speilvendt default: chat er på inntil admin skrur
+  // av via /innstillinger (app_innstillinger.chat_fane). Admin har alltid tilgang.
+  if (!kanAdministrere(profil?.rolle) && !chatFane) return notFound()
 
   // Marker at brukeren nå ser klubb-chat — prikken forsvinner ved neste
   // navigasjon. Fire-and-forget: vi venter ikke, men heller ikke stille.

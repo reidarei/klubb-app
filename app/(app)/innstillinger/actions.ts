@@ -70,10 +70,12 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
     )
   if (error) throw error
 
-  // Revalider layout i tillegg til fond og innstillinger — TopHeader lever i
-  // delt layout og trenger en ny server-render for at visFond-prop endres.
+  // Revalider layout i tillegg til de flagg-gatede sidene og innstillinger —
+  // TopHeader lever i delt layout og trenger en ny server-render for at
+  // visFond/visChat-props endres.
   revalidatePath('/', 'layout')
   revalidatePath('/fond')
+  revalidatePath('/chat')
   revalidatePath('/innstillinger')
 }
 

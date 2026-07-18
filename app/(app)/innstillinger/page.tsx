@@ -14,7 +14,7 @@ import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
 import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
-import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
+import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
 
 const innstillingLabels: Record<string, string> = {
   // Arrangementer
@@ -90,6 +90,7 @@ export default async function Innstillinger() {
     { data: adminProfiler },
     { data: egenProfil },
     fondFaneAktiv,
+    chatFaneAktiv,
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -127,6 +128,7 @@ export default async function Innstillinger() {
       .eq('id', bruker.id)
       .maybeSingle(),
     hentAppFlagg(supabase, FOND_FANE),
+    hentAppFlagg(supabase, CHAT_FANE, true),
   ])
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
@@ -340,13 +342,21 @@ export default async function Innstillinger() {
       {/* Funksjoner — app-vide på/av-flagg */}
       <InnstillingsKort
         tittel="Funksjoner"
-        oppsummering={fondFaneAktiv ? 'Fond: synlig for alle' : 'Fond: kun admin'}
+        oppsummering={[
+          fondFaneAktiv ? 'Fond: synlig for alle' : 'Fond: kun admin',
+          chatFaneAktiv ? 'Chat: synlig for alle' : 'Chat: kun admin',
+        ].join(' · ')}
         beskrivelse="Skru funksjoner av og på for alle medlemmer. Admin har alltid tilgang uavhengig av bryteren."
       >
         <FunksjonToggle
           noekkel={FOND_FANE}
           aktiv={fondFaneAktiv}
           beskrivelse="Fond-fanen synlig for alle"
+        />
+        <FunksjonToggle
+          noekkel={CHAT_FANE}
+          aktiv={chatFaneAktiv}
+          beskrivelse="Chat-fanen synlig for alle"
           last
         />
       </InnstillingsKort>

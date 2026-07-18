@@ -49,6 +49,9 @@ type Props = {
   ulestVarsler?: boolean
   /** True hvis Fond-fanen er skrudd på for vanlige medlemmer (app_innstillinger.fond_fane). */
   visFond?: boolean
+  /** False hvis Chat-fanen er skrudd av for vanlige medlemmer (app_innstillinger.chat_fane).
+      Default true — chat skal aldri forsvinne pga. manglende prop (f.eks. SSR-fallback). */
+  visChat?: boolean
 }
 
 /**
@@ -62,12 +65,17 @@ type Props = {
  * #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Se
  * Policy: Navigasjon i CLAUDE.md.
  */
-export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false }: Props) {
+export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true }: Props) {
   const pathname = usePathname()
 
   // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
   // men vis Fond-taben for alle hvis visFond-flagget er skrudd på (#447).
-  const synligeTabs = TABS.filter(t => !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond))
+  // Chat-taben er motsatt: synlig som default, men kan skrus av for vanlige
+  // medlemmer via chat_fane-flagget — admin ser den alltid.
+  const synligeTabs = TABS.filter(t => {
+    if (t.nokkel === 'chat') return visChat || kanAdministrere(rolle)
+    return !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond)
+  })
   const fondSynlig = synligeTabs.some(t => t.nokkel === 'fond')
 
   // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
