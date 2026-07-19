@@ -317,11 +317,9 @@ export default function AlbumLightbox({
           onTouchStart={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            // Løftes over admin-kontrollbaren (samme bottom-offset + ~48px høyde)
-            // når den vises, ellers samme bunnavstand som baren ville hatt.
-            bottom: kanRedigere && albumId
-              ? 'calc(max(20px, env(safe-area-inset-bottom)) + 52px)'
-              : 'max(20px, env(safe-area-inset-bottom))',
+            // Admin-kontrollene bor nå øverst til venstre (20. juli), så
+            // reaksjonsraden kan alltid ligge i bunnen uten ekstra offset.
+            bottom: 'max(20px, env(safe-area-inset-bottom))',
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'flex',
@@ -362,17 +360,22 @@ export default function AlbumLightbox({
         </div>
       )}
 
-      {/* Handlinger (kun synlig for admin/eier) */}
+      {/* Handlinger (kun synlig for admin/eier) — kompakt pill øverst til
+          venstre (X-en bor øverst til høyre, telleren i midten). Flyttet fra
+          bunnen og krympet etter Reidars tilbakemelding 20. juli: «Omslag»
+          med accent-stil når bildet ER omslaget, ellers nøytral knapp som
+          setter det. Kort label + fontSize 11 så pillen ikke kolliderer med
+          den sentrerte telleren på smale skjermer. */}
       {kanRedigere && albumId && !sheetAapen && (
         <div
           style={{
             position: 'absolute',
-            bottom: 'max(20px, env(safe-area-inset-bottom))',
-            left: '50%',
-            transform: 'translateX(-50%)',
+            top: 'max(16px, env(safe-area-inset-top))',
+            left: 16,
             display: 'flex',
-            gap: 10,
-            padding: '8px 10px',
+            alignItems: 'center',
+            gap: 2,
+            padding: '4px 6px',
             borderRadius: 999,
             background: 'var(--overlay-control-bg)',
             boxShadow: '0 0 0 1px var(--overlay-control-ring)',
@@ -382,41 +385,40 @@ export default function AlbumLightbox({
             type="button"
             onClick={handleSettOmslag}
             disabled={pending || erOmslag}
+            aria-label={erOmslag ? 'Dette bildet er omslaget' : 'Sett som omslag'}
             style={{
               border: 'none',
-              padding: '8px 14px',
+              padding: '6px 10px',
               borderRadius: 999,
               background: erOmslag ? 'var(--accent-soft)' : 'transparent',
               color: erOmslag ? 'var(--accent)' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 600,
               cursor: erOmslag || pending ? 'default' : 'pointer',
               opacity: pending && !erOmslag ? 0.6 : 1,
             }}
           >
-            {erOmslag ? 'Omslag' : 'Sett som omslag'}
+            Omslag
           </button>
           <button
             type="button"
             onClick={handleSlett}
             disabled={pending}
-            aria-label="Slett bilde"
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
               border: 'none',
+              padding: '6px 10px',
+              borderRadius: 999,
               background: 'transparent',
               color: 'var(--danger-alt)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              fontFamily: 'var(--font-body)',
+              fontSize: 11,
+              fontWeight: 600,
               cursor: pending ? 'default' : 'pointer',
               opacity: pending ? 0.6 : 1,
             }}
           >
-            <Icon name="x" size={18} color="currentColor" strokeWidth={2.5} />
+            Slett
           </button>
         </div>
       )}
