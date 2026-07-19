@@ -117,6 +117,42 @@ export type Database = {
           },
         ]
       }
+      album_bilde_reaksjon: {
+        Row: {
+          bilde_id: string
+          emoji: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          bilde_id: string
+          emoji: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          bilde_id?: string
+          emoji?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_bilde_reaksjon_bilde_id_fkey"
+            columns: ["bilde_id"]
+            isOneToOne: false
+            referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_reaksjon_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_innstillinger: {
         Row: {
           aktiv: boolean

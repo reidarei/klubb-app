@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { settOmslagsbilde, slettAlbumBilde } from '@/lib/actions/album'
+import AlbumBildeReaksjoner from '@/components/album/AlbumBildeReaksjoner'
+import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
 // Fullskjerm-galleri for album. Pil-knapper, swipe, tastatur og X for å lukke.
 // Krysser mellom bilder uten å unmounte hele overlayet — det gir en stabil
@@ -19,13 +21,19 @@ export default function AlbumLightbox({
   albumId,
   kanRedigere = false,
   coverBildeId = null,
+  brukerId,
 }: {
-  bilder: { id: string; bilde_url: string }[]
+  // reaksjoner er valgfri: AlbumSeksjon (arrangement-forhåndsvisning) sender
+  // ikke reaksjonsdata og bruker denne lightboxen kun til rask forhåndsvisning
+  // — reaksjonsraden er scopet til album/[id]-siden (#480). brukerId er derfor
+  // også valgfri; raden rendres kun når begge er til stede.
+  bilder: { id: string; bilde_url: string; reaksjoner?: ReaksjonGruppe[] }[]
   startIndex: number
   onLukk: () => void
   albumId?: string
   kanRedigere?: boolean
   coverBildeId?: string | null
+  brukerId?: string
 }) {
   const router = useRouter()
   const [index, setIndex] = useState(startIndex)
@@ -258,6 +266,39 @@ export default function AlbumLightbox({
             <Icon name="chevron" size={22} color="currentColor" strokeWidth={2.5} />
           </button>
         </>
+      )}
+
+      {/* Reaksjoner på det aktive bildet — kun når brukerId er oppgitt (album/[id]-
+          siden). key={aktiv.id} er KRITISK: lightboxen unmounter ikke ved
+          bildebytte (samme <AlbumBildeReaksjoner>-instans ville ellers beholde
+          forrige bildes optimistiske state) — key tvinger React til å remounte
+          komponenten når aktivt bilde endres, slik at useAlbumBildeReaksjoner
+          re-initialiseres med riktig `initial`. */}
+      {brukerId && (
+        <div
+          // Stopp touchstart her: swipe-handlerne ligger på ytre container og
+          // navigerer ved drag >50px. Uten dette ville en horisontal drag som
+          // starter på en badge både toggle reaksjon og bytte bilde. Å stoppe
+          // touchstart hindrer at container-dragen i det hele tatt initieres
+          // (onTouchMove early-returner når dragStartX aldri ble satt).
+          onTouchStart={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            // Løftes over admin-kontrollbaren (samme bottom-offset + ~48px høyde)
+            // når den vises, ellers samme bunnavstand som baren ville hatt.
+            bottom: kanRedigere && albumId
+              ? 'calc(max(20px, env(safe-area-inset-bottom)) + 52px)'
+              : 'max(20px, env(safe-area-inset-bottom))',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '6px 10px',
+            borderRadius: 999,
+            background: 'var(--overlay-control-bg)',
+            boxShadow: '0 0 0 1px var(--overlay-control-ring)',
+          }}
+        >
+          <AlbumBildeReaksjoner key={aktiv.id} bildeId={aktiv.id} brukerId={brukerId} initial={aktiv.reaksjoner ?? []} />
+        </div>
       )}
 
       {/* Handlinger (kun synlig for admin/eier) */}

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import AlbumLightbox from '@/components/album/AlbumLightbox'
+import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
 export type AlbumBildeDetalj = {
   id: string
@@ -10,19 +11,22 @@ export type AlbumBildeDetalj = {
   thumb_url: string | null
   bredde: number | null
   hoyde: number | null
+  reaksjoner: ReaksjonGruppe[]
 }
 
 // Grid med 3 kolonner. Klikk på en thumb åpner lightbox med fullt bilde.
-// Per-bilde-kommentarer kommer i fase 2 — derfor ingen interaksjon utover
-// vis-i-fullskjerm her.
+// Reaksjoner per bilde vises i lightboxen (#480) — ingen tellere på
+// thumbnails, grid-rendringen under er uendret.
 export default function AlbumDetalj({
   bilder,
   albumId,
+  brukerId,
   kanRedigere = false,
   coverBildeId = null,
 }: {
   bilder: AlbumBildeDetalj[]
   albumId: string
+  brukerId: string
   kanRedigere?: boolean
   coverBildeId?: string | null
 }) {
@@ -84,12 +88,13 @@ export default function AlbumDetalj({
 
       {aktiv !== null && (
         <AlbumLightbox
-          bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
+          bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url, reaksjoner: b.reaksjoner }))}
           startIndex={aktiv}
           onLukk={() => setAktiv(null)}
           albumId={albumId}
           kanRedigere={kanRedigere}
           coverBildeId={coverBildeId}
+          brukerId={brukerId}
         />
       )}
     </>

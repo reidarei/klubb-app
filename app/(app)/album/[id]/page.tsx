@@ -21,7 +21,10 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
     .select(
       `id, tittel, arrangement_id, opprettet_av, cover_bilde_id,
        arrangement:arrangementer (id, tittel),
-       album_bilde!album_bilde_album_id_fkey (id, bilde_url, thumb_url, bredde, hoyde, opprettet, rekkefolge)`,
+       album_bilde!album_bilde_album_id_fkey (
+         id, bilde_url, thumb_url, bredde, hoyde, opprettet, rekkefolge,
+         album_bilde_reaksjon (profil_id, emoji)
+       )`,
     )
     .eq('id', id)
     .single()
@@ -37,9 +40,22 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
     hoyde: number | null
     opprettet: string
     rekkefolge: number
+    album_bilde_reaksjon: Array<{ profil_id: string; emoji: string }> | null
   }>)
     .slice()
     .sort((a, b) => a.rekkefolge - b.rekkefolge || a.opprettet.localeCompare(b.opprettet))
+
+  // Grupper reaksjoner per bilde til ReaksjonGruppe[]-format (samme teknikk
+  // som lib/queries/agenda.ts brukes for meldinger/kommentarer). se #480.
+  function reaksjonGrupperFor(rader: Array<{ profil_id: string; emoji: string }> | null) {
+    const perEmoji = new Map<string, string[]>()
+    for (const r of rader ?? []) {
+      const profilIder = perEmoji.get(r.emoji) ?? []
+      profilIder.push(r.profil_id)
+      perEmoji.set(r.emoji, profilIder)
+    }
+    return [...perEmoji.entries()].map(([emoji, profilIder]) => ({ emoji, profilIder }))
+  }
 
   const erEier = album.opprettet_av === user!.id
   const erAdmin = kanAdministrere(profil?.rolle)
@@ -103,8 +119,10 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
           thumb_url: b.thumb_url,
           bredde: b.bredde,
           hoyde: b.hoyde,
+          reaksjoner: reaksjonGrupperFor(b.album_bilde_reaksjon),
         }))}
         albumId={album.id}
+        brukerId={user!.id}
         kanRedigere={kanRedigere}
         coverBildeId={album.cover_bilde_id}
       />

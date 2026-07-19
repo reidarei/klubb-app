@@ -253,3 +253,40 @@ export async function slettAlbum(id: string): Promise<void> {
   if (album?.arrangement_id) revalidatePath(`/arrangementer/${album.arrangement_id}`)
   revalidatePath('/')
 }
+
+// Reaksjoner per bilde i lightboxen (#480). Egen tabell album_bilde_reaksjon —
+// sammensatt PK (bilde_id, profil_id) håndhever «én reaksjon per bruker»
+// direkte, så bytte av emoji gjøres som delete+insert (samme mønster som
+// leggTilMeldingReaksjon i meldinger.ts). Ingen revalidatePath: reaksjoner
+// vises kun i lightboxen på album-siden, og useReaksjoner-hooken kaller
+// router.refresh() selv etter mutasjonen.
+export async function leggTilAlbumBildeReaksjon(bildeId: string, emoji: string) {
+  const { supabase, user } = await ensureInnlogget()
+
+  const { error: sletteFeil } = await supabase
+    .from('album_bilde_reaksjon')
+    .delete()
+    .eq('bilde_id', bildeId)
+    .eq('profil_id', user.id)
+
+  if (sletteFeil) throw new Error(sletteFeil.message)
+
+  const { error: innsettingFeil } = await supabase
+    .from('album_bilde_reaksjon')
+    .insert({ bilde_id: bildeId, profil_id: user.id, emoji })
+
+  if (innsettingFeil) throw new Error(innsettingFeil.message)
+}
+
+export async function fjernAlbumBildeReaksjon(bildeId: string, emoji: string) {
+  const { supabase, user } = await ensureInnlogget()
+
+  const { error } = await supabase
+    .from('album_bilde_reaksjon')
+    .delete()
+    .eq('bilde_id', bildeId)
+    .eq('profil_id', user.id)
+    .eq('emoji', emoji)
+
+  if (error) throw new Error(error.message)
+}

@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { leggTilMeldingReaksjon, fjernMeldingReaksjon } from '@/lib/actions/meldinger'
+import { leggTilAlbumBildeReaksjon, fjernAlbumBildeReaksjon } from '@/lib/actions/album'
 import { harBrukerReagert, toggleReaksjonGrupper, type ReaksjonGruppe } from '@/lib/reaksjoner'
 
 /**
@@ -88,5 +89,27 @@ export function useMeldingReaksjoner({
     initial,
     leggTil: leggTilMeldingReaksjon,
     fjern: fjernMeldingReaksjon,
+  })
+}
+
+/**
+ * Tynn wrapper rundt useReaksjoner for album-bilder (album_bilde_reaksjon-
+ * tabellen). Brukes av AlbumBildeReaksjoner i lightboxen. Se #480.
+ */
+export function useAlbumBildeReaksjoner({
+  bildeId,
+  brukerId,
+  initial,
+}: {
+  bildeId: string
+  brukerId: string
+  initial: ReaksjonGruppe[]
+}) {
+  return useReaksjoner({
+    id: bildeId,
+    brukerId,
+    initial,
+    leggTil: leggTilAlbumBildeReaksjon,
+    fjern: fjernAlbumBildeReaksjon,
   })
 }
