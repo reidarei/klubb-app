@@ -22,6 +22,15 @@ type Props = {
 export default function AlbumBildeReaksjoner({ bildeId, brukerId, initial }: Props) {
   const { reaksjoner, toggle, isPending } = useAlbumBildeReaksjoner({ bildeId, brukerId, initial })
 
+  // Din egen reaksjon representeres av tommelen (den «blir» emojien din) —
+  // badgene viser kun de ANDRES reaksjoner, ellers ville din egen dukket opp
+  // som en ekstra pille ved siden av tommelen (Reidars funn 19. juli).
+  // Antallet i en badge teller derfor bare de andre; totalen leses som
+  // tommel + badges.
+  const andresGrupper = reaksjoner
+    .map(r => ({ ...r, profilIder: r.profilIder.filter(id => id !== brukerId) }))
+    .filter(r => r.profilIder.length > 0)
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <MeldingTommel
@@ -30,12 +39,12 @@ export default function AlbumBildeReaksjoner({ bildeId, brukerId, initial }: Pro
         toggle={toggle}
         isPending={isPending}
       />
-      {/* Badges kun når noen har reagert — pickeren bor i tommelen (long-press),
+      {/* Badges kun når andre har reagert — pickeren bor i tommelen (long-press),
           så ingen onPlussKlikk og dermed ingen «+»-knapp her. */}
-      {reaksjoner.length > 0 && (
+      {andresGrupper.length > 0 && (
         <ReaksjonBadges
           brukerId={brukerId}
-          reaksjoner={reaksjoner}
+          reaksjoner={andresGrupper}
           toggle={toggle}
           isPending={isPending}
           apen={false}
