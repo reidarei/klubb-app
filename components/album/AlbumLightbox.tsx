@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { settOmslagsbilde, slettAlbumBilde } from '@/lib/actions/album'
 import AlbumBildeReaksjoner from '@/components/album/AlbumBildeReaksjoner'
+import BildeKommentarSheet from '@/components/album/BildeKommentarSheet'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
+import type { ChatProfil } from '@/lib/mention'
 
 // Fullskjerm-galleri for album. Pil-knapper, swipe, tastatur og X for å lukke.
 // Krysser mellom bilder uten å unmounte hele overlayet — det gir en stabil
@@ -22,25 +24,39 @@ export default function AlbumLightbox({
   kanRedigere = false,
   coverBildeId = null,
   brukerId,
+  profiler,
+  erAdmin = false,
+  autoAapneKommentarer = false,
 }: {
   // reaksjoner er valgfri: AlbumSeksjon (arrangement-forhåndsvisning) sender
   // ikke reaksjonsdata og bruker denne lightboxen kun til rask forhåndsvisning
   // — reaksjonsraden er scopet til album/[id]-siden (#480). brukerId er derfor
-  // også valgfri; raden rendres kun når begge er til stede.
-  bilder: { id: string; bilde_url: string; reaksjoner?: ReaksjonGruppe[] }[]
+  // også valgfri; raden rendres kun når begge er til stede. Samme gating
+  // gjelder kommentar-knappen/sheeten (#481) — profiler kreves i tillegg.
+  bilder: { id: string; bilde_url: string; reaksjoner?: ReaksjonGruppe[]; kommentarAntall?: number }[]
   startIndex: number
   onLukk: () => void
   albumId?: string
   kanRedigere?: boolean
   coverBildeId?: string | null
   brukerId?: string
+  profiler?: ChatProfil[]
+  erAdmin?: boolean
+  // Deep-link (?bilde=) fra en mention-varsel — åpner sheeten med det samme
+  // i stedet for at brukeren må trykke kommentar-knappen selv.
+  autoAapneKommentarer?: boolean
 }) {
   const router = useRouter()
   const [index, setIndex] = useState(startIndex)
   const [montert, setMontert] = useState(false)
+  const [sheetAapen, setSheetAapen] = useState(autoAapneKommentarer)
   const [pending, startTransition] = useTransition()
   const dragStartX = useRef<number | null>(null)
   const dragDeltaX = useRef(0)
+  // Speiler sheetAapen i en ref så det globale keydown-listeneret (bundet én
+  // gang) leser fersk verdi uten å re-binde effekten ved hver sheet-toggle.
+  const sheetAapenRef = useRef(sheetAapen)
+  sheetAapenRef.current = sheetAapen
 
   // Mount-flag for portal — createPortal kan ikke kalles på server
   useEffect(() => {
@@ -56,6 +72,16 @@ export default function AlbumLightbox({
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      // Mens kommentar-sheeten er åpen: Escape lukker KUN sheeten, og piltaster
+      // ignoreres (ellers bytter de bilde → remount av sheeten → mister tekst
+      // brukeren skriver, f.eks. når markøren flyttes i input-feltet).
+      if (sheetAapenRef.current) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setSheetAapen(false)
+        }
+        return
+      }
       if (e.key === 'Escape') onLukk()
       else if (e.key === 'ArrowRight') neste()
       else if (e.key === 'ArrowLeft') forrige()
@@ -147,7 +173,11 @@ export default function AlbumLightbox({
         background: 'var(--overlay-backdrop)',
         zIndex: 9999,
         display: 'flex',
-        alignItems: 'center',
+        // Når kommentar-sheeten er åpen krymper bildet til øvre del av
+        // skjermen (sheeten dekker resten nedenfra, se BildeKommentarSheet
+        // som starter på top: 42dvh) — flex-start i stedet for center gjør
+        // at bildet flytter seg opp i stedet for å forbli midtstilt bak sheeten.
+        alignItems: sheetAapen ? 'flex-start' : 'center',
         justifyContent: 'center',
       }}
     >
@@ -158,40 +188,43 @@ export default function AlbumLightbox({
         alt=""
         style={{
           maxWidth: '95vw',
-          maxHeight: '95vh',
+          maxHeight: sheetAapen ? '40dvh' : '95vh',
+          marginTop: sheetAapen ? 'max(16px, env(safe-area-inset-top))' : 0,
           objectFit: 'contain',
           userSelect: 'none',
           pointerEvents: 'none',
         }}
       />
 
-      {/* Lukk-knapp */}
-      <button
-        type="button"
-        onClick={onLukk}
-        aria-label="Lukk"
-        style={{
-          position: 'absolute',
-          top: 'max(16px, env(safe-area-inset-top))',
-          right: 16,
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: 'none',
-          background: 'var(--overlay-control-bg)',
-          color: 'var(--text-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          boxShadow: '0 0 0 1px var(--overlay-control-ring)',
-        }}
-      >
-        <Icon name="x" size={20} color="currentColor" strokeWidth={2.5} />
-      </button>
+      {/* Lukk-knapp — skjult mens sheeten er åpen (sheeten har sin egen) */}
+      {!sheetAapen && (
+        <button
+          type="button"
+          onClick={onLukk}
+          aria-label="Lukk"
+          style={{
+            position: 'absolute',
+            top: 'max(16px, env(safe-area-inset-top))',
+            right: 16,
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            border: 'none',
+            background: 'var(--overlay-control-bg)',
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 0 0 1px var(--overlay-control-ring)',
+          }}
+        >
+          <Icon name="x" size={20} color="currentColor" strokeWidth={2.5} />
+        </button>
+      )}
 
       {/* Teller */}
-      {bilder.length > 1 && (
+      {bilder.length > 1 && !sheetAapen && (
         <div
           style={{
             position: 'absolute',
@@ -211,7 +244,7 @@ export default function AlbumLightbox({
       )}
 
       {/* Pil-knapper (synlig på desktop, swipe brukes på mobil) */}
-      {bilder.length > 1 && (
+      {bilder.length > 1 && !sheetAapen && (
         <>
           <button
             type="button"
@@ -274,7 +307,7 @@ export default function AlbumLightbox({
           forrige bildes optimistiske state) — key tvinger React til å remounte
           komponenten når aktivt bilde endres, slik at useAlbumBildeReaksjoner
           re-initialiseres med riktig `initial`. */}
-      {brukerId && (
+      {brukerId && !sheetAapen && (
         <div
           // Stopp touchstart her: swipe-handlerne ligger på ytre container og
           // navigerer ved drag >50px. Uten dette ville en horisontal drag som
@@ -291,6 +324,9 @@ export default function AlbumLightbox({
               : 'max(20px, env(safe-area-inset-bottom))',
             left: '50%',
             transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             padding: '6px 10px',
             borderRadius: 999,
             background: 'var(--overlay-control-bg)',
@@ -298,11 +334,36 @@ export default function AlbumLightbox({
           }}
         >
           <AlbumBildeReaksjoner key={aktiv.id} bildeId={aktiv.id} brukerId={brukerId} initial={aktiv.reaksjoner ?? []} />
+          {/* Kommentar-knapp — kun når profiler er sendt med (album/[id]-siden,
+              #481). Åpner BildeKommentarSheet for det aktive bildet. */}
+          {albumId && profiler && (
+            <button
+              type="button"
+              onClick={() => setSheetAapen(true)}
+              aria-label="Vis kommentarer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              <Icon name="message" size={16} color="currentColor" strokeWidth={1.8} />
+              {(aktiv.kommentarAntall ?? 0) > 0 && aktiv.kommentarAntall}
+            </button>
+          )}
         </div>
       )}
 
       {/* Handlinger (kun synlig for admin/eier) */}
-      {kanRedigere && albumId && (
+      {kanRedigere && albumId && !sheetAapen && (
         <div
           style={{
             position: 'absolute',
@@ -358,6 +419,22 @@ export default function AlbumLightbox({
             <Icon name="x" size={18} color="currentColor" strokeWidth={2.5} />
           </button>
         </div>
+      )}
+
+      {/* Bilde-kommentarer (#481) — key={aktiv.id} tvinger remount ved
+          bildebytte (samme grunn som AlbumBildeReaksjoner over: usendt
+          tekst/edit-state skal ikke overleve til neste bilde). */}
+      {sheetAapen && brukerId && albumId && (
+        <BildeKommentarSheet
+          key={aktiv.id}
+          bildeId={aktiv.id}
+          albumId={albumId}
+          brukerId={brukerId}
+          erAdmin={erAdmin}
+          profiler={profiler ?? []}
+          initialAntall={aktiv.kommentarAntall ?? 0}
+          onLukk={() => setSheetAapen(false)}
+        />
       )}
     </div>
   )

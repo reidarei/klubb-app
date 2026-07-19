@@ -18,12 +18,19 @@ export function useChatMeldinger({
   supabase,
   konfig,
   kanalNavn,
+  hentInitialtSelv,
 }: {
   scope: ChatScope
   initialMeldinger: ChatMelding[]
   supabase: ReturnType<typeof createClient>
   konfig: ChatKonfig
   kanalNavn: string
+  /** Når true: hooken henter selv første side ved mount i stedet for å motta
+   * den via initialMeldinger (server-fetch). Brukt av BildeKommentarSheet som
+   * rendres klient-side uten SSR-props. harMerEldre-invarianten kan ikke
+   * settes korrekt utenfra i dette tilfellet — den avhenger av selve
+   * fetch-resultatets lengde, ikke en prop kalleren gjetter på. */
+  hentInitialtSelv?: boolean
 }) {
   // konfig.tabell er eneste sannhetskilde for tabellnavnet — brukes både i
   // select-grenen (fra_facebook kun på klubb_chat) og i realtime-configene.
@@ -32,6 +39,9 @@ export function useChatMeldinger({
   const [meldinger, setMeldinger] = useState<ChatMelding[]>(initialMeldinger)
   const [harMerEldre, setHarMerEldre] = useState(initialMeldinger.length >= SIDE_STORRELSE)
   const [henterEldre, setHenterEldre] = useState(false)
+  // Kun relevant når hentInitialtSelv er satt — starter true så sheet kan
+  // vise spinner til første fetch er ferdig.
+  const [laster, setLaster] = useState(!!hentInitialtSelv)
 
   // Ekstraherte scope-felter — flate verdier slik at react-hooks/exhaustive-deps
   // kan analysere deps-arrayene under uten "complex expression"-warnings.
@@ -40,6 +50,7 @@ export function useChatMeldinger({
   const pollId = scope.type === 'poll' ? scope.pollId : ''
   const meldingId = scope.type === 'melding' ? scope.meldingId : ''
   const samtaleId = scope.type === 'privat' ? scope.samtaleId : ''
+  const bildeId = scope.type === 'albumbilde' ? scope.bildeId : ''
 
   // Helper — henter meldinger med riktig scope-filter. Returnerer i
   // *stigende* rekkefølge (eldste først) siden det er det UI-et ønsker.
@@ -75,8 +86,39 @@ export function useChatMeldinger({
     // og parent sender inline scope-objekter (ny identitet per render) som ville trigget
     // unødvendige re-fetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scopeType, arrangementId, pollId, meldingId, samtaleId, supabase],
+    [scopeType, arrangementId, pollId, meldingId, samtaleId, bildeId, supabase],
   )
+
+  // Mount-fetch for hentInitialtSelv (BildeKommentarSheet) — sheeten rendres
+  // klient-side uten server-props, så initialMeldinger er alltid []. Setter
+  // harMerEldre ut fra selve fetch-resultatets lengde — denne invarianten
+  // kan ikke settes riktig utenfra (se kommentar på hentInitialtSelv over).
+  useEffect(() => {
+    if (!hentInitialtSelv) return
+    let cancelled = false
+    setLaster(true)
+    hentMeldinger().then(rader => {
+      if (cancelled) return
+      // Merge framfor blind sett: en realtime-INSERT kan ankomme før denne
+      // mount-fetchen resolver. Blind setMeldinger(rader) ville overskrevet
+      // den (selvhelende ved neste refetch, men et kort glimt der meldingen
+      // forsvinner). Dedupe på id og behold rader fetchen ikke fikk med seg.
+      setMeldinger(prev => {
+        if (prev.length === 0) return rader
+        const fetchedIds = new Set(rader.map(m => m.id))
+        const ekstra = prev.filter(m => !fetchedIds.has(m.id))
+        if (ekstra.length === 0) return rader
+        return [...rader, ...ekstra].sort((a, b) =>
+          a.opprettet < b.opprettet ? -1 : a.opprettet > b.opprettet ? 1 : 0,
+        )
+      })
+      setHarMerEldre(rader.length >= SIDE_STORRELSE)
+      setLaster(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [hentInitialtSelv, hentMeldinger])
 
   // Realtime-subscription — én kanal per scope
   useEffect(() => {
@@ -159,7 +201,7 @@ export function useChatMeldinger({
     // og parent sender inline scope-objekter (ny identitet per render) som ville trigget
     // unødvendige re-subscribes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeType, arrangementId, pollId, meldingId, samtaleId, supabase])
+  }, [scopeType, arrangementId, pollId, meldingId, samtaleId, bildeId, supabase])
 
   // Re-fetch ved visibilitychange (iOS PWA dropper WebSocket i bakgrunnen).
   // Henter de siste SIDE_STORRELSE for å fylle manglende meldinger.
@@ -195,5 +237,5 @@ export function useChatMeldinger({
     }
   }
 
-  return { meldinger, setMeldinger, harMerEldre, henterEldre, lastEldre, hentMeldinger }
+  return { meldinger, setMeldinger, harMerEldre, henterEldre, lastEldre, hentMeldinger, laster }
 }

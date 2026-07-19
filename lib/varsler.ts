@@ -584,6 +584,7 @@ export type MentionScope =
   | { type: 'klubb' }
   | { type: 'poll'; id: string }
   | { type: 'melding'; id: string }
+  | { type: 'albumbilde'; bildeId: string; albumId: string }
 
 // Mention-extract-regex er sentralisert i lib/mention.ts.
 // Stopper ved space — `@alle andre` matcher som `'alle'`, ikke
@@ -600,44 +601,58 @@ async function hentScopeInnhold(
   scope: MentionScope,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<{ tittel: string; url: string; knappTekst: string }> {
-  if (scope.type === 'klubb') {
-    return {
-      tittel: 'Klubbchat',
-      url: `${BASE_URL}/chat`,
-      knappTekst: 'Åpne chatten',
+  // Exhaustive switch med never-default (i stedet for if/else-kjede med
+  // ubetinget melding-fallthrough) — lukker klassen av bugs der en ny
+  // MentionScope-variant stille ruter til feil URL. Se #481.
+  switch (scope.type) {
+    case 'klubb':
+      return {
+        tittel: 'Klubbchat',
+        url: `${BASE_URL}/chat`,
+        knappTekst: 'Åpne chatten',
+      }
+    case 'arrangement': {
+      const { data } = await admin
+        .from('arrangementer')
+        .select('tittel')
+        .eq('id', scope.id)
+        .single()
+      return {
+        tittel: `Chat: ${data?.tittel ?? 'et arrangement'}`,
+        // #kommentarer-ankeret scroller direkte til chat-seksjonen på
+        // arrangement-siden — brukeren trenger ikke lete etter chatten. Se #233.
+        url: `${BASE_URL}/arrangementer/${scope.id}#kommentarer`,
+        knappTekst: 'Åpne chatten',
+      }
     }
-  }
-  if (scope.type === 'arrangement') {
-    const { data } = await admin
-      .from('arrangementer')
-      .select('tittel')
-      .eq('id', scope.id)
-      .single()
-    return {
-      tittel: `Chat: ${data?.tittel ?? 'et arrangement'}`,
-      // #kommentarer-ankeret scroller direkte til chat-seksjonen på
-      // arrangement-siden — brukeren trenger ikke lete etter chatten. Se #233.
-      url: `${BASE_URL}/arrangementer/${scope.id}#kommentarer`,
-      knappTekst: 'Åpne chatten',
+    case 'poll': {
+      const { data } = await admin
+        .from('poll')
+        .select('spoersmaal')
+        .eq('id', scope.id)
+        .single()
+      return {
+        tittel: `Kommentar: ${data?.spoersmaal ?? 'en avstemming'}`,
+        url: `${BASE_URL}/poll/${scope.id}`,
+        knappTekst: 'Åpne avstemmingen',
+      }
     }
-  }
-  if (scope.type === 'poll') {
-    const { data } = await admin
-      .from('poll')
-      .select('spoersmaal')
-      .eq('id', scope.id)
-      .single()
-    return {
-      tittel: `Kommentar: ${data?.spoersmaal ?? 'en avstemming'}`,
-      url: `${BASE_URL}/poll/${scope.id}`,
-      knappTekst: 'Åpne avstemmingen',
+    case 'melding':
+      return {
+        tittel: 'Kommentar i innlegg',
+        url: `${BASE_URL}/meldinger/${scope.id}`,
+        knappTekst: 'Åpne innlegget',
+      }
+    case 'albumbilde':
+      return {
+        tittel: 'Ny kommentar på bilde',
+        url: `${BASE_URL}/album/${scope.albumId}?bilde=${scope.bildeId}`,
+        knappTekst: 'Åpne bildet',
+      }
+    default: {
+      const ukjent: never = scope
+      throw new Error(`Ukjent mention-scope: ${JSON.stringify(ukjent)}`)
     }
-  }
-  // melding
-  return {
-    tittel: 'Kommentar i innlegg',
-    url: `${BASE_URL}/meldinger/${scope.id}`,
-    knappTekst: 'Åpne innlegget',
   }
 }
 

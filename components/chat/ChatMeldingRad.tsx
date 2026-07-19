@@ -35,6 +35,10 @@ type Props = {
   erFoerste: boolean
   erEgen: boolean
   kanSlette: boolean
+  /** Styrer om «Rediger» tilbys i pickeren for egne meldinger. Default true.
+   * Album-kommentarer sender false fordi album_bilde_chat bevisst mangler
+   * UPDATE-policy i DB (mig. 117) — uten gaten ville edit gitt 42501 + revert. */
+  tillatRediger?: boolean
   navn: string
   bilde: string | null | undefined
   rolle: string | null
@@ -60,6 +64,7 @@ export default function ChatMeldingRad({
   erFoerste,
   erEgen,
   kanSlette,
+  tillatRediger = true,
   navn,
   bilde,
   rolle,
@@ -464,7 +469,7 @@ export default function ChatMeldingRad({
                     {emoji}
                   </button>
                 ))}
-                {erEgen && m.innhold !== null && (
+                {tillatRediger && erEgen && m.innhold !== null && (
                   <>
                     <div
                       style={{

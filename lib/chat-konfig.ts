@@ -15,6 +15,10 @@ export type ChatScope =
   | { type: 'poll'; pollId: string }
   | { type: 'melding'; meldingId: string }
   | { type: 'privat'; samtaleId: string }
+  // albumId bæres i tillegg til bildeId — brukes av mention-URL og
+  // revalidering, men verken av scopeId eller kanalNavn (begge er
+  // bilde-scopet). Se #481.
+  | { type: 'albumbilde'; bildeId: string; albumId: string }
 
 export type ChatScopeType = ChatScope['type']
 
@@ -24,6 +28,7 @@ export type ChatTabell =
   | 'poll_chat'
   | 'melding_chat'
   | 'samtale_chat'
+  | 'album_bilde_chat'
 
 export type ChatKonfig = {
   tabell: ChatTabell
@@ -101,6 +106,19 @@ export const CHAT_KONFIG: Record<ChatScopeType, ChatKonfig> = {
     },
     charLimit: INNLEGG_MAKS_LENGDE,
   },
+  albumbilde: {
+    tabell: 'album_bilde_chat',
+    fkFelt: 'album_bilde_id',
+    scopeId: s => {
+      antarType(s, 'albumbilde')
+      return s.bildeId
+    },
+    kanalNavn: s => {
+      antarType(s, 'albumbilde')
+      return `chat-bilde-${s.bildeId}`
+    },
+    charLimit: CHAT_MAKS_LENGDE,
+  },
 }
 
 export function konfigFor(scope: ChatScope): ChatKonfig {
@@ -124,6 +142,10 @@ export function revalideringsPaths(scope: ChatScope): string[] {
     case 'privat':
       // Privatsamtaler vises ikke på forsiden
       return [`/samtaler/${scope.samtaleId}`]
+    case 'albumbilde':
+      // Bilde-kommentarer rendres klient-side i BildeKommentarSheet via
+      // realtime-hooken og finnes aldri i SSR-HTML — ingen sti å revalidere.
+      return []
     default: {
       // Tvinger kompileringsfeil hvis en ny ChatScope-variant glemmes her,
       // og kaster tydelig ved runtime i stedet for å returnere undefined. se #316

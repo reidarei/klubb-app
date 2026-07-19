@@ -53,14 +53,35 @@ async function sendVarslerEtterPost(
   // når server action returnerer (CLAUDE.md: «Bruk aldri after()…
   // Bruk await direkte»). Promise.all internt gjør utsendingen
   // parallell, så latency er kort selv med mange mottakere.
-  if (scope.type === 'arrangement') {
-    await sendChatMentionVarsler({ type: 'arrangement', id: scope.arrangementId }, tekst, avsenderId)
-  } else if (scope.type === 'klubb') {
-    await sendChatMentionVarsler({ type: 'klubb' }, tekst, avsenderId)
-  } else if (scope.type === 'poll') {
-    await sendChatMentionVarsler({ type: 'poll', id: scope.pollId }, tekst, avsenderId)
-  } else if (scope.type === 'melding') {
-    await sendChatMentionVarsler({ type: 'melding', id: scope.meldingId }, tekst, avsenderId)
+  //
+  // Exhaustive switch med never-default (i stedet for if/else-kjede) — lukker
+  // klassen av bugs der en ny ChatScope-variant stille faller gjennom uten
+  // varsel. 'privat' er allerede early-returnert over, så TS narrower scope
+  // korrekt til de resterende variantene her. Se #481.
+  switch (scope.type) {
+    case 'arrangement':
+      await sendChatMentionVarsler({ type: 'arrangement', id: scope.arrangementId }, tekst, avsenderId)
+      return
+    case 'klubb':
+      await sendChatMentionVarsler({ type: 'klubb' }, tekst, avsenderId)
+      return
+    case 'poll':
+      await sendChatMentionVarsler({ type: 'poll', id: scope.pollId }, tekst, avsenderId)
+      return
+    case 'melding':
+      await sendChatMentionVarsler({ type: 'melding', id: scope.meldingId }, tekst, avsenderId)
+      return
+    case 'albumbilde':
+      await sendChatMentionVarsler(
+        { type: 'albumbilde', bildeId: scope.bildeId, albumId: scope.albumId },
+        tekst,
+        avsenderId,
+      )
+      return
+    default: {
+      const ukjent: never = scope
+      throw new Error(`Ukjent chat-scope: ${JSON.stringify(ukjent)}`)
+    }
   }
 }
 

@@ -117,6 +117,51 @@ export type Database = {
           },
         ]
       }
+      album_bilde_chat: {
+        Row: {
+          album_bilde_id: string
+          bilde_url: string | null
+          id: string
+          innhold: string
+          opprettet: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          album_bilde_id: string
+          bilde_url?: string | null
+          id?: string
+          innhold: string
+          opprettet?: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          album_bilde_id?: string
+          bilde_url?: string | null
+          id?: string
+          innhold?: string
+          opprettet?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_bilde_chat_album_bilde_id_fkey"
+            columns: ["album_bilde_id"]
+            isOneToOne: false
+            referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       album_bilde_reaksjon: {
         Row: {
           bilde_id: string

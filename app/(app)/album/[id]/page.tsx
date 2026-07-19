@@ -8,26 +8,39 @@ import AlbumTittel from '@/components/album/AlbumTittel'
 import TillatLandskap from '@/components/album/TillatLandskap'
 import { kanAdministrere } from '@/lib/roller'
 
-export default async function AlbumSide({ params }: { params: Promise<{ id: string }> }) {
+export default async function AlbumSide({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ bilde?: string }>
+}) {
   const { id } = await params
+  const { bilde } = await searchParams
   const [supabase, user, profil] = await Promise.all([
     createServerClient(),
     getInnloggetBruker(),
     getProfil(),
   ])
 
-  const { data: album } = await supabase
-    .from('album')
-    .select(
-      `id, tittel, arrangement_id, opprettet_av, cover_bilde_id,
-       arrangement:arrangementer (id, tittel),
-       album_bilde!album_bilde_album_id_fkey (
-         id, bilde_url, thumb_url, bredde, hoyde, opprettet, rekkefolge,
-         album_bilde_reaksjon (profil_id, emoji)
-       )`,
-    )
-    .eq('id', id)
-    .single()
+  // Album og profiler (til mention-forslag i bilde-kommentarer, #481) hentes
+  // parallelt — samme profil-form (ChatProfil) som resten av chat-flaten.
+  const [{ data: album }, { data: profiler }] = await Promise.all([
+    supabase
+      .from('album')
+      .select(
+        `id, tittel, arrangement_id, opprettet_av, cover_bilde_id,
+         arrangement:arrangementer (id, tittel),
+         album_bilde!album_bilde_album_id_fkey (
+           id, bilde_url, thumb_url, bredde, hoyde, opprettet, rekkefolge,
+           album_bilde_reaksjon (profil_id, emoji),
+           album_bilde_chat (count)
+         )`,
+      )
+      .eq('id', id)
+      .single(),
+    supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
+  ])
 
   if (!album) notFound()
 
@@ -41,6 +54,7 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
     opprettet: string
     rekkefolge: number
     album_bilde_reaksjon: Array<{ profil_id: string; emoji: string }> | null
+    album_bilde_chat: { count: number }[] | null
   }>)
     .slice()
     .sort((a, b) => a.rekkefolge - b.rekkefolge || a.opprettet.localeCompare(b.opprettet))
@@ -120,11 +134,15 @@ export default async function AlbumSide({ params }: { params: Promise<{ id: stri
           bredde: b.bredde,
           hoyde: b.hoyde,
           reaksjoner: reaksjonGrupperFor(b.album_bilde_reaksjon),
+          kommentarAntall: b.album_bilde_chat?.[0]?.count ?? 0,
         }))}
         albumId={album.id}
         brukerId={user!.id}
         kanRedigere={kanRedigere}
         coverBildeId={album.cover_bilde_id}
+        profiler={profiler ?? []}
+        erAdmin={erAdmin}
+        initialBildeId={bilde ?? null}
       />
 
       {/* Alle medlemmer kan bidra med bilder — ikke bare eier/admin. Det er
