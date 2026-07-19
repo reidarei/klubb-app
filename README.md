@@ -152,7 +152,8 @@ meldinger (innlegg/posts)
   ├─ melding_chat (kommentarer)
   └─ melding_reaksjon
 
-album ──── album_bilde (cover_bilde_id peker tilbake)
+album ──── album_bilde ──── album_bilde_reaksjon
+          (cover_bilde_id peker tilbake)
 
 samtale (privat 1:1) ──── samtale_chat
 
