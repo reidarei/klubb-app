@@ -26,6 +26,45 @@ export async function sendEpost({ til, emne, html }: { til: string; emne: string
   }
 }
 
+// Resend sin batch-grense — maks antall meldinger per kall til /emails/batch.
+// Resend-spesifikk detalj, hører hjemme her og ikke i lib/konstanter.ts.
+const RESEND_BATCH_MAKS = 100
+
+// Batch-sending mot Resend. Valgt fordi enkelt-sending per mottaker (N kall til
+// /emails) traff Resends rate-limit på 10 req/s når sendVarsel sendte til alle ~16
+// medlemmer parallelt (se #478) — batch-endepunktet lar N e-poster telle som ett
+// request. Merk: attachments og scheduled_at støttes ikke i batch (ikke i bruk hos
+// oss i dag), og Resend kan avvise HELE batchen hvis ett element er ugyldig — det
+// øker blast-radius sammenlignet med enkelt-sending, men akseptert for våre ~16
+// admin-opprettede adresser.
+export async function sendEpostBatch(eposter: { til: string; emne: string; html: string }[]) {
+  if (eposter.length === 0) return
+  try {
+    for (let i = 0; i < eposter.length; i += RESEND_BATCH_MAKS) {
+      const del = eposter.slice(i, i + RESEND_BATCH_MAKS)
+      const res = await fetch('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          del.map(e => ({ from: RESEND_FROM, to: e.til, subject: e.emne, html: e.html })),
+        ),
+      })
+      if (!res.ok) {
+        const tekst = await res.text()
+        // Ta med antall mottakere i batchen: siden hele batchen kan avvises på ett
+        // ugyldig element (se blast-radius-kommentaren over), forteller count-en hvor
+        // mange e-poster som gikk tapt i denne feilen. count er whitelistet i lib/logg.ts.
+        await logg.feil('varsel.epost.feilet', new Error(tekst), { ctx: { count: del.length } })
+      }
+    }
+  } catch (err) {
+    await logg.feil('varsel.epost.feilet', err)
+  }
+}
+
 // E-postmaler bruker EPOST_FARGER fra lib/tema.ts (sand-aksent #e8d9b5).
 // CSS-variabler er ikke tilgjengelig i e-postklienter, så farger må hardkodes
 // som inline styles — derfor går vi via tema.ts i stedet for globals.css.

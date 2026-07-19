@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
-import { sendEpost, arrangementEpostHtml } from '@/lib/epost'
+import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE } from '@/lib/dato'
 import { BASE_URL } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
@@ -241,6 +241,16 @@ export async function sendVarsel({
   // per mottaker pga epost-roundtrip, og med Vercel Hobbys 10s
   // funksjons-timeout ble bakgrunnsjobben kuttet etter 1–2 mottakere
   // når @alle ble brukt. Promise.all gjør at alle 16+ går samtidig.
+  //
+  // Logg-insert og push sendes fortsatt per mottaker i denne parallelle
+  // loopen. E-post derimot samles i epostBatch og sendes med ETT kall til
+  // Resend sitt batch-endepunkt etterpå — parallelliseringen som løste
+  // Vercel-timeouten skapte samtidig 429-en fra Resend (16 samtidige
+  // /emails-kall > 10 req/s), og batch løser begge problemene på én gang
+  // (se #478). Push til epostBatch fra parallelle async-callbacks er trygt
+  // uten låsing — JS er single-threaded, så to push() kan aldri kjøre samtidig.
+  const epostBatch: { til: string; emne: string; html: string }[] = []
+
   await Promise.all(
     profiler.map(async profil => {
       const pref = prefs.get(profil.id)
@@ -278,10 +288,12 @@ export async function sendVarsel({
 
       if (kanEpost) {
         const html = arrangementEpostHtml({ tittel, tekst: melding, url: varselUrl, knappTekst })
-        await sendEpost({ til: profil.epost!, emne: tittel, html })
+        epostBatch.push({ til: profil.epost!, emne: tittel, html })
       }
     }),
   )
+
+  await sendEpostBatch(epostBatch)
 }
 
 // ─── WRAPPER-FUNKSJONER ─────────────────────────────────────────────────────

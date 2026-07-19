@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 // Mock push og epost
 const mockSendPush = vi.fn().mockResolvedValue(undefined)
 const mockSendEpost = vi.fn().mockResolvedValue(undefined)
+const mockSendEpostBatch = vi.fn().mockResolvedValue(undefined)
 const mockArrangementEpostHtml = vi.fn().mockReturnValue('<html>test</html>')
 
 vi.mock('@/lib/push', () => ({
@@ -20,6 +21,7 @@ vi.mock('@/lib/push', () => ({
 
 vi.mock('@/lib/epost', () => ({
   sendEpost: (...args: unknown[]) => mockSendEpost(...args),
+  sendEpostBatch: (...args: unknown[]) => mockSendEpostBatch(...args),
   arrangementEpostHtml: (...args: unknown[]) => mockArrangementEpostHtml(...args),
 }))
 
@@ -56,7 +58,9 @@ describe('sendVarsel – kanalvalg', () => {
       type: 'test',
     })
 
-    expect(mockSendEpost).toHaveBeenCalled()
+    // sendEpostBatch kalles ubetinget (early-return håndterer tom liste internt),
+    // så vi asserter på innholdet i batchen fremfor bare at mocken ble kalt.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
     expect(mockSendPush).not.toHaveBeenCalled()
   })
 
@@ -77,7 +81,7 @@ describe('sendVarsel – kanalvalg', () => {
     })
 
     expect(mockSendPush).toHaveBeenCalled()
-    expect(mockSendEpost).toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
   })
 
   it('skipper bruker uten noen kanal aktiv', async () => {
@@ -97,7 +101,9 @@ describe('sendVarsel – kanalvalg', () => {
     })
 
     expect(mockSendPush).not.toHaveBeenCalled()
-    expect(mockSendEpost).not.toHaveBeenCalled()
+    // sendEpostBatch kalles ubetinget, men skal ha fått en tom liste her —
+    // se kommentaren i testen over for hvorfor vi asserter på innhold, ikke kall-status.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([])
   })
 })
 
@@ -120,7 +126,8 @@ describe('sendVarsel – dedup', () => {
       tillatDuplikat: false,
     })
 
-    expect(mockSendEpost).not.toHaveBeenCalled()
+    // Dedup-sjekken returnerer tidlig — sendEpostBatch (og dermed varsel_logg-loopen) når aldri å kjøre.
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
     expect(mockSendPush).not.toHaveBeenCalled()
   })
 
@@ -142,7 +149,7 @@ describe('sendVarsel – dedup', () => {
       tillatDuplikat: true,
     })
 
-    expect(mockSendEpost).toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
   })
 })
 
@@ -162,10 +169,12 @@ describe('wrapper-funksjoner', () => {
       startTidspunkt: '2026-06-15T16:00:00Z',
     })
 
-    if (mockSendEpost.mock.calls.length > 0) {
-      const epostArgs = mockSendEpost.mock.calls[0][0]
-      expect(epostArgs.emne).toBe('Nytt arrangement')
-    }
+    // Batchen skal inneholde nøyaktig ett element til Ola med emnet fra wrapperen.
+    // Ingen guard: mocken er satt opp med epost_aktiv, så en tom batch her ville
+    // vært en reell regresjon vi vil at testen skal fange.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'ola@test.no', emne: 'Nytt arrangement' }),
+    ])
   })
 
   it('sendPaaminneVarsler sjekker riktig innstillingsnoekkel', async () => {
@@ -213,9 +222,11 @@ describe('wrapper-funksjoner', () => {
       aar: 2026,
     })
 
-    if (mockSendEpost.mock.calls.length > 0) {
-      expect(mockSendEpost.mock.calls[0][0].emne).toBe('Husk arrangøransvaret ditt!')
-    }
+    // Batchen skal inneholde nøyaktig ett element til den ansvarlige med
+    // purre-emnet — ingen guard, jf. kommentaren i nytt-arrangement-testen over.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'kari@test.no', emne: 'Husk arrangøransvaret ditt!' }),
+    ])
   })
 })
 
@@ -324,10 +335,10 @@ describe('sendVarsel – testmodus', () => {
       type: 'test',
     })
 
-    // I testmodus skal kun bruker med test@test.no motta varsel
-    expect(mockSendEpost.mock.calls.length).toBeLessThanOrEqual(1)
-    if (mockSendEpost.mock.calls.length === 1) {
-      expect(mockSendEpost.mock.calls[0][0].til).toBe('test@test.no')
-    }
+    // I testmodus skal kun bruker med test@test.no motta varsel — batchen skal
+    // ha nøyaktig ett element, med nøyaktig testadressen.
+    const batch = mockSendEpostBatch.mock.calls[0]?.[0] ?? []
+    expect(batch.length).toBe(1)
+    expect(batch[0].til).toBe('test@test.no')
   })
 })
