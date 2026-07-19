@@ -255,12 +255,24 @@ export default function BildeKommentarSheet({
         </button>
       </div>
 
-      {/* Meldingsliste */}
+      {/* Meldingsliste + input i SAMME scroll-container. Input-pillen ligger
+          sticky i bunnen av containeren (marginTop: auto skyver den ned når
+          innholdet er kort). Dette er ikke kosmetikk: iOS Safari avslører et
+          fokusert felt ved å scrolle nærmeste scrollbare forelder — finnes
+          ingen (som når pillen lå som fixed søsken og body har
+          overflow:hidden i lightboxen), panorerer Safari visual viewport i
+          stedet, og WebKit tegner da tekstmarkøren uten pan-kompensasjon →
+          markøren «løsner» og havner over/under feltet (Reidars funn 19.
+          juli, samme bug-klasse som #147/#151). Med pillen inne i
+          scroll-containeren får Safari en forelder å scrolle, og markøren
+          følger feltet. Speiler sticky-varianten fra Chat på detaljsider. */}
       <div
         style={{
           flex: 1,
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch',
+          display: 'flex',
+          flexDirection: 'column',
           padding: '10px 16px 0',
         }}
       >
@@ -318,7 +330,7 @@ export default function BildeKommentarSheet({
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12, flexShrink: 0 }}>
           {meldinger.map((m, i) => {
             const forrige = i > 0 ? meldinger[i - 1] : null
             const visDatoSkille = !forrige || !erSammeNorskeDag(forrige.opprettet, m.opprettet)
@@ -353,16 +365,23 @@ export default function BildeKommentarSheet({
             )
           })}
         </div>
-      </div>
 
-      {/* Input-pill */}
-      <div
-        style={{
-          flexShrink: 0,
-          padding: '8px 16px calc(8px + env(safe-area-inset-bottom))',
-        }}
-      >
-        <MentionVelger forslag={mentionForslag} onVelg={velgMention} />
+        {/* Input-pill — sticky i bunn av scroll-containeren (se kommentar på
+            containeren over for hvorfor den bor HER og ikke som fixed søsken).
+            marginTop: auto = pillen ligger i bunnen også når lista er kort;
+            sticky tar over når lista blir lang nok til å scrolle. Solid
+            bakgrunn så meldinger som scroller bak ikke skinner gjennom. */}
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            marginTop: 'auto',
+            flexShrink: 0,
+            background: 'var(--bg-elevated-solid)',
+            padding: '8px 0 calc(8px + env(safe-area-inset-bottom))',
+          }}
+        >
+          <MentionVelger forslag={mentionForslag} onVelg={velgMention} />
         <div
           style={{
             display: 'flex',
@@ -424,6 +443,7 @@ export default function BildeKommentarSheet({
           >
             <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
           </button>
+        </div>
         </div>
       </div>
     </div>
