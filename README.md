@@ -153,12 +153,13 @@ meldinger (innlegg/posts)
   └─ melding_reaksjon
 
 album ──── album_bilde ──── album_bilde_reaksjon
+                        └─ album_bilde_chat (kommentarer)
           (cover_bilde_id peker tilbake)
 
 samtale (privat 1:1) ──── samtale_chat
 
-5 chat-tabeller: arrangement_chat, klubb_chat, poll_chat,
-                  melding_chat, samtale_chat
+6 chat-tabeller: arrangement_chat, klubb_chat, poll_chat,
+                  melding_chat, samtale_chat, album_bilde_chat
                   + delt chat_reaksjoner-tabell
 
 arrangoransvar (hvem er ansvarlig for hvilke faste arrangementer per år)
