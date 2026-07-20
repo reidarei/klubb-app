@@ -207,14 +207,17 @@ export async function arkiverMelding(meldingId: string) {
   revalidatePath('/')
 }
 
-// Reverter arkivering — sender innlegget tilbake til levende-seksjonen
-// hvis det fortsatt er innenfor tidsvinduet. Samme RLS som arkiverMelding.
+// Reverter arkivering — sender innlegget tilbake til levende-seksjonen.
+// Bumper også sist_aktivitet: uten det ville innlegg eldre enn
+// MELDING_LEVENDE_DAGER falt rett tilbake i Tidligere (eller vært en no-op
+// hvis de aldri var arkivert, bare «falt ned» naturlig). Innlegget får dermed
+// en fersk levende-periode, som om det var nytt. Samme RLS som arkiverMelding.
 export async function avarkiverMelding(meldingId: string) {
   const { supabase } = await ensureInnlogget()
 
   const { error } = await supabase
     .from('meldinger')
-    .update({ arkivert_tidspunkt: null })
+    .update({ arkivert_tidspunkt: null, sist_aktivitet: naa() })
     .eq('id', meldingId)
 
   if (error) throw new Error(error.message)
