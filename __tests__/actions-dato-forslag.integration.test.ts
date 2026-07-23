@@ -95,8 +95,8 @@ afterEach(() => {
 // --- Test-cases ---
 
 describe('foreslaaAktuellDato', () => {
-  it('returnerer ingen_dato uten fetch når tekst er under 15 tegn', async () => {
-    const res = await foreslaaAktuellDato('kort tekst')
+  it('returnerer ingen_dato uten fetch når tekst er under DATO_FORSLAG_MIN_TEGN', async () => {
+    const res = await foreslaaAktuellDato('pils') // 4 tegn, under terskelen
     expect(res).toEqual({ dato: null, grunn: 'ingen_dato' })
     expect(mockFetch).not.toHaveBeenCalled()
   })

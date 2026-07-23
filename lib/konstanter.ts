@@ -114,9 +114,11 @@ export const LOGG_KONTEKST_MAKS_KB = 4
 // Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
 
-// Minste tekstlengde før dato-forslag-knappen aktiveres og server-action
-// godtar kallet. Speiles i UI (knapp disables) og server (action-terskel).
-export const DATO_FORSLAG_MIN_TEGN = 15
+// Minste tekstlengde før auto-uttrekk av festedato kjøres (bakgrunnskall mens
+// brukeren skriver + server-action-terskel). Satt lavt fordi klubbens innlegg
+// ofte er korte og direkte («Pils i dag?», «Fotball i morgen») — en for høy
+// terskel ville blokkert nettopp de innleggene funksjonen er til for.
+export const DATO_FORSLAG_MIN_TEGN = 10
 
 // Tema-valg — «dark» er default for alle eksisterende brukere.
 // Cookie er HttpOnly og speiles til localStorage for klient-synk.
