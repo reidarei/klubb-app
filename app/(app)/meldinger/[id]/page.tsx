@@ -8,14 +8,10 @@ import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
 import Chat from '@/components/chat/Chat'
 import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
-import SlettMeldingKnapp from './SlettMeldingKnapp'
-import SlettBildeKnapp from './SlettBildeKnapp'
-import LeggTilBildeKnapp from './LeggTilBildeKnapp'
-import { MELDING_MAKS_BILDER } from '@/lib/konstanter'
+import MeldingRediger from './MeldingRediger'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { Linkified } from '@/lib/linkify'
 
 type CoverObj = { bilde_url: string; thumb_url: string | null }
 type RawAlbumEmbed = {
@@ -95,11 +91,12 @@ export default async function MeldingDetalj({
   const erAdmin = kanAdministrere(profil?.rolle)
   // FB-importerte meldinger er fryst i RLS (mig 081 speiler 067 fra klubb_chat).
   // Skjul slette-knappen så brukeren ikke møter en kryptisk RLS-feil ved klikk.
-  const kanSlette = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
-  // Bilder kan slettes av forfatter (om ikke FB-post) eller admin
-  const kanSletteBilder = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
-  // Bilder legges kun til av forfatteren selv (RLS på melding_bilder insert,
-  // mig. 081 — admin har ikke insert på andres innlegg). Ikke på FB-poster.
+  // Redigering (tekst, slett bilde, slett innlegg): forfatter eller admin, og
+  // ikke FB-importert (RLS fryser FB-rader — mig. 081).
+  const kanRedigere = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
+  // Legg til bilde er strengere: kun forfatteren selv (RLS insert-policy på
+  // melding_bilder, mig. 081 — admin har ikke insert på andres innlegg), og
+  // ikke på album-koblede innlegg (de bruker albumets bilder).
   const kanLeggeTilBilder = melding.profil_id === user!.id && !melding.fra_facebook
 
   // Aggreger reaksjoner per emoji
@@ -186,20 +183,6 @@ export default async function MeldingDetalj({
           </div>
         </div>
 
-        <div
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 16,
-            color: 'var(--text-primary)',
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word',
-            marginBottom: 16,
-          }}
-        >
-          <Linkified text={melding.innhold ?? ''} />
-        </div>
-
         {/* Albumkort: stort bilde (albumets omslag) + CTA-pille som lenker
             til albumet. Brukes når innlegget er en lenke til et eksisterende
             album. */}
@@ -256,54 +239,17 @@ export default async function MeldingDetalj({
           </div>
         )}
 
-        {/* Bilder sortert på rekkefoelge. Hvert bilde har slett-knapp for
-            eier/admin (ikke for FB-importerte innlegg). */}
-        {!albumKort && bilder.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              marginBottom: 16,
-            }}
-          >
-            {bilder.map(b => (
-              <div key={b.id} style={{ position: 'relative' }}>
-                <div
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    aspectRatio: '4/3',
-                    borderRadius: 'var(--radius-card)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Image
-                    src={b.bilde_url}
-                    alt=""
-                    fill
-                    sizes="(max-width: 512px) 100vw, 512px"
-                    style={{ objectFit: 'cover' }}
-                    priority
-                  />
-                </div>
-                {kanSletteBilder && (
-                  <SlettBildeKnapp bildeId={b.id} />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* «Legg til bilde» etter publisering. Vises også når innlegget står
-            uten bilder — det er slik man bytter bilde: slett det gamle, legg
-            til et nytt. Skjules for album-koblede innlegg og ved full cap. */}
-        {!albumKort && kanLeggeTilBilder && bilder.length < MELDING_MAKS_BILDER && (
-          <LeggTilBildeKnapp
-            meldingId={melding.id}
-            gjenstaaende={MELDING_MAKS_BILDER - bilder.length}
-          />
-        )}
+        {/* Tekst + egne bilder + redigeringsmodus samlet bak «Rediger».
+            Album-koblede innlegg har tomme `bilder` (utelukker egne bilder), så
+            komponenten viser da bare tekst + Rediger-knapp. */}
+        <MeldingRediger
+          meldingId={melding.id}
+          innhold={melding.innhold ?? ''}
+          bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
+          erAlbum={!!albumKort}
+          kanRedigere={kanRedigere}
+          kanLeggeTilBilder={kanLeggeTilBilder}
+        />
 
         <MeldingReaksjoner
           meldingId={melding.id}
@@ -321,8 +267,6 @@ export default async function MeldingDetalj({
           profiler={chatProfiler ?? []}
         />
       </div>
-
-      {kanSlette && <SlettMeldingKnapp meldingId={melding.id} />}
     </div>
   )
 }

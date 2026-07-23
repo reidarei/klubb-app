@@ -182,17 +182,40 @@ export async function leggTilMeldingBilde(meldingId: string, bildeUrl: string) {
 }
 
 export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
+  const { supabase } = await ensureInnlogget()
   const tekst = innhold.trim()
-  if (tekst.length < INNLEGG_MIN_LENGDE || tekst.length > INNLEGG_MAKS_LENGDE) {
+
+  // Tekst kan være tom når innlegget bæres av bilder eller et album — samme
+  // regel som ved opprettelse. Ellers kreves INNLEGG_MIN_LENGDE tegn. Uten
+  // denne sjekken feilet redigering av et bilde-innlegg der man ville tømme
+  // teksten (min-lengde 1 slo inn selv om bildet er innholdet).
+  const [{ count: antallBilder }, { data: melding }] = await Promise.all([
+    supabase
+      .from('melding_bilder')
+      .select('id', { count: 'exact', head: true })
+      .eq('melding_id', meldingId),
+    supabase.from('meldinger').select('album_id').eq('id', meldingId).single(),
+  ])
+  const harBildeEllerAlbum = (antallBilder ?? 0) > 0 || !!melding?.album_id
+
+  if (harBildeEllerAlbum) {
+    if (tekst.length > INNLEGG_MAKS_LENGDE) {
+      throw new Error(`Innholdet kan maks være ${INNLEGG_MAKS_LENGDE} tegn`)
+    }
+  } else if (tekst.length < INNLEGG_MIN_LENGDE || tekst.length > INNLEGG_MAKS_LENGDE) {
     throw new Error(`Innholdet må være ${INNLEGG_MIN_LENGDE}–${INNLEGG_MAKS_LENGDE} tegn`)
   }
-  const supabase = await createServerClient()
+
+  // Tom tekst lagres som null (ikke tom streng) — konsistent med opprettMelding
+  // og med DB-checken som tillater «null eller 1..2000 tegn».
   const { error } = await supabase
     .from('meldinger')
-    .update({ innhold: tekst })
+    .update({ innhold: tekst || null })
     .eq('id', meldingId)
 
   if (error) throw new Error(error.message)
+  // Feeden viser innleggsteksten som utdrag — revalider så den ikke blir stale.
+  revalidatePath('/')
 }
 
 // Reaksjoner på selve innlegget. Egen tabell `melding_reaksjon` for å
