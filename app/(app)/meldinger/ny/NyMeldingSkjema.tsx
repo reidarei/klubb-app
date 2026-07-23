@@ -10,7 +10,7 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
 import { komprimer } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
-import { iDagOslo, formaterDato } from '@/lib/dato'
+import { iDagOslo } from '@/lib/dato'
 import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
 
 const inputStil: CSSProperties = {
@@ -55,18 +55,14 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // AI dato-forslag — tilstand for henting, forslaget og om brukeren har avvist det
-  const [henterForslag, setHenterForslag] = useState(false)
-  const [forslag, setForslag] = useState<string | null>(null)
-  const [forslagAvvist, setForslagAvvist] = useState(false)
-  // Feedback når hentingen ikke ga noe forslag («fant ingen dato» / teknisk
-  // feil) — før feilet dette stille og knappen så bare død ut (#462).
-  const [forslagInfo, setForslagInfo] = useState<string | null>(null)
+  // Auto-dato: appen trekker stille ut en festedato fra teksten mens brukeren
+  // skriver — ingen knapp, datofeltet fylles ut av seg selv. Så snart brukeren
+  // selv rører datofeltet slutter vi å overstyre valget hans.
+  const [datoManueltSatt, setDatoManueltSatt] = useState(false)
   // Generasjons-token mot stale forslag. En server action kan ikke avbrytes
-  // via AbortSignal, så vi kan ikke «kansellere» et kall i flukt. I stedet
-  // bumper vi denne telleren ved ny henting, tekst-endring og avvisning — et
-  // svar som lander med utdatert gen droppes. Dekker både stale-tekst-racet og
-  // svar som lander etter at brukeren avviste.
+  // via AbortSignal, så vi kan ikke «kansellere» et kall i flukt. Debounce-
+  // effekten bumper telleren ved hver ny henting; et svar som lander med
+  // utdatert gen droppes (teksten er endret siden kallet startet).
   const forslagGenRef = useRef(0)
   // Sentralt register over aktive blob-URL-er. Bruker ref + Set fordi
   // cleanup-funksjonen i useEffect ellers lukker over et tomt snapshot
@@ -103,48 +99,49 @@ export default function NyMeldingSkjema({ albumer }: Props) {
     setValgtAlbum(null)
   }
 
-  async function hentForslag() {
-    // Ny generasjon for dette kallet. Bump'es igjen av onChange/avvis mens
-    // kallet er i flukt — da matcher ikke gen lenger og svaret droppes.
+  // Stille bakgrunns-uttrekk av festedato mens brukeren skriver. Debounces slik
+  // at vi ikke kaller AI-en på hvert tastetrykk — først 1 sek etter siste
+  // endring. Overstyrer aldri en dato brukeren selv har satt (datoManueltSatt).
+  // forslagGenRef dropper svar som lander etter at teksten er endret på nytt.
+  useEffect(() => {
+    if (datoManueltSatt) return
+    if (innhold.trim().length < DATO_FORSLAG_MIN_TEGN) return
     const gen = ++forslagGenRef.current
-    // Et eksplisitt knappetrykk er en fersk intensjon og skal overstyre en
-    // tidligere ×-avvisning — ellers ville chip-en forblitt skjult av
-    // `forslag && !forslagAvvist` helt til brukeren endret teksten.
-    setForslagAvvist(false)
-    // Skjul et evt. tidligere forslag mens vi henter et nytt — ellers kan
-    // brukeren rekke å trykke «Bruk» på en utdatert chip mens kallet er i
-    // flukt (Copilot-funn, PR #425).
-    setForslag(null)
-    setForslagInfo(null)
-    setHenterForslag(true)
+    const timer = setTimeout(async () => {
+      try {
+        const r = await foreslaaAktuellDato(innhold)
+        // Teksten er endret siden kallet startet, eller brukeren har tatt over
+        // datofeltet i mellomtiden — forkast dette svaret.
+        if (gen !== forslagGenRef.current || datoManueltSatt) return
+        if (r.dato !== null) {
+          setAktuellDato(r.dato)
+        } else if (r.grunn === 'ingen_dato') {
+          // Teksten refererer ikke lenger til noen dato — fjern en auto-satt
+          // dato. Ved teknisk feil ('feil') beholder vi gjeldende verdi.
+          setAktuellDato('')
+        }
+      } catch {
+        // Nettverks-/auth-feil: helt stille. Dette er en bakgrunns-
+        // bekvemmelighet, ikke noe brukeren venter på.
+      }
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [innhold, datoManueltSatt])
+
+  // Beregn festedato idet vi publiserer. Normalt har bakgrunns-effekten over
+  // allerede fylt aktuellDato, så dette er en ren retur uten AI-kall. Har
+  // brukeren skrevet og publisert raskere enn debouncen (< 1 sek), gjør vi ett
+  // siste forsøk her slik at innlegget likevel blir festet. Har brukeren
+  // bevisst rørt/tømt datofeltet, respekterer vi det og hopper over uttrekk.
+  async function beregnAktuellDato(): Promise<string | null> {
+    if (aktuellDato) return aktuellDato
+    if (datoManueltSatt) return null
+    if (innhold.trim().length < DATO_FORSLAG_MIN_TEGN) return null
     try {
       const r = await foreslaaAktuellDato(innhold)
-      // Drop svaret hvis en nyere henting, tekst-endring eller avvisning
-      // har skjedd i mellomtiden.
-      if (gen !== forslagGenRef.current) return
-      // Eksplisitt null-sjekk (ikke truthiness) — det er null-literalen som
-      // diskriminerer unionen, så TS kan narrowe til { grunn } i else-grenen.
-      if (r.dato !== null) {
-        setForslag(r.dato)
-      } else {
-        // Skill «modellen fant ingen dato» fra tekniske feil — begge var
-        // usynlige før og knappen så bare død ut (#462).
-        setForslag(null)
-        setForslagInfo(
-          r.grunn === 'ingen_dato'
-            ? 'Fant ingen dato i teksten.'
-            : 'Klarte ikke å hente forslag. Prøv igjen.',
-        )
-      }
+      return r.dato ?? null
     } catch {
-      // Server action kastet (nettverk, auth) — samme melding som teknisk feil.
-      if (gen === forslagGenRef.current) {
-        setForslagInfo('Klarte ikke å hente forslag. Prøv igjen.')
-      }
-    } finally {
-      // Knappen er disabled mens henterForslag er true, så det er aldri to
-      // hentForslag i flukt samtidig — denne er alltid den aktive spinneren.
-      setHenterForslag(false)
+      return null
     }
   }
 
@@ -193,7 +190,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           await opprettMelding({
             innhold,
             album_id: valgtAlbum!.id,
-            aktuell_dato: aktuellDato || null,
+            aktuell_dato: await beregnAktuellDato(),
           })
         } catch (err) {
           if (
@@ -217,6 +214,9 @@ export default function NyMeldingSkjema({ albumer }: Props) {
 
     startTransition(async () => {
       try {
+        // Beregn festedato før opplasting, slik at et evt. siste AI-forsøk
+        // overlapper med bilde-komprimeringen i stedet for å legge på tid.
+        const aktuell_dato = await beregnAktuellDato()
         // Last opp bilder SEKVENSIELT for å spare iOS-minne (Canvas API er
         // single-threaded og multiple parallelle kanvasoperasjoner kan krasje
         // på eldre iPhones med lite RAM).
@@ -232,7 +232,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           opplastede.push(res.url)
         }
 
-        await opprettMelding({ innhold, bilde_urls: opplastede, aktuell_dato: aktuellDato || null })
+        await opprettMelding({ innhold, bilde_urls: opplastede, aktuell_dato })
       } catch (err) {
         // NEXT_REDIRECT er ikke en ekte feil — la Next.js håndtere redirect
         if (
@@ -260,9 +260,6 @@ export default function NyMeldingSkjema({ albumer }: Props) {
 
   const tegnIgjen = INNLEGG_MAKS_LENGDE - innhold.length
   const kanLeggeTilFlere = bilder.length < MELDING_MAKS_BILDER
-  // Forslag-knappen er sperret mens et kall pågår eller teksten er for kort.
-  // Løftet til variabel så `disabled` og `cursor` deler samme sannhet.
-  const forslagKnappDisabled = henterForslag || innhold.trim().length < DATO_FORSLAG_MIN_TEGN
   const visUploadSeksjon = !valgtAlbum
   const visAlbumvelger = bilder.length === 0
 
@@ -281,16 +278,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
         <div style={{ padding: '10px 4px' }}>
           <textarea
             value={innhold}
-            onChange={e => {
-              setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))
-              // Invalider et in-flight forslag: teksten er endret, så et svar
-              // som lander nå gjelder gammel tekst og skal droppes.
-              forslagGenRef.current++
-              // Stale forslag på gammel tekst skal ikke henge igjen
-              if (forslagAvvist) setForslagAvvist(false)
-              if (forslag) setForslag(null)
-              if (forslagInfo) setForslagInfo(null)
-            }}
+            onChange={e => setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))}
             placeholder="Skriv her…"
             style={inputStil}
           />
@@ -509,7 +497,12 @@ export default function NyMeldingSkjema({ albumer }: Props) {
           <input
             type="date"
             value={aktuellDato}
-            onChange={e => setAktuellDato(e.target.value)}
+            onChange={e => {
+              setAktuellDato(e.target.value)
+              // Brukeren har tatt over datofeltet — stopp auto-uttrekket fra å
+              // overstyre valget hans (gjelder også når han tømmer feltet).
+              setDatoManueltSatt(true)
+            }}
             disabled={isPending}
             // Sperr for fortidsdatoer i velgeren. Må bruke norsk kalenderdato
             // (ikke UTC), ellers kan «i dag» bli «i går» rundt midnatt norsk tid
@@ -517,121 +510,6 @@ export default function NyMeldingSkjema({ albumer }: Props) {
             min={iDagOslo()}
             style={{ ...inputStil, colorScheme: 'dark' }}
           />
-
-          {/* Foreslå dato fra innholdsteksten via AI */}
-          <button
-            type="button"
-            onClick={hentForslag}
-            disabled={forslagKnappDisabled}
-            style={{
-              marginTop: 10,
-              padding: '7px 14px',
-              background: 'transparent',
-              border: '0.5px solid var(--border)',
-              borderRadius: 999,
-              color: 'var(--text-secondary)',
-              fontFamily: 'var(--font-body)',
-              fontSize: 12,
-              cursor: forslagKnappDisabled ? 'default' : 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            {henterForslag ? (
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  color: 'var(--text-tertiary)',
-                  letterSpacing: '1.2px',
-                }}
-              >
-                Tenker…
-              </span>
-            ) : (
-              'Foreslå fra teksten'
-            )}
-          </button>
-
-          {/* Feedback når hentingen ikke ga forslag — «ingen dato» eller
-              teknisk feil. Forsvinner ved ny henting og tekst-endring. */}
-          {forslagInfo && !henterForslag && (
-            <div
-              style={{
-                marginTop: 8,
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              {forslagInfo}
-            </div>
-          )}
-
-          {/* Chip med foreslått dato — vises til brukeren godtar eller avviser */}
-          {forslag && !forslagAvvist && (
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                marginTop: 10,
-                padding: '6px 12px',
-                background: 'var(--bg-elevated)',
-                border: '0.5px solid var(--accent)',
-                borderRadius: 999,
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-primary)',
-              }}
-            >
-              <span>Foreslått: {formaterDato(forslag, 'EEE d. MMM')}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAktuellDato(forslag)
-                  setForslag(null)
-                }}
-                style={{
-                  background: 'var(--accent)',
-                  border: 'none',
-                  borderRadius: 999,
-                  color: 'var(--bg)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: '2px 8px',
-                  cursor: 'pointer',
-                }}
-              >
-                Bruk
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // Bump gen så et svar som fortsatt er i flukt (bruker rakk å
-                  // avvise før det landet) droppes i stedet for å dukke opp igjen.
-                  forslagGenRef.current++
-                  setForslag(null)
-                  setForslagAvvist(true)
-                }}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-tertiary)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 14,
-                  lineHeight: 1,
-                  padding: '0 2px',
-                  cursor: 'pointer',
-                }}
-                aria-label="Avvis forslag"
-              >
-                ×
-              </button>
-            </div>
-          )}
 
           <div
             style={{
@@ -643,7 +521,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
               marginTop: 6,
             }}
           >
-            Holder innlegget festet øverst til datoen er passert
+            Fylles ut fra teksten — holder innlegget festet øverst til datoen er passert
           </div>
         </div>
       </SkjemaSeksjon>

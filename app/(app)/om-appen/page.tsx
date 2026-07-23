@@ -95,10 +95,10 @@ export default function OmAppen() {
           Ytelsesmålinger (anonyme, uten brukerdata) går til Vercel.
         </Avsnitt>
         <Avsnitt overskrift="AI-funksjoner">
-          Når du trykker «Foreslå fra teksten» på et innlegg, sendes teksten
-          i det innlegget til Anthropic (AI-leverandør i USA) for å tolke en
-          eventuell dato. Dette skjer bare når du selv ber om det — ingen
-          tekst sendes automatisk.
+          Når du skriver et innlegg, sendes teksten til Anthropic (AI-leverandør
+          i USA) for å tolke en eventuell dato, slik at innlegget kan festes
+          øverst frem til den datoen. Dette skjer automatisk mens du skriver, og
+          bare på nye innlegg — ingen annen tekst i appen sendes ut.
         </Avsnitt>
         <Avsnitt overskrift="Hvor data ligger" siste>
           Database og fillagring hos Supabase i Dublin (EU). Hosting hos
