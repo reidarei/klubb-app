@@ -10,6 +10,8 @@ import Chat from '@/components/chat/Chat'
 import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
 import SlettMeldingKnapp from './SlettMeldingKnapp'
 import SlettBildeKnapp from './SlettBildeKnapp'
+import LeggTilBildeKnapp from './LeggTilBildeKnapp'
+import { MELDING_MAKS_BILDER } from '@/lib/konstanter'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -96,6 +98,9 @@ export default async function MeldingDetalj({
   const kanSlette = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
   // Bilder kan slettes av forfatter (om ikke FB-post) eller admin
   const kanSletteBilder = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
+  // Bilder legges kun til av forfatteren selv (RLS på melding_bilder insert,
+  // mig. 081 — admin har ikke insert på andres innlegg). Ikke på FB-poster.
+  const kanLeggeTilBilder = melding.profil_id === user!.id && !melding.fra_facebook
 
   // Aggreger reaksjoner per emoji
   const grupper = new Map<string, string[]>()
@@ -288,6 +293,16 @@ export default async function MeldingDetalj({
               </div>
             ))}
           </div>
+        )}
+
+        {/* «Legg til bilde» etter publisering. Vises også når innlegget står
+            uten bilder — det er slik man bytter bilde: slett det gamle, legg
+            til et nytt. Skjules for album-koblede innlegg og ved full cap. */}
+        {!albumKort && kanLeggeTilBilder && bilder.length < MELDING_MAKS_BILDER && (
+          <LeggTilBildeKnapp
+            meldingId={melding.id}
+            gjenstaaende={MELDING_MAKS_BILDER - bilder.length}
+          />
         )}
 
         <MeldingReaksjoner

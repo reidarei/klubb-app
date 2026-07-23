@@ -134,6 +134,53 @@ export async function slettMeldingBilde(bildeId: string) {
   if (error) throw new Error(error.message)
 }
 
+// Legg til ett bilde på en eksisterende melding etter publisering — brukes når
+// forfatteren vil bytte eller supplere bildet uten å lage nytt innlegg.
+// Klienten laster først opp til R2 (lastOppBilde) og sender den ferdige URL-en
+// hit. RLS på melding_bilder (mig. 081) tillater kun forfatteren å sette inn;
+// vi speiler den sjekken her + FB-frys og album-kobling for tydelig feilmelding
+// i stedet for en kryptisk RLS-avvisning.
+export async function leggTilMeldingBilde(meldingId: string, bildeUrl: string) {
+  const { supabase, user } = await ensureInnlogget()
+
+  const { data: melding, error: meldingFeil } = await supabase
+    .from('meldinger')
+    .select('profil_id, fra_facebook, album_id')
+    .eq('id', meldingId)
+    .single()
+
+  if (meldingFeil || !melding) throw new Error('Fant ikke innlegget')
+  if (melding.profil_id !== user.id) throw new Error('Du kan bare legge til bilder på egne innlegg')
+  if (melding.fra_facebook) throw new Error('Kan ikke endre bilder på Facebook-importerte innlegg')
+  // Album-koblede innlegg viser albumets omslag — egne bilder kan ikke
+  // kombineres med dem (samme regel som ved opprettelse).
+  if (melding.album_id) throw new Error('Album-koblede innlegg bruker albumets bilder')
+
+  // Hent eksisterende bilder for cap-sjekk og for å plassere det nye sist.
+  const { data: eksisterende, error: tellFeil } = await supabase
+    .from('melding_bilder')
+    .select('rekkefoelge')
+    .eq('melding_id', meldingId)
+
+  if (tellFeil) throw new Error(tellFeil.message)
+  if ((eksisterende?.length ?? 0) >= MELDING_MAKS_BILDER) {
+    throw new Error(`Maks ${MELDING_MAKS_BILDER} bilder per innlegg`)
+  }
+  // Nytt bilde legges bakerst: høyeste eksisterende rekkefoelge + 1 (−1 som
+  // start gjør at første bilde på et tomt innlegg får rekkefoelge 0).
+  const nesteRekkefoelge =
+    (eksisterende ?? []).reduce((maks, r) => Math.max(maks, r.rekkefoelge), -1) + 1
+
+  const { error } = await supabase
+    .from('melding_bilder')
+    .insert({ melding_id: meldingId, bilde_url: bildeUrl, rekkefoelge: nesteRekkefoelge })
+
+  if (error) throw new Error(error.message)
+  // Innlegget vises også på forsiden med omslagsbilde — revalider så feeden
+  // fanger det nye/endrede bildet, ikke bare detaljsiden (router.refresh).
+  revalidatePath('/')
+}
+
 export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
   const tekst = innhold.trim()
   if (tekst.length < INNLEGG_MIN_LENGDE || tekst.length > INNLEGG_MAKS_LENGDE) {
