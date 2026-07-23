@@ -240,7 +240,24 @@ export default function Chat({
         bildeUrl = res.url
       }
 
-      await sendChatMelding(scope, melding, bildeUrl)
+      const nyRad = await sendChatMelding(scope, melding, bildeUrl)
+      // Bytt den optimistiske temp-raden ut med den ekte raden fra serveren med
+      // en gang — ikke vent på realtime-INSERT. Egen melding forsvant tidligere
+      // når det eventet ikke nådde fram (abonnement-race ved sidelast, droppet
+      // WebSocket på iOS-PWA), fordi realtime var eneste avstemming. Realtime-
+      // handleren dedup'er på id, så en senere echo av samme rad blir no-op.
+      setMeldinger(prev => {
+        // Realtime rakk å legge inn den ekte raden allerede — fjern kun temp.
+        if (prev.some(m => m.id === nyRad.id)) {
+          return prev.filter(m => m.id !== tempId)
+        }
+        const harTemp = prev.some(m => m.id === tempId)
+        return harTemp
+          ? prev.map(m => (m.id === tempId ? { ...nyRad, fra_facebook: false } : m))
+          : [...prev, { ...nyRad, fra_facebook: false }]
+      })
+      // Den ekte raden peker på R2-URL nå — frigjør blob-preview-en.
+      if (previewUrlKopi) URL.revokeObjectURL(previewUrlKopi)
     } catch (err) {
       console.error('Send feilet:', err)
       setMeldinger(prev => prev.filter(m => m.id !== tempId))
@@ -254,8 +271,6 @@ export default function Chat({
       setSender(false)
       inputRef.current?.focus()
     }
-    // Merk: blob-URL beholdes ved suksess til realtime INSERT bytter ut
-    // optimistisk-raden. Cleanup skjer i useEffect under når raden er borte.
   }
 
   function startLongPress(meldingId: string) {

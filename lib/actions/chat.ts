@@ -124,6 +124,18 @@ async function sendPrivatMeldingVarsel(
   })
 }
 
+// Raden sendChatMelding returnerer til klienten. Lar avsenderen bytte ut sin
+// optimistiske temp-rad med den ekte raden umiddelbart, uten å vente på
+// realtime-INSERT (som kan mangle ved abonnement-race eller droppet WebSocket).
+export type SendtChatMelding = {
+  id: string
+  profil_id: string
+  innhold: string | null
+  bilde_url: string | null
+  video_url: string | null
+  opprettet: string
+}
+
 // Generisk send for alle chat-scopes. Tabell, FK-felt og charLimit slås opp
 // i CHAT_KONFIG. RLS i Postgres er fortsatt det som faktisk håndhever
 // tilgang per scope; her gjør vi bare ergonomisk innsetting.
@@ -131,14 +143,16 @@ export async function sendChatMelding(
   scope: ChatScope,
   innhold: string | null,
   bildeUrl: string | null = null,
-): Promise<void> {
+): Promise<SendtChatMelding> {
   const k = konfigFor(scope)
   const { tekst } = validerInnhold(innhold, bildeUrl, k.charLimit)
 
   const { supabase, user } = await ensureInnlogget()
 
   const fkData = k.fkFelt ? { [k.fkFelt]: k.scopeId(scope) } : {}
-  const { error } = await supabase
+  // Returner den innsatte raden (.select().single) så avsenderen kan avstemme
+  // sin optimistiske rad deterministisk — ikke via realtime-rundturen.
+  const { data, error } = await supabase
     .from(k.tabell)
     .insert({
       ...fkData,
@@ -146,7 +160,10 @@ export async function sendChatMelding(
       innhold: tekst,
       bilde_url: bildeUrl,
     })
+    .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
+    .single<SendtChatMelding>()
   if (error) throw new Error(error.message)
+  if (!data) throw new Error('Klarte ikke å lagre meldingen')
 
   revalideringsPaths(scope).forEach((p) => revalidatePath(p))
 
@@ -157,6 +174,8 @@ export async function sendChatMelding(
     // til DB. Logg og gå videre.
     await logg.feil('chat.varsler.feilet', err)
   }
+
+  return data
 }
 
 export async function oppdaterChatMelding(
