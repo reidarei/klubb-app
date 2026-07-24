@@ -207,11 +207,14 @@ export default async function Forside() {
         </section>
       )}
 
-      {/* I kveld */}
+      {/* I dag — samler alt som skjer i dag (arrangementer, bursdager, poll-
+          frister, jubileum). Labelen er «I dag», ikke «I kveld», fordi
+          seksjonen også rommer bursdager som varer hele dagen (#…). Kvelds-
+          arrangementer beholder sin egen «I KVELD»-chip på selve kortet. */}
       {idag.length > 0 && (
         <section style={{ marginBottom: 28 }}>
           <SectionLabel>
-            I kveld · {formaterDato(idag[0].sortIso!, 'd. MMMM').toLowerCase()}
+            I dag · {formaterDato(idag[0].sortIso!, 'd. MMMM').toLowerCase()}
           </SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {idag.map(i => {

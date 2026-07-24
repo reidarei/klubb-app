@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
-import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { formaterDato, aarHvisAvvik, iDagOslo } from '@/lib/dato'
 
 export type BursdagData = {
   id: string
@@ -17,6 +17,10 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
   const mnd = formaterDato(bursdag.dato, 'MMM').toUpperCase()
   const dag = formaterDato(bursdag.dato, 'd')
   const aar = aarHvisAvvik(bursdag.dato)
+  // Bursdag i dag løftes fram som dagens høydepunkt: aksentramme + halo og
+  // «I DAG» i stedet for datoen — på linje med hvordan dagens arrangementer
+  // fremheves. Bursdager fram i tid (i «Kommende») beholder nøytral stil.
+  const erIDag = bursdag.dato === iDagOslo()
 
   return (
     <Link
@@ -27,8 +31,9 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
         alignItems: 'stretch',
         overflow: 'hidden',
         borderRadius: 'var(--radius-card)',
-        border: '0.5px solid var(--border-subtle)',
+        border: erIDag ? '1px solid var(--accent)' : '0.5px solid var(--border-subtle)',
         background: 'var(--bg-elevated)',
+        boxShadow: erIDag ? '0 0 0 4px var(--accent-soft)' : undefined,
         textDecoration: 'none',
         color: 'inherit',
       }}
@@ -43,7 +48,7 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
           justifyContent: 'center',
         }}
       >
-        <Icon name="wine" size={24} color="var(--text-tertiary)" strokeWidth={1.25} />
+        <Icon name="wine" size={24} color={erIDag ? 'var(--accent)' : 'var(--text-tertiary)'} strokeWidth={1.25} />
       </div>
 
       <div
@@ -70,8 +75,8 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
             textTransform: 'uppercase',
           }}
         >
-          <span>
-            {dag}. {mnd}{aar && ` ${aar}`}
+          <span style={erIDag ? { color: 'var(--accent)' } : undefined}>
+            {erIDag ? 'I DAG' : `${dag}. ${mnd}${aar ? ` ${aar}` : ''}`}
           </span>
         </div>
 
