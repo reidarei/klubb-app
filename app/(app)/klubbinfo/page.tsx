@@ -70,6 +70,12 @@ export default async function Klubbinfo() {
       href: '/album',
     },
     {
+      icon: 'mapPin',
+      title: 'Stedene',
+      sub: 'Turene på Europakart',
+      href: '/stedene',
+    },
+    {
       icon: 'doc',
       title: 'Vedtekter',
       sub: 'Regler og kvotering',

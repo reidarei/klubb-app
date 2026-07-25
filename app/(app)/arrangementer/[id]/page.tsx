@@ -139,9 +139,12 @@ export default async function ArrangementDetaljer({
     : arr.opprettet_profil
   const opprettetAvNavn = opprettetProfil?.navn ?? 'Ukjent'
 
+  // Er arrangementet fortsatt i framtiden? Styrer både pass-lista og
+  // «Varsle nå»-knappen — man skal ikke kunne varsle om noe som alt har vært.
+  const erKommende = new Date(arr.start_tidspunkt) > new Date()
+
   // Pass-listen vises kun for arrangøren av en kommende tur.
-  const visPassListe =
-    erTur && erArrangoer && new Date(arr.start_tidspunkt) > new Date()
+  const visPassListe = erTur && erArrangoer && erKommende
 
   // Bygg deltaker-data for PassListe: kombiner pass_info (godkjent
   // dagstilgang) med siste forespørsel-status per eier.
@@ -272,7 +275,9 @@ export default async function ArrangementDetaljer({
             gap: 8,
           }}
         >
-          {kanRedigere && <VarsleNuKnapp arrangementId={id} arrangementTittel={arr.tittel} />}
+          {kanRedigere && erKommende && (
+            <VarsleNuKnapp arrangementId={id} arrangementTittel={arr.tittel} />
+          )}
           {kanRedigere && (
             <Link
               href={`/arrangementer/${id}/rediger`}

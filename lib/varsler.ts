@@ -52,6 +52,17 @@ async function erTypeAktiv(type: string): Promise<boolean> {
   return erVarselAktiv(typeTilNoekkel(type))
 }
 
+// Varseltyper som annonserer/minner om at selve arrangementet skjer. Disse
+// skal aldri gå ut hvis arrangementet alt har skjedd — jf. backfill av gamle
+// turer. Chat, innlegg, polls og arrangør-purring står bevisst UTENFOR: de
+// handler ikke om at hendelsen inntreffer, og skal virke også for tidligere
+// arrangementer.
+//
+// «oppdatert» (manuell «Varsle nå») er IKKE her: den knappen skjules i UI for
+// passerte arrangementer i stedet (se arrangementer/[id]/page.tsx). Vi blokkerer
+// altså ikke en bevisst manuell handling stille — vi fjerner muligheten.
+const HENDELSE_VARSLER = new Set(['nytt_arrangement', 'paaminne_7', 'paaminne_1'])
+
 // Sjekk om test-modus er aktiv — returnerer test-epost eller null
 async function hentTestModus(): Promise<string | null> {
   const supabase = createAdminClient()
@@ -177,6 +188,24 @@ export async function sendVarsel({
   }
 
   const supabase = createAdminClient()
+
+  // 0b. Fortids-sperre: hendelse-varsler skal ikke gå ut om arrangementet alt
+  // har skjedd (start_tidspunkt i fortiden). Lukker hele problemklassen sentralt
+  // — backfill av en gammel tur pinger ikke alle med «Nytt arrangement /
+  // påminnelse». Kun ett lite oppslag, og bare for de tre hendelse-typene.
+  // Sammenligner absolutte tidspunkt (begge er UTC-instanser), så tidssone
+  // spiller ingen rolle her.
+  if (arrangementId && HENDELSE_VARSLER.has(type)) {
+    const { data: arr } = await supabase
+      .from('arrangementer')
+      .select('start_tidspunkt')
+      .eq('id', arrangementId)
+      .maybeSingle()
+    if (arr?.start_tidspunkt && new Date(arr.start_tidspunkt).getTime() < Date.now()) {
+      logg.warn('varsel.hendelse.passert', { sample: type })
+      return
+    }
+  }
 
   // 1. Dedup-sjekk — gjelder enten arrangement_id eller poll_id alt etter
   // hvilken referanse varselet bærer. Først match som finnes vinner.

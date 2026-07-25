@@ -1,0 +1,154 @@
+import { createServerClient } from '@/lib/supabase/server'
+import { getInnloggetBruker } from '@/lib/auth-cache'
+import { formaterDato } from '@/lib/dato'
+import { BY_KOORDINATER } from '@/lib/steder-koordinater'
+import { projiser } from '@/lib/europa-kart-data'
+import EuropaKart, { type Sted } from '@/components/stedene/EuropaKart'
+
+// «Stedene» — alle turene klubben har vært på, plottet på et Europakart.
+// Datagrunnlag: arrangementer med type='tur' og en destinasjon som finnes i
+// geografi-oppslaget. Turer uten kjent by (f.eks. skjult blåtur) listes som
+// «ikke plottet» under kartet i stedet for å forsvinne stille.
+export default async function Stedene() {
+  const [supabase] = await Promise.all([createServerClient(), getInnloggetBruker()])
+
+  const { data: rader } = await supabase
+    .from('arrangementer')
+    .select('id, tittel, start_tidspunkt, destinasjon')
+    .eq('type', 'tur')
+    .not('destinasjon', 'is', null)
+    .order('start_tidspunkt', { ascending: true })
+
+  type Rad = { id: string; tittel: string; start_tidspunkt: string; destinasjon: string }
+  const turer = (rader ?? []) as Rad[]
+
+  // Grupper de plottbare turene per by, projiser koordinat én gang per by.
+  const perBy = new Map<string, Sted>()
+  const ikkePlottet: { aar: number; tittel: string; by: string }[] = []
+
+  for (const t of turer) {
+    const aar = Number(formaterDato(t.start_tidspunkt, 'yyyy'))
+    const koord = BY_KOORDINATER[t.destinasjon]
+    if (!koord) {
+      ikkePlottet.push({ aar, tittel: t.tittel, by: t.destinasjon })
+      continue
+    }
+    let sted = perBy.get(t.destinasjon)
+    if (!sted) {
+      const { x, y } = projiser(koord.lng, koord.lat)
+      sted = { by: t.destinasjon, x, y, turer: [] }
+      perBy.set(t.destinasjon, sted)
+    }
+    sted.turer.push({ aar, tittel: t.tittel })
+  }
+
+  const steder = [...perBy.values()]
+  const antallTurer = steder.reduce((n, s) => n + s.turer.length, 0)
+
+  // Samlet tidslinje (alle turer, også ikke-plottede), eldste først.
+  const tidslinje = [
+    ...steder.flatMap(s => s.turer.map(t => ({ ...t, by: s.by, plottet: true }))),
+    ...ikkePlottet.map(t => ({ ...t, plottet: false })),
+  ].sort((a, b) => a.aar - b.aar)
+
+  return (
+    <div style={{ padding: '0 20px 20px' }}>
+      <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '1.6px',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Klubbinfo
+        </div>
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 38,
+            fontWeight: 500,
+            letterSpacing: '-0.5px',
+            lineHeight: 1,
+            margin: 0,
+            color: 'var(--text-primary)',
+          }}
+        >
+          Stedene
+        </h1>
+        <p
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 14,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.5,
+            margin: '12px 0 0',
+          }}
+        >
+          {steder.length} byer, {antallTurer} turer gjennom årene.
+        </p>
+      </header>
+
+      <EuropaKart steder={steder} />
+
+      {/* Reiseruta — kronologisk tidslinje */}
+      <div style={{ marginTop: 34 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontWeight: 600,
+          }}
+        >
+          Reiseruta
+          <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
+        </div>
+        {tidslinje.map((t, i) => (
+          <div
+            key={`${t.aar}-${t.by}-${i}`}
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 14,
+              padding: '9px 2px',
+              borderBottom: '0.5px solid var(--border-subtle)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                color: 'var(--accent)',
+                minWidth: 42,
+              }}
+            >
+              {t.aar}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 17,
+                fontWeight: 500,
+                color: t.plottet ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                letterSpacing: '-0.2px',
+              }}
+            >
+              {t.plottet ? t.by : `${t.tittel} 🔒`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
