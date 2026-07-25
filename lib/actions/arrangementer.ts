@@ -11,6 +11,7 @@ import { r2StiFraUrl, slettR2 } from '@/lib/r2'
 import { VARSLE_MAKS_LENGDE, PURRING_MAKS_LENGDE } from '@/lib/konstanter'
 import { ensureInnlogget } from '@/lib/auth'
 import { logg } from '@/lib/logg'
+import { geokod } from '@/lib/geokoding'
 
 export type ArrangementInput = {
   type: 'moete' | 'tur'
@@ -61,6 +62,10 @@ async function losne(
 export async function opprettArrangement(data: ArrangementInput) {
   const { supabase, user } = await ensureInnlogget()
 
+  // Geokod destinasjonen til koordinat for Stedene-kartet. Kun for turer med
+  // en destinasjon; best-effort (null ved feil) så oppretting aldri blokkeres.
+  const koord = data.type === 'tur' && data.destinasjon ? await geokod(data.destinasjon) : null
+
   const { data: arrangement, error } = await supabase
     .from('arrangementer')
     .insert({
@@ -74,6 +79,8 @@ export async function opprettArrangement(data: ArrangementInput) {
       pris_per_person: data.pris_per_person || null,
       sensurerte_felt: data.sensurerte_felt || {},
       bilde_url: data.bilde_url || null,
+      lat: koord?.lat ?? null,
+      lng: koord?.lng ?? null,
       opprettet_av: user.id,
     })
     .select()
@@ -150,10 +157,23 @@ export async function oppdaterArrangement(id: string, data: Partial<ArrangementI
   // Håndter mal-bytte separat fra arrangement-feltene
   const { mal_navn, aar, ...arrFelter } = data
 
+  // Re-geokod hvis destinasjonen er en del av oppdateringen. Tømt destinasjon
+  // (eller endret til møte) → null coords, så gamle koordinater ikke henger igjen.
+  // Urørt destinasjon (undefined) lar coords stå som de er.
+  const koordFelt =
+    arrFelter.destinasjon !== undefined
+      ? await (async () => {
+          const dest = arrFelter.destinasjon?.trim()
+          const koord = dest ? await geokod(dest) : null
+          return { lat: koord?.lat ?? null, lng: koord?.lng ?? null }
+        })()
+      : {}
+
   const { error } = await supabase
     .from('arrangementer')
     .update({
       ...arrFelter,
+      ...koordFelt,
       oppdatert: naa(),
     })
     .eq('id', id)

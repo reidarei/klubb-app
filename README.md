@@ -68,6 +68,7 @@ Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
 | Bildelagring | Cloudflare R2 (S3-kompatibel), `aws4fetch` for signing |
 | E-post | Resend |
 | Push | Web Push (VAPID) via `web-push` |
+| Geokoding | Nominatim (OpenStreetMap) — nøkkelfri, for kart over turene (`lib/geokoding.ts`) |
 | AI (valgfritt) | Anthropic Claude Haiku for datoforslag — rå `fetch`, ingen SDK; av uten API-nøkkel |
 | Cron | GitHub Actions (`paaminne.yml`, daglig 06:00 UTC) |
 | Hosting | Vercel (Hobby) |
@@ -332,6 +333,8 @@ Skriptet sjekker tre nivåer:
 **ANTHROPIC_API_KEY** (valgfri) — aktiverer AI-datoforslag i «Nytt innlegg». Uten den er funksjonen usynlig no-op. `ANTHROPIC_MODEL` kan overstyre modellvalget (default `claude-haiku-4-5`). Kostnad: brøkdeler av øre per forslag.
 
 **APP_URL** settes kun som GitHub Actions-secret (peker workflow-en til prod-URL) — den brukes ikke av appen i runtime og hører ikke hjemme i `.env.local`.
+
+**Geokoding (Nominatim)** krever **ingen** miljøvariabel eller API-nøkkel. Stedene-kartet geokoder turers destinasjon via OpenStreetMaps offentlige Nominatim-tjeneste (`lib/geokoding.ts`). Tjenestens bruksvilkår krever en identifiserende `User-Agent`; den bygges automatisk fra `BASE_URL` + `VAPID_CONTACT_EMAIL`. Se [docs/geokoding.md](docs/geokoding.md).
 
 ---
 

@@ -52,6 +52,8 @@ Auth-guard via `middleware.ts` (`@supabase/ssr`). Bruk `createServerClient` (fra
 
 **Migrasjoner:** Nye tabeller i `public`-schema må ha eksplisitte `GRANT`-statements til `anon`/`authenticated`/`service_role` — Supabase fjerner default-grants 30. mai 2026 for nye prosjekter og 30. oktober 2026 for eksisterende. Se **Policy: Migrasjoner** nedenfor.
 
+**Geokoding:** Stedene-kartet (`/stedene`) plotter turer via koordinater lagret på arrangementet (`lat`/`lng`). `lib/geokoding.ts` geokoder `destinasjon` via nøkkelfri Nominatim (OpenStreetMap) ved oppretting/redigering av en tur — best-effort, server-side. **Aldri** hardkod by→koordinat-tabeller; coords skal komme fra geokoding og lagres på raden. Se [docs/geokoding.md](docs/geokoding.md).
+
 **PWA:** Installerbar via Safari/Chrome. Manifest i `app/manifest.ts`.
 
 **Produksjon:** Appen deployes på Vercel — se [docs/oppsett.md](docs/oppsett.md) for oppsettsveiledning.

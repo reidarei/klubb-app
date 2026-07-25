@@ -1,7 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { formaterDato } from '@/lib/dato'
-import { BY_KOORDINATER } from '@/lib/steder-koordinater'
 import { projiser } from '@/lib/europa-kart-data'
 import EuropaKart, { type Sted } from '@/components/stedene/EuropaKart'
 
@@ -14,28 +13,36 @@ export default async function Stedene() {
 
   const { data: rader } = await supabase
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt, destinasjon')
+    .select('id, tittel, start_tidspunkt, destinasjon, lat, lng')
     .eq('type', 'tur')
     .not('destinasjon', 'is', null)
     .order('start_tidspunkt', { ascending: true })
 
-  type Rad = { id: string; tittel: string; start_tidspunkt: string; destinasjon: string }
+  type Rad = {
+    id: string
+    tittel: string
+    start_tidspunkt: string
+    destinasjon: string
+    lat: number | null
+    lng: number | null
+  }
   const turer = (rader ?? []) as Rad[]
 
-  // Grupper de plottbare turene per by, projiser koordinat én gang per by.
+  // Grupper de plottbare turene per by. Koordinatene ligger nå på selve
+  // arrangementet (geokodet ved oppretting, se lib/geokoding.ts) — turer uten
+  // coords (geokoding feilet, eller skjult blåtur) listes som «ikke plottet».
   const perBy = new Map<string, Sted>()
   const ikkePlottet: { aar: number; tittel: string; by: string }[] = []
 
   for (const t of turer) {
     const aar = Number(formaterDato(t.start_tidspunkt, 'yyyy'))
-    const koord = BY_KOORDINATER[t.destinasjon]
-    if (!koord) {
+    if (t.lat == null || t.lng == null) {
       ikkePlottet.push({ aar, tittel: t.tittel, by: t.destinasjon })
       continue
     }
     let sted = perBy.get(t.destinasjon)
     if (!sted) {
-      const { x, y } = projiser(koord.lng, koord.lat)
+      const { x, y } = projiser(t.lng, t.lat)
       sted = { by: t.destinasjon, x, y, turer: [] }
       perBy.set(t.destinasjon, sted)
     }

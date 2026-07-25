@@ -271,6 +271,8 @@ export type Database = {
           destinasjon: string | null
           fra_facebook: boolean
           id: string
+          lat: number | null
+          lng: number | null
           oppdatert: string
           oppmoetested: string | null
           opprettet: string
@@ -288,6 +290,8 @@ export type Database = {
           destinasjon?: string | null
           fra_facebook?: boolean
           id?: string
+          lat?: number | null
+          lng?: number | null
           oppdatert?: string
           oppmoetested?: string | null
           opprettet?: string
@@ -305,6 +309,8 @@ export type Database = {
           destinasjon?: string | null
           fra_facebook?: boolean
           id?: string
+          lat?: number | null
+          lng?: number | null
           oppdatert?: string
           oppmoetested?: string | null
           opprettet?: string
