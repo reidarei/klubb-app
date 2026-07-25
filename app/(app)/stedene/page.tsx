@@ -13,7 +13,7 @@ export default async function Stedene() {
 
   const { data: rader } = await supabase
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt, destinasjon, lat, lng')
+    .select('id, tittel, start_tidspunkt, destinasjon, lat, lng, sensurerte_felt')
     .eq('type', 'tur')
     .not('destinasjon', 'is', null)
     .order('start_tidspunkt', { ascending: true })
@@ -25,6 +25,7 @@ export default async function Stedene() {
     destinasjon: string
     lat: number | null
     lng: number | null
+    sensurerte_felt: Record<string, boolean> | null
   }
   const turer = (rader ?? []) as Rad[]
 
@@ -36,6 +37,15 @@ export default async function Stedene() {
 
   for (const t of turer) {
     const aar = Number(formaterDato(t.start_tidspunkt, 'yyyy'))
+    // Sensurert destinasjon (blåtur): plottes ALDRI, og den ekte byen sendes
+    // ikke til klienten — kun låst i tidslinja. Coords skal uansett være null
+    // (geokodes ikke mens sensurert), men vi filtrerer defensivt her også slik
+    // at kartet ikke kan avsløre hemmeligheten selv om en coord skulle finnes.
+    const sensurert = t.sensurerte_felt?.destinasjon === true
+    if (sensurert) {
+      ikkePlottet.push({ aar, tittel: t.tittel, by: '' })
+      continue
+    }
     if (t.lat == null || t.lng == null) {
       ikkePlottet.push({ aar, tittel: t.tittel, by: t.destinasjon })
       continue

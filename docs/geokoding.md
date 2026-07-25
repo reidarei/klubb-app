@@ -35,6 +35,23 @@ Geokodingen bruker OpenStreetMaps offentlige **Nominatim**-tjeneste.
   er treg eller nede — turen lagres bare uten coords og plottes ikke (før den
   eventuelt re-geokodes ved en senere redigering).
 
+## Sensurert destinasjon (blåtur)
+
+En tur kan ha `destinasjon` markert som sensurert i `sensurerte_felt` (blåtur —
+kun arrangøren ser gjennom sladden). Da må koordinatene **ikke** finnes noe sted
+de kan avsløre hemmeligheten. To lag sikrer det:
+
+1. **Geokodes ikke.** `opprettArrangement`/`oppdaterArrangement` hopper over
+   geokoding når `sensurerte_felt.destinasjon === true`, så `lat`/`lng` forblir
+   null. Slås sladden PÅ for en tur som alt var plottet, nulles coords ved neste
+   lagring — turen forsvinner fra kartet.
+2. **Kartet filtrerer defensivt.** `/stedene` plotter aldri en sensurert tur, og
+   sender ikke den ekte byen til klienten (vises kun som låst i tidslinja) — selv
+   om en coord mot formodning skulle ligge på raden.
+
+Fjernes sladden (arrangøren redigerer og skrur den av), geokodes destinasjonen og
+turen dukker opp på kartet som normalt.
+
 ## Bytte geokoding-tjeneste
 
 Vil man heller bruke en betalt tjeneste (Mapbox, Google, OpenCage) med høyere

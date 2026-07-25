@@ -64,7 +64,14 @@ export async function opprettArrangement(data: ArrangementInput) {
 
   // Geokod destinasjonen til koordinat for Stedene-kartet. Kun for turer med
   // en destinasjon; best-effort (null ved feil) så oppretting aldri blokkeres.
-  const koord = data.type === 'tur' && data.destinasjon ? await geokod(data.destinasjon) : null
+  // IKKE geokod en sensurert destinasjon (blåtur) — da ville coords lekket
+  // hemmeligheten via kartet eller raden. Coords lagres først når sladden
+  // fjernes (via redigering). Se docs/geokoding.md.
+  const destSensurert = data.sensurerte_felt?.destinasjon === true
+  const koord =
+    data.type === 'tur' && data.destinasjon && !destSensurert
+      ? await geokod(data.destinasjon)
+      : null
 
   const { data: arrangement, error } = await supabase
     .from('arrangementer')
@@ -164,7 +171,11 @@ export async function oppdaterArrangement(id: string, data: Partial<ArrangementI
     arrFelter.destinasjon !== undefined
       ? await (async () => {
           const dest = arrFelter.destinasjon?.trim()
-          const koord = dest ? await geokod(dest) : null
+          // Sensurert destinasjon (blåtur) → ingen coords. Slås sladden PÅ for
+          // en tur som alt var plottet, nulles coords her, som fjerner den fra
+          // kartet. Skjemaet sender alltid destinasjon + sensurerte_felt sammen.
+          const sensurert = arrFelter.sensurerte_felt?.destinasjon === true
+          const koord = dest && !sensurert ? await geokod(dest) : null
           return { lat: koord?.lat ?? null, lng: koord?.lng ?? null }
         })()
       : {}
