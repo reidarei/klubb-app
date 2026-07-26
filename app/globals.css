@@ -44,7 +44,11 @@
   --danger-alt: #e87060;
   --danger-soft: rgba(217, 122, 108, 0.14);
   --danger-border: rgba(217, 122, 108, 0.34);
-  --danger-hot: #e89080; /* hover/aktiv danger */
+  /* Hover/aktiv danger — OG tekstfarge på danger-lenker i hviletilstand
+   * (f.eks. «Prøv igjen» på /tidligere, #492). Bevisst utvidelse av
+   * semantikken: mot --bg gir --danger-hot 7.96:1 (mørkt) / 5.83:1 (lyst),
+   * mens --danger så vidt klarer AA i lyst tema (4.59:1). */
+  --danger-hot: #e89080;
   --warning: #e8a96b;
   --warning-soft: rgba(232, 169, 107, 0.14);
   --warning-border: rgba(232, 169, 107, 0.34);

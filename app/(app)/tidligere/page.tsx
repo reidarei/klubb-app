@@ -9,17 +9,20 @@ import { createServerClient } from '@/lib/supabase/server'
 import { TIDLIGERE_SIDESTOERRELSE } from '@/lib/konstanter'
 import { dekodeCursor, byggNesteCursor, type KildeTilstand } from '@/lib/tidligere-cursor'
 import { parseFilter, skalHente, arrangementstypeFor, TOM_TEKST } from '@/lib/tidligere-filter'
+import { feilTekst, proevIgjenHref, visTomTekst, bunnSlot, type TidligereKilde } from '@/lib/tidligere-feil'
 import { tilKort, tilMeldingKort, tilPollKort } from '@/lib/agenda-sortering'
 import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { naa } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
+import { logg } from '@/lib/logg'
 import ArrangementKort from '@/components/agenda/ArrangementKort'
 import PollKort from '@/components/agenda/PollKort'
 import MeldingKort from '@/components/agenda/MeldingKort'
 import SectionLabel from '@/components/ui/SectionLabel'
 import TidligereTypeFilter from '@/components/tidligere/TidligereTypeFilter'
+import TidligereFeilBanner from '@/components/tidligere/TidligereFeilBanner'
 import Link from 'next/link'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 
@@ -28,7 +31,9 @@ export const dynamic = 'force-dynamic'
 export default async function TidligereSide({
   searchParams,
 }: {
-  searchParams: Promise<{ cursor?: string; type?: string }>
+  // `r` er en ren cache-buster fra «Prøv igjen»-lenka (se lib/tidligere-feil.ts)
+  // og leses aldri her — den finnes kun for å tvinge en fersk server-render.
+  searchParams: Promise<{ cursor?: string; type?: string; r?: string }>
 }) {
   const { user } = await ensureInnlogget()
   const supabase = await createServerClient()
@@ -116,11 +121,53 @@ export default async function TidligereSide({
   // Kun spørringene det aktive filteret faktisk trenger kjøres — skippede
   // typer resolver til null med samme Promise.all (parallellitet bevart,
   // ytelseskritisk for type=alle som fortsatt kjører alle tre samtidig).
-  const [arrRaad, meldRaad, pollRaad] = await Promise.all([
-    skalHente(filter, 'arrangement') ? arrQuery.then(r => r.data) : Promise.resolve(null),
-    skalHente(filter, 'melding') ? meldQuery.then(r => r.data) : Promise.resolve(null),
-    skalHente(filter, 'poll') ? pollQuery.then(r => r.data) : Promise.resolve(null),
+  //
+  // Vi beholder HELE svaret (ikke bare .data) — se #492. `r.data` alene kan
+  // ikke skille «filteret slo av kilden» fra «spørringen feilet»: begge gir
+  // null. Med det fulle svaret leser vi `.error` eksplisitt under i stedet.
+  const [arrSvar, meldSvar, pollSvar] = await Promise.all([
+    skalHente(filter, 'arrangement') ? arrQuery : Promise.resolve(null),
+    skalHente(filter, 'melding') ? meldQuery : Promise.resolve(null),
+    skalHente(filter, 'poll') ? pollQuery : Promise.resolve(null),
   ])
+
+  // Tri-state: `null`-svar betyr «filteret slo av kilden» (skalHente var
+  // false), `svar.error` betyr «spørringen kjørte men feilet». `arrRaad` har
+  // samme type og betydning som før denne endringen.
+  const arrFeilet = arrSvar?.error != null
+  const meldFeilet = meldSvar?.error != null
+  const pollFeilet = pollSvar?.error != null
+  const arrRaad = arrSvar?.data ?? null
+  const meldRaad = meldSvar?.data ?? null
+  const pollRaad = pollSvar?.data ?? null
+
+  // Bygget med flatMap over (kilde, svar)-par i stedet for tre non-null-
+  // assertions: `svar?.error != null` narrower både svaret og feltet, så
+  // TypeScript beviser at `svar.error` finnes i stedet for at vi lover det.
+  const feilendeKilder: { kilde: TidligereKilde; error: NonNullable<typeof arrSvar>['error'] }[] = (
+    [
+      ['arrangement', arrSvar],
+      ['melding', meldSvar],
+      ['poll', pollSvar],
+    ] as const
+  ).flatMap(([kilde, svar]) => (svar?.error != null ? [{ kilde, error: svar.error }] : []))
+
+  // Alltid await — logg.feil() må aldri blokkere responsen usett eller kastes
+  // i taushet (presedens: lib/actions/arrangementer.ts:115). `.catch` er
+  // ufravikelig: Sentry-kallet inne i logg.feil er ubeskyttet (se #496), og
+  // en kastende logger ville gjort en delvis degradering til en 500 — stikk
+  // motsatt av det hele denne siden bygger.
+  await Promise.all(
+    feilendeKilder.map(({ kilde, error }) =>
+      logg
+        .feil('tidligere.hent.feilet', error, {
+          fingerprint: `tidligere.hent.${kilde}`,
+          ctx: { code: (error as { code?: string })?.code },
+        })
+        .catch(() => {}),
+    ),
+  )
+  const harFeil = feilendeKilder.length > 0
 
   // Sjekk om det finnes mer (vi hentet grense = 30+1 rader)
   const harMerArr = (arrRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
@@ -311,6 +358,7 @@ export default async function TidligereSide({
     antallEmittert: emittertArr.length,
     sisteEmittert: sisteArr ? [sisteArr.sortIso, sisteArr.data.id] : null,
     flereEnnSiden: harMerArr,
+    feilet: arrFeilet,
   }
   const meldTilstand: KildeTilstand = {
     inn: cursor.m,
@@ -318,6 +366,7 @@ export default async function TidligereSide({
     antallEmittert: emittertMeld.length,
     sisteEmittert: sisteMeld ? [sisteMeldSistAktivitet!, sisteMeld.data.id] : null,
     flereEnnSiden: harMerMeld,
+    feilet: meldFeilet,
   }
   const pollTilstand: KildeTilstand = {
     inn: cursor.p,
@@ -325,9 +374,21 @@ export default async function TidligereSide({
     antallEmittert: emittertPoll.length,
     sisteEmittert: sistePoll ? [sistePoll.sortIso, sistePoll.data.id] : null,
     flereEnnSiden: harMerPoll,
+    feilet: pollFeilet,
   }
 
+  // nesteCursor og harFeil er gjensidig utelukkende ved konstruksjon
+  // (byggNesteCursor returnerer null når noen aktiv kilde har feilet, se
+  // lib/tidligere-cursor.ts) — «Last mer» og «Prøv igjen» kan derfor aldri
+  // vises samtidig.
   const nesteCursor = byggNesteCursor({ a: arrTilstand, m: meldTilstand, p: pollTilstand })
+  const feilTekstVerdi = feilTekst(feilendeKilder.map(f => f.kilde), filter)
+  const retryHref = harFeil ? proevIgjenHref(filter, cursorStr, naa()) : null
+
+  // De to UI-invariantene bor i lib/tidligere-feil.ts og er enhetstestet der —
+  // ikke inline betingelsene igjen her, da mister de mutasjonsdekningen.
+  const visTom = visTomTekst(side.length, harFeil)
+  const bunn = bunnSlot(nesteCursor, retryHref)
 
   return (
     <div style={{ padding: '0 20px 40px' }}>
@@ -355,7 +416,17 @@ export default async function TidligereSide({
 
       <TidligereTypeFilter aktiv={filter} />
 
-      {side.length === 0 ? (
+      {feilTekstVerdi && (
+        // role="status" (polite) — banneret dukker opp etter navigasjon, så en
+        // skjermleser skal nevne det uten å avbryte det brukeren holder på med.
+        <div role="status" style={{ marginBottom: 20 }}>
+          <TidligereFeilBanner tekst={feilTekstVerdi} />
+        </div>
+      )}
+
+      {/* visTomTekst() eier regelen «tom side, men ikke fordi noe feilet» —
+          se lib/tidligere-feil.ts og __tests__/tidligere-feil.test.ts. */}
+      {visTom ? (
         <p
           data-testid="tidligere-tom"
           style={{
@@ -387,7 +458,10 @@ export default async function TidligereSide({
         </p>
       ) : (
         <section>
-          <SectionLabel>Tidligere</SectionLabel>
+          {/* Ingen seksjonsetikett over en tom liste: når alle kilder feilet er
+              side.length 0, og en ensom «Tidligere»-overskrift over ingenting
+              ser ut som en bug i seg selv. */}
+          {side.length > 0 && <SectionLabel>Tidligere</SectionLabel>}
           {/* Hvert kort under (ArrangementKort/PollKort/MeldingKort) rendrer ett
               <a> på toppnivå. e2e/tidligere.spec.ts teller kort via
               `:scope > a` på denne diven — ikke wrap et kort i en ekstra div,
@@ -409,7 +483,14 @@ export default async function TidligereSide({
             })}
           </div>
 
-          {nesteCursor && (
+          {/* bunnSlot() eier valget mellom «Last mer» og «Prøv igjen» (se
+              lib/tidligere-feil.ts) — de deler denne slotten og er gjensidig
+              utelukkende ved konstruksjon. Retry-pillen bruker samme href som
+              banneret over, slik at en bruker som har scrollet til bunnen
+              opplever at knappen byttet ord, ikke at den forsvant.
+              `&& nesteCursor` / `&& retryHref` under er kun TypeScript-
+              narrowing til string — avgjørelsen ligger i `bunn`. */}
+          {bunn === 'last-mer' && nesteCursor ? (
             <Link
               data-testid="tidligere-last-mer"
               href={`/tidligere?${new URLSearchParams({
@@ -434,7 +515,35 @@ export default async function TidligereSide({
             >
               Last mer →
             </Link>
-          )}
+          ) : bunn === 'proev-igjen' && retryHref ? (
+            <div style={{ marginTop: 20, textAlign: 'center' }}>
+              <Link
+                data-testid="tidligere-proev-igjen"
+                href={retryHref}
+                prefetch={false}
+                // Lenketeksten er «Prøv igjen» uten kontekst når en skjermleser
+                // lister lenkene på siden — aria-label sier hva som prøves.
+                aria-label="Prøv å hente historikken på nytt"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 44, // WCAG 2.5.8 touch-target-minimum
+                  padding: '0 14px',
+                  borderRadius: 999,
+                  border: '0.5px solid var(--danger-border)',
+                  color: 'var(--danger-hot)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '1.4px',
+                  textTransform: 'uppercase',
+                  textDecoration: 'none',
+                }}
+              >
+                Prøv igjen
+              </Link>
+            </div>
+          ) : null}
         </section>
       )}
     </div>

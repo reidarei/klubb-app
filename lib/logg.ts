@@ -17,6 +17,8 @@
 //   bli-utvikler.issue.feilet   — GitHub Issue-oppretting feiler
 //   ai.datoforslag.feilet       — Anthropic dato-forslag feiler (auth/transient)
 //   aktivitet.tell.feilet       — tell_aktivitet-RPC feiler i /api/aktivitet
+//   tidligere.hent.feilet       — arrangement/melding/poll-spørring feiler på /tidligere (#492)
+//   poll.aggregat.feilet        — tell_poll_stemmer-RPC feiler i lib/queries/poll.ts (#492)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

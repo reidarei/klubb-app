@@ -38,6 +38,10 @@ export type KildeTilstand = {
   antallEmittert: number // rader av typen som faktisk kom med i den viste siden
   sisteEmittert: Posisjon | null
   flereEnnSiden: boolean // spørringen returnerte mer enn sidestørrelsen
+  // Tri-state mot #492: en avskrudd kilde (filteret ekskluderer typen) har
+  // ALLTID feilet: false — den ble aldri spurt. «Noen kilde feilet» betyr
+  // derfor reelt «noen *aktiv* kilde feilet», ikke «alle tre feilet».
+  feilet: boolean
 }
 
 // Posisjonen for neste side er ubetinget «siste emitterte, ellers inn-posisjonen
@@ -59,12 +63,19 @@ export function nestePosisjon(k: KildeTilstand): Posisjon | null {
 //   - `antallEmittert < antallISidevindu`: alle N leste radene var av denne
 //     typen, men noen ble kastet i merge-klippingen på tvers av typer
 //     (side.slice) og er dermed ikke vist ennå.
+// `feilet` leses bevisst IKKE her — porten mot en feilet kilde ligger i
+// byggNesteCursor (under), ikke i denne funksjonen. Se #492.
 export function harMerFraKilde(k: KildeTilstand): boolean {
   return k.flereEnnSiden || k.antallEmittert < k.antallISidevindu
 }
 
 export function byggNesteCursor(kilder: { a: KildeTilstand; m: KildeTilstand; p: KildeTilstand }): string | null {
   const { a, m, p } = kilder
+  // Invariant (#492): en cursor emitteres kun fra en side der alle aktive
+  // kilder lyktes. Uten denne gaten peker cursoren forbi rader vi aldri
+  // leste — «Last mer» ville da hoppet over historikk i stedet for å
+  // signalisere at noe manglet.
+  if (a.feilet || m.feilet || p.feilet) return null
   if (!harMerFraKilde(a) && !harMerFraKilde(m) && !harMerFraKilde(p)) return null
   return enkodeCursor({ a: nestePosisjon(a), m: nestePosisjon(m), p: nestePosisjon(p) })
 }

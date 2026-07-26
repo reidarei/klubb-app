@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseFilter, arrangementstypeFor, skalHente, TIDLIGERE_FILTRE, TOM_TEKST } from '@/lib/tidligere-filter'
+import { parseFilter, arrangementstypeFor, skalHente, TIDLIGERE_FILTRE, TOM_TEKST, BESTEMT_FORM } from '@/lib/tidligere-filter'
 import { Constants } from '@/lib/supabase/database.types'
 
 describe('parseFilter', () => {
@@ -93,6 +93,16 @@ describe('TIDLIGERE_FILTRE dekker arrangementstype-enumet', () => {
   it('hvert filter har en tom-tekst', () => {
     for (const f of TIDLIGERE_FILTRE) {
       expect(TOM_TEKST[f.verdi]).toBeTruthy()
+    }
+  })
+
+  // BESTEMT_FORM slås opp av emneFor() i lib/tidligere-feil.ts — et nytt filter
+  // uten bestemt form gir derfor «undefined» midt i en feiltekst, ikke bare en
+  // ubrukt luke i tabellen. Record-typen fanger det ved kompilering, denne
+  // testen fanger tom streng.
+  it('hvert filter har en bestemt form (#492)', () => {
+    for (const f of TIDLIGERE_FILTRE) {
+      expect(BESTEMT_FORM[f.verdi]).toBeTruthy()
     }
   })
 })

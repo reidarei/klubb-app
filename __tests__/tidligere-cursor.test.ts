@@ -154,6 +154,7 @@ const kilde = (overrides: Partial<KildeTilstand>): KildeTilstand => ({
   antallEmittert: 0,
   sisteEmittert: null,
   flereEnnSiden: false,
+  feilet: false,
   ...overrides,
 })
 
@@ -281,6 +282,64 @@ describe('byggNesteCursor', () => {
   })
 })
 
+describe('byggNesteCursor — feilet kilde (#492)', () => {
+  // En feilet kilde gater HELE cursoren, uansett hva de andre kildene sier —
+  // se invariant-kommentaren i lib/tidligere-cursor.ts.
+  const harMer = kilde({
+    antallISidevindu: 30,
+    antallEmittert: 30,
+    sisteEmittert: [GYLDIG_ISO, GYLDIG_UUID],
+    flereEnnSiden: true,
+  })
+
+  it('a feilet mens m har mer → null', () => {
+    const feiletA = kilde({ feilet: true })
+    expect(byggNesteCursor({ a: feiletA, m: harMer, p: kilde({}) })).toBeNull()
+  })
+
+  it('m feilet mens p har mer → null', () => {
+    const feiletM = kilde({ feilet: true })
+    expect(byggNesteCursor({ a: kilde({}), m: feiletM, p: harMer })).toBeNull()
+  })
+
+  it('p feilet mens a har mer → null', () => {
+    const feiletP = kilde({ feilet: true })
+    expect(byggNesteCursor({ a: harMer, m: kilde({}), p: feiletP })).toBeNull()
+  })
+
+  it('feilet kilde som ellers ville vært uttømt (harMerFraKilde=false) → likevel null', () => {
+    // Uten gaten ville dette blitt behandlet som «alle tre uttømt» → null av
+    // andre grunner. Testen isolerer at det er feilet-gaten som slår inn,
+    // ikke en tilfeldig sammenfallende uttømt-tilstand — endre gaten til å
+    // sjekke harMerFraKilde først, og denne testen skal fortsatt være null,
+    // så den alene beviser ingenting; kombinert med de tre over (der en
+    // annen kilde har mer) er dekningen komplett.
+    const feiletUttoemt = kilde({ feilet: true, antallISidevindu: 5, antallEmittert: 5, flereEnnSiden: false })
+    expect(byggNesteCursor({ a: feiletUttoemt, m: kilde({}), p: kilde({}) })).toBeNull()
+  })
+
+  it('alle tre feilet → null', () => {
+    const feilet = kilde({ feilet: true })
+    expect(byggNesteCursor({ a: feilet, m: feilet, p: feilet })).toBeNull()
+  })
+
+  it('anker mot for bred gate: feilet=false overalt gir uendret oppførsel', () => {
+    const cursor = byggNesteCursor({ a: harMer, m: kilde({}), p: kilde({}) })
+    expect(cursor).not.toBeNull()
+    expect(dekodeCursor(cursor!).a).toEqual([GYLDIG_ISO, GYLDIG_UUID])
+  })
+})
+
+describe('harMerFraKilde ignorerer feilet', () => {
+  it('samme tilstand med feilet true/false gir samme svar — gaten ligger i byggNesteCursor, ikke her', () => {
+    const felles = { antallISidevindu: 30, antallEmittert: 30, sisteEmittert: [GYLDIG_ISO, GYLDIG_UUID] as Posisjon, flereEnnSiden: true }
+    expect(harMerFraKilde(kilde({ ...felles, feilet: false }))).toBe(harMerFraKilde(kilde({ ...felles, feilet: true })))
+
+    const uttoemt = { antallISidevindu: 12, antallEmittert: 12, flereEnnSiden: false }
+    expect(harMerFraKilde(kilde({ ...uttoemt, feilet: false }))).toBe(harMerFraKilde(kilde({ ...uttoemt, feilet: true })))
+  })
+})
+
 // === Ende-til-ende: paginer et helt datasett gjennom flere sider (#488) ===
 //
 // Primitivene over dekkes hver for seg, men det var den SAMMENSATTE
@@ -323,17 +382,31 @@ const sorterSynkende = (x: Rad, y: Rad) =>
 const etterPosisjon = (rader: Rad[], pos: Posisjon | null) =>
   pos === null ? rader : rader.filter(r => r.iso < pos[0] || (r.iso === pos[0] && r.id < pos[1]))
 
-function paginer(kilder: Record<Kind, Rad[]>, maksSider: number) {
+// `feil` (#492) injiserer en feilende kilde på én bestemt side — speiler at
+// PostgREST-spørringen kaster i stedet for å returnere data (raad=[] og
+// feilet=true for akkurat den kilden/siden, resten av kildene upåvirket).
+// `startCursor` lar en retry gjenoppta pagineringen fra et gitt punkt uten
+// feilet på nytt — se «ingen datatap ved retry»-testene under.
+function paginer(
+  kilder: Record<Kind, Rad[]>,
+  maksSider: number,
+  feil?: { kind: Kind; paaSide: number },
+  startCursor: TidligereCursor = { a: null, m: null, p: null },
+) {
   const sider: Rad[][] = []
-  let cursor: TidligereCursor = { a: null, m: null, p: null }
+  const cursorInn: TidligereCursor[] = [] // cursor slik den var FØR siden ble lest
+  let cursor: TidligereCursor = startCursor
 
   for (let n = 0; n < maksSider; n++) {
+    cursorInn.push(cursor)
     const tilstander = {} as Record<Kind, KildeTilstand>
     const lest = {} as Record<Kind, Rad[]>
 
     for (const kind of ['a', 'm', 'p'] as const) {
-      // Hent sidestørrelse+1 for å vite om det finnes mer bak siden
-      const raad = etterPosisjon(kilder[kind], cursor[kind]).slice(0, SIDESTOERRELSE + 1)
+      const feilerHer = feil?.kind === kind && feil.paaSide === n
+      // Ved feil: spørringen returnerer ingen rader (speiler prod, hvor
+      // arrRaad/meldRaad/pollRaad er null når svar.error er satt).
+      const raad = feilerHer ? [] : etterPosisjon(kilder[kind], cursor[kind]).slice(0, SIDESTOERRELSE + 1)
       lest[kind] = raad.slice(0, SIDESTOERRELSE)
       tilstander[kind] = {
         inn: cursor[kind],
@@ -341,6 +414,7 @@ function paginer(kilder: Record<Kind, Rad[]>, maksSider: number) {
         antallEmittert: 0, // fylles etter merge
         sisteEmittert: null,
         flereEnnSiden: raad.length > SIDESTOERRELSE,
+        feilet: feilerHer,
       }
     }
 
@@ -355,11 +429,11 @@ function paginer(kilder: Record<Kind, Rad[]>, maksSider: number) {
     }
 
     const neste = byggNesteCursor(tilstander)
-    if (neste === null) return { sider, terminert: true }
+    if (neste === null) return { sider, terminert: true, cursorInn }
     cursor = dekodeCursor(neste)
   }
 
-  return { sider, terminert: false }
+  return { sider, terminert: false, cursorInn }
 }
 
 describe('ende-til-ende-paginering', () => {
@@ -437,6 +511,54 @@ describe('ende-til-ende-paginering', () => {
         const flat = sider.flat()
         const sortert = [...flat].sort(sorterSynkende)
         expect(flat.map(r => r.id)).toEqual(sortert.map(r => r.id))
+      })
+
+      // === Fault injection (#492): én kilde feiler midt i pagineringen ===
+      describe('fault injection ved henting', () => {
+        const kinder: Kind[] = ['a', 'm', 'p']
+        // Side 0 (feiler umiddelbart) og siste normale side (feiler etter
+        // flere vellykkede sider) — Set fjerner duplikatet når datasettet
+        // kun gir én side (f.eks. det tomme datasettet).
+        const sidevalg = [...new Set([0, sider.length - 1])]
+
+        for (const kind of kinder) {
+          for (const paaSide of sidevalg) {
+            describe(`kilde '${kind}' feiler på side ${paaSide}`, () => {
+              const feiletResultat = paginer(kilder, maksSider, { kind, paaSide })
+
+              it('pagineringen stopper på feilsiden', () => {
+                expect(feiletResultat.terminert).toBe(true)
+                expect(feiletResultat.sider).toHaveLength(paaSide + 1)
+              })
+
+              it('ingen duplikater blant sidene frem til og med feilsiden', () => {
+                const ider = feiletResultat.sider.flat().map(r => r.id)
+                expect(new Set(ider).size).toBe(ider.length)
+              })
+
+              it('ingen datatap ved retry: sidene før feilen + en frisk paginering fra cursorInn[paaSide] dekker hele datasettet uten duplikater', () => {
+                // cursorInn[paaSide] er posisjonen slik den var RETT FØR
+                // feilsiden ble forsøkt lest — «Prøv igjen» i produksjonskoden
+                // bruker akkurat denne posisjonen (se proevIgjenHref).
+                const foerFeilen = feiletResultat.sider.slice(0, paaSide)
+                const retry = paginer(kilder, maksSider, undefined, feiletResultat.cursorInn[paaSide])
+                const alleEmittert = [...foerFeilen.flat(), ...retry.sider.flat()]
+                expect(new Set(alleEmittert.map(r => r.id)).size, 'duplikat mellom sidene før feilen og retry').toBe(
+                  alleEmittert.length,
+                )
+                expect(new Set(alleEmittert.map(r => r.id))).toEqual(new Set(alle.map(r => r.id)))
+              })
+
+              it('cursoren for feilsiden er null (byggNesteCursor gater på feilet)', () => {
+                // Følger direkte av at paginer() avslutter løkka så snart
+                // byggNesteCursor returnerer null — «stopper på feilsiden»
+                // over beviser dette allerede, testen navngir invarianten
+                // eksplisitt for lesbarhet.
+                expect(feiletResultat.terminert).toBe(true)
+              })
+            })
+          }
+        }
       })
     })
   }

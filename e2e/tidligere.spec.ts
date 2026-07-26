@@ -83,6 +83,8 @@ test.describe('/tidligere — full historikk', () => {
     await expect(page.getByRole('heading', { name: 'Hele historikken' })).toBeVisible()
     await expect(aktivChipHref(page)).toHaveAttribute('href', '/tidligere')
     await expect(kortHrefs(page), RESEED_HINT).toHaveCount(TIDLIGERE_SIDESTOERRELSE)
+    // Negativ kontroll (#492): normal lasting skal aldri vise feilbanneret.
+    await expect(page.getByTestId('tidligere-feil')).toHaveCount(0)
 
     // Turer
     await chipLenke(page, '/tidligere?type=tur').click()
@@ -209,6 +211,9 @@ test.describe('/tidligere — full historikk', () => {
     await expect(page.getByTestId('tidligere-liste')).toHaveCount(0)
     // En tom side skal aldri tilby «Last mer» — det var nettopp løkka i #488.
     await expect(page.getByTestId('tidligere-last-mer')).toHaveCount(0)
+    // Negativ kontroll (#492): en tom side her er en gyldig «uttømt»-tilstand,
+    // ikke en feilet spørring — banneret skal ikke vises.
+    await expect(page.getByTestId('tidligere-feil')).toHaveCount(0)
   })
 })
 
