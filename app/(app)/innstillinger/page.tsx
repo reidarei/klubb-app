@@ -15,6 +15,8 @@ import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
+import { osloUkestart } from '@/lib/dato'
+import { AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
 
 const innstillingLabels: Record<string, string> = {
   // Arrangementer
@@ -91,6 +93,8 @@ export default async function Innstillinger() {
     { data: egenProfil },
     fondFaneAktiv,
     chatFaneAktiv,
+    { data: aktivitetDagerRaw },
+    { data: aktivitetUkerRaw },
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -129,6 +133,16 @@ export default async function Innstillinger() {
       .maybeSingle(),
     hentAppFlagg(supabase, FOND_FANE),
     hentAppFlagg(supabase, CHAT_FANE, true),
+    admin
+      .from('aktivitet_dag')
+      .select('unike')
+      .order('dag', { ascending: false })
+      .limit(AKTIVITET_SNITT_DAGER),
+    admin
+      .from('aktivitet_uke')
+      .select('uke_start, unike')
+      .order('uke_start', { ascending: false })
+      .limit(2),
   ])
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
@@ -159,6 +173,18 @@ export default async function Innstillinger() {
       return { metric, verdi, fargenavn, n: v.length }
     })
     .filter(Boolean) as { metric: string; verdi: string; fargenavn: 'god' | 'ok' | 'darlig'; n: number }[]
+
+  // Aktivitet — snitt DAU siste 30 d + siste fullførte ukes WAU. Se
+  // /innstillinger/bruk for full trend (grafer over tid).
+  type AktivitetDagRad = { unike: number }
+  type AktivitetUkeRad = { uke_start: string; unike: number }
+  const aktivitetDager = (aktivitetDagerRaw ?? []) as AktivitetDagRad[]
+  const aktivitetUker = (aktivitetUkerRaw ?? []) as AktivitetUkeRad[]
+  const snittDau = aktivitetDager.length
+    ? Math.round(aktivitetDager.reduce((sum, r) => sum + r.unike, 0) / aktivitetDager.length)
+    : 0
+  const mandag = osloUkestart()
+  const wau = aktivitetUker.find(r => r.uke_start !== mandag)?.unike ?? 0
 
   const [{ data: maler }, { data: kaaringmaler }, aapneIssues] = await Promise.all([
     admin.from('arrangementmaler').select('*').order('rekkefølge'),
@@ -606,6 +632,66 @@ export default async function Innstillinger() {
               }}
             >
               Per rute, enhet og filter →
+            </Link>
+          </>
+        )}
+      </InnstillingsKort>
+
+      {/* Bruk — anonym aktivitetsmåling (#484) */}
+      <InnstillingsKort
+        tittel="Bruk"
+        oppsummering={
+          aktivitetDager.length === 0
+            ? 'Ingen målinger ennå'
+            : `${snittDau} snitt unike/dag siste ${AKTIVITET_SNITT_DAGER} d · ${wau} siste uke`
+        }
+      >
+        {aktivitetDager.length === 0 ? (
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5,
+              margin: 0,
+            }}
+          >
+            Ingen aktivitetsmålinger ennå. Tellingen er anonym — ingen
+            kobling til enkeltmedlemmer, kun antall unike enheter og treff.
+          </p>
+        ) : (
+          <>
+            <p
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 12.5,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.5,
+                margin: '0 0 4px',
+              }}
+            >
+              Snitt {snittDau} unike (per enhet) per dag siste {AKTIVITET_SNITT_DAGER} dager,
+              {' '}{wau} unike siste fullførte uke. Anonym telling.
+            </p>
+            <Link
+              href="/innstillinger/bruk"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 10,
+                padding: '8px 14px',
+                background: 'var(--accent-soft)',
+                border: '0.5px solid var(--accent)',
+                borderRadius: 999,
+                color: 'var(--accent)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
+              Se trend →
             </Link>
           </>
         )}

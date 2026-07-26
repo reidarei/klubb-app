@@ -49,6 +49,26 @@ export function iDagOslo(): string {
 }
 
 /**
+ * Mandagen i inneværende ISO-uke (norsk tidssone), som "YYYY-MM-DD"-streng.
+ * Må matche Postgres' `date_trunc('week', ...)`, som også er mandag-basert.
+ * Regner på Oslo-kalenderdato-strengen (via iDagOslo) og gjør deretter ren
+ * UTC-dato-aritmetikk med getUTCDay/setUTCDate — DST-trygt fordi vi aldri
+ * blander ms-differanser med lokal tidssone (samme knep som formaterDatoSkille).
+ * Brukt av AktivitetTeller (#484) for å bucket-slå anonym ukentlig aktivitet.
+ */
+export function osloUkestart(): string {
+  const [y, m, d] = iDagOslo().split('-').map(Number)
+  const utcDato = new Date(Date.UTC(y, m - 1, d))
+  // getUTCDay() gir 0 (søndag)..6 (lørdag). date-fns' getISODay() bruker internt
+  // getDay() (lokaltid) og ville drifte på en runtime med negativ UTC-offset —
+  // relevant fordi dette er delt template-kode som synkes til selvhostede
+  // klubb-app-instanser. Map søndag (0) → 7 så mandag blir 1, som ISO.
+  const isoDag = utcDato.getUTCDay() === 0 ? 7 : utcDato.getUTCDay() // 1 (mandag)..7 (søndag)
+  utcDato.setUTCDate(utcDato.getUTCDate() - (isoDag - 1))
+  return utcDato.toISOString().slice(0, 10)
+}
+
+/**
  * Parse en ISO-dato til norsk dato (bare dag, uten klokkeslett).
  * Viktig for "er dette arrangement i dag?"-sjekker.
  */

@@ -16,6 +16,7 @@
 //   github.webhook.feilet       — webhook-konfigurasjons- eller varselfeil
 //   bli-utvikler.issue.feilet   — GitHub Issue-oppretting feiler
 //   ai.datoforslag.feilet       — Anthropic dato-forslag feiler (auth/transient)
+//   aktivitet.tell.feilet       — tell_aktivitet-RPC feiler i /api/aktivitet
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

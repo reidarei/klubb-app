@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      aktivitet_dag: {
+        Row: {
+          dag: string
+          treff: number
+          unike: number
+        }
+        Insert: {
+          dag: string
+          treff?: number
+          unike?: number
+        }
+        Update: {
+          dag?: string
+          treff?: number
+          unike?: number
+        }
+        Relationships: []
+      }
+      aktivitet_uke: {
+        Row: {
+          uke_start: string
+          unike: number
+        }
+        Insert: {
+          uke_start: string
+          unike?: number
+        }
+        Update: {
+          uke_start?: string
+          unike?: number
+        }
+        Relationships: []
+      }
       album: {
         Row: {
           arrangement_id: string | null
@@ -1709,6 +1742,10 @@ export type Database = {
           forrige_navn: string
           forrige_profil: string
         }[]
+      }
+      tell_aktivitet: {
+        Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
+        Returns: undefined
       }
       tell_poll_stemmer: {
         Args: { p_poll_id: string }

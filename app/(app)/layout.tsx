@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import TopHeader from '@/components/TopHeader'
 import PageTransition from '@/components/PageTransition'
 import ServiceWorkerRegistrering from '@/components/ServiceWorkerRegistrering'
+import AktivitetTeller from '@/components/AktivitetTeller'
 import DraNedForOppdater from '@/components/DraNedForOppdater'
 import DeployInfo from '@/components/DeployInfo'
 import InstallVeiledning from '@/components/InstallVeiledning'
@@ -56,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }}
     >
       <ServiceWorkerRegistrering />
+      <AktivitetTeller />
       <DraNedForOppdater />
       <InstallVeiledning />
       <Suspense fallback={<TopHeader />}>

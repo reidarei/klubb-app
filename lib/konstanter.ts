@@ -120,6 +120,20 @@ export const LOGG_EVENT_MAKS_LENGDE = 128
 // terskel ville blokkert nettopp de innleggene funksjonen er til for.
 export const DATO_FORSLAG_MIN_TEGN = 10
 
+// ─── AKTIVITETSMÅLING ────────────────────────────────────────────────────────
+
+// Ett treff telles maks én gang per enhet per 30 minutter — hindrer at en
+// bruker som blar mellom flere sider på kort tid blåser opp treff-tallet.
+// Reidars beslutning, se #484.
+export const AKTIVITET_TREFF_THROTTLE_MIN = 30
+
+// Antall uker som vises i uke-grafen på /innstillinger/bruk.
+export const AKTIVITET_GRAF_UKER = 8
+
+// Antall dager som inngår i snitt-beregningene (DAU-snitt, snitt treff/dag)
+// på /innstillinger/bruk.
+export const AKTIVITET_SNITT_DAGER = 30
+
 // Tema-valg — «dark» er default for alle eksisterende brukere.
 // Cookie er HttpOnly og speiles til localStorage for klient-synk.
 export const TEMA_COOKIE = 'tema' as const
