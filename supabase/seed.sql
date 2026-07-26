@@ -126,10 +126,10 @@ values
 -- fortid») legges bevisst INNENFOR 12-månedersvinduet, slik at forsidens
 -- «Tidligere»-seksjon også har noe å vise i test-instansen.
 --
--- Tallene 34 møter / 6 turer / 5 meldinger / 4 poller (49 totalt) er BUNDET
+-- Tallene 34 møter / 6 turer / 36 meldinger / 4 poller (80 totalt) er BUNDET
 -- til e2e/tidligere.spec.ts (ANT_MOETE/ANT_TUR/ANT_MELDING/ANT_POLL/
 -- ANT_ALLE) — endres ett tall her må speccen oppdateres i samme commit.
--- 49 > TIDLIGERE_SIDESTOERRELSE (30) med vilje: paginering («Last mer»)
+-- 80 > TIDLIGERE_SIDESTOERRELSE (30) med vilje: paginering («Last mer»)
 -- testes ikke ordentlig med bare et par rader (issuet foreslo opprinnelig
 -- «et par», men det dekker ikke paginering — se Reidars avklaring i #489).
 --
@@ -185,9 +185,9 @@ select
   ('00000000-0000-4000-8000-00000000000' || ((i % 3) + 1))::uuid
 from generate_series(1, 5) as i;
 
--- === Meldinger (5: 1 nylig + 4 dyp historikk) ===============================
--- arkivert_tidspunkt og aktuell_dato holdes null (default) — ingen av
--- speccens forventninger avhenger av arkiv- eller festedato-oppførsel.
+-- === Meldinger (36: 1 nylig + 34 dyp historikk + 1 arkivert) ================
+-- aktuell_dato holdes null (default) — ingen av speccens forventninger
+-- avhenger av festedato-oppførsel.
 insert into public.meldinger (id, profil_id, innhold, opprettet, sist_aktivitet)
 values (
   '00000000-0000-4000-9300-000000000000',
@@ -203,7 +203,26 @@ select
   'Historisk innlegg ' || lpad(i::text, 2, '0') || ' — seedet fortidsdata for /tidligere (#489).',
   now() - make_interval(days => 410 + i * 30) + interval '3 hours',
   now() - make_interval(days => 410 + i * 30) + interval '3 hours'
-from generate_series(1, 4) as i;
+from generate_series(1, 34) as i;
+
+-- Én arkivert melding — regresjonsdekning for #491/#312. sist_aktivitet
+-- (1500 dager) er eldre enn ALLE andre meldinger over, så den ville landet
+-- utenfor side 1 (posisjon 36 av 36) hvis /tidligere fortsatt paginerte på
+-- sist_aktivitet slik #312-bugen gjorde. arkivert_tidspunkt (45 dager) er
+-- derimot ferskt nok til posisjon 2 i den korrekte sorterings_tidspunkt-
+-- rekkefølgen (mig. 120) — altså trygt på side 1. Testen i
+-- e2e/tidligere.spec.ts asserter nettopp denne plasseringen.
+-- NB: id-en slutter på 99 mens generate_series over teller 1..34 med samme
+-- prefiks — vokser serien forbi 98 kolliderer UUID-ene. Flytt denne raden til
+-- et eget prefiks først (f.eks. …-9301-…), ikke bare bump serien.
+insert into public.meldinger (id, profil_id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt)
+values (
+  '00000000-0000-4000-9300-000000000099',
+  '00000000-0000-4000-8000-000000000001',
+  'Arkivert historisk innlegg — seedet regresjonsdata for /tidligere (#491).',
+  now() - interval '1500 days', now() - interval '1500 days',
+  now() - interval '45 days'
+);
 
 -- === Poller (4: 1 nylig + 3 dyp historikk) ==================================
 -- kaaring_mal_id holdes null (default) — dette er vanlige polls, ikke

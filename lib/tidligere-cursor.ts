@@ -9,9 +9,28 @@
 
 export type TidligereCursor = {
   a: [string, string] | null  // arrangementer: [start_tidspunkt, id]
-  m: [string, string] | null  // meldinger:    [sist_aktivitet, id]
+  m: [string, string] | null  // meldinger:    [sorterings_tidspunkt, id] (mig. 120, #491)
   p: [string, string] | null  // polls:        [svarfrist, id]
 }
+
+// Cursor-kompatibilitet ved denne endringen (#491): gamle cursors i delte
+// eller bokmerkede URL-er bærer verdier fra FØR sorterings_tidspunkt fantes,
+// dvs. sist_aktivitet. For alle ikke-arkiverte meldinger er sist_aktivitet
+// og sorterings_tidspunkt identisk verdi (coalesce faller til sist_aktivitet
+// når arkivert_tidspunkt er null), så disse cursorene fortsetter å virke
+// uendret. Arkiverte meldinger kan derimot degradere på to måter, og ingen av
+// dem retter seg av seg selv innenfor pagineringskjeden:
+//   1. Tapt rad: en melding med sist_aktivitet < cursorverdien som arkiveres
+//      ETTER at cursoren ble laget, får sorterings_tidspunkt > cursorverdien
+//      og filtreres bort av keyset-filteret (.lt) — den dukker aldri opp på
+//      side 2, 3, … i den kjeden.
+//   2. Duplikat over deploy-grensa: en melding arkivert for lenge siden
+//      (arkivert_tidspunkt < cursorverdien, sist_aktivitet > cursorverdien)
+//      ble vist på side 1 av gammel kode og kvalifiserer nå til side 2 av ny.
+// Begge retter seg ved en fersk lasting av /tidligere, hvor raden ligger
+// korrekt sortert. Vi har bevisst ikke lagt inn versjonering av cursor-
+// formatet for dette: vinduet er kort (kun cursors laget før deployet),
+// treffer kun arkiverte meldinger, og koster ett klikk på «Tidligere».
 
 export function enkodeCursor(c: TidligereCursor): string {
   return Buffer.from(JSON.stringify(c), 'utf8').toString('base64url')

@@ -920,6 +920,7 @@ export type Database = {
           opprettet: string
           profil_id: string
           sist_aktivitet: string
+          sorterings_tidspunkt: string
         }
         Insert: {
           aktuell_dato?: string | null
@@ -932,6 +933,7 @@ export type Database = {
           opprettet?: string
           profil_id: string
           sist_aktivitet?: string
+          sorterings_tidspunkt?: string
         }
         Update: {
           aktuell_dato?: string | null
@@ -944,6 +946,7 @@ export type Database = {
           opprettet?: string
           profil_id?: string
           sist_aktivitet?: string
+          sorterings_tidspunkt?: string
         }
         Relationships: [
           {

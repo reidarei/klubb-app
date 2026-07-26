@@ -13,7 +13,7 @@ import { enkodeCursor } from '../lib/tidligere-cursor'
 // oppdateres i samme commit, og omvendt.
 const ANT_MOETE = 34
 const ANT_TUR = 6
-const ANT_MELDING = 5
+const ANT_MELDING = 36
 const ANT_POLL = 4
 const ANT_ALLE = ANT_MOETE + ANT_TUR + ANT_MELDING + ANT_POLL
 
@@ -97,11 +97,14 @@ test.describe('/tidligere — full historikk', () => {
     expect(turHrefs.filter(h => h.startsWith('/meldinger/'))).toHaveLength(0)
     await expect(page.getByText('Historisk møte')).toHaveCount(0)
 
-    // Meldinger
+    // Meldinger — ANT_MELDING (36) er nå > TIDLIGERE_SIDESTOERRELSE (#491:
+    // den arkiverte regresjonsraden dyttet meldinger over sidegrensa, som
+    // møter allerede var), så denne uparginerte sjekken forventer en full
+    // side (30), samme mønster som møter under.
     await chipLenke(page, '/tidligere?type=melding').click()
     await page.waitForURL(/type=melding/)
     const meldingHrefs = await alleHrefs(page)
-    expect(seedHrefs(meldingHrefs), RESEED_HINT).toHaveLength(ANT_MELDING)
+    expect(meldingHrefs, RESEED_HINT).toHaveLength(TIDLIGERE_SIDESTOERRELSE)
     for (const href of meldingHrefs) expect(href).toMatch(/^\/meldinger\//)
 
     // Poller
@@ -131,33 +134,41 @@ test.describe('/tidligere — full historikk', () => {
     expect(prefikser.size).toBeGreaterThanOrEqual(2)
   })
 
+  // Delt av «møter» og «meldinger» under — begge har flere seed-rader enn
+  // TIDLIGERE_SIDESTOERRELSE (30), så «Last mer» skal vises på side 1 og
+  // forsvinne igjen på side 2. Vi teller seed-rader over begge sidene i
+  // stedet for eksakt sidelengde, slik at manuelt opprettede rader i
+  // test-instansen ikke gir falsk rødt.
+  async function sjekkToSiderPaginering(page: Page, type: string, ant: number) {
+    await page.goto(`/tidligere?type=${type}`)
+    const side1 = await alleHrefs(page)
+    expect(side1, RESEED_HINT).toHaveLength(TIDLIGERE_SIDESTOERRELSE)
+    const lastMer = page.getByTestId('tidligere-last-mer')
+    await expect(lastMer).toBeVisible()
+    await klikkLastMer(page)
+    expect(page.url()).toContain(`type=${type}`)
+    await expect(aktivChipHref(page)).toHaveAttribute('href', `/tidligere?type=${type}`)
+    const side2 = await alleHrefs(page)
+    expect(side2.filter(h => side1.includes(h)), 'duplikat mellom side 1 og 2').toHaveLength(0)
+    expect(seedHrefs([...side1, ...side2])).toHaveLength(ant)
+    await expect(page.getByTestId('tidligere-last-mer')).toHaveCount(0)
+  }
+
   test('«Last mer» vises ikke når det ikke finnes flere rader (#488)', async ({ page }) => {
     // Positivt anker før fravær-sjekken: uten det ville et 500-svar, en
     // redirect til /login eller en tom liste passert testen vakuumt.
-    const forventet: Record<string, number> = { tur: ANT_TUR, poll: ANT_POLL, melding: ANT_MELDING }
-    for (const type of ['tur', 'poll', 'melding']) {
+    // melding er IKKE med her lenger (#491) — den arkiverte regresjonsraden
+    // (se seed.sql) gjør at meldinger nå spenner to sider, som møter.
+    const forventet: Record<string, number> = { tur: ANT_TUR, poll: ANT_POLL }
+    for (const type of ['tur', 'poll']) {
       await page.goto(`/tidligere?type=${type}`)
       await expect(aktivChipHref(page)).toHaveAttribute('href', `/tidligere?type=${type}`)
       expect(seedHrefs(await alleHrefs(page)), RESEED_HINT).toHaveLength(forventet[type])
       await expect(page.getByTestId('tidligere-last-mer')).toHaveCount(0)
     }
 
-    // Møter har 34 seedede rader — mer enn TIDLIGERE_SIDESTOERRELSE (30), så
-    // «Last mer» skal vises på side 1 og forsvinne igjen på side 2. Vi teller
-    // seed-rader over begge sidene i stedet for eksakt sidelengde, slik at
-    // manuelt opprettede møter i test-instansen ikke gir falsk rødt.
-    await page.goto('/tidligere?type=moete')
-    const side1 = await alleHrefs(page)
-    expect(side1, RESEED_HINT).toHaveLength(TIDLIGERE_SIDESTOERRELSE)
-    const lastMer = page.getByTestId('tidligere-last-mer')
-    await expect(lastMer).toBeVisible()
-    await klikkLastMer(page)
-    expect(page.url()).toContain('type=moete')
-    await expect(aktivChipHref(page)).toHaveAttribute('href', '/tidligere?type=moete')
-    const side2 = await alleHrefs(page)
-    expect(side2.filter(h => side1.includes(h)), 'duplikat mellom side 1 og 2').toHaveLength(0)
-    expect(seedHrefs([...side1, ...side2])).toHaveLength(ANT_MOETE)
-    await expect(page.getByTestId('tidligere-last-mer')).toHaveCount(0)
+    await sjekkToSiderPaginering(page, 'moete', ANT_MOETE)
+    await sjekkToSiderPaginering(page, 'melding', ANT_MELDING)
   })
 
   test('«Last mer» paginerer gjennom hele historikken uten duplikater (type=alle)', async ({ page }) => {
@@ -214,6 +225,26 @@ test.describe('/tidligere — full historikk', () => {
     // Negativ kontroll (#492): en tom side her er en gyldig «uttømt»-tilstand,
     // ikke en feilet spørring — banneret skal ikke vises.
     await expect(page.getByTestId('tidligere-feil')).toHaveCount(0)
+  })
+
+  test('arkivert melding sorteres og pagineres på arkivert_tidspunkt, ikke sist_aktivitet (#491)', async ({ page }) => {
+    // Regresjonstest for #491/#312: den arkiverte seed-raden (se seed.sql)
+    // har en sist_aktivitet fra 1500 dager tilbake — eldre enn ALLE andre
+    // seedede meldinger — men et arkivert_tidspunkt fra kun 45 dager tilbake.
+    // Før fiksen paginerte /tidligere meldinger på sist_aktivitet mens
+    // visningen sorterte på arkivert_tidspunkt ?? sist_aktivitet: raden ville
+    // da vært lest til en senere side enn den ble VIST på, og kunne dermed
+    // forsvinne sporløst mellom to sider. Denne testen MÅ feile på main —
+    // uten det er «fikset» en påstand, ikke et bevis.
+    const arkivertHref = '/meldinger/00000000-0000-4000-9300-000000000099'
+
+    await page.goto('/tidligere?type=melding')
+    const side1 = await alleHrefs(page)
+    expect(side1, RESEED_HINT).toContain(arkivertHref)
+
+    await klikkLastMer(page)
+    const side2 = await alleHrefs(page)
+    expect(side2).not.toContain(arkivertHref)
   })
 })
 

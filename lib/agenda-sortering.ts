@@ -466,6 +466,12 @@ export function byggAgenda(input: {
     // Arkiverte meldinger sorteres på arkiveringstidspunkt — de legger seg
     // øverst i Tidligere rett etter at brukeren trykker Arkiver. Ikke-
     // arkiverte bruker sist_aktivitet som før.
+    //
+    // Samme uttrykk som den genererte kolonnen sorterings_tidspunkt (mig. 120).
+    // Forsiden leser bevisst IKKE kolonnen: den har ingen keyset-paginering —
+    // hele agenda-vinduet hentes med .gte('sist_aktivitet', …) og sorteres i
+    // JS — så lese- og visningsnøkkel kan ikke divergere slik de gjorde på
+    // /tidligere (#491). Endres regelen må BEGGE steder oppdateres.
     sortIso: m.arkivert_tidspunkt ?? m.sist_aktivitet,
     data: tilMeldingKort(m, true),
   }))

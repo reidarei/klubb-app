@@ -79,20 +79,24 @@ export default async function TidligereSide({
   let meldQuery = supabase
     .from('meldinger')
     .select(
-      `id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt, aktuell_dato, fra_facebook, profil_id,
+      `id, innhold, opprettet, sist_aktivitet, arkivert_tidspunkt, sorterings_tidspunkt, aktuell_dato, fra_facebook, profil_id,
        profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
        melding_bilder (bilde_url, rekkefoelge),
        melding_chat (count),
        ${ALBUM_KORT_SELECT}`,
     )
-    .order('sist_aktivitet', { ascending: false })
+    .order('sorterings_tidspunkt', { ascending: false })
     .order('id', { ascending: false })
     .limit(grense)
 
   if (cursor.m) {
-    // Keyset: vis kun rader med eldre sist_aktivitet enn cursoren
+    // Keyset mot sorterings_tidspunkt (mig. 120) — samme kolonne som .order()
+    // over og visningens sortIso under. Før #491 leste dette mot sist_aktivitet
+    // mens visningen sorterte på arkivert_tidspunkt ?? sist_aktivitet: to
+    // uttrykk for «samme» regel som kunne divergere, og keyset-filteret kunne
+    // dermed hoppe over arkiverte rader.
     meldQuery = meldQuery.or(
-      `sist_aktivitet.lt.${cursor.m[0]},and(sist_aktivitet.eq.${cursor.m[0]},id.lt.${cursor.m[1]})`,
+      `sorterings_tidspunkt.lt.${cursor.m[0]},and(sorterings_tidspunkt.eq.${cursor.m[0]},id.lt.${cursor.m[1]})`,
     )
   }
 
@@ -193,6 +197,7 @@ export default async function TidligereSide({
     opprettet: string
     sist_aktivitet: string
     arkivert_tidspunkt: string | null
+    sorterings_tidspunkt: string
     aktuell_dato: string | null
     fra_facebook: boolean | null
     profil_id: string
@@ -201,29 +206,6 @@ export default async function TidligereSide({
     melding_chat: { count: number }[] | null
     album: RawAlbumEmbed | RawAlbumEmbed[]
   }
-
-  // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
-  const meldinger: MeldingRaad[] = meldSide.map((m: RawMelding) => ({
-    id: m.id,
-    innhold: m.innhold,
-    opprettet: m.opprettet,
-    sist_aktivitet: m.sist_aktivitet,
-    arkivert_tidspunkt: m.arkivert_tidspunkt,
-    bilder: [...(m.melding_bilder ?? [])]
-      .sort((a, b) => a.rekkefoelge - b.rekkefoelge)
-      .map(b => b.bilde_url),
-    fraFacebook: m.fra_facebook === true,
-    forfatter: {
-      id: m.profil_id,
-      navn: m.profiles?.navn ?? 'Ukjent',
-      bilde_url: m.profiles?.bilde_url ?? null,
-      rolle: m.profiles?.rolle ?? null,
-    },
-    reaksjoner: [], // reaksjoner hentes ikke på /tidligere for å holde siden rask
-    antallKommentarer: (m.melding_chat?.[0] as { count: number } | undefined)?.count ?? 0,
-    albumKort: tilAlbumKort(m.album),
-    aktuell_dato: m.aktuell_dato,
-  }))
 
   // Bygg items for arrangmenter
   const arrItems: TidligereItem[] = arrSide.map(a => ({
@@ -242,14 +224,40 @@ export default async function TidligereSide({
   }))
 
   // Bygg items for meldinger — alle i «tidligere»-stil (dempet visning).
-  // Arkiverte innlegg sorteres på arkivert_tidspunkt (faller tilbake til
-  // sist_aktivitet for ikke-arkiverte) — konsistent med forsiden, se
-  // byggAgenda i lib/agenda-sortering.ts. (#312)
-  const meldItems: TidligereItem[] = meldinger.map(m => ({
-    kind: 'melding' as const,
-    sortIso: m.arkivert_tidspunkt ?? m.sist_aktivitet,
-    data: tilMeldingKort(m, true),
-  }))
+  // sortIso kommer fra sorterings_tidspunkt (mig. 120, #491) — DB-en eier nå
+  // nøkkelen «arkivert_tidspunkt hvis satt, ellers sist_aktivitet», så denne
+  // verdien er alltid identisk med .order()/keyset-filteret over.
+  // Rå-rad → MeldingRaad → TidligereItem skjer i ÉN map: to parallelle lister
+  // koblet på indeks er en stille bug i vente hvis en av dem senere filtreres.
+  const meldItems: TidligereItem[] = meldSide.map((m: RawMelding) => {
+    // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
+    const raad: MeldingRaad = {
+      id: m.id,
+      innhold: m.innhold,
+      opprettet: m.opprettet,
+      sist_aktivitet: m.sist_aktivitet,
+      arkivert_tidspunkt: m.arkivert_tidspunkt,
+      bilder: [...(m.melding_bilder ?? [])]
+        .sort((a, b) => a.rekkefoelge - b.rekkefoelge)
+        .map(b => b.bilde_url),
+      fraFacebook: m.fra_facebook === true,
+      forfatter: {
+        id: m.profil_id,
+        navn: m.profiles?.navn ?? 'Ukjent',
+        bilde_url: m.profiles?.bilde_url ?? null,
+        rolle: m.profiles?.rolle ?? null,
+      },
+      reaksjoner: [], // reaksjoner hentes ikke på /tidligere for å holde siden rask
+      antallKommentarer: (m.melding_chat?.[0] as { count: number } | undefined)?.count ?? 0,
+      albumKort: tilAlbumKort(m.album),
+      aktuell_dato: m.aktuell_dato,
+    }
+    return {
+      kind: 'melding' as const,
+      sortIso: m.sorterings_tidspunkt,
+      data: tilMeldingKort(raad, true),
+    }
+  })
 
   // Bygg items for polls
   type RawPoll = {
@@ -340,14 +348,6 @@ export default async function TidligereSide({
   const sisteMeld = emittertMeld.at(-1)
   const sistePoll = emittertPoll.at(-1)
 
-  // Meldings-cursoren MÅ bruke sist_aktivitet, ikke display-sortIso. Visningen
-  // sorterer på arkivert_tidspunkt ?? sist_aktivitet (#312), men DB-keyset-
-  // filteret over kjører mot sist_aktivitet-kolonnen. Bruker vi arkivert_tidspunkt
-  // som cursor mot en sist_aktivitet-sammenligning glipper/dupliseres rader.
-  const sisteMeldSistAktivitet = sisteMeld
-    ? meldinger.find(m => m.id === sisteMeld.data.id)?.sist_aktivitet ?? sisteMeld.sortIso
-    : null
-
   // antallISidevindu MÅ leses fra *Side-listene (klippet til sidestørrelse),
   // ikke fra *Raad (som har sidestørrelse+1 rader). Sender man rå-lengden blir
   // antallEmittert < antallISidevindu permanent true, og «Last mer» henger
@@ -364,7 +364,7 @@ export default async function TidligereSide({
     inn: cursor.m,
     antallISidevindu: meldSide.length,
     antallEmittert: emittertMeld.length,
-    sisteEmittert: sisteMeld ? [sisteMeldSistAktivitet!, sisteMeld.data.id] : null,
+    sisteEmittert: sisteMeld ? [sisteMeld.sortIso, sisteMeld.data.id] : null,
     flereEnnSiden: harMerMeld,
     feilet: meldFeilet,
   }
@@ -442,8 +442,7 @@ export default async function TidligereSide({
               bare på en tom siste side. Da lyver «Ingen X i historikken»; «Her stopper
               løypa» er riktig for begge. «Last mer» på en reelt tom side skal ikke
               lenger skje (fikset i #488), men grenen beholdes: en bokmerket/foreldet
-              cursor, eller melding-typens divergens mellom sist_aktivitet og
-              arkivert_tidspunkt, kan fortsatt lande på en tom side her.
+              cursor kan fortsatt lande på en tom side her.
               e2e/tidligere.spec.ts dekker grenen via en foreldet cursor. */}
           {filter === 'alle' || cursorStr ? (
             'Her stopper løypa, gutta.'
