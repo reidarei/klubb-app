@@ -1,12 +1,14 @@
 // Full historikk — alle arrangementer/meldinger/polls i fortid, paginert med
 // opaque cursor. Overlapper bevisst med agenda-vinduet på forsiden. De tre
 // typene pagineres uavhengig med keyset og merges sortert synkende på
-// (sortIso, id). Issue #176.
+// (sortIso, id). Issue #176. Kan filtreres på innholdstype (møte/tur/
+// melding/poll) via ?type=… — se lib/tidligere-filter.ts. Issue #487.
 
 import { ensureInnlogget } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { TIDLIGERE_SIDESTOERRELSE } from '@/lib/konstanter'
 import { dekodeCursor, enkodeCursor } from '@/lib/tidligere-cursor'
+import { parseFilter, skalHente, arrangementstypeFor, TOM_TEKST } from '@/lib/tidligere-filter'
 import { tilKort, tilMeldingKort, tilPollKort } from '@/lib/agenda-sortering'
 import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
@@ -17,6 +19,7 @@ import ArrangementKort from '@/components/agenda/ArrangementKort'
 import PollKort from '@/components/agenda/PollKort'
 import MeldingKort from '@/components/agenda/MeldingKort'
 import SectionLabel from '@/components/ui/SectionLabel'
+import TidligereTypeFilter from '@/components/tidligere/TidligereTypeFilter'
 import Link from 'next/link'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 
@@ -25,12 +28,13 @@ export const dynamic = 'force-dynamic'
 export default async function TidligereSide({
   searchParams,
 }: {
-  searchParams: Promise<{ cursor?: string }>
+  searchParams: Promise<{ cursor?: string; type?: string }>
 }) {
   const { user } = await ensureInnlogget()
   const supabase = await createServerClient()
-  const { cursor: cursorStr } = await searchParams
+  const { cursor: cursorStr, type: typeStr } = await searchParams
   const cursor = dekodeCursor(cursorStr)
+  const filter = parseFilter(typeStr)
 
   // Innlogget brukers rolle — styrer om av-arkiver-knappen vises på andres
   // innlegg (admin kan av-arkivere alle, ellers kun egne). (#312)
@@ -53,6 +57,11 @@ export default async function TidligereSide({
     .order('start_tidspunkt', { ascending: false })
     .order('id', { ascending: false })
     .limit(grense)
+
+  const arrType = arrangementstypeFor(filter)
+  if (arrType) {
+    arrQuery = arrQuery.eq('type', arrType)
+  }
 
   if (cursor.a) {
     // Keyset: vis kun rader eldre enn cursoren (synkende på start_tidspunkt, id)
@@ -104,10 +113,13 @@ export default async function TidligereSide({
     )
   }
 
-  const [{ data: arrRaad }, { data: meldRaad }, { data: pollRaad }] = await Promise.all([
-    arrQuery,
-    meldQuery,
-    pollQuery,
+  // Kun spørringene det aktive filteret faktisk trenger kjøres — skippede
+  // typer resolver til null med samme Promise.all (parallellitet bevart,
+  // ytelseskritisk for type=alle som fortsatt kjører alle tre samtidig).
+  const [arrRaad, meldRaad, pollRaad] = await Promise.all([
+    skalHente(filter, 'arrangement') ? arrQuery.then(r => r.data) : Promise.resolve(null),
+    skalHente(filter, 'melding') ? meldQuery.then(r => r.data) : Promise.resolve(null),
+    skalHente(filter, 'poll') ? pollQuery.then(r => r.data) : Promise.resolve(null),
   ])
 
   // Sjekk om det finnes mer (vi hentet grense = 30+1 rader)
@@ -334,6 +346,8 @@ export default async function TidligereSide({
         </h1>
       </div>
 
+      <TidligereTypeFilter aktiv={filter} />
+
       {side.length === 0 ? (
         <p
           style={{
@@ -345,7 +359,20 @@ export default async function TidligereSide({
             textAlign: 'center',
           }}
         >
-          Her stopper løypa, gutta.
+          {/* Har brukeren paginert hit (cursorStr satt), er lista ikke tom — han står
+              bare på en tom siste side. Da lyver «Ingen X i historikken»; «Her stopper
+              løypa» er riktig for begge. Rotårsaken («Last mer» vises på siste side,
+              fra #176) er sporet i eget issue. */}
+          {filter === 'alle' || cursorStr ? (
+            'Her stopper løypa, gutta.'
+          ) : (
+            <>
+              Ingen {TOM_TEKST[filter]} i historikken.{' '}
+              <Link href="/tidligere" style={{ color: 'var(--accent)' }}>
+                Vis alle
+              </Link>
+            </>
+          )}
         </p>
       ) : (
         <section>
@@ -369,7 +396,10 @@ export default async function TidligereSide({
 
           {nesteCursor && (
             <Link
-              href={`/tidligere?cursor=${nesteCursor}`}
+              href={`/tidligere?${new URLSearchParams({
+                ...(filter !== 'alle' && { type: filter }),
+                cursor: nesteCursor,
+              })}`}
               style={{
                 display: 'block',
                 marginTop: 20,
