@@ -43,6 +43,7 @@ npx supabase db reset
 - Test-bruker (`e2e-admin@klubb.test`)
 - Noen vanlige medlemmer
 - Arrangement-data som spec-ene verifiserer mot
+- Historiske data (eldre arrangementer og meldinger) for testing av historikk-siden (`/tidligere`)
 
 Etter en test-kjøring kan du kjøre på nytt uten reset, eller resette hvis du vil ha garantert ren tilstand:
 
