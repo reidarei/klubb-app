@@ -7,7 +7,7 @@
 import { ensureInnlogget } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import { TIDLIGERE_SIDESTOERRELSE } from '@/lib/konstanter'
-import { dekodeCursor, enkodeCursor } from '@/lib/tidligere-cursor'
+import { dekodeCursor, byggNesteCursor, type KildeTilstand } from '@/lib/tidligere-cursor'
 import { parseFilter, skalHente, arrangementstypeFor, TOM_TEKST } from '@/lib/tidligere-filter'
 import { tilKort, tilMeldingKort, tilPollKort } from '@/lib/agenda-sortering'
 import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
@@ -281,23 +281,18 @@ export default async function TidligereSide({
   // Klipp til sidestørrelse etter merge (kan ha fått inntil 3*30 = 90 items)
   const side = alleItems.slice(0, TIDLIGERE_SIDESTOERRELSE)
 
-  // Bygg neste cursor: per type avgjør vi posisjonen etter denne regelen:
-  //   1. Hvis typen ble emittert i `side` → cursor = siste emitterte (iso, id)
-  //   2. Hvis typen IKKE ble emittert, men `harMer{Type}` = true → behold input-cursor
-  //      (vi har lest 31 rader uten å vise noen — neste side må fortsette der vi slapp)
-  //   3. Hvis typen IKKE ble emittert OG `harMer{Type}` = false → null (uttømt)
-  // Regel 2 er kritisk: tidligere satte vi cursor til null her, som ville
-  // restarte typen fra toppen og gi duplikater på neste sidevisning.
-  const sisteArr = side.filter(i => i.kind === 'arrangement').at(-1)
-  const sisteMeld = side.filter(i => i.kind === 'melding').at(-1)
-  const sistePoll = side.filter(i => i.kind === 'poll').at(-1)
+  // Bygg neste cursor. To uavhengige spørsmål per type (se #488 — de var
+  // slått sammen tidligere, som fikk «Last mer» til å vises på siste side):
+  //   1. Hvor skal neste side starte for denne typen? → nestePosisjon()
+  //   2. Finnes det i det hele tatt en neste side for denne typen? → harMerFraKilde()
+  // Se lib/tidligere-cursor.ts for selve reglene og hvorfor de er riktige.
+  const emittertArr = side.filter(i => i.kind === 'arrangement')
+  const emittertMeld = side.filter(i => i.kind === 'melding')
+  const emittertPoll = side.filter(i => i.kind === 'poll')
+  const sisteArr = emittertArr.at(-1)
+  const sisteMeld = emittertMeld.at(-1)
+  const sistePoll = emittertPoll.at(-1)
 
-  type Pos = [string, string] | null
-  const nyArrCursor: Pos = sisteArr
-    ? [sisteArr.sortIso, sisteArr.data.id]
-    : harMerArr
-      ? cursor.a // ikke emittert i denne siden — behold input-posisjon
-      : null
   // Meldings-cursoren MÅ bruke sist_aktivitet, ikke display-sortIso. Visningen
   // sorterer på arkivert_tidspunkt ?? sist_aktivitet (#312), men DB-keyset-
   // filteret over kjører mot sist_aktivitet-kolonnen. Bruker vi arkivert_tidspunkt
@@ -305,22 +300,34 @@ export default async function TidligereSide({
   const sisteMeldSistAktivitet = sisteMeld
     ? meldinger.find(m => m.id === sisteMeld.data.id)?.sist_aktivitet ?? sisteMeld.sortIso
     : null
-  const nyMeldCursor: Pos = sisteMeld
-    ? [sisteMeldSistAktivitet!, sisteMeld.data.id]
-    : harMerMeld
-      ? cursor.m
-      : null
-  const nyPollCursor: Pos = sistePoll
-    ? [sistePoll.sortIso, sistePoll.data.id]
-    : harMerPoll
-      ? cursor.p
-      : null
 
-  // Bare bygg cursor hvis minst én type fortsatt har mer å hente.
-  const nesteCursor =
-    nyArrCursor || nyMeldCursor || nyPollCursor
-      ? enkodeCursor({ a: nyArrCursor, m: nyMeldCursor, p: nyPollCursor })
-      : null
+  // antallISidevindu MÅ leses fra *Side-listene (klippet til sidestørrelse),
+  // ikke fra *Raad (som har sidestørrelse+1 rader). Sender man rå-lengden blir
+  // antallEmittert < antallISidevindu permanent true, og «Last mer» henger
+  // igjen på siste side igjen — akkurat bugen #488 fikset.
+  const arrTilstand: KildeTilstand = {
+    inn: cursor.a,
+    antallISidevindu: arrSide.length,
+    antallEmittert: emittertArr.length,
+    sisteEmittert: sisteArr ? [sisteArr.sortIso, sisteArr.data.id] : null,
+    flereEnnSiden: harMerArr,
+  }
+  const meldTilstand: KildeTilstand = {
+    inn: cursor.m,
+    antallISidevindu: meldSide.length,
+    antallEmittert: emittertMeld.length,
+    sisteEmittert: sisteMeld ? [sisteMeldSistAktivitet!, sisteMeld.data.id] : null,
+    flereEnnSiden: harMerMeld,
+  }
+  const pollTilstand: KildeTilstand = {
+    inn: cursor.p,
+    antallISidevindu: pollSide.length,
+    antallEmittert: emittertPoll.length,
+    sisteEmittert: sistePoll ? [sistePoll.sortIso, sistePoll.data.id] : null,
+    flereEnnSiden: harMerPoll,
+  }
+
+  const nesteCursor = byggNesteCursor({ a: arrTilstand, m: meldTilstand, p: pollTilstand })
 
   return (
     <div style={{ padding: '0 20px 40px' }}>
@@ -361,8 +368,10 @@ export default async function TidligereSide({
         >
           {/* Har brukeren paginert hit (cursorStr satt), er lista ikke tom — han står
               bare på en tom siste side. Da lyver «Ingen X i historikken»; «Her stopper
-              løypa» er riktig for begge. Rotårsaken («Last mer» vises på siste side,
-              fra #176) er sporet i eget issue. */}
+              løypa» er riktig for begge. «Last mer» på en reelt tom side skal ikke
+              lenger skje (fikset i #488), men grenen beholdes: en bokmerket/foreldet
+              cursor, eller melding-typens divergens mellom sist_aktivitet og
+              arkivert_tidspunkt, kan fortsatt lande på en tom side her. */}
           {filter === 'alle' || cursorStr ? (
             'Her stopper løypa, gutta.'
           ) : (
