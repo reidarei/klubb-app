@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { formaterDato } from '@/lib/dato'
 import { projiser } from '@/lib/europa-kart-data'
-import EuropaKart, { type Sted } from '@/components/stedene/EuropaKart'
+import EuropaKart, { type Sted, type AlbumKort } from '@/components/stedene/EuropaKart'
 
 // «Stedene» — alle turene klubben har vært på, plottet på et Europakart.
 // Datagrunnlag: arrangementer med type='tur' og en destinasjon som finnes i
@@ -13,11 +13,27 @@ export default async function Stedene() {
 
   const { data: rader } = await supabase
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt, destinasjon, lat, lng, sensurerte_felt')
+    .select(
+      // Album embed-es på arrangementet (album.arrangement_id → arrangementer)
+      // i samme round trip, så detaljkortet kan lenke til turens bildealbum.
+      // Fase 1 forventer 0 eller 1 album per arrangement — vi tar det nyeste.
+      `id, tittel, start_tidspunkt, destinasjon, lat, lng, sensurerte_felt,
+       album (
+         id,
+         antall:album_bilde!album_bilde_album_id_fkey (count),
+         cover:album_bilde!album_cover_fk (thumb_url, bilde_url)
+       )`,
+    )
     .eq('type', 'tur')
     .not('destinasjon', 'is', null)
     .order('start_tidspunkt', { ascending: true })
 
+  type RawCover = { thumb_url: string | null; bilde_url: string }
+  type RawAlbum = {
+    id: string
+    antall: { count: number }[] | null
+    cover: RawCover | RawCover[] | null
+  }
   type Rad = {
     id: string
     tittel: string
@@ -26,8 +42,22 @@ export default async function Stedene() {
     lat: number | null
     lng: number | null
     sensurerte_felt: Record<string, boolean> | null
+    album: RawAlbum | RawAlbum[] | null
   }
   const turer = (rader ?? []) as Rad[]
+
+  // Normaliser album-embed (array eller enkeltobjekt avhengig av kardinalitet)
+  // til en flat form kartet kan rendre. Cover-thumb først, ellers fullbilde.
+  function albumKort(raw: Rad['album']): AlbumKort | null {
+    const a = Array.isArray(raw) ? raw[0] : raw
+    if (!a) return null
+    const cover = Array.isArray(a.cover) ? a.cover[0] : a.cover
+    return {
+      id: a.id,
+      antall: a.antall?.[0]?.count ?? 0,
+      thumb: cover?.thumb_url ?? cover?.bilde_url ?? null,
+    }
+  }
 
   // Grupper de plottbare turene per by. Koordinatene ligger nå på selve
   // arrangementet (geokodet ved oppretting, se lib/geokoding.ts) — turer uten
@@ -56,7 +86,7 @@ export default async function Stedene() {
       sted = { by: t.destinasjon, x, y, turer: [] }
       perBy.set(t.destinasjon, sted)
     }
-    sted.turer.push({ aar, tittel: t.tittel })
+    sted.turer.push({ aar, tittel: t.tittel, album: albumKort(t.album) })
   }
 
   const steder = [...perBy.values()]

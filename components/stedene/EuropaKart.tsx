@@ -1,13 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
 import { KART_BREDDE as W, KART_HOEYDE as H, LAND_BANER } from '@/lib/europa-kart-data'
+
+// Bildealbum koblet til en tur (via album.arrangement_id). Vises som lenke i
+// detaljkortet så gutta kan hoppe rett fra stedet til bildene.
+export type AlbumKort = { id: string; antall: number; thumb: string | null }
 
 export type Sted = {
   by: string
   x: number
   y: number
-  turer: { aar: number; tittel: string }[]
+  turer: { aar: number; tittel: string; album: AlbumKort | null }[]
 }
 
 type Props = {
@@ -150,6 +156,7 @@ export default function EuropaKart({ steder }: Props) {
                   key={t.aar}
                   style={{
                     display: 'flex',
+                    alignItems: 'center',
                     gap: 12,
                     padding: '5px 0',
                     fontSize: 14,
@@ -166,6 +173,55 @@ export default function EuropaKart({ steder }: Props) {
                     {t.aar}
                   </span>
                   <span>{t.tittel}</span>
+                  {/* Lenke til turens bildealbum (kun turer som faktisk har ett) */}
+                  {t.album && (
+                    <Link
+                      href={`/album/${t.album.id}`}
+                      style={{
+                        marginLeft: 'auto',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        textDecoration: 'none',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {t.album.thumb && (
+                        <span
+                          style={{
+                            position: 'relative',
+                            width: 28,
+                            height: 28,
+                            borderRadius: 5,
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            background: 'var(--bg-elevated-2)',
+                          }}
+                        >
+                          <Image
+                            src={t.album.thumb}
+                            alt=""
+                            fill
+                            sizes="28px"
+                            style={{ objectFit: 'cover' }}
+                          />
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          color: 'var(--accent)',
+                          letterSpacing: '1px',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Bilder{t.album.antall > 0 ? ` (${t.album.antall})` : ''}
+                      </span>
+                    </Link>
+                  )}
                 </div>
               ))}
           </div>
