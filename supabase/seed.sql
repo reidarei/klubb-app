@@ -117,3 +117,122 @@ insert into public.arrangement_chat (arrangement_id, profil_id, innhold)
 values
   ('00000000-0000-4000-9000-000000000001', '00000000-0000-4000-8000-000000000002', 'Gleder meg, dette blir bra!'),
   ('00000000-0000-4000-9000-000000000001', '00000000-0000-4000-8000-000000000003', 'Kommer rett fra jobb, kan bli et kvarter forsinka.');
+
+-- ─── Fortidsdata for /tidligere-specen (#489) ──────────────────────────────
+-- Bulken under ligger bevisst MER enn AGENDA_VINDU_MND (12) måneder tilbake
+-- (dagoffset 400+), slik at forsidens «Tidligere»-seksjon (subMonts-cutoff i
+-- app/(app)/page.tsx) IKKE plukker dem opp — de skal kun være nåbare via
+-- den paginerte /tidligere-siden. Fire enkelt-rader (én per type, «nylig
+-- fortid») legges bevisst INNENFOR 12-månedersvinduet, slik at forsidens
+-- «Tidligere»-seksjon også har noe å vise i test-instansen.
+--
+-- Tallene 34 møter / 6 turer / 5 meldinger / 4 poller (49 totalt) er BUNDET
+-- til e2e/tidligere.spec.ts (ANT_MOETE/ANT_TUR/ANT_MELDING/ANT_POLL/
+-- ANT_ALLE) — endres ett tall her må speccen oppdateres i samme commit.
+-- 49 > TIDLIGERE_SIDESTOERRELSE (30) med vilje: paginering («Last mer»)
+-- testes ikke ordentlig med bare et par rader (issuet foreslo opprinnelig
+-- «et par», men det dekker ikke paginering — se Reidars avklaring i #489).
+--
+-- Deterministiske UUID-er: '00000000-0000-4000-<type>-<løpenummer>', der
+-- <type> er 9100=møter, 9200=turer, 9300=meldinger, 9400=poller,
+-- 9500=poll_valg. Løpenummer 0 = den «nylige» raden, 1..N = dyp historikk.
+--
+-- Hvert type har sitt eget dag-offset og steg (400+i*7 / 405+i*40 /
+-- 410+i*30 / 415+i*50) — IKKE bare pynt: det garanterer at ingen to
+-- elementer på tvers av typer får identisk sortIso, så merge-rekkefølgen i
+-- app/(app)/tidligere/page.tsx (synkende på sortIso, id) er deterministisk
+-- og aldri faller tilbake på id-tiebreak mellom typer.
+
+-- === Møter (34: 1 nylig + 33 dyp historikk) ================================
+insert into public.arrangementer (id, type, tittel, beskrivelse, start_tidspunkt, oppmoetested, opprettet_av)
+values (
+  '00000000-0000-4000-9100-000000000000',
+  'moete', 'Historisk møte 00',
+  'Seedet fortidsdata for /tidligere (#489) — nylig fortid, innenfor 12-månedersvinduet.',
+  now() - interval '30 days', 'Klubbhuset',
+  '00000000-0000-4000-8000-000000000001'
+);
+
+insert into public.arrangementer (id, type, tittel, beskrivelse, start_tidspunkt, oppmoetested, opprettet_av)
+select
+  ('00000000-0000-4000-9100-' || lpad(i::text, 12, '0'))::uuid,
+  'moete',
+  'Historisk møte ' || lpad(i::text, 2, '0'),
+  'Seedet fortidsdata for /tidligere (#489) — dyp historikk.',
+  now() - make_interval(days => 400 + i * 7) + interval '1 hour',
+  'Klubbhuset',
+  ('00000000-0000-4000-8000-00000000000' || ((i % 3) + 1))::uuid
+from generate_series(1, 33) as i;
+
+-- === Turer (6: 1 nylig + 5 dyp historikk) ===================================
+insert into public.arrangementer (id, type, tittel, beskrivelse, start_tidspunkt, oppmoetested, opprettet_av)
+values (
+  '00000000-0000-4000-9200-000000000000',
+  'tur', 'Historisk tur 00',
+  'Seedet fortidsdata for /tidligere (#489) — nylig fortid, innenfor 12-månedersvinduet.',
+  now() - interval '60 days', 'Parkeringa',
+  '00000000-0000-4000-8000-000000000002'
+);
+
+insert into public.arrangementer (id, type, tittel, beskrivelse, start_tidspunkt, oppmoetested, opprettet_av)
+select
+  ('00000000-0000-4000-9200-' || lpad(i::text, 12, '0'))::uuid,
+  'tur',
+  'Historisk tur ' || lpad(i::text, 2, '0'),
+  'Seedet fortidsdata for /tidligere (#489) — dyp historikk.',
+  now() - make_interval(days => 405 + i * 40) + interval '2 hours',
+  'Parkeringa',
+  ('00000000-0000-4000-8000-00000000000' || ((i % 3) + 1))::uuid
+from generate_series(1, 5) as i;
+
+-- === Meldinger (5: 1 nylig + 4 dyp historikk) ===============================
+-- arkivert_tidspunkt og aktuell_dato holdes null (default) — ingen av
+-- speccens forventninger avhenger av arkiv- eller festedato-oppførsel.
+insert into public.meldinger (id, profil_id, innhold, opprettet, sist_aktivitet)
+values (
+  '00000000-0000-4000-9300-000000000000',
+  '00000000-0000-4000-8000-000000000003',
+  'Historisk innlegg 00 — seedet fortidsdata for /tidligere (#489).',
+  now() - interval '40 days', now() - interval '40 days'
+);
+
+insert into public.meldinger (id, profil_id, innhold, opprettet, sist_aktivitet)
+select
+  ('00000000-0000-4000-9300-' || lpad(i::text, 12, '0'))::uuid,
+  ('00000000-0000-4000-8000-00000000000' || ((i % 3) + 1))::uuid,
+  'Historisk innlegg ' || lpad(i::text, 2, '0') || ' — seedet fortidsdata for /tidligere (#489).',
+  now() - make_interval(days => 410 + i * 30) + interval '3 hours',
+  now() - make_interval(days => 410 + i * 30) + interval '3 hours'
+from generate_series(1, 4) as i;
+
+-- === Poller (4: 1 nylig + 3 dyp historikk) ==================================
+-- kaaring_mal_id holdes null (default) — dette er vanlige polls, ikke
+-- kåringspoller, så /tidligere sin RPC-aggregat-gren (kaaringAggregater)
+-- ikke trengs for at speccen skal kunne telle kort.
+insert into public.poll (id, spoersmaal, svarfrist, opprettet_av)
+values (
+  '00000000-0000-4000-9400-000000000000',
+  'Historisk poll 00?',
+  now() - interval '20 days',
+  '00000000-0000-4000-8000-000000000001'
+);
+
+insert into public.poll (id, spoersmaal, svarfrist, opprettet_av)
+select
+  ('00000000-0000-4000-9400-' || lpad(i::text, 12, '0'))::uuid,
+  'Historisk poll ' || lpad(i::text, 2, '0') || '?',
+  now() - make_interval(days => 415 + i * 50) + interval '4 hours',
+  ('00000000-0000-4000-8000-00000000000' || ((i % 3) + 1))::uuid
+from generate_series(1, 3) as i;
+
+-- To valg (Ja/Nei) per poll. poll_valg-id-en er utledet fra pollens eget
+-- løpenummer (0=nylig, 1..3=dyp) ganget med 2 + valg-indeks — deterministisk
+-- og unik uten å stole på innsettingsrekkefølge. Ingen poll_stemme seedes.
+insert into public.poll_valg (id, poll_id, tekst, rekkefoelge)
+select
+  ('00000000-0000-4000-9500-' || lpad((i * 2 + v.idx)::text, 12, '0'))::uuid,
+  ('00000000-0000-4000-9400-' || lpad(i::text, 12, '0'))::uuid,
+  v.tekst,
+  v.idx
+from generate_series(0, 3) as i
+cross join (values ('Ja', 0), ('Nei', 1)) as v(tekst, idx);

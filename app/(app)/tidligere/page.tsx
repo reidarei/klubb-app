@@ -357,6 +357,7 @@ export default async function TidligereSide({
 
       {side.length === 0 ? (
         <p
+          data-testid="tidligere-tom"
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
@@ -371,7 +372,8 @@ export default async function TidligereSide({
               løypa» er riktig for begge. «Last mer» på en reelt tom side skal ikke
               lenger skje (fikset i #488), men grenen beholdes: en bokmerket/foreldet
               cursor, eller melding-typens divergens mellom sist_aktivitet og
-              arkivert_tidspunkt, kan fortsatt lande på en tom side her. */}
+              arkivert_tidspunkt, kan fortsatt lande på en tom side her.
+              e2e/tidligere.spec.ts dekker grenen via en foreldet cursor. */}
           {filter === 'alle' || cursorStr ? (
             'Her stopper løypa, gutta.'
           ) : (
@@ -386,7 +388,11 @@ export default async function TidligereSide({
       ) : (
         <section>
           <SectionLabel>Tidligere</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Hvert kort under (ArrangementKort/PollKort/MeldingKort) rendrer ett
+              <a> på toppnivå. e2e/tidligere.spec.ts teller kort via
+              `:scope > a` på denne diven — ikke wrap et kort i en ekstra div,
+              det bryter den tellingen. Se #489. */}
+          <div data-testid="tidligere-liste" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {side.map(t => {
               if (t.kind === 'arrangement')
                 return <ArrangementKort key={t.data.id} arr={t.data} tidligere />
@@ -405,6 +411,7 @@ export default async function TidligereSide({
 
           {nesteCursor && (
             <Link
+              data-testid="tidligere-last-mer"
               href={`/tidligere?${new URLSearchParams({
                 ...(filter !== 'alle' && { type: filter }),
                 cursor: nesteCursor,
