@@ -19,6 +19,7 @@ import {
 import { sendVarsel } from '@/lib/varsler'
 import { rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
+import { BASE_URL } from '@/lib/config'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -184,7 +185,7 @@ export async function kjorBursdagsgratulasjon(
             tittel: 'Gratulerer med dagen!',
             melding: `${hilsen} med dagen ${fornavn}`,
             type: 'bursdagsgratulasjon',
-            url: '/chat',
+            url: `${BASE_URL}/chat`,
           })
           varselSendt = true
         }

@@ -4,6 +4,7 @@
 // Event-taksonomi (dot-separert navnerom):
 //   varsel.send.feilet          — sendPush/sendEpost-feil i lib/varsler.ts
 //   varsel.epost.feilet         — Resend API-feil i lib/epost.ts
+//   varsel.url.relativ          — url som verken er absolutt eller starter med «/» (#507)
 //   varsel.push.feilet          — web-push-feil i lib/push.ts
 //   bilde.opplast.feilet        — R2-opplasting feiler
 //   video.opplast.feilet        — video-upload feiler

@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE } from '@/lib/dato'
-import { BASE_URL } from '@/lib/config'
+import { BASE_URL, absoluttUrl } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
 import { logg } from '@/lib/logg'
@@ -280,6 +280,18 @@ export async function sendVarsel({
   // uten låsing — JS er single-threaded, så to push() kan aldri kjøre samtidig.
   const epostBatch: { til: string; emne: string; html: string }[] = []
 
+  // Normaliser URL-en én gang før loopen — push tåler relativ URL (SW resolver
+  // mot origin), men e-post-malen setter den rett inn som href og har ingen
+  // base-URL å resolve mot. Uten dette blir kallesteder som `url: '/chat'`
+  // ødelagte lenker i innboksen (#507).
+  const normalisertUrl = url ? absoluttUrl(url) : undefined
+  // absoluttUrl kaster ikke på en verdi som verken er absolutt eller starter
+  // med «/» (f.eks. `url: 'chat'`) — den slipper gjennom uendret og blir en
+  // ødelagt lenke. Logg det så feilen ikke er stille (#507-review).
+  if (url && normalisertUrl === url && !/^https?:\/\//i.test(url)) {
+    logg.warn('varsel.url.relativ', { sample: type })
+  }
+
   await Promise.all(
     profiler.map(async profil => {
       const pref = prefs.get(profil.id)
@@ -300,14 +312,14 @@ export async function sendVarsel({
           melding,
           type,
           kanal,
-          url: url ?? null,
+          url: normalisertUrl ?? null,
           arrangement_id: arrangementId ?? null,
           poll_id: pollId ?? null,
         })
         .select('id')
         .single()
 
-      const varselUrl = url ?? (loggRad ? `${BASE_URL}/varsler/${loggRad.id}` : BASE_URL)
+      const varselUrl = normalisertUrl ?? (loggRad ? `${BASE_URL}/varsler/${loggRad.id}` : BASE_URL)
 
       if (kanPush) {
         await Promise.all(

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { sendVarsel, formaterHilsenMelding } from '@/lib/varsler'
 import { ensureAdmin, ensureInnlogget } from '@/lib/auth'
 import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
+import { BASE_URL } from '@/lib/config'
 
 // Slå opp purredato fra arrangementmaler og sett riktig år. Mal-raden
 // har år=2000 som sentinel (kun mnd+dag teller), så vi bytter ut til aar.
@@ -224,7 +225,7 @@ export async function purreAnsvarlig(ansvarId: string, hilsen?: string) {
     mottakere,
     tittel: `Purring: ${ansvar.arrangement_navn}`,
     melding,
-    url: '/arrangoransvar',
+    url: `${BASE_URL}/arrangoransvar`,
     knappTekst: 'Åpne arrangøransvar',
     type: 'purring_ansvar',
     tillatDuplikat: true,

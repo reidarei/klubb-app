@@ -11,14 +11,35 @@ const DEV_URL = 'http://localhost:3000'
 // Server-koden kan ikke lese window.location, så vi støtter en eksplisitt
 // override via NEXT_PUBLIC_BASE_URL. Vercel setter automatisk VERCEL_URL
 // for preview-deploys (uten protokoll), så vi prefikser den med https.
+// Trailing slash strippes: alle kallesteder skriver `${BASE_URL}/sti`, så en
+// env satt til «https://klubben.no/» ville gitt dobbel skråstrek. Samme
+// normalisering som R2_PUBLIC_URL under. Særlig relevant for klubb-app-
+// instanser der env-en settes av andre enn oss (#507-review).
 export function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL
+  if (process.env.NEXT_PUBLIC_BASE_URL)
+    return process.env.NEXT_PUBLIC_BASE_URL.replace(/\/$/, '')
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
   if (process.env.NODE_ENV === 'production') return PROD_URL
   return DEV_URL
 }
 
 export const BASE_URL = getBaseUrl()
+
+// Gjør en URL absolutt ved å prefikse BASE_URL. Push tåler relative URL-er
+// (Service Worker resolver mot origin, se public/sw.js), men e-postklienter
+// har ingen base-URL å resolve mot — en relativ href blir en ødelagt lenke
+// i innboksen (#507). Allerede absolutte URL-er sendes uendret (case-
+// insensitiv match — «HTTPS://» er like gyldig). Protokoll-relative URL-er
+// («//host/sti») er like ubrukelige i e-post som en ren sti, så de får
+// https-prefiks. Verdier som verken er absolutte eller starter med «/»
+// returneres uendret i stedet for å kaste — et varsel skal aldri feile på
+// dette; kallestedet logges i stedet (se lib/varsler.ts).
+export function absoluttUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('//')) return `https:${url}`
+  if (url.startsWith('/')) return `${BASE_URL}${url}`
+  return url
+}
 
 // Kontakt-epost for VAPID push-tjenestene (Apple/Google). Brukes ikke til
 // å sende epost — kun metadata slik at push-tjenester kan kontakte oss

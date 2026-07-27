@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagFromMock, lagChain } from './helpers/supabase-mock'
+import { BASE_URL } from '@/lib/config'
 
 // Mock Supabase admin-klient
 const mockFrom = vi.fn()
@@ -17,6 +18,17 @@ const mockArrangementEpostHtml = vi.fn().mockReturnValue('<html>test</html>')
 
 vi.mock('@/lib/push', () => ({
   sendPush: (...args: unknown[]) => mockSendPush(...args),
+}))
+
+// Logg mockes så vi kan asserte på advarselen for ikke-normaliserbare URL-er
+// uten at den ekte loggeren prøver å skrive til feil_logg/Sentry.
+const mockLoggWarn = vi.fn()
+
+vi.mock('@/lib/logg', () => ({
+  logg: {
+    warn: (...args: unknown[]) => mockLoggWarn(...args),
+    feil: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/epost', () => ({
@@ -310,6 +322,78 @@ describe('formaterHilsenMelding', () => {
         maksLengde: 0,
       })
     ).toThrow('Hilsen kan ikke være lengre enn 0 tegn')
+  })
+})
+
+describe('sendVarsel – URL-normalisering', () => {
+  it('gjør relativ URL absolutt før den sendes til e-post-malen (#507)', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: '/chat',
+    })
+
+    // E-postklienter har ingen base-URL å resolve relative lenker mot —
+    // uten normalisering blir href-en ubrukelig i innboksen.
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `${BASE_URL}/chat` }),
+    )
+  })
+
+  it('lar en allerede absolutt URL være uendret (ingen dobbelt-prefiksing)', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: `${BASE_URL}/poll/abc`,
+    })
+
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `${BASE_URL}/poll/abc` }),
+    )
+  })
+
+  it('logger advarsel når URL-en verken er absolutt eller starter med /', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: 'chat',
+    })
+
+    // Vi kaster ikke — varselet skal ut — men feilen skal ikke være stille.
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'varsel.url.relativ',
+      expect.objectContaining({ sample: 'test' }),
+    )
   })
 })
 
