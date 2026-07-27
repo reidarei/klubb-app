@@ -135,12 +135,16 @@ export async function settGeneralsekretaer(nyProfilId: string): Promise<SettGene
     // 23505 = unique_violation: partial index profiles_unik_generalsekretaer
     // blokkerte INSERT/UPDATE fordi en annen GS ble satt i mellomtiden.
     if (error.code === '23505') {
-      // Slå opp sittende GS for å vise reaktiv confirm i klienten
-      const { data: gs } = await supabase
+      // Slå opp sittende GS for å vise reaktiv confirm i klienten. Fail-open
+      // med logging: feiler oppslaget, faller vi bare gjennom til den
+      // generiske { kode: 'feil' }-returen under — den bærer fortsatt
+      // RPC-ens egen (korrekte) feilmelding, så ingenting blir misvisende.
+      const { data: gs, error: gsFeil } = await supabase
         .from('profiles')
         .select('id, navn')
         .eq('rolle', 'generalsekretaer')
         .maybeSingle()
+      if (gsFeil) logg.warn('profil.generalsekretaer.oppslag.feilet', { code: gsFeil.code })
       if (gs) {
         return { ok: false, kode: 'generalsekretaer_finnes', innehaver: { id: gs.id, navn: gs.navn } }
       }

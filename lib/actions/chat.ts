@@ -92,21 +92,31 @@ async function sendPrivatMeldingVarsel(
 ): Promise<void> {
   const supabase = await createServerClient()
 
-  const { data: samtale } = await supabase
+  // Begge oppslagene under kalles fra sendVarslerEtterPost, som igjen kalles
+  // i et try/catch i sendChatMelding (logger 'chat.varsler.feilet' og
+  // fortsetter) — meldingen er alt committet før vi når hit, så en kastet
+  // feil her stopper aldri selve chat-postingen, kun varselet. Kaster i
+  // stedet for stille fallback slik at feilen faktisk blir logget der.
+  // maybeSingle: en slettet samtale skal gi den stille `return`-en under,
+  // ikke en PGRST116-feil i varsellogg-en.
+  const { data: samtale, error: samtaleFeil } = await supabase
     .from('samtale')
     .select('profil_a, profil_b')
     .eq('id', samtaleId)
-    .single()
+    .maybeSingle()
+  if (samtaleFeil) throw new Error(`Kunne ikke hente samtalen: ${samtaleFeil.message}`)
 
   if (!samtale) return
 
   const motpartId = samtale.profil_a === avsenderId ? samtale.profil_b : samtale.profil_a
 
-  const { data: avsender } = await supabase
+  // maybeSingle så 'Noen'-fallbacken under fortsatt er nåbar.
+  const { data: avsender, error: avsenderFeil } = await supabase
     .from('profiles')
     .select('navn, visningsnavn')
     .eq('id', avsenderId)
-    .single()
+    .maybeSingle()
+  if (avsenderFeil) throw new Error(`Kunne ikke hente avsenders navn: ${avsenderFeil.message}`)
 
   const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
   const utdrag = tekst.length > 80 ? tekst.slice(0, 77) + '...' : tekst

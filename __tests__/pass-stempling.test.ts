@@ -41,7 +41,7 @@ vi.mock('@/lib/logg', () => ({
   logg: { warn: vi.fn(), feil: (...a: unknown[]) => mockLoggFeil(...a) },
 }))
 
-import { godkjennPassTilgang, avslaaPassTilgang } from '@/lib/actions/pass'
+import { bePassTilgang, godkjennPassTilgang, avslaaPassTilgang } from '@/lib/actions/pass'
 
 const FORESPORSEL = {
   soker_id: 'soker-1',
@@ -57,6 +57,67 @@ beforeEach(() => {
   mockAdminFrom.mockImplementation(() => lagChain({ navn: 'Ola Nordmann', visningsnavn: null }))
   mockRpc.mockResolvedValue({ data: true, error: null })
   mockSendVarsel.mockResolvedValue({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 0 })
+})
+
+// Pinner pulje A-vurderingen i lib/actions/pass.ts: de fire berikelses-
+// oppslagene i bePassTilgang (gensek-liste, søker, eier, arrangement) er
+// fail-open ETTER at forespørselen alt er lagret — en feilet spørring skal
+// verken kaste (som ville maskert en vellykket forespørsel som en feilet en)
+// eller sende varselet stille uten spor. Se CLAUDE.md § pulje A.
+describe('bePassTilgang – fail-open berikelse etter committet insert', () => {
+  it('en feilet eier-oppslag hindrer IKKE at forespørselen fullfører eller varselet sendes', async () => {
+    // Forespørselen inserter OK (mockSupabaseFrom, felles default)
+    let profilKallTeller = 0
+    mockAdminFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'profiles') {
+        profilKallTeller++
+        if (profilKallTeller === 1) {
+          // gensekProfiler — liste, ikke .single()
+          return lagChain([{ id: 'gensek-1', navn: 'Gensek', visningsnavn: null }])
+        }
+        if (profilKallTeller === 3) {
+          // eier — simuler feil
+          return lagChain(null, { message: 'DB nede' })
+        }
+        // soker
+        return lagChain({ navn: 'Søker Søkersen', visningsnavn: null })
+      }
+      // arrangementer
+      return lagChain({ tittel: 'Fjelltur' })
+    })
+
+    await expect(
+      bePassTilgang({ eier_id: 'eier-1', arrangement_id: 'arr-1' }),
+    ).resolves.toBeUndefined()
+
+    // Fallback-navn ('noen') brukt i meldingen i stedet for et kastet unntak
+    expect(mockSendVarsel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        melding: expect.stringContaining('noen'),
+      }),
+    )
+    // Feilen ble likevel loggført — fail-open, men ikke stille
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'pass.varsel.oppslag.feilet',
+      expect.objectContaining({ message: 'DB nede' }),
+      expect.anything(),
+    )
+  })
+
+  it('ingen berikelsesfeil: sender vanlig melding og logger ingenting', async () => {
+    mockAdminFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'profiles') {
+        return lagChain([{ id: 'gensek-1', navn: 'Gensek', visningsnavn: null }])
+      }
+      return lagChain({ tittel: 'Fjelltur' })
+    })
+
+    // NB: profiles-mocken over dekker både liste- og single()-kall siden
+    // lagChain støtter begge — vi bryr oss her kun om at ingen feil logges.
+    await bePassTilgang({ eier_id: 'eier-1', arrangement_id: 'arr-1' })
+
+    expect(mockLoggFeil).not.toHaveBeenCalledWith('pass.varsel.oppslag.feilet', expect.anything(), expect.anything())
+  })
 })
 
 describe('godkjennPassTilgang – stempling', () => {
@@ -109,6 +170,26 @@ describe('godkjennPassTilgang – stempling', () => {
 
     expect(mockSendVarsel).not.toHaveBeenCalled()
     expect(mockRpc).not.toHaveBeenCalled()
+  })
+
+  // Godkjenningen (UPDATE) er alt committet før eier-oppslaget kjører — en
+  // feilet berikelse skal IKKE kaste en misvisende feil på en handling som
+  // faktisk lyktes. Fallback-navn brukes, feilen loggføres. (pulje A)
+  it('eier-oppslag feiler: fullfører likevel med fallback-navn, logger feilen', async () => {
+    mockAdminFrom.mockImplementation(() => lagChain(null, { message: 'DB nede' }))
+
+    await expect(godkjennPassTilgang('fp-8')).resolves.toBeUndefined()
+
+    expect(mockSendVarsel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        melding: expect.stringContaining('medlemmet'),
+      }),
+    )
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'pass.varsel.oppslag.feilet',
+      expect.objectContaining({ message: 'DB nede' }),
+      expect.anything(),
+    )
   })
 })
 

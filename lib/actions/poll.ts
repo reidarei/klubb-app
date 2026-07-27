@@ -94,12 +94,14 @@ export async function stemPaaPoll(pollId: string, valgIds: string[]) {
   if (valgIds.length === 0) throw new Error('Velg minst ett alternativ')
 
   // Sanity: alle valgIds må tilhøre denne pollen. Billig validering før
-  // vi sletter eksisterende stemmer.
-  const { data: valg } = await supabase
+  // vi sletter eksisterende stemmer. Feil hentes eksplisitt: uten den ville
+  // en DB-feil sett identisk ut som «ugyldig valg» under.
+  const { data: valg, error: valgErr } = await supabase
     .from('poll_valg')
     .select('id')
     .eq('poll_id', pollId)
     .in('id', valgIds)
+  if (valgErr) throw new Error(`Kunne ikke sjekke valgene: ${valgErr.message}`)
 
   if (!valg || valg.length !== valgIds.length) {
     throw new Error('Ugyldig valg')

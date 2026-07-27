@@ -61,11 +61,15 @@ export async function opprettKaaringspoll(input: OpprettInput) {
   const kandidater: Kandidat[] = []
 
   if (kilde === 'profil') {
-    const { data: medlemmer } = await admin
+    // Feil hentes eksplisitt: uten den ville en svelget feil gitt
+    // kandidater.length===0 og feiltolket det som «for få aktive medlemmer»
+    // under, i stedet for den faktiske DB-feilen.
+    const { data: medlemmer, error: medlemmerFeil } = await admin
       .from('profiles')
       .select('id, navn')
       .eq('aktiv', true)
       .order('navn')
+    if (medlemmerFeil) throw new Error(`Kunne ikke hente medlemmer: ${medlemmerFeil.message}`)
     for (const m of medlemmer ?? []) {
       if (!m.navn) continue
       kandidater.push({ tekst: m.navn, referanse_profil_id: m.id })
@@ -77,13 +81,15 @@ export async function opprettKaaringspoll(input: OpprettInput) {
     // 31. desember kl 23:30 norsk tid telles ikke som neste år).
     const fra = `${input.aar}-01-01T00:00:00Z`
     const til = `${input.aar + 1}-01-01T00:00:00Z`
-    const { data: arr } = await admin
+    // Samme resonnement som medlemmer-oppslaget over.
+    const { data: arr, error: arrFeil } = await admin
       .from('arrangementer')
       .select('id, tittel, start_tidspunkt')
       .eq('type', 'moete')
       .gte('start_tidspunkt', fra)
       .lt('start_tidspunkt', til)
       .order('start_tidspunkt')
+    if (arrFeil) throw new Error(`Kunne ikke hente møter: ${arrFeil.message}`)
     for (const a of arr ?? []) {
       kandidater.push({ tekst: a.tittel, referanse_arrangement_id: a.id })
     }
@@ -149,11 +155,15 @@ export async function velgTiebreakVinner(pollId: string, valgId: string) {
   const { user, profil } = await ensureLoeserTiebreak()
   const admin = createAdminClient()
 
-  const { data: poll } = await admin
+  // Feil hentes eksplisitt: uten den ville en DB-feil sett identisk ut som
+  // «pollen finnes ikke» under. maybeSingle (ikke single) er nødvendig for at
+  // «finnes ikke» i det hele tatt når frem — single gir 0 rader som PGRST116.
+  const { data: poll, error: pollFeil } = await admin
     .from('poll')
     .select('id, spoersmaal, kaaring_mal_id, aar, tiebreak_status')
     .eq('id', pollId)
-    .single()
+    .maybeSingle()
+  if (pollFeil) throw new Error(`Kunne ikke hente pollen: ${pollFeil.message}`)
   if (!poll) throw new Error('Pollen finnes ikke')
   if (!poll.kaaring_mal_id) throw new Error('Ikke en kåringspoll')
   if (poll.tiebreak_status !== 'venter_paa_tiebreak') {
@@ -161,12 +171,16 @@ export async function velgTiebreakVinner(pollId: string, valgId: string) {
   }
   if (poll.aar === null) throw new Error('Kåringspoll mangler årstall')
 
-  const { data: valg } = await admin
+  // Samme resonnement — skiller DB-feil fra «ugyldig valg». Her er
+  // maybeSingle ekstra viktig: et valgId som ikke hører til pollen ER den
+  // normale angrepsvektoren, og skal gi «Ugyldig valg», ikke PGRST116.
+  const { data: valg, error: valgFeil } = await admin
     .from('poll_valg')
     .select('id, referanse_profil_id, referanse_arrangement_id')
     .eq('id', valgId)
     .eq('poll_id', pollId)
-    .single()
+    .maybeSingle()
+  if (valgFeil) throw new Error(`Kunne ikke hente valget: ${valgFeil.message}`)
   if (!valg) throw new Error('Ugyldig valg')
 
   // Sanity: profil eller arrangement, ikke ingen.

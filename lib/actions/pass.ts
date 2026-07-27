@@ -52,29 +52,38 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
   // hente lista — dette er ikke sensitiv data og vi trenger den uansett
   // for å vite hvem mottakerne er.
   const admin = createAdminClient()
-  const { data: gensekProfiler } = await admin
-    .from('profiles')
-    .select('id, navn, visningsnavn')
-    .eq('rolle', 'generalsekretaer')
-    .eq('aktiv', true)
 
-  const { data: soker } = await admin
-    .from('profiles')
-    .select('navn, visningsnavn')
-    .eq('id', user.id)
-    .single()
+  // Fire oppslag slått sammen til én Promise.all — alle er berikelse for
+  // varselteksten ETTER at forespørselen alt er lagret over. Å kaste her
+  // ville fortalt brukeren at handlingen feilet, når den faktisk gikk fint.
+  // Fail-open med fallback-navn (Noen/noen/en tur) under, men loggført slik
+  // at et reelt bortfall av generalsekretær-varsling vises i klientfeil-
+  // alarmen — samme «fail-open, men ikke stille»-mønster som
+  // varsel.scope.feilet i lib/varsler.ts. maybeSingle på de tre punkt-
+  // oppslagene: en manglende rad skal falle til fallback-navnet, ikke fylle
+  // feil_logg med PGRST116 for noe som ikke er en feil.
+  const [
+    { data: gensekProfiler, error: gensekFeil },
+    { data: soker, error: sokerFeil },
+    { data: eier, error: eierFeil },
+    { data: arrangement, error: arrangementFeil },
+  ] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('id, navn, visningsnavn')
+      .eq('rolle', 'generalsekretaer')
+      .eq('aktiv', true),
+    admin.from('profiles').select('navn, visningsnavn').eq('id', user.id).maybeSingle(),
+    admin.from('profiles').select('navn, visningsnavn').eq('id', input.eier_id).maybeSingle(),
+    admin.from('arrangementer').select('tittel').eq('id', input.arrangement_id).maybeSingle(),
+  ])
 
-  const { data: eier } = await admin
-    .from('profiles')
-    .select('navn, visningsnavn')
-    .eq('id', input.eier_id)
-    .single()
-
-  const { data: arrangement } = await admin
-    .from('arrangementer')
-    .select('tittel')
-    .eq('id', input.arrangement_id)
-    .single()
+  const oppslagsfeil = [gensekFeil, sokerFeil, eierFeil, arrangementFeil].find(Boolean)
+  if (oppslagsfeil) {
+    await logg.feil('pass.varsel.oppslag.feilet', oppslagsfeil, {
+      ctx: { arrangement_id: input.arrangement_id },
+    })
+  }
 
   const sokerNavn = soker?.visningsnavn ?? soker?.navn ?? 'Noen'
   const eierNavn = eier?.visningsnavn ?? eier?.navn ?? 'noen'
@@ -124,13 +133,20 @@ export async function godkjennPassTilgang(forespørselId: string) {
   if (error) throw new Error(error.message)
   if (!oppdatert) throw new Error('Forespørsel ikke funnet eller allerede behandlet')
 
-  // Varsle søkeren
+  // Varsle søkeren. Samme «fail-open, men ikke stille»-begrunnelse som over:
+  // godkjenningen (UPDATE) er alt committet, så dette er ren berikelse av
+  // varselteksten — fallback-navnet 'medlemmet' dekker feilen uten å kaste
+  // en misvisende feil på en handling som faktisk lyktes. maybeSingle så en
+  // manglende profilrad gir 'medlemmet' i stedet for en PGRST116-logglinje.
   const admin = createAdminClient()
-  const { data: eier } = await admin
+  const { data: eier, error: eierFeil } = await admin
     .from('profiles')
     .select('navn, visningsnavn')
     .eq('id', oppdatert.eier_id)
-    .single()
+    .maybeSingle()
+  if (eierFeil) {
+    await logg.feil('pass.varsel.oppslag.feilet', eierFeil, { ctx: { arrangement_id: oppdatert.arrangement_id } })
+  }
   const eierNavn = eier?.visningsnavn ?? eier?.navn ?? 'medlemmet'
 
   // Stemple varslet_paa via stemple_pass_varslet()-RPC-en når sendVarsel

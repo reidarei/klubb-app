@@ -20,6 +20,7 @@ export async function aapneSamtale(motpartId: string) {
   const [a, b] = user.id < motpartId ? [user.id, motpartId] : [motpartId, user.id]
 
   // Forsøk å hente eksisterende
+  // eslint-disable-next-line hk/supabase-feil-maa-hentes -- bevisst fail-open: unique-constraint samtale_par_unik (profil_a, profil_b) i migrasjon 055 fanger den tapte grenen — feiler oppslaget, faller vi gjennom til insert under, som gir 23505 hvis raden alt fantes, og 23505-grenen der henter raden på nytt og redirecter (#503-review)
   const { data: eksisterende } = await supabase
     .from('samtale')
     .select('id')
@@ -37,6 +38,26 @@ export async function aapneSamtale(motpartId: string) {
     .insert({ profil_a: a, profil_b: b })
     .select('id')
     .single()
+
+  // 23505 = unique_violation på samtale_par_unik. To veier hit: to samtidige
+  // klikk (ekte race), eller at select-en over feilet mens raden fantes. I
+  // begge tilfeller er svaret det samme — samtalen finnes, brukeren skal inn i
+  // den. Å kaste her ville gitt ham «duplicate key value violates unique
+  // constraint» i ansiktet for å ha trykket «åpne samtale» på en samtale som
+  // faktisk er der. Dette er grenen fail-open-kommentaren over lover. (#503)
+  if (error?.code === '23505') {
+    const { data: etterRace, error: etterRaceFeil } = await supabase
+      .from('samtale')
+      .select('id')
+      .eq('profil_a', a)
+      .eq('profil_b', b)
+      .maybeSingle()
+    if (etterRaceFeil) throw new Error(`Kunne ikke åpne samtalen: ${etterRaceFeil.message}`)
+    // Ingen rad tross 23505 betyr at constrainten som slo til var en annen
+    // enn den vi tror — da er den opprinnelige feilen fortsatt sannheten.
+    if (!etterRace) throw new Error(error.message)
+    redirect(`/samtaler/${etterRace.id}`)
+  }
 
   if (error) throw new Error(error.message)
   if (!ny) throw new Error('Klarte ikke å opprette samtale')

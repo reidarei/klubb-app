@@ -15,13 +15,16 @@ export async function settVinnerPaaKaaring(malId: string, aar: number, vinner: V
   const { user } = await ensureAdmin()
   const admin = createAdminClient()
 
-  // Check if vinner already exists for this mal_id and aar
-  const { data: eksisterende } = await admin
+  // Check if vinner already exists for this mal_id and aar. maybeSingle
+  // (ikke single): 0 rader er den vanlige tilstanden (ingen vinner satt
+  // enda for de fleste mal/år-kombinasjoner) og skal IKKE kaste.
+  const { data: eksisterende, error: eksisterendeFeil } = await admin
     .from('kaaring_vinnere')
     .select('id')
     .eq('mal_id', malId)
     .eq('aar', aar)
-    .single()
+    .maybeSingle()
+  if (eksisterendeFeil) throw new Error(`Kunne ikke sjekke eksisterende vinner: ${eksisterendeFeil.message}`)
 
   if (eksisterende) {
     // Update existing

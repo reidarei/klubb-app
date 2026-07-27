@@ -12,12 +12,18 @@ export async function oppdaterVedtekt(data: {
 }) {
   const { supabase, user } = await ensureAdmin()
 
-  // Hent gjeldende innhold for å versjonere det
-  const { data: vedtekt } = await supabase
+  // Hent gjeldende innhold for å versjonere det. Feil hentes eksplisitt:
+  // uten den ville en DB-feil sett identisk ut som «vedtekt ikke funnet»
+  // under, OG vi ville ha mistet historikk-versjoneringen av en vedtekts-
+  // endring stille — samme alvorlighetsgrad som pengehistorikk i fond.ts.
+  // maybeSingle (ikke single) er det som gjør «Vedtekt ikke funnet» under
+  // nåbar: single rapporterer 0 rader som error PGRST116, ikke som data=null.
+  const { data: vedtekt, error: vedtektFeil } = await supabase
     .from('vedtekter')
     .select('id, innhold')
     .eq('slug', data.slug)
-    .single()
+    .maybeSingle()
+  if (vedtektFeil) throw new Error(`Kunne ikke hente gjeldende vedtekt: ${vedtektFeil.message}`)
 
   if (!vedtekt) throw new Error('Vedtekt ikke funnet')
 

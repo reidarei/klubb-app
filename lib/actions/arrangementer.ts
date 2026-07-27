@@ -135,12 +135,14 @@ export async function slettArrangement(id: string) {
 
   // Hent bilde_url først så vi kan rydde i R2 etter at arrangementet er
   // slettet. Hvis dette feiler er det ikke kritisk — orphan i R2 er bedre
-  // enn at sletting feiler.
-  const { data: arr } = await supabase
+  // enn at sletting feiler. Loggført likevel (warn, ikke feil) — bevisst
+  // fail-open, ikke stille.
+  const { data: arr, error: arrFeil } = await supabase
     .from('arrangementer')
     .select('bilde_url')
     .eq('id', id)
     .maybeSingle()
+  if (arrFeil) logg.warn('arrangement.slett.bilde_oppslag.feilet', { code: arrFeil.code })
 
   // Løsne ansvar-rader før sletting slik at typen blir tilgjengelig igjen i
   // dropdown-en (FK har on delete set null, men vi gjør det eksplisitt først
@@ -213,11 +215,16 @@ export async function varslOmArrangement(arrangementId: string, hilsen?: string)
     throw new Error(`Hilsen kan ikke være lengre enn ${VARSLE_MAKS_LENGDE} tegn`)
   }
 
-  const { data: arrangement } = await supabase
+  // Feil hentes eksplisitt: uten den ville en DB-feil sett identisk ut som
+  // «arrangement ikke funnet» under. maybeSingle (ikke single): single lar
+  // PostgREST rapportere 0 rader som error PGRST116, og da hadde vakten over
+  // spist «ikke funnet»-tilfellet og gjort norsk-meldingen under død kode.
+  const { data: arrangement, error: arrangementFeil } = await supabase
     .from('arrangementer')
     .select('id, tittel, start_tidspunkt, opprettet_av')
     .eq('id', arrangementId)
-    .single()
+    .maybeSingle()
+  if (arrangementFeil) throw new Error(`Kunne ikke hente arrangementet: ${arrangementFeil.message}`)
 
   if (!arrangement) throw new Error('Arrangement ikke funnet')
 
@@ -228,14 +235,19 @@ export async function varslOmArrangement(arrangementId: string, hilsen?: string)
   if (!erAdmin && !erOpprettet) throw new Error('Ikke tilgang')
 
   // Hent avsenders visningsnavn hvis hilsen er oppgitt — samme mønster
-  // som purreAnsvarlig i lib/actions/arrangoransvar.ts
+  // som purreAnsvarlig i lib/actions/arrangoransvar.ts. Ingen skriving er
+  // gjort ennå (varselet sendes under), så vi kaster på feil i stedet for
+  // stille fallback — samme resonnement som purrer-oppslaget der. maybeSingle
+  // så en manglende profilrad fortsatt faller til 'En gutt' i stedet for å
+  // kaste PGRST116 på en handling som ellers ville gått fint.
   let fraNavn: string | undefined
   if (trimmetHilsen) {
-    const { data: avsender } = await supabase
+    const { data: avsender, error: avsenderFeil } = await supabase
       .from('profiles')
       .select('navn, visningsnavn')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
+    if (avsenderFeil) throw new Error(`Kunne ikke hente ditt navn: ${avsenderFeil.message}`)
     fraNavn = avsender?.visningsnavn || avsender?.navn || 'En gutt'
   }
 
@@ -263,11 +275,14 @@ export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
     throw new Error(`Hilsen kan ikke være lengre enn ${PURRING_MAKS_LENGDE} tegn`)
   }
 
-  const { data: arrangement } = await supabase
+  // Feil hentes eksplisitt, og maybeSingle så «ikke funnet» ikke drukner i
+  // PGRST116 — se samme resonnement i varslOmArrangement over.
+  const { data: arrangement, error: arrangementFeil } = await supabase
     .from('arrangementer')
     .select('id, tittel, start_tidspunkt, opprettet_av')
     .eq('id', arrangementId)
-    .single()
+    .maybeSingle()
+  if (arrangementFeil) throw new Error(`Kunne ikke hente arrangementet: ${arrangementFeil.message}`)
 
   if (!arrangement) throw new Error('Arrangement ikke funnet')
 
@@ -277,14 +292,16 @@ export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
   const erOpprettet = arrangement.opprettet_av === user.id
   if (!erAdmin && !erOpprettet) throw new Error('Ikke tilgang')
 
-  // Hent avsenders visningsnavn hvis hilsen er oppgitt
+  // Hent avsenders visningsnavn hvis hilsen er oppgitt — kaster på feil,
+  // maybeSingle beholder 'En gutt'-fallbacken; se varslOmArrangement over.
   let fraNavn: string | undefined
   if (trimmetHilsen) {
-    const { data: avsender } = await supabase
+    const { data: avsender, error: avsenderFeil } = await supabase
       .from('profiles')
       .select('navn, visningsnavn')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
+    if (avsenderFeil) throw new Error(`Kunne ikke hente ditt navn: ${avsenderFeil.message}`)
     fraNavn = avsender?.visningsnavn || avsender?.navn || 'En gutt'
   }
 

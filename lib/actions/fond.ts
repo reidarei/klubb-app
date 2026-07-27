@@ -3,6 +3,7 @@
 import { ensureAdmin } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { revalidatePath } from 'next/cache'
+import { logg } from '@/lib/logg'
 
 // Hjelpefunksjon — invalider fond-sidene etter alle mutasjoner
 function revalider() {
@@ -78,12 +79,24 @@ export async function oppdaterEiendom(input: {
   validerBelop(input.markedsverdi, 'Markedsverdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
 
-  // Les gammel markedsverdi før oppdatering for historikk-logging
-  const { data: gammel } = await supabase
+  // Les gammel markedsverdi før oppdatering for historikk-logging. Kaster FØR
+  // selve oppdateringen: skriver vi den nye verdien uten å ha fått lest den
+  // gamle, mister vi sporet av en pengeendring permanent — verre enn å be
+  // brukeren prøve igjen (se CLAUDE.md § pulje A, fond.ts-vurderingen).
+  // maybeSingle (ikke single): «raden er borte» skal ha sin egen norske
+  // melding, ikke drukne i PostgREST-ens PGRST116-tekst.
+  const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_eiendom')
     .select('markedsverdi')
     .eq('id', input.id)
-    .single()
+    .maybeSingle()
+  if (gammelFeil) {
+    await logg.feil('fond.eiendom.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
+    throw new Error(`Kunne ikke lese gjeldende markedsverdi for historikk: ${gammelFeil.message}`)
+  }
+  // Raden er slettet av noen andre mens skjemaet sto åpent: update-en under
+  // ville vært en stille no-op som ser ut som suksess. Si det som det er.
+  if (!gammel) throw new Error('Eiendommen finnes ikke lenger — den er slettet av noen andre')
 
   const { error } = await supabase
     .from('fond_eiendom')
@@ -96,9 +109,7 @@ export async function oppdaterEiendom(input: {
     .eq('id', input.id)
   if (error) throw new Error(error.message)
 
-  if (gammel) {
-    await skrivHistorikk(supabase, user.id, 'eiendom', input.id, gammel.markedsverdi, input.markedsverdi)
-  }
+  await skrivHistorikk(supabase, user.id, 'eiendom', input.id, gammel.markedsverdi, input.markedsverdi)
   revalider()
 }
 
@@ -108,14 +119,23 @@ export async function slettEiendom(id: string) {
   // Logg historikk før sletting: uten en 0-rad får den fremtidige utviklingsgrafen
   // et usynlig hopp der eiendommens verdi bare forsvinner. Les siste verdi, så slett —
   // kilde_id har ingen FK til kildetabellen, så rekkefølgen er ikke constraint-tvunget.
-  const { data: gammel } = await supabase
+  // Kaster FØR sletting hvis oppslaget feiler — sletter vi likevel mister vi
+  // historikk-raden for godt (samme resonnement som oppdaterEiendom over).
+  // Men sletting skal være IDEMPOTENT: er raden alt borte (to admins, eller
+  // to faner, på /fond) er utfallet brukeren ba om allerede sant, og da skal
+  // han ikke få en rød feil på en stale liste som aldri blir revalidert.
+  const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_eiendom')
     .select('markedsverdi')
     .eq('id', id)
-    .single()
-  if (gammel) {
-    await skrivHistorikk(supabase, user.id, 'eiendom', id, gammel.markedsverdi, 0)
+    .maybeSingle()
+  if (gammelFeil) {
+    await logg.feil('fond.eiendom.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
+    throw new Error(`Kunne ikke lese gjeldende markedsverdi for historikk: ${gammelFeil.message}`)
   }
+  // Ingen rad = ingen ny historikk å skrive (0-raden ble skrevet av den som
+  // slettet først). Fortsett til delete-en, som blir en no-op, og revalider.
+  if (gammel) await skrivHistorikk(supabase, user.id, 'eiendom', id, gammel.markedsverdi, 0)
 
   const { error } = await supabase.from('fond_eiendom').delete().eq('id', id)
   if (error) throw new Error(error.message)
@@ -158,11 +178,19 @@ export async function oppdaterVerdipapir(input: {
   validerBelop(input.verdi, 'Verdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
 
-  const { data: gammel } = await supabase
+  // Samme historikk-resonnement som oppdaterEiendom over — kaster FØR
+  // oppdateringen hvis vi ikke får lest gammel verdi, og maybeSingle så
+  // «raden er borte» får sin egen melding i stedet for PGRST116.
+  const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_verdipapir')
     .select('verdi')
     .eq('id', input.id)
-    .single()
+    .maybeSingle()
+  if (gammelFeil) {
+    await logg.feil('fond.verdipapir.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
+    throw new Error(`Kunne ikke lese gjeldende verdi for historikk: ${gammelFeil.message}`)
+  }
+  if (!gammel) throw new Error('Verdipapiret finnes ikke lenger — det er slettet av noen andre')
 
   const { error } = await supabase
     .from('fond_verdipapir')
@@ -176,9 +204,7 @@ export async function oppdaterVerdipapir(input: {
     .eq('id', input.id)
   if (error) throw new Error(error.message)
 
-  if (gammel) {
-    await skrivHistorikk(supabase, user.id, 'verdipapir', input.id, gammel.verdi, input.verdi)
-  }
+  await skrivHistorikk(supabase, user.id, 'verdipapir', input.id, gammel.verdi, input.verdi)
   revalider()
 }
 
@@ -186,14 +212,18 @@ export async function slettVerdipapir(id: string) {
   const { supabase, user } = await ensureAdmin()
 
   // Logg historikk før sletting — se kommentar i slettEiendom for hvorfor (graf-kontinuitet).
-  const { data: gammel } = await supabase
+  // Kaster FØR sletting hvis oppslaget feiler, men er idempotent når raden alt
+  // er borte — se samme resonnement i slettEiendom.
+  const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_verdipapir')
     .select('verdi')
     .eq('id', id)
-    .single()
-  if (gammel) {
-    await skrivHistorikk(supabase, user.id, 'verdipapir', id, gammel.verdi, 0)
+    .maybeSingle()
+  if (gammelFeil) {
+    await logg.feil('fond.verdipapir.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
+    throw new Error(`Kunne ikke lese gjeldende verdi for historikk: ${gammelFeil.message}`)
   }
+  if (gammel) await skrivHistorikk(supabase, user.id, 'verdipapir', id, gammel.verdi, 0)
 
   const { error } = await supabase.from('fond_verdipapir').delete().eq('id', id)
   if (error) throw new Error(error.message)
@@ -304,11 +334,18 @@ export async function hentPublisertOppgjor(): Promise<
     const { hentOppgjor } = await import('@/lib/fond-oppgjor')
     const oppgjor = await hentOppgjor()
 
-    // Hent alle aktive profiler for å matche visningsnavn → profil_id
-    const { data: profiler } = await supabase
+    // Hent alle aktive profiler for å matche visningsnavn → profil_id. Kaster
+    // på feil i stedet for å falle gjennom til profilListe=[] — ellers ville
+    // matchProfil() under feiltolket EN DB-feil som «ukjent visningsnavn» for
+    // hver eneste andel i oppgjøret, en villedende feilmelding.
+    const { data: profiler, error: profilerFeil } = await supabase
       .from('profiles')
       .select('id, visningsnavn')
       .eq('aktiv', true)
+    if (profilerFeil) {
+      await logg.feil('fond.oppgjor.profiler.feilet', profilerFeil)
+      throw new Error(`Kunne ikke hente profiler for oppgjøret: ${profilerFeil.message}`)
+    }
 
     const profilListe = profiler ?? []
 
@@ -328,16 +365,28 @@ export async function hentPublisertOppgjor(): Promise<
       })
     }
 
-    // Hent alle innskudd-rader og kontant-saldo fra appen
-    const { data: innskuddRader } = await supabase
+    // Hent alle innskudd-rader og kontant-saldo fra appen. Dette er
+    // grunnlaget for diff-visningen admin bruker til å bestemme om oppgjøret
+    // skal skrives — en svelget feil her ville vist «ingen rad enda» for ALLE
+    // medlemmer i stedet for de faktiske appVerdi-ene, og kunne fått admin til
+    // å tro et helt oppgjør manglet når det egentlig var en forbigående feil.
+    const { data: innskuddRader, error: innskuddFeil } = await supabase
       .from('fond_innskudd')
       .select('id, profil_id, belop')
+    if (innskuddFeil) {
+      await logg.feil('fond.oppgjor.innskudd.feilet', innskuddFeil)
+      throw new Error(`Kunne ikke hente innskudd for oppgjøret: ${innskuddFeil.message}`)
+    }
 
-    const { data: kontant } = await supabase
+    const { data: kontant, error: kontantFeil } = await supabase
       .from('fond_kontant')
       .select('saldo')
       .eq('id', 1)
       .maybeSingle()
+    if (kontantFeil) {
+      await logg.feil('fond.oppgjor.saldo.feilet', kontantFeil)
+      throw new Error(`Kunne ikke hente kontantsaldo for oppgjøret: ${kontantFeil.message}`)
+    }
 
     const alleInnskudd = innskuddRader ?? []
 
@@ -395,10 +444,16 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     const { validerOppgjor } = await import('@/lib/fond-oppgjor')
     const oppgjor = validerOppgjor(oppgjorPayload)
 
-    const { data: profiler } = await supabase
+    // Samme resonnement som i hentPublisertOppgjor over: kast på feil i
+    // stedet for å la matchProfil() feiltolke den som «ukjent visningsnavn».
+    const { data: profiler, error: profilerFeil } = await supabase
       .from('profiles')
       .select('id, visningsnavn')
       .eq('aktiv', true)
+    if (profilerFeil) {
+      await logg.feil('fond.oppgjor.profiler.feilet', profilerFeil)
+      throw new Error(`Kunne ikke hente profiler for oppgjøret: ${profilerFeil.message}`)
+    }
 
     const profilListe = profiler ?? []
 
@@ -409,10 +464,17 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       matchede.push({ profil_id: match.id, visningsnavn: andel.visningsnavn, belop: andel.belop })
     }
 
-    // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving
-    const { data: alleInnskudd } = await supabase
+    // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving.
+    // En svelget feil her ville gitt alleRader=[] og latt duplikat-sjekken
+    // under passere stille selv om duplikater faktisk fantes — nøyaktig
+    // sikkerhetsnettet kommentaren over lover at vi har.
+    const { data: alleInnskudd, error: alleInnskuddFeil } = await supabase
       .from('fond_innskudd')
       .select('id, profil_id')
+    if (alleInnskuddFeil) {
+      await logg.feil('fond.oppgjor.innskudd.feilet', alleInnskuddFeil)
+      throw new Error(`Kunne ikke hente innskudd for oppgjøret: ${alleInnskuddFeil.message}`)
+    }
 
     const alleRader = alleInnskudd ?? []
     for (const m of matchede) {
@@ -447,12 +509,20 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       }
     }
 
-    // Skriv saldo via skrivHistorikk-logikken fra oppdaterKontantSaldo (historikk-logging inkludert)
-    const { data: gammelKontant } = await supabase
+    // Skriv saldo via skrivHistorikk-logikken fra oppdaterKontantSaldo (historikk-logging inkludert).
+    // maybeSingle (ikke single): singletonen kan legitimt mangle før første
+    // gangs seeding — det skal IKKE kaste. En ekte feil skal det derimot, for
+    // uten det ville skrivHistorikk() under logget «endret fra 0» selv om
+    // reell gammel saldo var ukjent, og forfalsket regnskapshistorikken.
+    const { data: gammelKontant, error: gammelKontantFeil } = await supabase
       .from('fond_kontant')
       .select('saldo')
       .eq('id', 1)
-      .single()
+      .maybeSingle()
+    if (gammelKontantFeil) {
+      await logg.feil('fond.kontant.oppslag.feilet', gammelKontantFeil)
+      throw new Error(`Kunne ikke lese gjeldende saldo for historikk: ${gammelKontantFeil.message}`)
+    }
 
     const { error: kontantFeil } = await supabase
       .from('fond_kontant')
@@ -487,12 +557,20 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
   const { supabase, user } = await ensureAdmin()
   validerBelop(nySaldo, 'Saldo')
 
-  // Les gammel saldo; kan mangle hvis singleton ikke er seeded enda
-  const { data: gammel } = await supabase
+  // Les gammel saldo; kan mangle hvis singleton ikke er seeded enda —
+  // maybeSingle håndterer det som en legitim null, ikke en feil (se samme
+  // resonnement i skrivPublisertOppgjor over). En ekte feil skal fortsatt
+  // kaste, ellers logges «endret fra 0» i historikken selv om reell gammel
+  // saldo var ukjent.
+  const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_kontant')
     .select('saldo')
     .eq('id', 1)
-    .single()
+    .maybeSingle()
+  if (gammelFeil) {
+    await logg.feil('fond.kontant.oppslag.feilet', gammelFeil)
+    throw new Error(`Kunne ikke lese gjeldende saldo for historikk: ${gammelFeil.message}`)
+  }
 
   // UPSERT: insert hvis rad ikke finnes, update ellers
   const { error } = await supabase

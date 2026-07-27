@@ -164,6 +164,7 @@ export async function kjorBursdagsgratulasjon(
       // kilde_ekstern_id og gir 23505, håndtert som «alt postet» under. Guarden
       // finnes altså i DB-en, ikke her; å kaste ville stanset resten av
       // bursdagsløkka for en sjekk vi har en hardere versjon av rett etterpå.
+      // eslint-disable-next-line hk/supabase-feil-maa-hentes -- bevisst fail-open: unique-constraint klubb_chat_kilde_ekstern_id_unique (migrasjon 066) fanger den tapte grenen via 23505 rett under (#504)
       const { data: eksisterende } = await admin
         .from('klubb_chat')
         .select('id')

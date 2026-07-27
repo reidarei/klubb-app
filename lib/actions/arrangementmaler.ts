@@ -7,7 +7,10 @@ import { ensureAdmin } from '@/lib/auth'
 export async function leggTilMal(navn: string) {
   await ensureAdmin()
   const admin = createAdminClient()
-  const { data: max } = await admin.from('arrangementmaler').select('*').order('rekkefølge', { ascending: false }).limit(1).single()
+  // maybeSingle (ikke single): 0 rader er en legitim tilstand (tabellen kan
+  // være tom ved aller første mal) og skal IKKE kaste — kun en ekte feil skal.
+  const { data: max, error: maxFeil } = await admin.from('arrangementmaler').select('*').order('rekkefølge', { ascending: false }).limit(1).maybeSingle()
+  if (maxFeil) throw new Error(`Kunne ikke bestemme rekkefølge: ${maxFeil.message}`)
   const { error } = await admin.from('arrangementmaler').insert({ navn: navn.trim(), rekkefølge: (max?.rekkefølge ?? 0) + 1 })
   if (error) throw new Error(error.message)
   revalidatePath('/innstillinger')

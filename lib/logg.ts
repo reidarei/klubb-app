@@ -44,6 +44,16 @@
 //   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
 //   bursdagsgratulasjon.varsel.feilet    — varsel til bursdagsbarnet feiler, telles som feil (#504)
 //   logg.feillogg.insert.feilet — feil_logg-inserten fra logg.feil() selv feilet/timet ut (#496)
+//   pass.varsel.oppslag.feilet  — navn-/tur-berikelse for pass-varsel feiler etter committet skriving, sender likevel (pulje A)
+//   fond.eiendom.oppslag.feilet    — gammel markedsverdi-oppslag feiler før oppdatering/sletting (pulje A)
+//   fond.verdipapir.oppslag.feilet — gammel verdi-oppslag feiler før oppdatering/sletting (pulje A)
+//   fond.kontant.oppslag.feilet    — gammel kontantsaldo-oppslag feiler før oppdatering (pulje A)
+//   fond.oppgjor.profiler.feilet   — profil-oppslag for visningsnavn-matching i fond-oppgjør feiler (pulje A)
+//   fond.oppgjor.innskudd.feilet   — innskudd-rader-oppslag i fond-oppgjør feiler (pulje A)
+//   fond.oppgjor.saldo.feilet      — kontantsaldo-oppslag for diff-visning i fond-oppgjør feiler (pulje A)
+//   album.revalidering.oppslag.feilet    — arrangement_id-oppslag for revalidatePath feiler etter committet album-mutasjon (pulje A)
+//   album.slett.bilder_oppslag.feilet    — bilder-oppslag for R2-opprydding feiler før album slettes (pulje A)
+//   arrangement.slett.bilde_oppslag.feilet — bilde_url-oppslag for R2-opprydding feiler før arrangement slettes (pulje A)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

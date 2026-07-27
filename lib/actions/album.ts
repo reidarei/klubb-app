@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { ensureInnlogget } from '@/lib/auth'
 import { lastOppR2, slettR2, r2StiFraUrl } from '@/lib/r2'
 import { albumSti, EXT_FRA_BILDE_MIME, nyttR2Filnavn } from '@/lib/bilde-utils'
+import { logg } from '@/lib/logg'
 
 // Album-server actions. Bilder lastes opp via egen flyt: klient komprimerer
 // både hovedbilde og thumbnail, server tar imot begge i samme call og lagrer
@@ -158,11 +159,15 @@ export async function settOmslagsbilde(albumId: string, bildeId: string): Promis
   // Verifiser at bildet faktisk tilhører albumet — uten denne sjekken kunne
   // en bruker som kjenner et annet albums bildeId sette det som cover her.
   // FK-en alene garanterer kun at bildeId eksisterer som album_bilde-rad.
-  const { data: bilde } = await supabase
+  // Feil hentes eksplisitt: uten den ville en DB-feil her blitt tolket som
+  // «hører ikke til», en sikkerhetsrelevant feilmelding som rett og slett
+  // ikke stemmer — brukeren ville trodd tilhørigheten var sjekket og avvist.
+  const { data: bilde, error: bildeFeil } = await supabase
     .from('album_bilde')
     .select('album_id')
     .eq('id', bildeId)
     .maybeSingle()
+  if (bildeFeil) throw new Error(`Kunne ikke sjekke bildets album: ${bildeFeil.message}`)
   if (!bilde || bilde.album_id !== albumId) {
     throw new Error('Bildet hører ikke til dette albumet')
   }
@@ -173,12 +178,16 @@ export async function settOmslagsbilde(albumId: string, bildeId: string): Promis
     .eq('id', albumId)
   if (error) throw new Error(error.message)
 
-  // Sjekk arrangement-id for revalidering
-  const { data: album } = await supabase
+  // Sjekk arrangement-id for revalidering. Oppdateringen over er alt
+  // committet — feiler dette oppslaget mister vi kun én revalidatePath-linje
+  // (arrangement-siden viser nytt omslag ved neste naturlige revalidering),
+  // ikke selve mutasjonen. Fail-open med logging, ikke kast.
+  const { data: album, error: albumFeil } = await supabase
     .from('album')
     .select('arrangement_id')
     .eq('id', albumId)
     .maybeSingle()
+  if (albumFeil) await logg.feil('album.revalidering.oppslag.feilet', albumFeil)
 
   revalidatePath(`/album/${albumId}`)
   revalidatePath('/album')
@@ -189,12 +198,17 @@ export async function settOmslagsbilde(albumId: string, bildeId: string): Promis
 export async function slettAlbumBilde(bildeId: string): Promise<void> {
   const { supabase } = await ensureInnlogget()
 
-  // Hent URL-er + albumId før delete så vi kan rydde i R2 etterpå
-  const { data: bilde } = await supabase
+  // Hent URL-er + albumId før delete så vi kan rydde i R2 etterpå. Feil
+  // hentes eksplisitt: uten den ville en DB-feil her sett identisk ut som
+  // «bildet finnes ikke lenger» (samme `!bilde`-gren) og latt funksjonen
+  // returnere stille — kalleren ville trodd bildet var slettet, mens
+  // ingenting skjedde.
+  const { data: bilde, error: bildeFeil } = await supabase
     .from('album_bilde')
     .select('bilde_url, thumb_url, album_id')
     .eq('id', bildeId)
     .maybeSingle()
+  if (bildeFeil) throw new Error(`Kunne ikke hente bildet for sletting: ${bildeFeil.message}`)
 
   if (!bilde) return
 
@@ -209,12 +223,15 @@ export async function slettAlbumBilde(bildeId: string): Promise<void> {
     if (s2) await slettR2(s2).catch(() => {})
   }
 
-  // Sjekk arrangement-id for revalidering
-  const { data: album } = await supabase
+  // Sjekk arrangement-id for revalidering. Sletting er alt committet over —
+  // samme fail-open-begrunnelse som i settOmslagsbilde: vi mister høyst én
+  // revalidatePath-linje, ikke selve slettingen.
+  const { data: album, error: albumFeil } = await supabase
     .from('album')
     .select('arrangement_id')
     .eq('id', bilde.album_id)
     .maybeSingle()
+  if (albumFeil) await logg.feil('album.revalidering.oppslag.feilet', albumFeil)
 
   revalidatePath(`/album/${bilde.album_id}`)
   revalidatePath('/album')
@@ -226,16 +243,22 @@ export async function slettAlbum(id: string): Promise<void> {
   const { supabase } = await ensureInnlogget()
 
   // Hent alle bilder for å rydde R2 før vi sletter raden (cascade tar DB).
-  const { data: bilder } = await supabase
+  // Fail-open med logging, ikke kast: konsekvensen av en feilet spørring her
+  // er orphanede R2-objekter (rydder seg ikke selv, men korrupter ingen data)
+  // — å blokkere hele slettingen av et album pga. usikker opprydding er verre.
+  const { data: bilder, error: bilderFeil } = await supabase
     .from('album_bilde')
     .select('bilde_url, thumb_url')
     .eq('album_id', id)
+  if (bilderFeil) await logg.feil('album.slett.bilder_oppslag.feilet', bilderFeil)
 
-  const { data: album } = await supabase
+  // Kun til revalidatePath under — samme fail-open-begrunnelse som ellers i fila.
+  const { data: album, error: albumFeil } = await supabase
     .from('album')
     .select('arrangement_id')
     .eq('id', id)
     .maybeSingle()
+  if (albumFeil) await logg.feil('album.revalidering.oppslag.feilet', albumFeil)
 
   const { error } = await supabase.from('album').delete().eq('id', id)
   if (error) throw new Error(error.message)
