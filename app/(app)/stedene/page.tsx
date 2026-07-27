@@ -90,7 +90,6 @@ export default async function Stedene() {
   }
 
   const steder = [...perBy.values()]
-  const antallTurer = steder.reduce((n, s) => n + s.turer.length, 0)
 
   // Samlet tidslinje (alle turer, også ikke-plottede), eldste først.
   const tidslinje = [
@@ -120,24 +119,17 @@ export default async function Stedene() {
             fontSize: 38,
             fontWeight: 500,
             letterSpacing: '-0.5px',
-            lineHeight: 1,
+            // 1.05 og ikke 1: tittelen brekker over 2–3 linjer på mobil, og
+            // helt stram lineHeight lar bokstavene nesten røre hverandre (#502)
+            lineHeight: 1.05,
             margin: 0,
             color: 'var(--text-primary)',
           }}
         >
-          Stedene
+          Vi har vært verden rundt, det vil si:
         </h1>
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 14,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-            margin: '12px 0 0',
-          }}
-        >
-          {steder.length} byer, {antallTurer} turer gjennom årene.
-        </p>
+        {/* Ingen undertittel: overskriften spiller på en sangtekst, og kolonet
+            skal lede rett ned i kartet — ikke i en teller (#502) */}
       </header>
 
       <EuropaKart steder={steder} />
