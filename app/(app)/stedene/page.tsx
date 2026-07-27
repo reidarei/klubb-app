@@ -1,8 +1,21 @@
+import type { CSSProperties } from 'react'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { formaterDato } from '@/lib/dato'
 import { projiser } from '@/lib/europa-kart-data'
+import { fyllHullAar, erHullRad } from '@/lib/reiserute'
 import EuropaKart, { type Sted, type AlbumKort } from '@/components/stedene/EuropaKart'
+
+// Visuelt skjult, men lest av skjermlesere. Samme mønster som MiniKalender —
+// display:none/visibility:hidden ville tatt teksten ut av tilgjengelighetstreet.
+const SR_ONLY: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+}
 
 // «Stedene» — alle turene klubben har vært på, plottet på et Europakart.
 // Datagrunnlag: arrangementer med type='tur' og en destinasjon som finnes i
@@ -91,11 +104,12 @@ export default async function Stedene() {
 
   const steder = [...perBy.values()]
 
-  // Samlet tidslinje (alle turer, også ikke-plottede), eldste først.
-  const tidslinje = [
+  // Samlet tidslinje (alle turer, også ikke-plottede), eldste først. Hull-år
+  // (ingen tur registrert) fylles inn av fyllHullAar, som også sorterer.
+  const tidslinje = fyllHullAar([
     ...steder.flatMap(s => s.turer.map(t => ({ ...t, by: s.by, plottet: true }))),
     ...ikkePlottet.map(t => ({ ...t, plottet: false })),
-  ].sort((a, b) => a.aar - b.aar)
+  ])
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -153,9 +167,12 @@ export default async function Stedene() {
           Reiseruta
           <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
         </div>
+        {/* Hull-rader og tur-rader deler wrapper og årstall-span med vilje — kun
+            innholds-spanen skiller dem, så en designjustering treffer begge (#508) */}
         {tidslinje.map((t, i) => (
           <div
-            key={`${t.aar}-${t.by}-${i}`}
+            // Indeksen alene gjør nøkkelen unik: samme år kan ha flere turer
+            key={`${t.aar}-${i}`}
             style={{
               display: 'flex',
               alignItems: 'baseline',
@@ -174,17 +191,38 @@ export default async function Stedene() {
             >
               {t.aar}
             </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 17,
-                fontWeight: 500,
-                color: t.plottet ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                letterSpacing: '-0.2px',
-              }}
-            >
-              {t.plottet ? t.by : `${t.tittel} 🔒`}
-            </span>
+            {erHullRad(t) ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 17,
+                    fontWeight: 500,
+                    color: 'var(--text-tertiary)',
+                    letterSpacing: '-0.2px',
+                  }}
+                >
+                  —
+                </span>
+                {/* Streken er ren dekor. aria-label på raden ville ikke hjulpet:
+                    en <div> uten role er «generic», som ikke støtter navn fra
+                    forfatter — derfor sr-only-tekst, samme som MiniKalender. */}
+                <span style={SR_ONLY}>ingen tur</span>
+              </>
+            ) : (
+              <span
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 17,
+                  fontWeight: 500,
+                  color: t.plottet ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  letterSpacing: '-0.2px',
+                }}
+              >
+                {t.plottet ? t.by : `${t.tittel} 🔒`}
+              </span>
+            )}
           </div>
         ))}
       </div>

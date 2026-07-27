@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { KART_BREDDE as W, KART_HOEYDE as H, LAND_BANER } from '@/lib/europa-kart-data'
@@ -34,9 +34,20 @@ export default function EuropaKart({ steder }: Props) {
   const [valgt, setValgt] = useState<string | null>(null)
   const valgtSted = steder.find(s => s.by === valgt) ?? null
 
+  // Escape lukker det valgte stedet — samme mønster som AlbumLightbox.
+  useEffect(() => {
+    if (valgt === null) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setValgt(null)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [valgt])
+
   return (
     <div>
       <div
+        onClick={() => setValgt(null)}
         style={{
           position: 'relative',
           width: '100%',
@@ -75,7 +86,12 @@ export default function EuropaKart({ steder }: Props) {
               {/* Transparent 44 px-knapp = treffområde. Prikken tegnes inni. */}
               <button
                 type="button"
-                onClick={() => setValgt(erValgt ? null : s.by)}
+                onClick={e => {
+                  // Uten stopPropagation lukker klikket det vi nettopp valgte igjen,
+                  // fordi containerens onClick (trykk-utenfor-lukker) fyrer etterpå.
+                  e.stopPropagation()
+                  setValgt(erValgt ? null : s.by)
+                }}
                 aria-label={`${s.by}, ${s.turer.length} tur${s.turer.length > 1 ? 'er' : ''}`}
                 style={{
                   position: 'absolute',
@@ -94,6 +110,11 @@ export default function EuropaKart({ steder }: Props) {
                   cursor: 'pointer',
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
+                  // 44 px-treffområdene overlapper for flere bypar på smale skjermer
+                  // (München/Berlin, København/Berlin, m.fl.) — uten dette vinner
+                  // alltid den senere byen i DOM-rekkefølge, uansett hvem man trykker
+                  // på nytt på (#508).
+                  zIndex: erValgt ? 2 : 1,
                 }}
               >
                 <span
@@ -138,15 +159,58 @@ export default function EuropaKart({ steder }: Props) {
           <div>
             <div
               style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 22,
-                fontWeight: 500,
-                letterSpacing: '-0.4px',
-                color: 'var(--text-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 marginBottom: 8,
               }}
             >
-              {valgtSted.by}
+              <div
+                style={{
+                  flex: 1,
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 22,
+                  fontWeight: 500,
+                  letterSpacing: '-0.4px',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {valgtSted.by}
+              </div>
+              {/* Eksplisitt lukk-knapp — trykk-utenfor og Escape lukker også,
+                  men touch-brukere kjenner ikke alltid disse gestene (#508) */}
+              <button
+                type="button"
+                onClick={() => setValgt(null)}
+                aria-label="Lukk"
+                style={{
+                  flexShrink: 0,
+                  // Samme 44 px-mål som markørene (se TREFF): dette er den eneste
+                  // oppdagbare utveien for touch. Negativ margin nøytraliserer
+                  // veksten så tittelraden ikke blir høyere enn før.
+                  width: TREFF,
+                  height: TREFF,
+                  margin: -8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  padding: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 4l10 10M14 4L4 14"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
             </div>
             {valgtSted.turer
               .slice()
@@ -288,7 +352,9 @@ function Etikett({
       }}
     >
       {tekst}
-      {antall && antall > 1 ? <span style={{ opacity: 0.6 }}> ·{antall}</span> : null}
+      {/* Bruker ASCII-x, ikke midtprikk (·) eller ekte multiplikasjonstegn (×):
+          prikken ble lest som skitt på skjermen, ikke som et antall (#508) */}
+      {antall && antall > 1 ? <span style={{ opacity: 0.6 }}> x{antall}</span> : null}
     </span>
   )
 }
