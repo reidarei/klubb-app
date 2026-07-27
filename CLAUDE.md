@@ -101,7 +101,7 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 - Dedup via `tillatDuplikat`-parameter (false = sjekker `varsel_logg` for eksisterende type+arrangement_id)
 - Deduplisering av mottakerliste (Set)
 - Logging til `varsel_logg`-tabellen med kanal-info (push/epost/begge)
-- URL-generering: oppgitt URL brukes, ellers genereres `/varsler/{id}`
+- URL-generering: oppgitt URL brukes (normalisert til absolutt via `absoluttUrl()` — e-postklienter kan ikke resolve relative lenker), ellers genereres `/varsler/{id}`
 
 **Parametre:**
 - `mottakere?: string[]` — profil_id-er, utelat = alle aktive
@@ -168,7 +168,8 @@ Miljø-avhengige verdier samles i `lib/config.ts`. **Aldri** hardkode domenet el
 
 **Eksporterer:**
 - `BASE_URL` — applikasjonens base-URL. Kjenner Vercel-preview (`VERCEL_URL`), prod-default og dev-default. Brukes i absolutte URL-er for varsler, ICS-filer, GitHub-webhook-lenker.
-- `getBaseUrl()` — funksjons-form av samme; bruk denne hvis du trenger å resolve på kall-tidspunkt heller enn modul-load
+- `getBaseUrl()` — funksjons-form av samme; bruk denne hvis du trenger å resolve på kall-tidspunkt heller enn modul-load. Trailing slash i `NEXT_PUBLIC_BASE_URL` strippes, så `${BASE_URL}/sti` aldri gir dobbel skråstrek.
+- `absoluttUrl(url)` — gjør en relativ sti (`/chat`) absolutt med `BASE_URL`. Brukes av `sendVarsel()` fordi e-postklienter ikke har noen base-URL å resolve mot. Absolutte URL-er slipper uendret gjennom; protokoll-relative (`//host`) får https-prefiks.
 - `VAPID_CONTACT_EMAIL` — kontakt for push-tjenester (env-overridable)
 - `GITHUB_REPO`, `GITHUB_ONSKE_LABEL`, `githubIssuesUrl({state, perPage, page})` — for innspill-funksjonen mot GitHub Issues
 
