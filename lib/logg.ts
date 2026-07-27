@@ -20,6 +20,16 @@
 //   aktivitet.tell.feilet       — tell_aktivitet-RPC feiler i /api/aktivitet
 //   tidligere.hent.feilet       — arrangement/melding/poll-spørring feiler på /tidligere (#492)
 //   poll.aggregat.feilet        — tell_poll_stemmer-RPC feiler i lib/queries/poll.ts (#492)
+//   varsel.innstilling.feilet   — varsel_innstillinger-oppslag (aktiv/test-modus) feiler (#503)
+//   varsel.fortidssperre.feilet — arrangementer-oppslag for fortids-sperren feiler (#503)
+//   varsel.mottakere.feilet     — mottaker-oppslag (profiles) feiler i lib/varsler.ts (#503)
+//   varsel.mottakere.tomme      — eksplisitt mottakerliste ga 0 aktive treff utenfor testmodus (#503)
+//   varsel.dedup.feilet         — dedup-select mot varsel_logg feiler, sender likevel (#503)
+//   varsel.preferanser.feilet   — varsel_preferanser/push_subscriptions-oppslag feiler (#503)
+//   varsel.logg.insert.feilet   — insert i varsel_logg feiler for én mottaker, sender likevel (#503)
+//   varsel.scope.feilet         — arrangement/poll-oppslag for @-mention-tittel feiler, sender likevel (#503)
+//   pass.varsler.feilet         — varsel etter pass-tilgang-hendelse feiler i lib/actions/pass.ts (#503)
+//   cron.klientfeil.varsel.feilet — alarm-varsel i sjekk-klientfeil-cronet feiler, retention kjører videre (#503)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

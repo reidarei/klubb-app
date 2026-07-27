@@ -10,6 +10,7 @@ import {
   KLIENT_FEIL_ALARM_TERSKEL,
   LOGG_FEIL_RETENSJONSDAGER,
 } from '@/lib/konstanter'
+import { logg } from '@/lib/logg'
 
 async function handle(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -46,15 +47,19 @@ async function handle(req: NextRequest) {
       .eq('aktiv', true)
 
     if (admins && admins.length > 0) {
+      // Varselet er en bieffekt — retention-slettingen under skal kjøre uansett.
+      // Uten catch her ville en varsel-feil gitt 500 og hoppet over oppryddingen,
+      // altså: dagen alarmen faktisk går er dagen retention ryker. (#503-review)
       await sendVarsel({
         mottakere: admins.map(p => p.id),
         tittel: 'Klientfeil siste døgn',
         melding: `${antall} feil registrert i feil_logg siste 24 timer.`,
         type: 'klient_alarm',
-        // tillatDuplikat: false sikrer at samme alarm ikke spammes hvis cronet
-        // av en eller annen grunn kjøres to ganger etter hverandre.
+        // NB: tillatDuplikat: false er en no-op her — sendVarsel deduperer kun
+        // når arrangementId eller pollId er satt, og klient_alarm har ingen av
+        // delene. To cron-kjøringer på rad gir altså to alarmer. (#503-review)
         tillatDuplikat: false,
-      })
+      }).catch((err: unknown) => logg.feil('cron.klientfeil.varsel.feilet', err))
     }
   }
 

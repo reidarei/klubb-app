@@ -6,6 +6,7 @@ import { BASE_URL } from '@/lib/config'
 import { naa } from '@/lib/dato'
 import { PASS_TILGANG_TIMER } from '@/lib/konstanter'
 import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
 
 /**
  * Lagre eller oppdatere passinfo for innlogget bruker. Validerer ikke
@@ -82,6 +83,10 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
   const mottakere = (gensekProfiler ?? []).map(p => p.id)
   if (mottakere.length === 0) return // Ingen generalsekretær å varsle (kantcase)
 
+  // Varselet er en bieffekt ETTER en allerede committet tilstandsendring
+  // (forespørselen er lagret over). Uten catch her ville en varsel-feil
+  // kastet en maskert prod-feil videre til brukeren, som ville trodd at selve
+  // forespørselen feilet — selv om den faktisk gikk fint. (#503)
   await sendVarsel({
     mottakere,
     tittel: 'Forespørsel om passinfo',
@@ -90,7 +95,7 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
     knappTekst: 'Gjennomgå',
     type: 'pass-forespørsel',
     tillatDuplikat: true,
-  })
+  }).catch((err: unknown) => logg.feil('pass.varsler.feilet', err))
 }
 
 /**
@@ -136,7 +141,8 @@ export async function godkjennPassTilgang(forespørselId: string) {
     knappTekst: 'Åpne turen',
     type: 'pass-godkjent',
     tillatDuplikat: true,
-  })
+    // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
+  }).catch((err: unknown) => logg.feil('pass.varsler.feilet', err))
 }
 
 export async function avslaaPassTilgang(forespørselId: string) {
@@ -165,5 +171,6 @@ export async function avslaaPassTilgang(forespørselId: string) {
     knappTekst: 'Åpne turen',
     type: 'pass-avslatt',
     tillatDuplikat: true,
-  })
+    // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
+  }).catch((err: unknown) => logg.feil('pass.varsler.feilet', err))
 }

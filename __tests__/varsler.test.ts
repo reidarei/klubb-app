@@ -22,12 +22,16 @@ vi.mock('@/lib/push', () => ({
 
 // Logg mockes så vi kan asserte på advarselen for ikke-normaliserbare URL-er
 // uten at den ekte loggeren prøver å skrive til feil_logg/Sentry.
+// ÉN vi.mock per modul: to kall for samme modul hoistes begge, og den siste
+// vinner stille — spionen i den første blir da aldri kalt. (#503-rebase)
+// logg.feil awaites i lib/varsler.ts, så mocken må returnere en Promise. (#503)
 const mockLoggWarn = vi.fn()
+const mockLoggFeil = vi.fn().mockResolvedValue(undefined)
 
 vi.mock('@/lib/logg', () => ({
   logg: {
     warn: (...args: unknown[]) => mockLoggWarn(...args),
-    feil: vi.fn(),
+    feil: (...args: unknown[]) => mockLoggFeil(...args),
   },
 }))
 
@@ -42,6 +46,7 @@ import {
   sendNyttArrangementVarsler,
   sendPaaminneVarsler,
   sendArrangorPurringVarsler,
+  sendChatMentionVarsler,
   formaterHilsenMelding,
 } from '@/lib/varsler'
 
@@ -424,5 +429,323 @@ describe('sendVarsel – testmodus', () => {
     const batch = mockSendEpostBatch.mock.calls[0]?.[0] ?? []
     expect(batch.length).toBe(1)
     expect(batch[0].til).toBe('test@test.no')
+  })
+})
+
+// #503: styrende regel er «feil skal aldri føre til at noen får noe de ikke
+// skulle hatt». Oppslag som beskytter mot uønsket utsending feiler LUKKET
+// (kaster), mens dedup — som i verste fall bare gir et duplikat — feiler ÅPENT.
+describe('sendVarsel – feilhåndtering', () => {
+  it('kaster og sender ingenting når mottaker-oppslaget feiler', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_logg: [],
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          push_subscriptions: [],
+          varsel_preferanser: [],
+        },
+        { profiles: new Error('DB nede') },
+      ),
+    )
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster og sender ingenting når varsel_innstillinger feiler (fail-closed-vakten)', async () => {
+    mockFrom.mockImplementation(lagFromMock({}, { varsel_innstillinger: new Error('DB nede') }))
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  // Denne er selve overskriften i #503: et nytt-arrangement-varsel til hele
+  // klubben som stille gikk til null personer fordi en feilet profiles-spørring
+  // ga tomt array. Broadcast-stien (uten mottakerliste) går via hentProfiler og
+  // var ikke pinnet av noen test. (#503-review)
+  it('kaster på broadcast uten mottakerliste når profiles-oppslaget feiler', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_logg: [],
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          varsel_preferanser: [],
+          push_subscriptions: [],
+        },
+        { profiles: new Error('DB nede') },
+      ),
+    )
+
+    await expect(
+      sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow(/kunne ikke hente profiler/i)
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster når test_modus-oppslaget feiler, selv om varseltype-oppslaget lykkes', async () => {
+    // Begge oppslagene går mot varsel_innstillinger, så en tabell-bred feil ville
+    // stoppet allerede i erVarselAktiv og maskert denne throw-en. Vi skiller på
+    // nøkkelen i .eq() slik at kun test_modus-formen feiler. (#503-review)
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_innstillinger') {
+        let noekkel = ''
+        const chain = lagChain({ aktiv: true, beskrivelse: null })
+        chain.eq = vi.fn((kol: string, verdi: string) => {
+          if (kol === 'noekkel') noekkel = verdi
+          return chain
+        })
+        chain.maybeSingle = vi.fn(() =>
+          noekkel === 'test_modus'
+            ? Promise.resolve({ data: null, error: new Error('DB nede') })
+            : Promise.resolve({ data: { aktiv: true, beskrivelse: null }, error: null }),
+        )
+        return chain
+      }
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
+      }
+      return lagChain([])
+    })
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow(/test_modus/)
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster når varseltype-oppslaget feiler, selv om test_modus-oppslaget lykkes', async () => {
+    // Speilvendt av testen over: uten denne maskerer de to varsel_innstillinger-
+    // oppslagene hverandre begge veier — fjerner man throw-en i erVarselAktiv
+    // faller kallet bare videre til test_modus-throw-en og testene ser grønt ut.
+    // Mutasjonstestet: begge throw-ene er nå pinnet hver for seg. (#503-review)
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_innstillinger') {
+        let noekkel = ''
+        const chain = lagChain({ aktiv: true, beskrivelse: null })
+        chain.eq = vi.fn((kol: string, verdi: string) => {
+          if (kol === 'noekkel') noekkel = verdi
+          return chain
+        })
+        chain.maybeSingle = vi.fn(() =>
+          noekkel === 'test_modus'
+            ? Promise.resolve({ data: { aktiv: false, beskrivelse: null }, error: null })
+            : Promise.resolve({ data: null, error: new Error('DB nede') }),
+        )
+        return chain
+      }
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
+      }
+      return lagChain([])
+    })
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow(/varsel-innstilling/)
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster når fortids-sperren ikke kan leses (arrangementer-oppslaget feiler)', async () => {
+    // En sperre vi ikke klarer å lese skal ikke tolkes som «ikke passert» — da
+    // ville en transient DB-feil kunne pinge hele klubben om en gammel tur.
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_logg: [],
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+          push_subscriptions: [],
+        },
+        { arrangementer: new Error('DB nede') },
+      ),
+    )
+
+    await expect(
+      sendVarsel({
+        mottakere: ['user1'],
+        tittel: 'Test',
+        melding: 'Test',
+        type: 'paaminne_7',
+        arrangementId: 'arr1',
+      }),
+    ).rejects.toThrow(/fortids-sperre/)
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('sendChatMentionVarsler kaster når profil-oppslaget feiler', async () => {
+    // Samme klasse som mottaker-oppslaget: en feilet spørring skal ikke tolkes
+    // som «ingen mentions å varsle».
+    mockFrom.mockImplementation(lagFromMock({}, { profiles: new Error('DB nede') }))
+
+    await expect(
+      sendChatMentionVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1'),
+    ).rejects.toThrow(/@-mention/)
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster og sender ingenting når varsel_preferanser feiler', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_logg: [],
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          push_subscriptions: [],
+        },
+        { varsel_preferanser: new Error('DB nede') },
+      ),
+    )
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster og sender ingenting når push_subscriptions feiler', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_logg: [],
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
+        },
+        { push_subscriptions: new Error('DB nede') },
+      ),
+    )
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).rejects.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('sender likevel når dedup-select feiler, og logg.feil kalles med feilobjektet (motsatt av oppslagene over)', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        {
+          varsel_innstillinger: { aktiv: true, beskrivelse: null },
+          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+          push_subscriptions: [],
+        },
+        { varsel_logg: new Error('DB nede') },
+      ),
+    )
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'nytt_arrangement',
+      arrangementId: 'arr1',
+      tillatDuplikat: false,
+    })
+
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
+    // Fail-open er et valg om leveranse, ikke om synlighet: feilobjektet skal
+    // være med (2. argument), ikke bare et event-navn. (#503-review)
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'varsel.dedup.feilet',
+      expect.any(Error),
+      expect.objectContaining({ ctx: expect.objectContaining({ sample: 'nytt_arrangement' }) }),
+    )
+  })
+
+  it('sender likevel når varsel_logg-insert feiler, og logg.feil kalles', async () => {
+    // Håndrullet mock: select (dedup-sjekk) må lykkes mens insert (logging av
+    // utsendingen) feiler — samme teknikk som testen for paaminnelse-nøkler over,
+    // siden lagFromMock/lagChain ikke skiller mellom metoder på samme tabell.
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = vi.fn(() => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('insert feilet') }),
+          }),
+        }))
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
+      }
+      if (tabell === 'push_subscriptions') return lagChain([])
+      return lagChain([])
+    })
+
+    await sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' })
+
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
+    expect(mockLoggFeil).toHaveBeenCalledWith('varsel.logg.insert.feilet', expect.anything(), expect.anything())
+  })
+
+  it('eksplisitt mottakerliste med 0 treff utenfor testmodus: ingen kast, ingen utsending, logg.warn kalles', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [],
+      varsel_preferanser: [],
+      push_subscriptions: [],
+    })
+
+    await expect(
+      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).resolves.not.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+    expect(mockLoggWarn).toHaveBeenCalledWith('varsel.mottakere.tomme', expect.anything())
+  })
+
+  it('regresjonsvakt: broadcast med 0 aktive profiler og error: null kaster ikke, men logges', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [],
+      varsel_preferanser: [],
+      push_subscriptions: [],
+    })
+
+    await expect(
+      sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' }),
+    ).resolves.not.toThrow()
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+    // En broadcast som ikke treffer noen er ikke nødvendigvis feil, men den er
+    // mistenkelig nok til at den ikke skal være stille. `count: 0` = broadcast. (#503-review)
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'varsel.mottakere.tomme',
+      expect.objectContaining({ sample: 'test', count: 0 }),
+    )
   })
 })

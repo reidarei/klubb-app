@@ -1,3 +1,18 @@
+// Styrende regel for feilhåndtering i denne fila (#503):
+// Feil skal aldri føre til at noen får noe de ikke skulle hatt. Oppslag
+// som beskytter mot uønsket utsending (innstillinger, testmodus, mottakere,
+// preferanser, fortids-sperre) feiler LUKKET (throw) — en feil der skal
+// aldri tolkes som «send til alle». Oppslag der en feil i verste fall bare
+// gir et duplikat (dedup-sjekk) eller en dårligere varseltekst (scope-oppslag
+// for @-mention) feiler ÅPENT — det er mildere enn et tapt varsel. Fail-open
+// betyr likevel ikke stille: de stiene logger med logg.feil.
+//
+// Ett oppført unntak fra listen over: push_subscriptions-oppslaget kaster også,
+// selv om en feil der isolert sett bare degraderer til «ingen push». Grunnen er
+// at et tomt resultat er bit-identisk med «ingen har registrert push», og vi tar
+// en kanalbeslutning per mottaker på det grunnlaget — den som kun har push aktiv
+// ville stille fått ingenting. Delvis kjent tilstand (epost kjent, push ukjent)
+// behandles derfor som ukjent. (#503-review)
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
@@ -38,11 +53,19 @@ function typeTilNoekkel(type: string): string {
 // Sjekk om en varseltype er aktivert i admin-innstillinger
 async function erVarselAktiv(noekkel: string): Promise<boolean> {
   const supabase = createAdminClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('varsel_innstillinger')
     .select('aktiv')
     .eq('noekkel', noekkel)
     .maybeSingle()
+  // Fail closed: en feilet spørring skal aldri tolkes som «aktiv». Manglende
+  // RAD er fortsatt legitimt (default true) — det er noe annet enn en feil.
+  if (error) {
+    // sample må ligge under ctx — logg.feil() leser kun opts.fingerprint og
+    // opts.ctx på toppnivå, så et toppnivå-sample ville forsvunnet stille. (#503-review)
+    await logg.feil('varsel.innstilling.feilet', error, { ctx: { sample: noekkel } })
+    throw new Error(`Kunne ikke lese varsel-innstilling «${noekkel}»: ${error.message}`)
+  }
   return data?.aktiv ?? true
 }
 
@@ -66,33 +89,56 @@ const HENDELSE_VARSLER = new Set(['nytt_arrangement', 'paaminne_7', 'paaminne_1'
 // Sjekk om test-modus er aktiv — returnerer test-epost eller null
 async function hentTestModus(): Promise<string | null> {
   const supabase = createAdminClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('varsel_innstillinger')
     .select('aktiv, beskrivelse')
     .eq('noekkel', 'test_modus')
     .maybeSingle()
+  // Fail closed: testmodus er en sikkerhetssperre. Klarer vi ikke å lese den,
+  // vet vi ikke om utsending skal begrenses til testprofilen — da sender vi
+  // ikke i det hele tatt, i stedet for å risikere at alle 17 får varselet.
+  if (error) {
+    await logg.feil('varsel.innstilling.feilet', error, { ctx: { sample: 'test_modus' } })
+    throw new Error(`Kunne ikke lese test_modus-innstilling: ${error.message}`)
+  }
   if (data?.aktiv && data.beskrivelse) return data.beskrivelse
   return null
 }
 
-// Hent alle aktive profiler (i test-modus: kun profilen med test-eposten)
-async function hentProfiler() {
+// Hent alle aktive profiler (i test-modus: kun profilen med test-eposten).
+// Tar testEpost som parameter i stedet for å kalle hentTestModus() selv —
+// begge kallstedene (sendVarsel og sendPurringVarsler) har allerede slått
+// opp testmodus selv, og et internt kall her ville dobbeltspurt DB-en. (#503)
+async function hentProfiler(testEpost: string | null) {
   const supabase = createAdminClient()
-  const testEpost = await hentTestModus()
 
   const query = supabase.from('profiles').select('id, navn, epost').eq('aktiv', true)
   if (testEpost) query.eq('epost', testEpost)
-  const { data } = await query
+  const { data, error } = await query
+  // Fail closed: tomt array her er bit-identisk med «ingen aktive mottakere»
+  // — uten denne sjekken ville en feilet spørring stille sendt til null personer.
+  if (error) {
+    // «broadcast» skiller denne fra de to andre stedene som sender samme event
+    // (eksplisitt mottakerliste i sendVarsel, og @-mention). (#503-review)
+    await logg.feil('varsel.mottakere.feilet', error, { ctx: { sample: 'broadcast' } })
+    throw new Error(`Kunne ikke hente profiler: ${error.message}`)
+  }
   return data ?? []
 }
 
 // Hent varselpreferanser for alle profiler
 async function hentVarselPreferanser(profilIder: string[]) {
   const supabase = createAdminClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('varsel_preferanser')
     .select('profil_id, push_aktiv, epost_aktiv')
     .in('profil_id', profilIder)
+  // Fail closed: en tom Map her tolkes lenger nede som epostAktiv: true for
+  // ALLE — altså e-post til folk som bevisst har skrudd den av.
+  if (error) {
+    await logg.feil('varsel.preferanser.feilet', error, { ctx: { count: profilIder.length } })
+    throw new Error(`Kunne ikke hente varselpreferanser: ${error.message}`)
+  }
   const map = new Map<string, { push_aktiv: boolean; epost_aktiv: boolean }>()
   for (const p of data ?? []) map.set(p.profil_id, p)
   return map
@@ -101,10 +147,17 @@ async function hentVarselPreferanser(profilIder: string[]) {
 // Hent alle push-subscriptions for en liste med profil-IDer
 async function hentPushSubscriptions(profilIder: string[]) {
   const supabase = createAdminClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('push_subscriptions')
     .select('profil_id, endpoint, p256dh, auth')
     .in('profil_id', profilIder)
+  // Isolert sett kun degradering (tomt array = ingen push), men denne
+  // kjører i samme Promise.all som preferanse-oppslaget over — en delvis
+  // kjent tilstand (push ukjent, epost kjent) er ikke grunnlag å sende på.
+  if (error) {
+    await logg.feil('varsel.preferanser.feilet', error, { ctx: { count: profilIder.length } })
+    throw new Error(`Kunne ikke hente push-subscriptions: ${error.message}`)
+  }
   return data ?? []
 }
 
@@ -196,11 +249,22 @@ export async function sendVarsel({
   // Sammenligner absolutte tidspunkt (begge er UTC-instanser), så tidssone
   // spiller ingen rolle her.
   if (arrangementId && HENDELSE_VARSLER.has(type)) {
-    const { data: arr } = await supabase
+    const { data: arr, error: arrFeil } = await supabase
       .from('arrangementer')
       .select('start_tidspunkt')
       .eq('id', arrangementId)
       .maybeSingle()
+    // Fail closed: en sperre vi ikke klarer å lese skal ikke tolkes som
+    // «ikke passert» — da ville en transient DB-feil kunne sende backfill-
+    // varsler for gamle turer, nøyaktig det denne sperren finnes for å hindre.
+    if (arrFeil) {
+      // Eget event: dette er et arrangementer-oppslag, ikke varsel_innstillinger
+      // — å låne innstilling-eventet ville feilmerket alarmen. (#503-review)
+      await logg.feil('varsel.fortidssperre.feilet', arrFeil, {
+        ctx: { sample: type, arrangement_id: arrangementId },
+      })
+      throw new Error(`Kunne ikke sjekke fortids-sperre for arrangement ${arrangementId}: ${arrFeil.message}`)
+    }
     if (arr?.start_tidspunkt && new Date(arr.start_tidspunkt).getTime() < Date.now()) {
       logg.warn('varsel.hendelse.passert', { sample: type })
       return
@@ -209,40 +273,65 @@ export async function sendVarsel({
 
   // 1. Dedup-sjekk — gjelder enten arrangement_id eller poll_id alt etter
   // hvilken referanse varselet bærer. Først match som finnes vinner.
+  //
+  // Fail ÅPENT her (i motsetning til de fleste andre oppslagene i denne fila):
+  // en throw ved feil gir et GARANTERT tapt varsel, mens fail-open i verste
+  // fall gir et MULIG duplikat. Duplikatet er mildere, og dedup er en
+  // bekvemmelighet — ikke en sikkerhetssperre mot uønsket utsending. (#503)
   if (!tillatDuplikat && arrangementId) {
-    const { data: eksisterende } = await supabase
+    const { data: eksisterende, error: dedupFeil } = await supabase
       .from('varsel_logg')
       .select('id')
       .eq('type', type)
       .eq('arrangement_id', arrangementId)
       .limit(1)
+    // logg.feil, ikke warn: at vi bevisst fortsetter er et valg om LEVERANSE,
+    // ikke om synlighet. warn går aldri til Sentry, og den gamle varianten
+    // sendte i tillegg ikke dedupFeil videre i det hele tatt — verken kode,
+    // tabell eller melding overlevde. (#503-review)
+    if (dedupFeil) {
+      await logg.feil('varsel.dedup.feilet', dedupFeil, {
+        ctx: { sample: type, arrangement_id: arrangementId },
+      })
+    }
     if (eksisterende && eksisterende.length > 0) return
   }
   if (!tillatDuplikat && pollId) {
-    const { data: eksisterende } = await supabase
+    const { data: eksisterende, error: dedupFeil } = await supabase
       .from('varsel_logg')
       .select('id')
       .eq('type', type)
       .eq('poll_id', pollId)
       .limit(1)
+    if (dedupFeil) {
+      await logg.feil('varsel.dedup.feilet', dedupFeil, { ctx: { sample: type } })
+    }
     if (eksisterende && eksisterende.length > 0) return
   }
 
   // 2. Testmodus
   const testEpost = await hentTestModus()
 
-  // 3. Løs opp mottakere + dedupliser
+  // 3. Løs opp mottakere + dedupliser. Fail closed (hovedfiksen i #503):
+  // tidligere ga en feilet spørring her `profiler = []`, bit-identisk med
+  // «ingen aktive mottakere» — varselet gikk stille til null personer.
   let profiler: { id: string; navn: string | null; epost: string | null }[]
   if (mottakere) {
     const unikeIder = [...new Set(mottakere)]
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, navn, epost')
       .in('id', unikeIder)
       .eq('aktiv', true)
+    if (error) {
+      await logg.feil('varsel.mottakere.feilet', error, {
+        ctx: { sample: type, count: unikeIder.length },
+      })
+      throw new Error(`Varsel «${type}»: kunne ikke hente mottakere: ${error.message}`)
+    }
     profiler = data ?? []
   } else {
-    profiler = await hentProfiler()
+    profiler = await hentProfiler(testEpost)
   }
 
   // I testmodus: filtrer til kun testprofilen
@@ -250,7 +339,18 @@ export async function sendVarsel({
     profiler = profiler.filter(p => p.epost === testEpost)
   }
 
-  if (profiler.length === 0) return
+  if (profiler.length === 0) {
+    // Legitim tilstand (ingen aktive mottakere), men verdt å vite om. Vi tier
+    // kun i testmodus, som rutinemessig filtrerer bort nesten alle og ville
+    // druknet loggen. En BROADCAST som treffer 0 aktive profiler logges også
+    // (#503-review): det er minst like mistenkelig som en tom eksplisitt liste
+    // — en RLS-/grant-glipp mot profiles eller et masse-nullet `aktiv` ser
+    // nøyaktig sånn ut. `count: 0` betyr broadcast (ingen liste oppgitt).
+    if (!testEpost) {
+      logg.warn('varsel.mottakere.tomme', { sample: type, count: mottakere?.length ?? 0 })
+    }
+    return
+  }
 
   // 4. Hent preferanser + push-subscriptions
   const profilIder = profiler.map(p => p.id)
@@ -304,7 +404,7 @@ export async function sendVarsel({
       const kanal = kanPush && kanEpost ? 'begge' : kanPush ? 'push' : kanEpost ? 'epost' : null
       if (!kanal) return
 
-      const { data: loggRad } = await supabase
+      const { data: loggRad, error: loggFeil } = await supabase
         .from('varsel_logg')
         .insert({
           profil_id: profil.id,
@@ -318,6 +418,21 @@ export async function sendVarsel({
         })
         .select('id')
         .single()
+
+      // Fail ÅPENT — bevisst unntak: vi står midt i et Promise.all over alle
+      // mottakere, og en throw her ville avbrutt loopen før sendEpostBatch (under)
+      // rakk å kjøre — resultatet er noen som fikk push men ALDRI e-post, en
+      // verre inkonsistens enn den manglende loggraden i seg selv. Merk: en tapt
+      // rad her gjør `tillatDuplikat: false` upålitelig ved neste kjøring — neste
+      // sendVarsel-kall for samme referanse ser ikke denne sendingen og sender på
+      // nytt. Rammer de varseltypene som faktisk deduperes, dvs. de som sender
+      // arrangementId eller pollId med tillatDuplikat: false — nytt_arrangement,
+      // paaminne_7, paaminne_1, cron-purring og de fire kaaringspoll_*. Typer uten
+      // slik referanse (arrangor_purring, klient_alarm) deduperes ikke uansett.
+      // (#503, korrigert i #503-review)
+      if (loggFeil) {
+        await logg.feil('varsel.logg.insert.feilet', loggFeil, { ctx: { profil_id: profil.id } })
+      }
 
       const varselUrl = normalisertUrl ?? (loggRad ? `${BASE_URL}/varsler/${loggRad.id}` : BASE_URL)
 
@@ -584,7 +699,7 @@ export async function sendPurringVarsler({
   }
 
   const harSvart = new Set((paameldinger ?? []).map(p => p.profil_id))
-  const profiler = await hentProfiler()
+  const profiler = await hentProfiler(await hentTestModus())
   const sendTil = profiler.filter(p => !harSvart.has(p.id)).map(p => p.id)
 
   if (sendTil.length === 0) return
@@ -653,11 +768,16 @@ async function hentScopeInnhold(
         knappTekst: 'Åpne chatten',
       }
     case 'arrangement': {
-      const { data } = await admin
+      // Fail ÅPENT (bevisst): en feil her rammer kun tittel-teksten i varselet
+      // (fallback under), ikke hvem som mottar det. Ikke verdt å kaste for. (#503)
+      const { data, error } = await admin
         .from('arrangementer')
         .select('tittel')
         .eq('id', scope.id)
         .single()
+      // Fail-open, men ikke stille: feilobjektet skal videre til Sentry selv
+      // om vi fortsetter med fallback-tittel. (#503-review)
+      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'mention.arrangement' } })
       return {
         tittel: `Chat: ${data?.tittel ?? 'et arrangement'}`,
         // #kommentarer-ankeret scroller direkte til chat-seksjonen på
@@ -667,11 +787,13 @@ async function hentScopeInnhold(
       }
     }
     case 'poll': {
-      const { data } = await admin
+      // Samme resonnement som arrangement over — feiler kun tittel-teksten.
+      const { data, error } = await admin
         .from('poll')
         .select('spoersmaal')
         .eq('id', scope.id)
         .single()
+      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'mention.poll' } })
       return {
         tittel: `Kommentar: ${data?.spoersmaal ?? 'en avstemming'}`,
         url: `${BASE_URL}/poll/${scope.id}`,
@@ -709,11 +831,20 @@ export async function sendChatMentionVarsler(
 
   const admin = createAdminClient()
 
-  const { data: profiler } = await admin
+  // Fail closed — samme klasse feil som mottaker-oppslaget i sendVarsel:
+  // en feilet spørring skal ikke tolkes som «ingen mentions å varsle». (#503)
+  const { data, error } = await admin
     .from('profiles')
     .select('id, navn, visningsnavn, epost')
     .eq('aktiv', true)
-  if (!profiler) return
+  if (error) {
+    await logg.feil('varsel.mottakere.feilet', error, { ctx: { sample: 'mention' } })
+    throw new Error(`Kunne ikke hente profiler for @-mention: ${error.message}`)
+  }
+  // `data` er typet «| null», men throw-en over har allerede fanget det eneste
+  // tilfellet som gir null — `?? []` er ren TS-narrowing, ikke en skjult
+  // stille-retur. (#503-review)
+  const profiler = data ?? []
 
   const erAlle = mentions.includes('alle')
   const nevnte = erAlle
