@@ -118,6 +118,24 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 
 **Viktig:** Bruk aldri `after()` fra `next/server` for varsler — det kjører ikke pålitelig på Vercel Hobby. Bruk `await` direkte.
 
+**Kvitteringsdoktrine — sikker duplikat-eliminering:**
+
+Varsler er asynkrone og kan mislykkes midt i utsendingen. For å unngå duplikater og sikre at hver hendelse varsles eksakt ett forsøk, følger vi en strict compare-and-swap-kontrakt:
+
+1. **Ingen tilstandsendring får være sin egen varsel-nøkkel.** Markøren for «varslet om» (f.eks. `varslet_paa` på en rad) er et eget felt, satt som en atomic compare-and-swap når `sendVarsel()` returnerer **uten å kaste**. Hvis kallet feiler (throw), endres markøren ikke.
+
+2. **Kast = ukjent utfall.** Hvis `sendVarsel()` kaster, tolker den som «vi vet ikke hva som skjedde», og retry er tillatt (av samme eller annen jobbkjøring). Returnerer den normalt (uten exception) tolkes det som «tilstanden er nå gjort», og markøren er satt.
+
+3. **Retry må være tidsbegrenset.** Retry-spørringen som søker etter rader med udefinert markør skal alltid ha en `WHERE created_at > now() - interval '…'` sånn at en permanentuleverbar rad ikke sitter og poller for alltid. Gjør også oppsett-guiden klar på hva verdien skal være når den settes opp.
+
+4. **Duplikat-nøkkelen hindrer duplikater per mottaker.** `varsel_logg.dedup_noekkel` + partial unique index `(profil_id, type, arrangement_id) WHERE dedup_noekkel IS NOT NULL` låser at én (type, arrangement_id)-kombinasjon bare sendes en gang per medlem. Nøkkelen skal alltid være namespaced med typen (f.eks. `'paaminnelse_7_' || arrangement_id`).
+
+5. **`23505` (UNIQUE-brudd) tolkes som suksess, ikke feil.** Hvis duplikat-indexen trigges under utsending til flere mottakere, fanger `.catch()` i utsendingsløkka `23505` **per mottaker** og tolker det som «denne mottakeren har allerede fått varslet» — feilen propageres aldri ut av `sendVarsel()`. Andre feil per mottaker (push-subscription invalid, preference blocked) kastes og bobler ut.
+
+6. **`varsel_logg` er medlemmets innboks, ikke appens kvitteringsbok.** Logg-rader prunes aldri. De er brukerens synlige varselhistorikk.
+
+7. **Markøren dekker det utfallet som var kjent da den ble satt.** Hvis to ulike varsler skal sendes for samme hendelse (f.eks. pass godkjent → både «du ble passet inn» og en påminnelses-pussh), krever det to markør-kolonner. Hver markør styrer sin egen retry-kø uavhengig.
+
 **Feilkontrakt — `sendVarsel()` kaster:**
 
 Funksjonen feiler **lukket** (throw) ved innstillings-, testmodus-, mottaker-, preferanse-, push-subscription- og fortids-sperre-feil (se omtale av HENDELSE_VARSLER i kommentaren øverst i `lib/varsler.ts`). Disse er feil som betyr at et varsel *ikke burde sendes* — å dedup eller logge dem ville maskere at konfigurasjonen eller appen er i en gal tilstand.
