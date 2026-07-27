@@ -22,6 +22,13 @@ export const PAAMINNELSE_DAGER = {
 // trekke tilbake.
 export const PASS_TILGANG_TIMER = 24
 
+// Retry-vindu (i dager) for kåringsvinner-varselet: cronen leter etter
+// avsluttede-men-uvarslede kåringspoller helt til vinner_varslet_paa er satt
+// ELLER polls avsluttet_paa faller ut av dette vinduet. kjorPaaminnelser
+// kjører kåringsblokka KUN på slot 1 (én gang daglig), altså 7 reelle
+// retry-forsøk før en permanent uvarslebar poll faller ut av køen. Se #504.
+export const KAARING_VARSEL_RETRY_DAGER = 7
+
 // Kommentarseksjonen på agenda-arrangementer kollapses automatisk når
 // det er stille i 4 dager; brukeren kan fortsatt åpne manuelt via chevron.
 // se #316

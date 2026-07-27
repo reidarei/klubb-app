@@ -203,6 +203,33 @@ export function formaterHilsenMelding({
 
 // ─── SENTRAL VARSLINGSFUNKSJON ───────────────────────────────────────────────
 
+// Utfallet fra sendVarsel — kontrakten kallere kan bygge kvitterings-logikk
+// på (#504). «Kaster = ukjent utfall, retry er lov. Returnerer = terminalt
+// avgjort, ikke retry.» Kallere som stempler en tilstandsrad (varslet_paa,
+// vinner_varslet_paa) skal stemple på ALLE utfall her — også blokkert_lokal
+// og type_deaktivert — fordi returverdien i seg selv betyr at rørledningen
+// kjørte til ende for denne tilstandsendringen. Additiv endring: alle
+// eksisterende ~30 kallsteder ignorerer returverdien uten å brekke.
+export type VarselUtfall = {
+  utfall:
+    | 'sendt'
+    | 'blokkert_lokal'
+    | 'type_deaktivert'
+    | 'hendelse_passert'
+    | 'dedup'
+    | 'ingen_mottakere'
+  // Mottakere med MINST ÉN AKTIV KANAL (push og/eller epost) — ikke bekreftet
+  // levering. Telleren økes før push forsøkes og før e-posten er i batchen, og
+  // sendPush/sendEpostBatch svelger sine egne feil, så `levert` kan aldri gå
+  // ned igjen. Den økes også når varsel_logg-inserten feilet med annet enn
+  // 23505. Bruk den til observability, aldri som leverings-kvittering. (#504-review)
+  levert: number
+  kunApp: number       // mottakere som kun fikk in-app-rad (ingen kanal aktiv)
+  dedupHoppet: number  // mottakere som traff 23505 på dedup_noekkel
+}
+
+const INGEN_UTSENDING: Omit<VarselUtfall, 'utfall'> = { levert: 0, kunApp: 0, dedupHoppet: 0 }
+
 export async function sendVarsel({
   mottakere,
   tittel,
@@ -213,6 +240,7 @@ export async function sendVarsel({
   arrangementId,
   pollId,
   tillatDuplikat = false,
+  dedupNoekkel,
 }: {
   mottakere?: string[]
   tittel: string
@@ -223,21 +251,24 @@ export async function sendVarsel({
   arrangementId?: string
   pollId?: string
   tillatDuplikat?: boolean
-}) {
+  // Navnerom-prefikset per-mottaker-guard (f.eks. «pass-godkjent:{id}»,
+  // «bursdag:{barnId}:{aar}») — se varsel_logg_dedup_noekkel_uniq (mig. 121).
+  dedupNoekkel?: string
+}): Promise<VarselUtfall> {
   // Dev-guard: Blokker utsending fra lokal dev-server mot prod-DB.
   // Vi returnerer tidlig uten å skrive varsel_logg — det er bedre å ikke
   // forurense loggen med "late som"-rader. Logg til konsoll slik at
   // utvikleren ser hva som skjedde.
   if (BLOKKER_UTSENDING) {
     logg.warn('varsel.blokkert.lokal', { sample: type })
-    return
+    return { utfall: 'blokkert_lokal', ...INGEN_UTSENDING }
   }
 
   // 0. Sjekk admin-kontrollpanelet — admin kan slå av en hel varseltype
   // sentralt. Manglende nøkkel teller som «aktiv» (default true).
   if (!(await erTypeAktiv(type))) {
     logg.warn('varsel.type.deaktivert', { sample: type })
-    return
+    return { utfall: 'type_deaktivert', ...INGEN_UTSENDING }
   }
 
   const supabase = createAdminClient()
@@ -267,7 +298,7 @@ export async function sendVarsel({
     }
     if (arr?.start_tidspunkt && new Date(arr.start_tidspunkt).getTime() < Date.now()) {
       logg.warn('varsel.hendelse.passert', { sample: type })
-      return
+      return { utfall: 'hendelse_passert', ...INGEN_UTSENDING }
     }
   }
 
@@ -294,7 +325,7 @@ export async function sendVarsel({
         ctx: { sample: type, arrangement_id: arrangementId },
       })
     }
-    if (eksisterende && eksisterende.length > 0) return
+    if (eksisterende && eksisterende.length > 0) return { utfall: 'dedup', ...INGEN_UTSENDING }
   }
   if (!tillatDuplikat && pollId) {
     const { data: eksisterende, error: dedupFeil } = await supabase
@@ -306,7 +337,7 @@ export async function sendVarsel({
     if (dedupFeil) {
       await logg.feil('varsel.dedup.feilet', dedupFeil, { ctx: { sample: type } })
     }
-    if (eksisterende && eksisterende.length > 0) return
+    if (eksisterende && eksisterende.length > 0) return { utfall: 'dedup', ...INGEN_UTSENDING }
   }
 
   // 2. Testmodus
@@ -347,9 +378,22 @@ export async function sendVarsel({
     // — en RLS-/grant-glipp mot profiles eller et masse-nullet `aktiv` ser
     // nøyaktig sånn ut. `count: 0` betyr broadcast (ingen liste oppgitt).
     if (!testEpost) {
-      logg.warn('varsel.mottakere.tomme', { sample: type, count: mottakere?.length ?? 0 })
+      // Broadcast (mottakere er undefined) eskaleres til logg.feil → Sentry
+      // (#504/#517): logg.warn går ALDRI til Sentry, og en broadcast som
+      // treffer 0 er den mest mistenkelige ikke-feil-tilstanden i hele
+      // varslingskjernen — den kan bety en RLS-/grant-glipp mot profiles.
+      // En eksplisitt tom mottakerliste (mottakere: []) er derimot en
+      // legitim kallested-avgjørelse og beholder warn. ctx (ikke toppnivå
+      // sample) — se #517, logg.feil() leser kun opts.fingerprint/opts.ctx.
+      if (mottakere === undefined) {
+        await logg.feil('varsel.mottakere.tomme', new Error('Broadcast traff 0 aktive profiler'), {
+          ctx: { sample: type },
+        })
+      } else {
+        logg.warn('varsel.mottakere.tomme', { sample: type, count: mottakere.length })
+      }
     }
-    return
+    return { utfall: 'ingen_mottakere', ...INGEN_UTSENDING }
   }
 
   // 4. Hent preferanser + push-subscriptions
@@ -392,6 +436,13 @@ export async function sendVarsel({
     logg.warn('varsel.url.relativ', { sample: type })
   }
 
+  // Tellere for VarselUtfall — muteres fra parallelle async-callbacks under.
+  // Trygt uten låsing av samme grunn som epostBatch.push over: JS er
+  // single-threaded, så to inkrementeringer kan aldri kjøre samtidig.
+  let levert = 0
+  let kunApp = 0
+  let dedupHoppet = 0
+
   await Promise.all(
     profiler.map(async profil => {
       const pref = prefs.get(profil.id)
@@ -401,8 +452,12 @@ export async function sendVarsel({
 
       const kanPush = pushAktiv && profilSubs.length > 0
       const kanEpost = epostAktiv && !!profil.epost
-      const kanal = kanPush && kanEpost ? 'begge' : kanPush ? 'push' : kanEpost ? 'epost' : null
-      if (!kanal) return
+      // 'kun_app' (i stedet for tidligere `if (!kanal) return`, #504): en
+      // mottaker uten push eller epost aktiv skal likevel få en in-app-rad —
+      // varsel_logg ER innboksen på /profil, og ingen rad skal noensinne
+      // bety «forsøkt, ikke levert». Push/epost er allerede gated av
+      // kanPush/kanEpost under, så utsendingen hoppes bare over av seg selv.
+      const kanal = kanPush && kanEpost ? 'begge' : kanPush ? 'push' : kanEpost ? 'epost' : 'kun_app'
 
       const { data: loggRad, error: loggFeil } = await supabase
         .from('varsel_logg')
@@ -415,6 +470,7 @@ export async function sendVarsel({
           url: normalisertUrl ?? null,
           arrangement_id: arrangementId ?? null,
           poll_id: pollId ?? null,
+          dedup_noekkel: dedupNoekkel ?? null,
         })
         .select('id')
         .single()
@@ -430,9 +486,22 @@ export async function sendVarsel({
       // paaminne_7, paaminne_1, cron-purring og de fire kaaringspoll_*. Typer uten
       // slik referanse (arrangor_purring, klient_alarm) deduperes ikke uansett.
       // (#503, korrigert i #503-review)
+      //
+      // 23505 fra dedup_noekkel-unique-indeksen (mig. 121) tolkes derimot som
+      // SUKSESS: denne mottakeren er allerede kvittert for denne nøkkelen, så
+      // vi hopper stille over utsendingen for HAM — men fortsetter loopen for
+      // resten. Aldri throw her: én manns duplikat skal ikke rive med seg
+      // hele broadcasten (#504).
       if (loggFeil) {
+        if (loggFeil.code === '23505') {
+          dedupHoppet++
+          return
+        }
         await logg.feil('varsel.logg.insert.feilet', loggFeil, { ctx: { profil_id: profil.id } })
       }
+
+      if (kanal === 'kun_app') kunApp++
+      else levert++
 
       const varselUrl = normalisertUrl ?? (loggRad ? `${BASE_URL}/varsler/${loggRad.id}` : BASE_URL)
 
@@ -450,6 +519,8 @@ export async function sendVarsel({
   )
 
   await sendEpostBatch(epostBatch)
+
+  return { utfall: 'sendt', levert, kunApp, dedupHoppet }
 }
 
 // ─── WRAPPER-FUNKSJONER ─────────────────────────────────────────────────────

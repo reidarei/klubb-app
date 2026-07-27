@@ -5,8 +5,18 @@
 // Idempotens sikres via kilde_ekstern_id = «bursdag:{barnId}:{år}:{adminId}»
 // — unik per avsender, slik at begge kan poste uten å slette hverandres.
 //
-// Varsel til bursdagsbarnet sendes kun én gang selv om flere admins poster —
-// varselSendt-flagget per barn sikrer dette.
+// Varsel til bursdagsbarnet: sendVarsel() sin egen dedup_noekkel
+// («bursdag:{barnId}:{år}», mig. 121) er korrektheten her — IKKE en lokal
+// variabel. Varselet er flyttet UT av avsender-løkka og sendes én gang per
+// barn, EVIG GANG chat-posten finnes (uansett om den ble laget akkurat nå,
+// i et tidligere slot, eller av en annen prosess). Før #504 sto varselet
+// inni avsender-løkka bak `if (!varselSendt)`, og varselSendt var en lokal
+// variabel i én kjøring — når posten allerede fantes fra en tidligere
+// kjøring (`eksisterende`/23505-grenen), hoppet koden ALDRI innom
+// varsel-koden i det hele tatt («hoppet++; continue»), så et bursdagsbarn
+// som fikk posten sin utsatt til et senere slot fikk aldri varselet. Samme
+// dedup_noekkel lukker også duplikat-bugen der to admins i to ulike slots
+// begge trigget varselet.
 
 import { formatInTimeZone } from 'date-fns-tz'
 import { TIDSSONE } from '@/lib/dato'
@@ -50,11 +60,19 @@ export async function kjorBursdagsgratulasjon(
   const aarStr = formatInTimeZone(idag, TIDSSONE, 'yyyy')
 
   // 2. Hent aktive profiler med fødselsdato
-  const { data: profiler } = await admin
+  const { data: profiler, error: profilerFeil } = await admin
     .from('profiles')
     .select('id, navn, visningsnavn, fodselsdato')
     .eq('aktiv', true)
     .not('fodselsdato', 'is', null)
+
+  // Fail closed (#504): en svelget feil her ga tidligere samme resultat som
+  // «ingen har bursdag i dag» — umulig å skille fra en reell DB-feil.
+  if (profilerFeil) {
+    await logg.feil('bursdagsgratulasjon.profiler.feilet', profilerFeil)
+    feil++
+    return { sendt, hoppet, feil }
+  }
 
   if (!profiler || profiler.length === 0) {
     return { sendt, hoppet, feil }
@@ -94,12 +112,19 @@ export async function kjorBursdagsgratulasjon(
   // rollerMed('kanAdministrere') gir både 'admin' og 'generalsekretaer'.
   // Kolonnen bursdagsgratulasjon_aktiv finnes etter migrasjon 100, men
   // TypeScript kjenner den ikke før typer regenereres — cast via any.
-  const { data: avsendere } = await admin
+  const { data: avsendere, error: avsendereFeil } = await admin
     .from('profiles')
     .select('id, navn')
     .eq('aktiv', true)
     .eq('bursdagsgratulasjon_aktiv' as string, true)
     .in('rolle', rollerMed('kanAdministrere'))
+
+  // Fail closed (#504): samme resonnement som profiler-oppslaget over.
+  if (avsendereFeil) {
+    await logg.feil('bursdagsgratulasjon.avsendere.feilet', avsendereFeil)
+    feil++
+    return { sendt, hoppet, feil }
+  }
 
   if (!avsendere || avsendere.length === 0) {
     // Ingen admin har skrudd på toggle — ingenting å gjøre
@@ -108,9 +133,20 @@ export async function kjorBursdagsgratulasjon(
 
   // 4. Behandle hvert bursdagsbarn × hvert avsender-admin
   for (const barn of bursdagsbarn) {
-    // varselSendt holder styr på om varselet er sendt for dette barnet allerede
-    // — første avsender som lykkes å poste sender varselet, resten poster uten varsel.
-    let varselSendt = false
+    // visningsnavn er ikke nullable i schema — fornavn er første token.
+    const fornavn = barn.visningsnavn.trim().split(/\s+/)[0]
+
+    // harPost = «finnes det (nå, eller fra før) en chat-post til dette
+    // barnet i år?» — settes i alle tre grenene som betyr nettopp det:
+    // funnet fra før, fersk insert, eller 23505 (racy dobbel-insert). Styrer
+    // om varselet under skal sendes i det hele tatt — vi skal ikke varsle om
+    // en gratulasjon som slot-sannsynligheten har utsatt til et senere slot.
+    let harPost = false
+    // Fanger hilsen fra FØRSTE vellykkede insert i denne kjøringen. Er den
+    // fortsatt null når løkka er ferdig (posten fantes alt fra en tidligere
+    // kjøring/slot), trekker vi en ny under — vi har ikke den opprinnelige
+    // hilsen-teksten liggende noe sted.
+    let varselHilsen: string | null = null
 
     for (const avsender of avsendere) {
       // En admin gratulerer ikke seg selv (dekker også tilfellet der
@@ -121,6 +157,13 @@ export async function kjorBursdagsgratulasjon(
 
       // Idempotens-sjekk: allerede postet fra denne avsenderen i år?
       // maybeSingle() returnerer null ved 0 rader uten feil — det vanlige tilfellet.
+      //
+      // Bevisst IKKE fail-closed, i motsetning til nabooppslagene i denne filen
+      // (#504-review NIT-11): feiler dette oppslaget svelges feilen og vi går
+      // videre til insert — som da treffer unique-indeksen på
+      // kilde_ekstern_id og gir 23505, håndtert som «alt postet» under. Guarden
+      // finnes altså i DB-en, ikke her; å kaste ville stanset resten av
+      // bursdagsløkka for en sjekk vi har en hardere versjon av rett etterpå.
       const { data: eksisterende } = await admin
         .from('klubb_chat')
         .select('id')
@@ -129,6 +172,7 @@ export async function kjorBursdagsgratulasjon(
 
       if (eksisterende) {
         hoppet++
+        harPost = true
         continue
       }
 
@@ -144,11 +188,8 @@ export async function kjorBursdagsgratulasjon(
         continue
       }
 
-      // Bygg melding. visningsnavn er ikke nullable i schema — fornavn er
-      // første token. Tekst-variasjon genereres per avsender slik at to
-      // posters fra ulike admins ikke er identiske.
-      const fornavn = barn.visningsnavn.trim().split(/\s+/)[0]
-
+      // Tekst-variasjon genereres per avsender slik at to posters fra ulike
+      // admins ikke er identiske.
       const emojis = trekkEmoji(BURSDAG_EMOJI_ANTALL)
       const hilsen = BURSDAG_HILSNER[Math.floor(Math.random() * BURSDAG_HILSNER.length)]
       const utropstegn = BURSDAG_UTROPSTEGN[Math.floor(Math.random() * BURSDAG_UTROPSTEGN.length)]
@@ -166,6 +207,7 @@ export async function kjorBursdagsgratulasjon(
           // sjekk og insert). Behandles som hoppet, ikke feil.
           if (insertErr.code === '23505') {
             hoppet++
+            harPost = true
             continue
           }
           await logg.feil('bursdagsgratulasjon.feilet', insertErr, {
@@ -175,24 +217,35 @@ export async function kjorBursdagsgratulasjon(
           continue
         }
 
-        // Send varsel kun fra første avsender som lykkes — bursdagsbarnet
-        // skal ikke få N varsler bare fordi N admins har toggle på.
-        // Hilsen-teksten i varselet er bevisst fra første vellykkede avsender;
-        // ev. senere avsenderes hilsner vises kun i chat, ikke i varselet.
-        if (!varselSendt) {
-          await sendVarsel({
-            mottakere: [barn.id],
-            tittel: 'Gratulerer med dagen!',
-            melding: `${hilsen} med dagen ${fornavn}`,
-            type: 'bursdagsgratulasjon',
-            url: `${BASE_URL}/chat`,
-          })
-          varselSendt = true
-        }
-
+        harPost = true
+        if (varselHilsen === null) varselHilsen = hilsen
         sendt++
       } catch (e) {
         await logg.feil('bursdagsgratulasjon.feilet', e)
+        feil++
+      }
+    }
+
+    // Varselet er flyttet UT av avsender-løkka (#504) — selve retry-fiksen.
+    // Sendes én gang per barn per år, uansett hvilken avsender/slot som
+    // faktisk fikk posten inn. dedup_noekkel («bursdag:{barnId}:{år}», mig.
+    // 121) er korrektheten på tvers av prosesser/slots, ikke en lokal
+    // variabel — sendVarsel hopper selv over utsendingen til denne
+    // mottakeren hvis noekkelen alt er brukt (23505 → tolkes som suksess).
+    if (harPost) {
+      const hilsenForVarsel =
+        varselHilsen ?? BURSDAG_HILSNER[Math.floor(Math.random() * BURSDAG_HILSNER.length)]
+      try {
+        await sendVarsel({
+          mottakere: [barn.id],
+          tittel: 'Gratulerer med dagen!',
+          melding: `${hilsenForVarsel} med dagen ${fornavn}`,
+          type: 'bursdagsgratulasjon',
+          url: `${BASE_URL}/chat`,
+          dedupNoekkel: `bursdag:${barn.id}:${aarStr}`,
+        })
+      } catch (e) {
+        await logg.feil('bursdagsgratulasjon.varsel.feilet', e, { ctx: { profil_id: barn.id } })
         feil++
       }
     }

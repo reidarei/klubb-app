@@ -61,17 +61,21 @@ async function handle(req: NextRequest) {
 
   const paaminnerFeil = paaminneResult?.feil ?? 0
   const bursdagFeil = bursdagResult?.feil ?? 0
-  const totalFeil = paaminnerFeil + bursdagFeil
 
-  // Returner 500 hvis noe feilet — synliggjør cron-feil i GitHub Actions-loggen
-  // i stedet for å skjule dem bak en 200.
-  const status = totalFeil > 0 ? 500 : 200
+  // Gating per jobb, ikke ruten som helhet (#504): paaminner kjører KUN på
+  // slot 1 og har ingen senere sjanse samme dag — enhver feil der skal gi
+  // rødt med én gang. Bursdag kjører derimot på alle slots og får nye
+  // sjanser resten av dagen — kun terminal (siste slot) skal gjøre rødt.
+  const erSisteSlot = slotIndex === BURSDAG_VINDU_SLOTS - 1
+  const status = paaminnerFeil > 0 || (bursdagFeil > 0 && erSisteSlot) ? 500 : 200
   return NextResponse.json(
     {
-      ok: totalFeil === 0,
+      ok: status === 200,
       slot: slotIndex,
       paaminne: paaminneResult ?? 'hoppet',
       bursdag: bursdagResult ?? 'utenfor vindu',
+      paaminnerFeil,
+      bursdagFeil,
     },
     { status },
   )

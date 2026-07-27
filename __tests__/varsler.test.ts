@@ -101,16 +101,30 @@ describe('sendVarsel – kanalvalg', () => {
     expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
   })
 
-  it('skipper bruker uten noen kanal aktiv', async () => {
-    setupMock({
-      varsel_logg: [],
-      varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: null }],
-      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: false }],
-      push_subscriptions: [],
+  it('skriver varsel_logg-rad med kanal: kun_app for bruker uten noen kanal aktiv (#504)', async () => {
+    // Navnet lyver ikke lenger: raden skal skrives (kanal: 'kun_app'), ikke
+    // «skippes» — varsel_logg ER innboksen på /profil, og ingen mottaker skal
+    // være usynlig for alle tre kanaler bare fordi push og epost er avslått.
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({
+        single: () => Promise.resolve({ data: { id: 'ny-rad' }, error: null }),
+      }),
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: null }])
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: false }])
+      }
+      return lagChain([])
     })
 
-    await sendVarsel({
+    const utfall = await sendVarsel({
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -121,6 +135,10 @@ describe('sendVarsel – kanalvalg', () => {
     // sendEpostBatch kalles ubetinget, men skal ha fått en tom liste her —
     // se kommentaren i testen over for hvorfor vi asserter på innhold, ikke kall-status.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([])
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ profil_id: 'user1', kanal: 'kun_app' }),
+    )
+    expect(utfall).toEqual({ utfall: 'sendt', levert: 0, kunApp: 1, dedupHoppet: 0 })
   })
 })
 
@@ -726,7 +744,7 @@ describe('sendVarsel – feilhåndtering', () => {
     expect(mockLoggWarn).toHaveBeenCalledWith('varsel.mottakere.tomme', expect.anything())
   })
 
-  it('regresjonsvakt: broadcast med 0 aktive profiler og error: null kaster ikke, men logges', async () => {
+  it('regresjonsvakt: broadcast med 0 aktive profiler og error: null kaster ikke, men eskaleres til logg.feil (#504)', async () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
@@ -735,17 +753,171 @@ describe('sendVarsel – feilhåndtering', () => {
       push_subscriptions: [],
     })
 
-    await expect(
-      sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' }),
-    ).resolves.not.toThrow()
+    const utfall = await sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' })
 
     expect(mockSendPush).not.toHaveBeenCalled()
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
-    // En broadcast som ikke treffer noen er ikke nødvendigvis feil, men den er
-    // mistenkelig nok til at den ikke skal være stille. `count: 0` = broadcast. (#503-review)
-    expect(mockLoggWarn).toHaveBeenCalledWith(
+    // #504: en broadcast som ikke treffer noen er den mest mistenkelige
+    // ikke-feil-tilstanden i hele varslingskjernen (RLS-/grant-glipp mot
+    // profiles) — logg.warn går ALDRI til Sentry, så den eskaleres til
+    // logg.feil. ctx (ikke toppnivå sample) — se #517.
+    expect(mockLoggWarn).not.toHaveBeenCalledWith('varsel.mottakere.tomme', expect.anything())
+    expect(mockLoggFeil).toHaveBeenCalledWith(
       'varsel.mottakere.tomme',
-      expect.objectContaining({ sample: 'test', count: 0 }),
+      expect.anything(),
+      expect.objectContaining({ ctx: expect.objectContaining({ sample: 'test' }) }),
     )
+    expect(utfall).toEqual({ utfall: 'ingen_mottakere', levert: 0, kunApp: 0, dedupHoppet: 0 })
+  })
+})
+
+// #504: VarselUtfall er kontrakten kallere bygger CAS-stempling på — hver
+// tidlig-retur MÅ ha riktig diskriminant. blokkert_lokal er dekket separat
+// i __tests__/varsler-blokkert.test.ts (krever modul-reimport med overstyrt
+// VITEST-env, siden BLOKKER_UTSENDING regnes ut på modul-nivå).
+describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () => {
+  it('type_deaktivert når varsel_innstillinger.aktiv er false', async () => {
+    setupMock({
+      varsel_innstillinger: { aktiv: false, beskrivelse: null },
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'test',
+    })
+
+    expect(utfall).toEqual({ utfall: 'type_deaktivert', levert: 0, kunApp: 0, dedupHoppet: 0 })
+  })
+
+  it('hendelse_passert når arrangementet allerede har startet', async () => {
+    setupMock({
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      arrangementer: { start_tidspunkt: '2020-01-01T00:00:00Z' },
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'paaminne_7',
+      arrangementId: 'arr1',
+    })
+
+    expect(utfall).toEqual({ utfall: 'hendelse_passert', levert: 0, kunApp: 0, dedupHoppet: 0 })
+  })
+
+  it('dedup når en varsel_logg-rad for samme type+arrangementId alt finnes', async () => {
+    setupMock({
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      varsel_logg: [{ id: 'eksisterende' }],
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'nytt_arrangement',
+      arrangementId: 'arr1',
+      tillatDuplikat: false,
+    })
+
+    expect(utfall).toEqual({ utfall: 'dedup', levert: 0, kunApp: 0, dedupHoppet: 0 })
+  })
+
+  it('ingen_mottakere når en eksplisitt mottakerliste ikke gir treff', async () => {
+    setupMock({
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      varsel_logg: [],
+      profiles: [],
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'test',
+    })
+
+    expect(utfall).toEqual({ utfall: 'ingen_mottakere', levert: 0, kunApp: 0, dedupHoppet: 0 })
+  })
+
+  it('sendt med korrekt levert-teller når varselet faktisk går ut', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'test',
+    })
+
+    expect(utfall).toEqual({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 0 })
+  })
+})
+
+// #504: 23505 fra dedup_noekkel-unique-indeksen skal fanges PER MOTTAKER og
+// aldri rive med seg resten av broadcasten.
+describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
+  it('hopper over kun mottakeren som traff 23505, resten får epost, ingen throw', async () => {
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = vi.fn((rad: { profil_id: string }) => ({
+          select: () => ({
+            single: () =>
+              rad.profil_id === 'user1'
+                ? Promise.resolve({
+                    data: null,
+                    error: Object.assign(new Error('duplicate key'), { code: '23505' }),
+                  })
+                : Promise.resolve({ data: { id: `logg-${rad.profil_id}` }, error: null }),
+          }),
+        }))
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') {
+        return lagChain([
+          { id: 'user1', navn: 'Ola', epost: 'ola@test.no' },
+          { id: 'user2', navn: 'Kari', epost: 'kari@test.no' },
+        ])
+      }
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([
+          { profil_id: 'user1', push_aktiv: false, epost_aktiv: true },
+          { profil_id: 'user2', push_aktiv: false, epost_aktiv: true },
+        ])
+      }
+      if (tabell === 'push_subscriptions') return lagChain([])
+      return lagChain([])
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1', 'user2'],
+      tittel: 'Test',
+      melding: 'Test',
+      type: 'bursdagsgratulasjon',
+      dedupNoekkel: 'bursdag:barn1:2026',
+    })
+
+    // user1 traff 23505 (allerede kvittert) — hoppes stille over. user2 får
+    // epost som normalt. Ingen throw ut av funksjonen uansett.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'kari@test.no' }),
+    ])
+    expect(mockLoggFeil).not.toHaveBeenCalledWith(
+      'varsel.logg.insert.feilet',
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(utfall).toEqual({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 1 })
   })
 })

@@ -1041,6 +1041,7 @@ export type Database = {
           opprettet: string
           soker_id: string
           status: string
+          varslet_paa: string | null
         }
         Insert: {
           arrangement_id: string
@@ -1052,6 +1053,7 @@ export type Database = {
           opprettet?: string
           soker_id: string
           status?: string
+          varslet_paa?: string | null
         }
         Update: {
           arrangement_id?: string
@@ -1063,6 +1065,7 @@ export type Database = {
           opprettet?: string
           soker_id?: string
           status?: string
+          varslet_paa?: string | null
         }
         Relationships: [
           {
@@ -1110,6 +1113,7 @@ export type Database = {
           spoersmaal: string
           svarfrist: string
           tiebreak_status: string | null
+          vinner_varslet_paa: string | null
         }
         Insert: {
           aar?: number | null
@@ -1125,6 +1129,7 @@ export type Database = {
           spoersmaal: string
           svarfrist: string
           tiebreak_status?: string | null
+          vinner_varslet_paa?: string | null
         }
         Update: {
           aar?: number | null
@@ -1140,6 +1145,7 @@ export type Database = {
           spoersmaal?: string
           svarfrist?: string
           tiebreak_status?: string | null
+          vinner_varslet_paa?: string | null
         }
         Relationships: [
           {
@@ -1508,6 +1514,7 @@ export type Database = {
       varsel_logg: {
         Row: {
           arrangement_id: string | null
+          dedup_noekkel: string | null
           id: string
           kanal: string | null
           lest: boolean
@@ -1521,6 +1528,7 @@ export type Database = {
         }
         Insert: {
           arrangement_id?: string | null
+          dedup_noekkel?: string | null
           id?: string
           kanal?: string | null
           lest?: boolean
@@ -1534,6 +1542,7 @@ export type Database = {
         }
         Update: {
           arrangement_id?: string | null
+          dedup_noekkel?: string | null
           id?: string
           kanal?: string | null
           lest?: boolean
@@ -1746,6 +1755,7 @@ export type Database = {
           forrige_profil: string
         }[]
       }
+      stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
       tell_aktivitet: {
         Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
         Returns: undefined

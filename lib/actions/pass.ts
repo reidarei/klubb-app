@@ -133,16 +133,32 @@ export async function godkjennPassTilgang(forespørselId: string) {
     .single()
   const eierNavn = eier?.visningsnavn ?? eier?.navn ?? 'medlemmet'
 
-  await sendVarsel({
-    mottakere: [oppdatert.soker_id],
-    tittel: 'Pass-tilgang godkjent',
-    melding: `Du har nå tilgang til passinfo for ${eierNavn} i 24 timer.`,
-    url: `${BASE_URL}/arrangementer/${oppdatert.arrangement_id}`,
-    knappTekst: 'Åpne turen',
-    type: 'pass-godkjent',
-    tillatDuplikat: true,
-    // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
-  }).catch((err: unknown) => logg.feil('pass.varsler.feilet', err))
+  // Stemple varslet_paa via stemple_pass_varslet()-RPC-en når sendVarsel
+  // RETURNERER — ikke bare når et varsel faktisk gikk ut. Det er doktrinen fra
+  // #504: «kaster = ukjent utfall, retry er lov. Returnerer = terminalt avgjort,
+  // ikke retry.» En retur på `type_deaktivert` eller `ingen_mottakere` er
+  // terminal — admin har bevisst skrudd av, og en retry ville aldri gitt noe
+  // annet svar. try/catch (ikke .catch()) er nettopp det som skiller de to:
+  // kaster sendVarsel, hopper vi over stemplingen og lar retry-stien stå åpen.
+  // `false` i retur betyr «noen andre stemplet allerede først» (racy
+  // dobbel-varsling) og er suksess, ikke feil — kun DB-feil logges. (#504)
+  try {
+    await sendVarsel({
+      mottakere: [oppdatert.soker_id],
+      tittel: 'Pass-tilgang godkjent',
+      melding: `Du har nå tilgang til passinfo for ${eierNavn} i 24 timer.`,
+      url: `${BASE_URL}/arrangementer/${oppdatert.arrangement_id}`,
+      knappTekst: 'Åpne turen',
+      type: 'pass-godkjent',
+      tillatDuplikat: true,
+      dedupNoekkel: `pass-godkjent:${forespørselId}`,
+      // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
+    })
+    const { error } = await admin.rpc('stemple_pass_varslet', { p_id: forespørselId })
+    if (error) await logg.feil('pass.stempel.feilet', error)
+  } catch (err) {
+    await logg.feil('pass.varsler.feilet', err)
+  }
 }
 
 export async function avslaaPassTilgang(forespørselId: string) {
@@ -163,14 +179,26 @@ export async function avslaaPassTilgang(forespørselId: string) {
   if (error) throw new Error(error.message)
   if (!oppdatert) throw new Error('Forespørsel ikke funnet eller allerede behandlet')
 
-  await sendVarsel({
-    mottakere: [oppdatert.soker_id],
-    tittel: 'Pass-tilgang avslått',
-    melding: 'Generalsekretæren har avslått forespørselen.',
-    url: `${BASE_URL}/arrangementer/${oppdatert.arrangement_id}`,
-    knappTekst: 'Åpne turen',
-    type: 'pass-avslatt',
-    tillatDuplikat: true,
-    // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
-  }).catch((err: unknown) => logg.feil('pass.varsler.feilet', err))
+  // Se kommentaren i godkjennPassTilgang over — samme RPC, samme kontrakt.
+  // Admin-klienten opprettes her og ikke lenger opp som i godkjenn-varianten
+  // rett og slett fordi avslags-meldingen er statisk: vi trenger ikke slå opp
+  // eiernavnet først. Eneste bruk er stemple_pass_varslet()-kallet under.
+  const admin = createAdminClient()
+  try {
+    await sendVarsel({
+      mottakere: [oppdatert.soker_id],
+      tittel: 'Pass-tilgang avslått',
+      melding: 'Generalsekretæren har avslått forespørselen.',
+      url: `${BASE_URL}/arrangementer/${oppdatert.arrangement_id}`,
+      knappTekst: 'Åpne turen',
+      type: 'pass-avslatt',
+      tillatDuplikat: true,
+      dedupNoekkel: `pass-avslatt:${forespørselId}`,
+      // Bieffekt etter committet oppdatering — se bePassTilgang over. (#503)
+    })
+    const { error } = await admin.rpc('stemple_pass_varslet', { p_id: forespørselId })
+    if (error) await logg.feil('pass.stempel.feilet', error)
+  } catch (err) {
+    await logg.feil('pass.varsler.feilet', err)
+  }
 }

@@ -9,6 +9,12 @@ import type { Database } from '@/lib/supabase/database.types'
  *
  * Bruker eksisterende indeks på `klubb_chat (opprettet desc)` (migrasjon 038).
  * Ingen ny indeks lagt til — ~17 brukere og lav volum gjør det unødvendig.
+ *
+ * `select('id').limit(1)` i stedet for `count: 'exact', head: true` (#504):
+ * vi returnerer uansett bare `count > 0`, men `count: 'exact'` tvinger
+ * Postgres til å telle ALLE matchende rader ved hver sidevisning — kalles fra
+ * `(app)/layout.tsx`, altså på hver eneste sidelast. `limit(1)` stopper ved
+ * første treff.
  */
 export async function harUlestChat(
   supabase: SupabaseClient<Database>,
@@ -18,13 +24,14 @@ export async function harUlestChat(
   // Null = aldri åpnet chat → alt regnes som ulest (alle meldinger fra andre).
   const cutoff = sistSett ?? '1970-01-01T00:00:00Z'
 
-  const { count } = await supabase
+  const { data } = await supabase
     .from('klubb_chat')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .gt('opprettet', cutoff)
     .neq('profil_id', brukerId)
+    .limit(1)
 
-  return (count ?? 0) > 0
+  return (data?.length ?? 0) > 0
 }
 
 /**
@@ -33,16 +40,21 @@ export async function harUlestChat(
  * `sist_sett`-kolonne her fordi `varsel_logg.lest` bærer per-rad-statusen —
  * markering skjer automatisk når man åpner et varsel eller bruker "Marker
  * alle som lest"-knappen på profilsiden.
+ *
+ * Samme `limit(1)`-optimalisering som harUlestChat over (#504) — nå også
+ * understøttet av den partial-indeksen `varsel_logg_profil_ulest_idx`
+ * (mig. 121) som dekker nettopp `(profil_id) where lest = false`.
  */
 export async function harUlestVarsler(
   supabase: SupabaseClient<Database>,
   brukerId: string,
 ): Promise<boolean> {
-  const { count } = await supabase
+  const { data } = await supabase
     .from('varsel_logg')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('profil_id', brukerId)
     .eq('lest', false)
+    .limit(1)
 
-  return (count ?? 0) > 0
+  return (data?.length ?? 0) > 0
 }

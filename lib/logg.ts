@@ -29,7 +29,20 @@
 //   varsel.logg.insert.feilet   — insert i varsel_logg feiler for én mottaker, sender likevel (#503)
 //   varsel.scope.feilet         — arrangement/poll-oppslag for @-mention-tittel feiler, sender likevel (#503)
 //   pass.varsler.feilet         — varsel etter pass-tilgang-hendelse feiler i lib/actions/pass.ts (#503)
+//   pass.stempel.feilet         — stemple_pass_varslet()-RPC feiler etter vellykket varsel (#504)
 //   cron.klientfeil.varsel.feilet — alarm-varsel i sjekk-klientfeil-cronet feiler, retention kjører videre (#503)
+//   cron.paaminne.hentForDag.feilet          — arrangementer-oppslag for en påminnelsesdag feiler (#504)
+//   cron.paaminne.hentArrangorPurringer.feilet — arrangoransvar-oppslag for dagens purringer feiler (#504)
+//   cron.paaminne.kaaring.fersk.feilet   — «åpne kåringspoller»-spørringen feiler (#495/#504)
+//   cron.paaminne.kaaring.retry.feilet   — «uvarslede avsluttede kåringspoller»-spørringen feiler (#495/#504)
+//   cron.paaminne.kaaring.profiler.feilet — mottaker-oppslag for kåringsvarsel feiler, DEN ufravikelige (#495/#504)
+//   cron.paaminne.kaaring.feilet — behandleKaaringspoller() kastet, fanget i kjorPaaminnelser (#504)
+//   cron.paaminne.kaaring.rpc.feilet     — avslutt_kaaringspoll-RPC-en feilet for én poll (#504)
+//   cron.paaminne.kaaring.tom_rpc        — avslutt_kaaringspoll returnerte ingen rad (#504)
+//   cron.paaminne.kaaring.fersk_ikke_lukket — warn: fersk poll ble ikke lukket (ikke_moden / kappløp), utsettes til retry (#504)
+//   bursdagsgratulasjon.profiler.feilet  — profiler-med-fødselsdato-oppslag feiler (#504)
+//   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
+//   bursdagsgratulasjon.varsel.feilet    — varsel til bursdagsbarnet feiler, telles som feil (#504)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

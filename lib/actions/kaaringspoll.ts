@@ -8,7 +8,10 @@ import {
   sendKaaringspollOpprettetVarsel,
   sendKaaringspollVinnerVarsel,
 } from '@/lib/varsler'
-import { behandleKaaringspollAvsluttResultat } from '@/lib/varsler-kaaringspoll'
+import {
+  behandleKaaringspollAvsluttResultat,
+  stempleVinnerVarslet,
+} from '@/lib/varsler-kaaringspoll'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
 
@@ -195,10 +198,21 @@ export async function velgTiebreakVinner(pollId: string, valgId: string) {
     .eq('id', pollId)
   if (oppdErr) throw new Error(oppdErr.message)
 
-  await sendKaaringspollVinnerVarsel({
-    pollId: poll.id,
-    spoersmaal: poll.spoersmaal,
-  }).catch((err: unknown) => logg.feil('kaaringspoll.varsler.feilet', err))
+  // Bevisst utvidelse utover #504s bokstav (styret ba KUN om stempling i
+  // cron): det finnes tre skrivere til «kåringen er varslet om», ikke én.
+  // Stempler vi kun i cron, plukker cron opp denne manuelt avgjorte tiebreak-
+  // en igjen neste morgen og sender vinnervarselet på nytt. try/catch (ikke
+  // .catch()) sikrer at stemplingen KUN skjer når varselet faktisk gikk ut
+  // — kaster sendKaaringspollVinnerVarsel, stempler vi ikke.
+  try {
+    await sendKaaringspollVinnerVarsel({
+      pollId: poll.id,
+      spoersmaal: poll.spoersmaal,
+    })
+    await stempleVinnerVarslet(admin, pollId)
+  } catch (err) {
+    await logg.feil('kaaringspoll.varsler.feilet', err)
+  }
 
   revalidatePath(`/poll/${pollId}`)
   revalidatePath('/kaaringer')
@@ -236,11 +250,18 @@ export async function lukkKaaringspollNaa(pollId: string) {
   const tiebreakRoller = rollerMed('loeserTiebreak')
   const adminRoller = rollerMed('kanAdministrere')
   const trengteRoller = Array.from(new Set([...tiebreakRoller, ...adminRoller]))
-  const { data: relevanteProfiler } = await admin
+  const { data: relevanteProfiler, error: profilerFeil } = await admin
     .from('profiles')
     .select('id, rolle')
     .in('rolle', trengteRoller)
     .eq('aktiv', true)
+  // Fail closed (#504): spørringen kjører FØR RPC-en, så det er trygt å
+  // kaste rett ut — ingenting er committet ennå. En feilet spørring skal
+  // ikke tolkes som «ingen å varsle»; det ville lukket pollen og likevel
+  // sendt et varsel med tomme mottakerlister.
+  if (profilerFeil) {
+    throw new Error(`Kunne ikke hente relevante profiler for kåringsvarsel: ${profilerFeil.message}`)
+  }
   const tiebreakIder = (relevanteProfiler ?? [])
     .filter(p => tiebreakRoller.includes(p.rolle as (typeof tiebreakRoller)[number]))
     .map(p => p.id)
@@ -263,13 +284,22 @@ export async function lukkKaaringspollNaa(pollId: string) {
     return
   }
 
-  await behandleKaaringspollAvsluttResultat({
-    pollId,
-    spoersmaal: poll.spoersmaal,
-    status: rad.status as string,
-    tiebreakIder,
-    adminIder,
-  }).catch((err: unknown) => logg.feil('kaaringspoll.varsler.feilet', err))
+  // Samme mønster som velgTiebreakVinner: try/catch (ikke .catch()) slik at
+  // stempling av vinner_varslet_paa kun skjer når varselet faktisk gikk ut.
+  // Dette er den tredje av tre skrivere til «varslet om» — se kommentaren
+  // i velgTiebreakVinner over for hvorfor cron alene ikke er nok.
+  try {
+    await behandleKaaringspollAvsluttResultat({
+      pollId,
+      spoersmaal: poll.spoersmaal,
+      status: rad.status as string,
+      tiebreakIder,
+      adminIder,
+    })
+    await stempleVinnerVarslet(admin, pollId)
+  } catch (err) {
+    await logg.feil('kaaringspoll.varsler.feilet', err)
+  }
 
   revalidatePath(`/poll/${pollId}`)
   revalidatePath('/kaaringer')
