@@ -1,7 +1,7 @@
 'use client'
 
 // Mikro-månedskalender i agenda-headeren (#429).
-// Ligger i luken mellom dato-blokka og NyFAB: 🍺 = dag med arrangement,
+// Ligger i luken mellom dato-blokka og NyFAB: ✈️ = tur, 🍺 = annet arrangement,
 // 🎂 = bursdag, outline-prikk = tom dag, accent-ring = i dag.
 // Kun visning — ingen klikk på dager.
 
@@ -27,6 +27,8 @@ const MAANED_FULL = [
 type Props = {
   /** yyyy-MM-dd-nøkler for dager med minst ett arrangement */
   arrangementDatoer: string[]
+  /** yyyy-MM-dd-nøkler for dager med minst én tur — delmengde av arrangementDatoer (#510) */
+  turDatoer: string[]
   /** MM-dd-nøkler for medlemsbursdager (uten år — de gjentar seg årlig) */
   bursdagMMDD: string[]
   /** Dagens dato i norsk tidssone som yyyy-MM-dd (fra iDagOslo() — deterministisk render) */
@@ -45,7 +47,7 @@ const MIN_OFFSET = -AGENDA_VINDU_MND
 const PRIKK = 12
 const GAP = 2
 
-export default function MiniKalender({ arrangementDatoer, bursdagMMDD, iDag }: Props) {
+export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD, iDag }: Props) {
   const [maanedOffset, setMaanedOffset] = useState(0)
 
   // iDag er en date-only-streng (yyyy-MM-dd); `new Date(iDag)` ville tolket den
@@ -64,6 +66,7 @@ export default function MiniKalender({ arrangementDatoer, bursdagMMDD, iDag }: P
 
   // Set for O(1)-oppslag — bygges kun når arrangementDatoer endrer seg.
   const datoSett = useMemo(() => new Set(arrangementDatoer), [arrangementDatoer])
+  const turSett = useMemo(() => new Set(turDatoer), [turDatoer])
   const bursdagSett = useMemo(() => new Set(bursdagMMDD), [bursdagMMDD])
 
   const kanBakover = maanedOffset > MIN_OFFSET
@@ -122,6 +125,7 @@ export default function MiniKalender({ arrangementDatoer, bursdagMMDD, iDag }: P
           }
 
           const harArr = harInnhold(nokkel, datoSett)
+          const harTur = harInnhold(nokkel, turSett)
           const harBdag = harBursdag(nokkel, bursdagSett)
           const erIdag = nokkel === iDag
           const dagtall = parseInt(nokkel.slice(-2), 10)
@@ -129,18 +133,19 @@ export default function MiniKalender({ arrangementDatoer, bursdagMMDD, iDag }: P
           // Skjermleser-label kun for dager som «betyr noe» — resten skjules
           // fra a11y-treet så ikke 30 løse prikker annonseres som støy.
           const deler: string[] = []
-          if (harArr) deler.push('arrangement')
+          if (harArr) deler.push(harTur ? 'tur' : 'arrangement')
           if (harBdag) deler.push('bursdag')
           if (erIdag) deler.push('i dag')
           const celleLabel = deler.length > 0
             ? `${dagtall}. ${MAANED_FULL[visMaaned0]} – ${deler.join(', ')}`
             : undefined
 
-          // Ikon-dager: 🍺 for arrangement, 🎂 for bursdag. Kolliderer de på
-          // samme dag vinner arrangementet (én celle rommer ett ikon) — a11y-
-          // labelen over nevner uansett begge. Emoji er bevisst valgt over
-          // SVG-ikoner her: gjenkjennbare på 12px og brukes ellers i appen.
-          const ikon = harArr ? '🍺' : harBdag ? '🎂' : null
+          // Ikon-dager: ✈️ for tur, 🍺 for øvrige arrangementer, 🎂 for bursdag.
+          // Kolliderer de på samme dag vinner det mest sjeldne (én celle rommer
+          // ett ikon) — a11y-labelen over nevner uansett begge. Emoji er bevisst
+          // valgt over SVG-ikoner her: gjenkjennbare på 12px og brukes ellers i
+          // appen. Tur får eget ikon fordi det er årets høydepunkt (#510).
+          const ikon = harTur ? '✈️' : harArr ? '🍺' : harBdag ? '🎂' : null
 
           return (
             <div
