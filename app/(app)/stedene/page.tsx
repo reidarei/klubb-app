@@ -140,10 +140,10 @@ export default async function Stedene() {
             color: 'var(--text-primary)',
           }}
         >
-          Vi har vært verden rundt, det vil si:
+          Vi har vært verden rundt, det vil si
         </h1>
-        {/* Ingen undertittel: overskriften spiller på en sangtekst, og kolonet
-            skal lede rett ned i kartet — ikke i en teller (#502) */}
+        {/* Ingen undertittel: overskriften spiller på en sangtekst og skal lede
+            rett ned i kartet — ikke i en teller (#502). Uten kolon (#509) */}
       </header>
 
       <EuropaKart steder={steder} />
