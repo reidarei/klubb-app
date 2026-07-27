@@ -43,9 +43,11 @@
 //   bursdagsgratulasjon.profiler.feilet  — profiler-med-fødselsdato-oppslag feiler (#504)
 //   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
 //   bursdagsgratulasjon.varsel.feilet    — varsel til bursdagsbarnet feiler, telles som feil (#504)
+//   logg.feillogg.insert.feilet — feil_logg-inserten fra logg.feil() selv feilet/timet ut (#496)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
+import type { Json } from '@/lib/supabase/database.types'
 
 // ─── PII-SCRUBBING ──────────────────────────────────────────────────────────
 
@@ -103,6 +105,105 @@ function normaliserFeil(err: unknown): { code?: string; tabell?: string; melding
   return { melding: String(err) }
 }
 
+// ─── TILGANGSFEIL-KLASSIFISERING (42501) + DØD SESJON (PGRST301) ────────────
+//
+// PGRST301 er IKKE en variant av 42501 — det var en gal premiss i #497 og i
+// den opprinnelige kommentaren her. PostgREST bruker PGRST301 for utløpt eller
+// ugyldig JWT (HTTP 401, melding «JWT expired»). Den teksten matcher ingen av
+// regexene under, så den falt til error → Sentry-event + feil_logg-rad +
+// morgenalarm. En død sesjon i en iOS-PWA er rutine og brukerutløst (ITP
+// spiser cookies), ikke en programfeil — den skal være warn. Se #498-review.
+//
+// 42501 (Postgres «permission denied») beholdes UENDRET: den er tripwiren for
+// GRANT-klippen 30.10.2026 og skjuler to helt ulike årsaker bak samme kode:
+//
+//   1. «permission denied for table/view/function/sequence/schema …»
+//      → manglende GRANT. PostgREST returnerer IKKE 42501 når en RLS-policy
+//        filtrerer bort rader ved SELECT — da får du bare en tom liste og
+//        HTTP 200. Så 42501 på en SELECT kan i vårt oppsett KUN bety at en
+//        GRANT mangler, altså et ødelagt deploy. Supabase fjerner
+//        default-grants på public-schema 30. oktober 2026 (CLAUDE.md §
+//        Policy: Migrasjoner) — dette er tripwiren for akkurat den datoen,
+//        og skal derfor aldri kunne nedgraderes til warn.
+//   2. «… violates row-level security policy …»
+//      → ekte policy-avvisning, trigget av lovlig brukeradferd (f.eks. en
+//        insert avvist fordi raden ikke tilhører brukeren). Fortsatt warn.
+//   3. Alt annet med denne SQLSTATE-en → error. Før #497 falt ALT i denne
+//      koden til warn uansett meldingstekst, noe som holdt alarmen taus helt
+//      fram til 30.10.2026-fristen. Snur vi defaulten blir feilmoden «litt
+//      for mye støy» i stedet for «taus» — og endrer Postgres ordlyden sin
+//      ved en fremtidig oppgradering, blir vi støyete, ikke blinde.
+function klassifiserTilgangsfeil(melding: string, code?: string): 'error' | 'warn' | null {
+  // Død/ugyldig sesjon → warn. Både på kode og på meldingstekst: PostgREST
+  // svarer PGRST301, mens GoTrue-/PostgREST-varianter kan komme uten kode i
+  // det hele tatt, og da er teksten det eneste signalet vi har.
+  if (code === 'PGRST301' || /JWT (expired|invalid)|JWSError/i.test(melding)) {
+    return 'warn'
+  }
+  if (code !== '42501') return null
+  if (/permission denied for (table|view|function|sequence|schema)/i.test(melding)) {
+    return 'error'
+  }
+  if (/violates row-level security policy/i.test(melding)) {
+    return 'warn'
+  }
+  return 'error'
+}
+
+// ─── FEIL_LOGG-PERSISTERING ──────────────────────────────────────────────────
+//
+// Skriver server-feil til feil_logg (#496) slik at sjekk-klientfeil-cronet —
+// som i dag kun teller rader satt inn av klienten via /api/logg-feil — også
+// fanger opp server-feil. Lukker hullet mellom de to feilkanalene beskrevet
+// i #492: Sentry er avhengig av at noen leser eposten, feil_logg driver en
+// bevist-i-drift daglig alarm.
+async function persisterFeilLogg(
+  event: string,
+  code: string | undefined,
+  tabell: string | undefined,
+  ctx?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    // Lazy import: ingen 'use client'-fil importerer @/lib/logg (verifisert),
+    // så service_role-nøkkelen havner aldri i klient-bundlen. 0 kB vekst.
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+
+    // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
+    // (arrangement_id, count, fingerprint, sample, status) er ikke del av
+    // kontrakten for denne tabellen. melding persisteres bevisst ALDRI:
+    // normaliserFeil() returnerer PostgREST-teksten rått, og den kan bære
+    // radverdier (f.eks. «Key (epost)=(x@y.no) already exists»).
+    const ctxScrubbet = scrubbet(ctx)
+    const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
+
+    const { error } = await admin
+      .from('feil_logg')
+      .insert({
+        event,
+        // logg.feil() har i dag bare denne ene veien fram hit — warn
+        // returnerer tidlig lenger opp i feil() og treffer aldri persist.
+        // Skriv nivået eksplisitt likevel fremfor å anta, i tilfelle en
+        // egen fatal-vei legges til senere.
+        nivaa: 'error',
+        kontekst: { code, tabell } as Json,
+        profil_id: profilId,
+      })
+      // Hard cap: under pool-utmattelse skal ikke en logge-skriving legge
+      // seg oppå trykket ved å vente ubegrenset på en ledig tilkobling.
+      .abortSignal(AbortSignal.timeout(1000))
+
+    if (error) {
+      // Ren stdout — IKKE logg.feil() her, det ville vært selv-rekursivt.
+      console.log(JSON.stringify({ ts: naa(), nivaa: 'warn', event: 'logg.feillogg.insert.feilet', code: error.code }))
+    }
+  } catch {
+    // Loggingen skal ALDRI kunne kaste — en logger som velter render-stien
+    // er verre enn feilen den prøvde å logge. Fanger både nettverksfeil og
+    // AbortError fra timeouten over.
+  }
+}
+
 // ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
 
 // Dynamisk import for å unngå hard avhengighet til @sentry/nextjs i dev
@@ -133,14 +234,17 @@ export const logg = {
   },
 
   /**
-   * Logg en uventet feil til stdout og Sentry.
+   * Logg en uventet feil til stdout, feil_logg og Sentry.
    *
-   * RLS-feil (42501 / PGRST301) sendes KUN til warn — de trigges av
-   * lovlig brukeradferd (f.eks. tilgang avvist av policy) og spiser
-   * Sentry-kvoten hvis de havner der. Se CLAUDE.md-policy.
+   * 42501 klassifiseres etter meldingstekst, ikke bare kode — se
+   * klassifiserTilgangsfeil() over. Kort versjon: «permission denied for
+   * table/view/…» er alltid error (manglende GRANT), «violates row-level
+   * security policy» er warn (legitim avvisning), alt annet med samme kode
+   * er også error (defaulten snudd i #497 — se kommentaren over).
+   * PGRST301 (utløpt JWT) er alltid warn — død sesjon, ikke programfeil.
    *
-   * PostgREST-feil normaliseres til {code, tabell} for å gi Sentry
-   * bedre fingerprint-gruppering på tvers av instanser.
+   * PostgREST-feil normaliseres til {code, tabell} for å gi Sentry og
+   * feil_logg bedre fingerprint-gruppering på tvers av instanser.
    */
   async feil(
     event: string,
@@ -153,9 +257,10 @@ export const logg = {
   ) {
     const { code, tabell, melding } = normaliserFeil(error)
 
-    // RLS-avvisning er ikke en programfeil — logg som warn og returner tidlig.
-    // 42501 = PostgreSQL permission denied, PGRST301 = PostgREST row-level security.
-    if (code === '42501' || code === 'PGRST301') {
+    const tilgangsklasse = klassifiserTilgangsfeil(melding, code)
+    if (tilgangsklasse === 'warn') {
+      // Ikke en programfeil — logg som warn og returner tidlig (ingen
+      // feil_logg-rad, ingen Sentry-event).
       logg.warn(event, { code, ...opts?.ctx })
       return
     }
@@ -174,6 +279,12 @@ export const logg = {
         ...scrubbet(opts?.ctx),
       })
     )
+
+    // await, ikke fire-and-forget — samme grunn som CLAUDE.mds forbud mot
+    // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
+    // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
+    // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
+    await persisterFeilLogg(event, code, tabell, opts?.ctx)
 
     const Sentry = await getSentry()
     if (!Sentry) return

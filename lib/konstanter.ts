@@ -114,12 +114,40 @@ export const LOGG_FEIL_RETENSJONSDAGER = 30
 // ny feil er verdt et varsel. Var kort innom 3 den 16. juli 2026.
 export const KLIENT_FEIL_ALARM_TERSKEL = 0
 
+// Event-navn som IKKE teller mot alarmen i sjekk-klientfeil-cronet (#498-review).
+// Terskelen er bevisst 0 — ett treff i døgnet varsler alle med
+// faar_issue_varsler. Disse tre fyrer på kjent transiente forhold som ikke
+// krever menneskelig inngripen, og ville gjort morgenvarselet til støy:
+//   ai.datoforslag.feilet     — 429/529/timeout fra Anthropic, i bakgrunnen
+//                               mens brukeren skriver
+//   varsel.push.feilet        — web-push mot en enhet som er offline/treg
+//                               (410 Gone håndteres separat: abonnementet slettes)
+//   varsel.logg.insert.feilet — én varsel_logg-rad feilet, varselet gikk ut
+//
+// Radene skrives fortsatt til feil_logg og er søkbare der — de utløser bare
+// ikke varsel. Å legge til et event her er en BEVISST handling som gjør oss
+// blinde for akkurat den eventen i alarmkanalen; det er ikke en opprydding.
+// Å heve terskelen i stedet ville gjort fire ekte feil tause, og det er feil
+// retning for en alarm vi nettopp bygde for å slutte å være blinde.
+export const ALARM_IGNORERTE_EVENTS = [
+  'ai.datoforslag.feilet',
+  'varsel.push.feilet',
+  'varsel.logg.insert.feilet',
+] as const
+
 // Maksimal størrelse på kontekst-JSON sendt til /api/logg-feil (i KB).
 // Hindrer at store payloads metter tabellen — typisk stacktrace er < 2 KB.
 export const LOGG_KONTEKST_MAKS_KB = 4
 
 // Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
+
+// Hard cap på antall rader sjekk-klientfeil-cronet henter for å regne ut
+// topp 3 event-navn i alarmteksten (#496). Dedup-indeksen i feil_logg
+// begrenser allerede verste konsensfall per (profil/event/minutt), men
+// grensen her hindrer at selve aggregerings-spørringen blir treg under en
+// reell storm.
+export const TOPP_EVENT_HENT_GRENSE = 5000
 
 // Minste tekstlengde før auto-uttrekk av festedato kjøres (bakgrunnskall mens
 // brukeren skriver + server-action-terskel). Satt lavt fordi klubbens innlegg
