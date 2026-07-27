@@ -118,6 +118,16 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 
 **Viktig:** Bruk aldri `after()` fra `next/server` for varsler — det kjører ikke pålitelig på Vercel Hobby. Bruk `await` direkte.
 
+**Feilkontrakt — `sendVarsel()` kaster:**
+
+Funksjonen feiler **lukket** (throw) ved innstillings-, testmodus-, mottaker-, preferanse-, push-subscription- og fortids-sperre-feil (se omtale av HENDELSE_VARSLER i kommentaren øverst i `lib/varsler.ts`). Disse er feil som betyr at et varsel *ikke burde sendes* — å dedup eller logge dem ville maskere at konfigurasjonen eller appen er i en gal tilstand.
+
+Derimot feiler dedup-oppslag og `varsel_logg`-insert **åpent** (throw-en kastes ikke videre, men feilobjektet logges). Fail-open gjelder **leveranse** — hvis vi ikke kan sjekke duplikater eller skrive logg, sender vi varselet likevel. Men fail-open gjelder *ikke* **synlighet** — vi logger alltid med feilobjektet (via `logg.feil(…)`) så det finnes en spor.
+
+**Kall etter en committet tilstandsendring** (f.eks. `sendVarsel()` etter å ha opprettet et arrangement eller passet et medlem) **må** ha eksplisitt `.catch(err => logg.feil(…))`. Eksempler: `lib/actions/pass.ts` (passa medlem → varsel skal sendes hvis pass ble godkjent), `lib/actions/meldinger.ts` (ny melding → varsler sendes; hvis varsel-feil kastes, reverter ikke meldingen). Regelen lukker klassen av stille feil hvor en tilstandsendring blir committed men varselet mislykkes — uten `.catch()` ser brukeren en server error, noe som kan få dem til å prøve på nytt og lag duplikater.
+
+**Kall der varselet *er* handlingen** (f.eks. en admin som klikker en knapp «Varsle alle» på `/admin`) lar throw-en boble til brukeren. `.catch()` skal ikke legges der — brukeren må se feilen.
+
 ## Policy: Roller
 
 Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver rolle kan/mottar. **Aldri** sammenlign `rolle === 'admin'` direkte i kode — bruk hjelperne.
