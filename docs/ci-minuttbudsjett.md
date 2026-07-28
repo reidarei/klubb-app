@@ -34,7 +34,7 @@ If you fork this template to run on a **private repository**, the watcher will a
 
 2. **Monitor the step summary** in your Actions. Every PR run shows a budget table (see `tabell()` function in the script) that breaks down consumption and the e2e decision.
 
-3. **If e2e is skipped,** check the PR's workflow run details. The `CI-minuttbudsjett (#534)` step in the job summary explains why. It's not a failure — core CI still ran.
+3. **If e2e is skipped,** check the PR's workflow run details. The `CI-minuttbudsjett (#534)` step in the job summary explains why. It's not a failure — core CI still ran. Note: e2e skipping includes security tests in `e2e/rls/` (Row Level Security coverage).
 
 ## Measuring e2e cost
 

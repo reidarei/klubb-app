@@ -101,3 +101,25 @@ Playwright kjører mot Chromium (og WebKit hvis vi aktiverer det). **Det er ikke
 Slike bugs må verifiseres manuelt på iPhone. Dokumenter i PR-en at automatisk verifikasjon ikke er mulig.
 
 WebKit-runneren er ikke aktivert i dag — kan vurderes senere, men selv da fanger den ikke alt av det over.
+
+## Security tests: Row Level Security (RLS) verification
+
+`e2e/rls/` contains security tests that verify your RLS policies actually block or allow access as intended. Until this test suite was added, all e2e tests ran as `service_role` (which bypasses RLS entirely), leaving your primary security boundary (RLS) unverified with a real authenticated client.
+
+**What's covered:**
+- Sensitive data visibility (pass info, private conversations) is restricted to authorized users only
+- Column-level protections prevent members from changing their own role or settings
+- Unauthenticated (`anon`) users have no read access to any table in the public schema
+- Admin operations (deleting others' posts, editing policies) are gated correctly
+
+**Why Playwright and not unit tests:** RLS can only be verified by actually querying Postgres as an authenticated user via PostgREST. Unit test mocks don't have RLS at all, so they'd give false confidence. Playwright has the full test infrastructure (`supabase start`) — adding a parallel unit-test rig would duplicate complexity without benefit.
+
+**Important:** When you read data after a blocked `update` or `delete`, Postgres returns success (`error: null`) even though 0 rows changed. Tests verify the row actually remained unchanged using an admin client. Each spec file also includes at least one positive control case that *should* succeed — to prove the authenticated client is working, not just that RLS blocks everything.
+
+**Run RLS tests only:**
+
+```bash
+npx playwright test --project=rls
+```
+
+(Full e2e: `npx playwright test` runs both RLS and the main test suite.)
