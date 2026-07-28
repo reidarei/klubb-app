@@ -128,7 +128,9 @@ I et lite miljø der alle kjenner hverandre oppdages rare ting ofte raskere av e
 
 ### Hvem som får alarmen
 
-Det styres av et eget felt på hvert medlem, som admin setter i medlemsredigering. **Det er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer, og et vanlig medlem kan derfor motta alarmer uten å være admin.
+Det styres av bryteren **«Innspill-varsler»** i medlemsredigering, som admin setter per medlem. Den slår på to ting samtidig: varsel når noen sender inn et innspill i appen, og døgnalarmen om feil. Kolonnen heter `faar_issue_varsler` i databasen — navnet stammer fra innspill-funksjonen, som var det opprinnelige formålet, og dekker altså bare halve dagens bruk.
+
+**Bryteren er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer, og et vanlig medlem kan derfor motta alarmer uten å være admin.
 
 ### To logger med hvert sitt formål
 
@@ -154,7 +156,7 @@ Verdiene her kan endres uten at strategien over endres. Konstanter uten oppgitt 
 | Alarmterskel | `0` | `KLIENT_FEIL_ALARM_TERSKEL` | `0` betyr alarm ved enhver feil. Heves den, blir feil under terskelen tause. Det er som regel bedre å unnta enkelte event-navn enn å heve terskelen |
 | Unntatte event-navn | 3 stk | `ALARM_IGNORERTE_EVENTS` | Radene skrives fortsatt til loggen, men gir ikke alarm. Vi blir blinde for akkurat de feilene |
 | Når alarmen kjøres | 05:00 UTC | `.github/workflows/sjekk-klientfeil.yml` | Flere kjøringer i døgnet gir flere varsler om den samme feilen |
-| Hvem som varsles | Per medlem | `profiles.faar_issue_varsler`, settes i medlemsredigering | Er ingen merket, går det ingen alarm |
+| Hvem som varsles | Per medlem | Bryteren «Innspill-varsler» i medlemsredigering (`profiles.faar_issue_varsler`) | Er ingen merket, går det ingen alarm. Samme bryter styrer også varsel om nye innspill — de to kan ikke skrus av hver for seg |
 | Hvor lenge feil beholdes | 180 dager | `LOGG_FEIL_RETENSJONSDAGER` | Eldre rader slettes automatisk. Kortere tid skjuler mønstre som gjentar seg sesongvis; lengre tid lagrer profil-id og nettleserinfo lenger |
 | Hvor lenge varsler beholdes | Slettes ikke | — | Sletting ville brutt muligheten til å se om et varsel allerede er sendt |
 | Antall feil i alarmteksten | 3 | `lib/feil-alarm.ts` | Hvor mange event-navn meldingen lister opp |
