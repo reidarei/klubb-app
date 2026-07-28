@@ -25,7 +25,12 @@ const mockStemple = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/varsler-kaaringspoll', () => ({
   behandleKaaringspollAvsluttResultat: (...a: unknown[]) => mockBehandle(...a),
   utledKaaringStatus: (...a: unknown[]) => mockUtled(...a),
-  stempleVinnerVarslet: (...a: unknown[]) => mockStemple(...a),
+  stempleKaaringspollVarslet: (...a: unknown[]) => mockStemple(...a),
+  // Ekte implementasjon, ikke spion: guarden avgjør om koden i det hele tatt
+  // når stemplingen, så en mock som returnerer undefined ville fått hver test
+  // til å hoppe over — og de ville alle blitt grønne av feil grunn.
+  erKaaringUtfall: (s: unknown) =>
+    s === 'avgjort' || s === 'venter_paa_tiebreak' || s === 'ingen_stemmer',
 }))
 
 const mockLoggFeil = vi.fn().mockResolvedValue(undefined)
@@ -90,10 +95,28 @@ describe('kjorPaaminnelser – kåringsvarsel-retry (#495/#504)', () => {
 
     const resultat = await kjorPaaminnelser(admin)
 
-    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll1')
+    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll1', 'avgjort')
     expect(resultat.sendteVarsler).toBe(1)
     expect(resultat.lukketKaaringer).toBe(1)
     expect(resultat.feil).toBe(0)
+  })
+
+  it('ukjent status fra RPC-en: stempler ikke, teller som feil, prøver igjen i morgen', async () => {
+    // Et gjett her ville stemplet feil kolonne og filtrert pollen permanent
+    // bort fra retry — nøyaktig #521. Guarden skal hoppe over i stedet. Typen
+    // fanger det ved kompilering; denne testen pinner oppførselen ved en
+    // status som først dukker opp i runtime (ny RPC-verdi). (#521-review)
+    const admin = lagAdmin({
+      pollFersk: [{ id: 'poll9', spoersmaal: 'Årets Z', tiebreak_status: null }],
+      profiler: [{ id: 'gensek1', rolle: 'generalsekretaer' }],
+      rpcRes: { poll9: { data: [{ var_ny: true, status: 'noe_helt_nytt' }], error: null } },
+    })
+
+    const resultat = await kjorPaaminnelser(admin)
+
+    expect(mockStemple).not.toHaveBeenCalled()
+    expect(mockBehandle).not.toHaveBeenCalled()
+    expect(resultat.feil).toBeGreaterThanOrEqual(1)
   })
 
   it('stempler IKKE når behandleKaaringspollAvsluttResultat kaster (sendVarsel feilet)', async () => {
@@ -142,7 +165,7 @@ describe('kjorPaaminnelser – kåringsvarsel-retry (#495/#504)', () => {
     expect(mockBehandle).toHaveBeenCalledWith(
       expect.objectContaining({ pollId: 'poll4', status: 'avgjort' }),
     )
-    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll4')
+    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll4', 'avgjort')
     // var_ny var false — RPC-en lukket den ikke NÅ, så telleren skal ikke øke.
     expect(resultat.lukketKaaringer).toBe(0)
   })
@@ -158,7 +181,7 @@ describe('kjorPaaminnelser – kåringsvarsel-retry (#495/#504)', () => {
     await kjorPaaminnelser(admin)
 
     expect((admin as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc).not.toHaveBeenCalled()
-    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll5')
+    expect(mockStemple).toHaveBeenCalledWith(admin, 'poll5', 'venter_paa_tiebreak')
   })
 
   it('fersk poll med var_ny=false hverken varsler eller stempler (#504-review MAJOR-1)', async () => {
@@ -213,6 +236,66 @@ describe('kjorPaaminnelser – kåringsvarsel-retry (#495/#504)', () => {
     )
     expect(mockStemple).not.toHaveBeenCalled()
     expect(resultat.feil).toBe(1)
+  })
+})
+
+describe('kjorPaaminnelser – retry skiller tiebreak- og vinner-stempel (#521)', () => {
+  // Regresjonstest for selve #521-bugen: FØR fiksen delte tiebreak- og
+  // vinner-varselet samme kolonne (vinner_varslet_paa), så en poll som ble
+  // avgjort via velgTiebreakVinner så ALT stemplet ut (fra tiebreak-steget)
+  // selv om det ekte vinner-varselet aldri gikk ut. Retry-spørringen filtrerte
+  // den derfor bort, og vinnerannonseringen var tapt for godt. Med to
+  // kolonner har denne pollen fortsatt vinner_varslet_paa = null etter
+  // tiebreak-varselet, og plukkes korrekt opp her.
+  it('poll avgjort via tiebreak med feilet vinner-varsel plukkes opp av retry og varsles på nytt', async () => {
+    mockBehandle.mockResolvedValueOnce({ sendt: true })
+    mockUtled.mockReturnValueOnce('avgjort')
+    const admin = lagAdmin({
+      pollRetry: [{
+        id: 'pollC',
+        spoersmaal: 'Årets C',
+        tiebreak_status: 'avgjort',
+        // Tiebreak-varselet gikk ut for lenge siden (pollen VAR uavgjort),
+        // men vinner-varselet feilet etter at gensek avgjorde — derfor null.
+        tiebreak_varslet_paa: '2026-06-01T00:00:00.000Z',
+        vinner_varslet_paa: null,
+      }],
+      profiler: [{ id: 'admin1', rolle: 'admin' }],
+    })
+
+    const resultat = await kjorPaaminnelser(admin)
+
+    expect(mockUtled).toHaveBeenCalledWith('avgjort')
+    expect(mockBehandle).toHaveBeenCalledWith(
+      expect.objectContaining({ pollId: 'pollC', status: 'avgjort' }),
+    )
+    expect(mockStemple).toHaveBeenCalledWith(admin, 'pollC', 'avgjort')
+    expect(resultat.sendteVarsler).toBe(1)
+  })
+
+  // Speilbildet: en poll som fortsatt venter på gensek sin avgjørelse, men
+  // der TIEBREAK-varselet alt gikk ut, skal IKKE plukkes opp av retry i det
+  // hele tatt — den er ikke uvarslet, den venter bare på en beslutning som
+  // ikke er tatt. Uten status-grenen ville denne feilaktig blitt tolket som
+  // «uvarslet vinner» (fordi vinner_varslet_paa også er null her) og fått
+  // sendt tiebreak-varselet PÅ NYTT hver morgen — daglig spam til gensek.
+  it('poll som venter på gensek (tiebreak alt varslet) plukkes IKKE opp av retry', async () => {
+    const admin = lagAdmin({
+      pollRetry: [{
+        id: 'pollB',
+        spoersmaal: 'Årets B',
+        tiebreak_status: 'venter_paa_tiebreak',
+        tiebreak_varslet_paa: '2026-06-01T00:00:00.000Z',
+        vinner_varslet_paa: null,
+      }],
+      profiler: [{ id: 'gensek1', rolle: 'generalsekretaer' }],
+    })
+
+    const resultat = await kjorPaaminnelser(admin)
+
+    expect(mockBehandle).not.toHaveBeenCalled()
+    expect(mockStemple).not.toHaveBeenCalled()
+    expect(resultat.sendteVarsler).toBe(0)
   })
 })
 

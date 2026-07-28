@@ -67,6 +67,7 @@
 //   admin.varsel_logg.hent.feilet          — varsel_logg-oppslag feiler i admin-API-et; klienten får generisk 500 (pulje C-review)
 //   klient.chat.meldinger.feilet           — chat-meldingshenting feiler i nettleseren (pulje C-review)
 //   klient.chat.reaksjoner.feilet          — reaksjonshenting feiler i nettleseren (pulje C-review)
+//   varsel.dedup.ingen_noekkel  — tillatDuplikat: false uten arrangementId/pollId/dedupNoekkel i lib/varsler.ts — ingen nøkkel å deduplisere på, sjekken under er en no-op (#518)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

@@ -113,6 +113,12 @@ export async function opprettMelding(input: {
     url: `${BASE_URL}/meldinger/${data.id}`,
     knappTekst: 'Åpne innlegget',
     type: 'melding-ny',
+    // Bærer verken arrangementId, pollId eller dedupNoekkel — default
+    // tillatDuplikat: false var derfor en no-op (samme felle som #518,
+    // funnet under det arbeidet). Ingen retry-mekanisme kaller dette
+    // stedet i dag, så tillatDuplikat: true sier bare sannheten om
+    // oppførselen som allerede fantes.
+    tillatDuplikat: true,
   }).catch((err: unknown) => logg.feil('melding.varsler.feilet', err))
 
   // Uten dette serverer Router Cache den gamle forsiden ved redirect, så det

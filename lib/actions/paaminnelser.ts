@@ -9,7 +9,8 @@ import {
 import {
   behandleKaaringspollAvsluttResultat,
   utledKaaringStatus,
-  stempleVinnerVarslet,
+  stempleKaaringspollVarslet,
+  erKaaringUtfall, type KaaringUtfall,
 } from '@/lib/varsler-kaaringspoll'
 import { PAAMINNELSE_DAGER, KAARING_VARSEL_RETRY_DAGER } from '@/lib/konstanter'
 import { rollerMed } from '@/lib/roller'
@@ -171,11 +172,18 @@ async function behandleKaaringspoller(admin: Admin) {
   // ikke `or`.
   //  - Fersk: pollen har ikke lukket ennå (partial-indexen poll_kaaring_aapne
   //    dekker dette filteret presist).
-  //  - Retry: pollen ER lukket, men vinner_varslet_paa mangler fortsatt.
+  //  - Retry: pollen ER lukket, men mangler stempelet for SITT utfall.
   //    Dette ER #495-fiksen — cronen slutter å bruke var_ny (RPC-ens «lukket
   //    jeg den akkurat nå?») som varslings-gate, og spør i stedet direkte
   //    etter uvarslede avsluttede poller. Ingen ny index her — håndfull rader.
-  const [{ data: fersk, error: ferskFeil }, { data: retry, error: retryFeil }] =
+  //
+  //    Retry-spørringen filtrerer bevisst IKKE på vinner_varslet_paa/
+  //    tiebreak_varslet_paa i selve SELECT-en (samme .or()-begrensning som
+  //    over) — filtreringen på HVILKET stempel som mangler for HVILKET
+  //    utfall gjøres i JS rett under (#521). Uten det ville en poll som
+  //    fortsatt venter på tiebreak, men der tiebreak-varselet ALT er sendt,
+  //    blitt filtrert bort på feil kolonne og purret på nytt hver morgen.
+  const [{ data: fersk, error: ferskFeil }, { data: retryRader, error: retryFeil }] =
     await Promise.all([
       admin
         .from('poll')
@@ -186,10 +194,9 @@ async function behandleKaaringspoller(admin: Admin) {
         .is('vinner_varslet_paa', null),
       admin
         .from('poll')
-        .select('id, spoersmaal, tiebreak_status')
+        .select('id, spoersmaal, tiebreak_status, tiebreak_varslet_paa, vinner_varslet_paa')
         .not('kaaring_mal_id', 'is', null)
         .not('avsluttet_paa', 'is', null)
-        .is('vinner_varslet_paa', null)
         .gte('avsluttet_paa', vinduStart),
     ])
 
@@ -204,6 +211,21 @@ async function behandleKaaringspoller(admin: Admin) {
     throw new Error(`Kunne ikke hente uvarslede kåringspoller: ${retryFeil.message}`)
   }
 
+  // #521: en poll som ENNÅ venter på tiebreak (tiebreak_status =
+  // 'venter_paa_tiebreak') skal purres på TIEBREAK-varselet hvis DET mangler
+  // — ikke behandles som om den venter på vinner-varsel, for det gjør den
+  // ikke ennå. Alle andre lukkede poller (avgjort eller ingen_stemmer)
+  // filtreres på vinner_varslet_paa som før.
+  //
+  // `== null` (ikke `=== null`) fordi PostgREST alltid gir eksplisitt `null`
+  // for en selektert kolonne uten verdi — men holder filteret trygt selv om
+  // en fremtidig kallested/mock utelater feltet i stedet for å sette null.
+  const retry = (retryRader ?? []).filter(p =>
+    p.tiebreak_status === 'venter_paa_tiebreak'
+      ? p.tiebreak_varslet_paa == null
+      : p.vinner_varslet_paa == null,
+  )
+
   // De to spørringene er gjensidig utelukkende (avsluttet_paa er enten null
   // eller ikke), så en enkel sammenslåing gir ingen duplikater — men den må
   // BEVARE PROVENIENSEN (#504-review). Slås radene sammen flatt, er `var_ny`
@@ -212,7 +234,7 @@ async function behandleKaaringspoller(admin: Admin) {
   // på en poll som fortsatt er åpen: feil varsel OG permanent stempling.
   const koe = [
     ...(fersk ?? []).map(poll => ({ poll, erRetry: false })),
-    ...(retry ?? []).map(poll => ({ poll, erRetry: true })),
+    ...retry.map(poll => ({ poll, erRetry: true })),
   ]
   if (koe.length === 0) {
     return { lukketKaaringer, sendteVarsler, kaaringFeil }
@@ -251,7 +273,7 @@ async function behandleKaaringspoller(admin: Admin) {
   for (const { poll, erRetry } of koe) {
     try {
       // Statusen bestemmes av HVILKEN spørring raden kom fra, ikke av var_ny.
-      let status: string
+      let status: KaaringUtfall
       if (erRetry) {
         // Retry-raden er per definisjon allerede lukket (spørringen filtrerer
         // på avsluttet_paa not null), så RPC-en ville bare svart
@@ -293,8 +315,21 @@ async function behandleKaaringspoller(admin: Admin) {
           logg.warn('cron.paaminne.kaaring.fersk_ikke_lukket', { status: String(rad.status) })
           continue
         }
+        if (!erKaaringUtfall(rad.status)) {
+          // Ukjent status fra RPC-en: vi vet ikke hvilket varsel som skal ut,
+          // og et gjett ville stemplet feil kolonne og filtrert pollen
+          // permanent bort fra retry. Hopp over — i morgen er tilstanden
+          // konsistent og vi prøver igjen. (#521-review)
+          kaaringFeil += 1
+          await logg.feil(
+            'cron.paaminne.kaaring.ukjent_status',
+            new Error(`avslutt_kaaringspoll ga ukjent status: ${String(rad.status)}`),
+            { ctx: { sample: poll.id } },
+          )
+          continue
+        }
         lukketKaaringer += 1
-        status = rad.status as string
+        status = rad.status
       }
 
       const { sendt } = await behandleKaaringspollAvsluttResultat({
@@ -310,7 +345,11 @@ async function behandleKaaringspoller(admin: Admin) {
       // generalsekretær å varsle) er like terminalt som sendt=true — uten
       // stempling der får vi en poison pill som retryes hver morgen i
       // KAARING_VARSEL_RETRY_DAGER dager. (#495/#504)
-      await stempleVinnerVarslet(admin, poll.id)
+      //
+      // Dispatcheren velger riktig kolonne ut fra STATUS, ikke fra erRetry —
+      // en fersk poll som ble tiebreak stemples på tiebreak_varslet_paa
+      // nøyaktig som en retry-poll med samme status ville blitt. (#521)
+      await stempleKaaringspollVarslet(admin, poll.id, status)
     } catch {
       kaaringFeil += 1
     }

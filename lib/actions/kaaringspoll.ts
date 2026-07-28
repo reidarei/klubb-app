@@ -11,6 +11,8 @@ import {
 import {
   behandleKaaringspollAvsluttResultat,
   stempleVinnerVarslet,
+  stempleKaaringspollVarslet,
+  erKaaringUtfall,
 } from '@/lib/varsler-kaaringspoll'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
@@ -299,18 +301,33 @@ export async function lukkKaaringspollNaa(pollId: string) {
   }
 
   // Samme mønster som velgTiebreakVinner: try/catch (ikke .catch()) slik at
-  // stempling av vinner_varslet_paa kun skjer når varselet faktisk gikk ut.
-  // Dette er den tredje av tre skrivere til «varslet om» — se kommentaren
-  // i velgTiebreakVinner over for hvorfor cron alene ikke er nok.
+  // stempling kun skjer når varselet faktisk gikk ut. Dette er den tredje av
+  // tre skrivere til «varslet om» — se kommentaren i velgTiebreakVinner over
+  // for hvorfor cron alene ikke er nok.
+  //
+  // Dispatcheren (ikke stempleVinnerVarslet direkte) fordi status her kan
+  // være 'venter_paa_tiebreak' — denne funksjonen lukker manuelt, den kjenner
+  // ikke utfallet før RPC-en svarer, i motsetning til velgTiebreakVinner som
+  // alltid ender i 'avgjort'. (#521)
+  if (!erKaaringUtfall(rad.status)) {
+    // Se paaminnelser.ts — ukjent status skal ikke gjettes, da stempler vi
+    // feil kolonne og pollen faller permanent ut av retry. (#521-review)
+    await logg.feil(
+      'kaaringspoll.ukjent_status',
+      new Error(`lukk_kaaringspoll_naa ga ukjent status: ${String(rad.status)}`),
+    )
+    return
+  }
+
   try {
     await behandleKaaringspollAvsluttResultat({
       pollId,
       spoersmaal: poll.spoersmaal,
-      status: rad.status as string,
+      status: rad.status,
       tiebreakIder,
       adminIder,
     })
-    await stempleVinnerVarslet(admin, pollId)
+    await stempleKaaringspollVarslet(admin, pollId, rad.status)
   } catch (err) {
     await logg.feil('kaaringspoll.varsler.feilet', err)
   }

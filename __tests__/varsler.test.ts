@@ -420,6 +420,101 @@ describe('sendVarsel – URL-normalisering', () => {
   })
 })
 
+describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
+  it('logger advarsel når tillatDuplikat er false uten arrangementId/pollId/dedupNoekkel', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    // Ingen av de tre nøklene er oppgitt, og tillatDuplikat er default false
+    // (ikke oppgitt) — dedup-sjekkene lenger ned har ingenting å kjøre på.
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test-uten-noekkel',
+    })
+
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'varsel.dedup.ingen_noekkel',
+      expect.objectContaining({ sample: 'test-uten-noekkel' }),
+    )
+  })
+
+  it('logger IKKE advarselen når arrangementId er satt', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test-med-arrangement',
+      arrangementId: 'arr1',
+    })
+
+    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+      'varsel.dedup.ingen_noekkel',
+      expect.anything(),
+    )
+  })
+
+  it('logger IKKE advarselen når dedupNoekkel er satt', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test-med-dedupnoekkel',
+      dedupNoekkel: 'noe:unikt',
+    })
+
+    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+      'varsel.dedup.ingen_noekkel',
+      expect.anything(),
+    )
+  })
+
+  it('logger IKKE advarselen når tillatDuplikat er true', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test-tillater-duplikat',
+      tillatDuplikat: true,
+    })
+
+    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+      'varsel.dedup.ingen_noekkel',
+      expect.anything(),
+    )
+  })
+})
+
 describe('sendVarsel – testmodus', () => {
   it('filtrerer til kun testprofil når testmodus er aktiv', async () => {
     mockFrom.mockImplementation((tabell: string) => {

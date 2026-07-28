@@ -11,7 +11,12 @@ vi.mock('@/lib/dato', () => ({
   naa: () => '2026-07-27T08:00:00.000Z',
 }))
 
-import { utledKaaringStatus, stempleVinnerVarslet } from '@/lib/varsler-kaaringspoll'
+import {
+  utledKaaringStatus,
+  stempleVinnerVarslet,
+  stempleTiebreakVarslet,
+  stempleKaaringspollVarslet,
+} from '@/lib/varsler-kaaringspoll'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -57,4 +62,54 @@ describe('stempleVinnerVarslet', () => {
 
     await expect(stempleVinnerVarslet(admin, 'poll1')).rejects.toThrow(/Kunne ikke stemple/)
   })
+})
+
+// #521: søsterfunksjon til stempleVinnerVarslet — se CLAUDE.md § Policy:
+// Varsler («to varsler ⇒ to kolonner»).
+describe('stempleTiebreakVarslet', () => {
+  it('kaller update med tiebreak_varslet_paa og is(tiebreak_varslet_paa, null)-CAS', async () => {
+    const chain = lagChain(null)
+    const mockFrom = vi.fn(() => chain)
+    const admin = { from: mockFrom } as unknown as Parameters<typeof stempleTiebreakVarslet>[0]
+
+    await stempleTiebreakVarslet(admin, 'poll1')
+
+    expect(mockFrom).toHaveBeenCalledWith('poll')
+    expect(chain.update).toHaveBeenCalledWith({ tiebreak_varslet_paa: '2026-07-27T08:00:00.000Z' })
+    expect(chain.eq).toHaveBeenCalledWith('id', 'poll1')
+    expect(chain.is).toHaveBeenCalledWith('tiebreak_varslet_paa', null)
+  })
+
+  it('kaster hvis update-spørringen feiler', async () => {
+    const admin = {
+      from: vi.fn(() => lagChain(null, new Error('DB nede'))),
+    } as unknown as Parameters<typeof stempleTiebreakVarslet>[0]
+
+    await expect(stempleTiebreakVarslet(admin, 'poll1')).rejects.toThrow(/Kunne ikke stemple/)
+  })
+})
+
+describe('stempleKaaringspollVarslet (dispatcher, #521)', () => {
+  it('ruter til tiebreak_varslet_paa når status er venter_paa_tiebreak', async () => {
+    const chain = lagChain(null)
+    const mockFrom = vi.fn(() => chain)
+    const admin = { from: mockFrom } as unknown as Parameters<typeof stempleKaaringspollVarslet>[0]
+
+    await stempleKaaringspollVarslet(admin, 'poll1', 'venter_paa_tiebreak')
+
+    expect(chain.update).toHaveBeenCalledWith({ tiebreak_varslet_paa: '2026-07-27T08:00:00.000Z' })
+  })
+
+  it.each(['avgjort', 'ingen_stemmer'] as const)(
+    'ruter til vinner_varslet_paa når status er %s',
+    async (status) => {
+      const chain = lagChain(null)
+      const mockFrom = vi.fn(() => chain)
+      const admin = { from: mockFrom } as unknown as Parameters<typeof stempleKaaringspollVarslet>[0]
+
+      await stempleKaaringspollVarslet(admin, 'poll1', status)
+
+      expect(chain.update).toHaveBeenCalledWith({ vinner_varslet_paa: '2026-07-27T08:00:00.000Z' })
+    },
+  )
 })

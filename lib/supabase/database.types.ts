@@ -1113,6 +1113,7 @@ export type Database = {
           spoersmaal: string
           svarfrist: string
           tiebreak_status: string | null
+          tiebreak_varslet_paa: string | null
           vinner_varslet_paa: string | null
         }
         Insert: {
@@ -1129,6 +1130,7 @@ export type Database = {
           spoersmaal: string
           svarfrist: string
           tiebreak_status?: string | null
+          tiebreak_varslet_paa?: string | null
           vinner_varslet_paa?: string | null
         }
         Update: {
@@ -1145,6 +1147,7 @@ export type Database = {
           spoersmaal?: string
           svarfrist?: string
           tiebreak_status?: string | null
+          tiebreak_varslet_paa?: string | null
           vinner_varslet_paa?: string | null
         }
         Relationships: [

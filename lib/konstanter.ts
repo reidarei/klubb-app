@@ -23,7 +23,8 @@ export const PAAMINNELSE_DAGER = {
 export const PASS_TILGANG_TIMER = 24
 
 // Retry-vindu (i dager) for kåringsvinner-varselet: cronen leter etter
-// avsluttede-men-uvarslede kåringspoller helt til vinner_varslet_paa er satt
+// avsluttede-men-uvarslede kåringspoller helt til riktig markør for pollens utfall er satt
+// (vinner_varslet_paa eller tiebreak_varslet_paa, se #521)
 // ELLER polls avsluttet_paa faller ut av dette vinduet. kjorPaaminnelser
 // kjører kåringsblokka KUN på slot 1 (én gang daglig), altså 7 reelle
 // retry-forsøk før en permanent uvarslebar poll faller ut av køen. Se #504.

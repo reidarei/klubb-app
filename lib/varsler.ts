@@ -309,6 +309,18 @@ export async function sendVarsel({
   // en throw ved feil gir et GARANTERT tapt varsel, mens fail-open i verste
   // fall gir et MULIG duplikat. Duplikatet er mildere, og dedup er en
   // bekvemmelighet — ikke en sikkerhetssperre mot uønsket utsending. (#503)
+
+  // Fella i #518: tillatDuplikat: false ser beskyttende ut ved kallstedet,
+  // men uten NOEN av de tre nøklene under er det ingenting å deduplisere
+  // PÅ — verken sjekkene under eller dedup_noekkel-indeksen (mig. 121) har
+  // noe å holde seg til. Gjør fraværet synlig i loggen i stedet for stille:
+  // neste varseltype som skrives sånn arver ellers samme falske trygghet
+  // som arrangor_purring og klient_alarm gjorde (nå rettet til
+  // tillatDuplikat: true, som er den ærlige beskrivelsen av deres oppførsel).
+  if (!tillatDuplikat && !arrangementId && !pollId && !dedupNoekkel) {
+    logg.warn('varsel.dedup.ingen_noekkel', { sample: type })
+  }
+
   if (!tillatDuplikat && arrangementId) {
     const { data: eksisterende, error: dedupFeil } = await supabase
       .from('varsel_logg')
@@ -484,8 +496,9 @@ export async function sendVarsel({
       // nytt. Rammer de varseltypene som faktisk deduperes, dvs. de som sender
       // arrangementId eller pollId med tillatDuplikat: false — nytt_arrangement,
       // paaminne_7, paaminne_1, cron-purring og de fire kaaringspoll_*. Typer uten
-      // slik referanse (arrangor_purring, klient_alarm) deduperes ikke uansett.
-      // (#503, korrigert i #503-review)
+      // slik referanse (arrangor_purring, klient_alarm, melding-ny) deduperes ikke
+      // uansett — alle tre er derfor eksplisitt merket tillatDuplikat: true, så
+      // koden sier sannheten om intensjonen. (#503, presisert i #518)
       //
       // 23505 fra dedup_noekkel-unique-indeksen (mig. 121) tolkes derimot som
       // SUKSESS: denne mottakeren er allerede kvittert for denne nøkkelen, så
@@ -623,7 +636,12 @@ export async function sendArrangorPurringVarsler({
     url: `${BASE_URL}/arrangementer/nytt`,
     knappTekst: 'Opprett arrangement',
     type: 'arrangor_purring',
-    tillatDuplikat: false,
+    // Bærer verken arrangementId eller pollId — tillatDuplikat: false var
+    // derfor en no-op (#518), ikke en reell sperre. Tåler duplikater i
+    // praksis (cronen kjører én gang daglig per ubesatt ansvar), så
+    // tillatDuplikat: true sier sannheten om oppførselen i stedet for å late
+    // som en beskyttelse som ikke fantes.
+    tillatDuplikat: true,
   })
 }
 

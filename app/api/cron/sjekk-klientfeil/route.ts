@@ -80,10 +80,11 @@ async function handle(req: NextRequest) {
         tittel: 'Feil siste døgn',
         melding: `${antall} feil registrert i feil_logg siste 24 timer.${lagToppEventTekst(eventRader ?? [])}`,
         type: 'klient_alarm',
-        // NB: tillatDuplikat: false er en no-op her — sendVarsel deduperer kun
-        // når arrangementId eller pollId er satt, og klient_alarm har ingen av
-        // delene. To cron-kjøringer på rad gir altså to alarmer. (#503-review)
-        tillatDuplikat: false,
+        // Bærer verken arrangementId, pollId eller dedupNoekkel — sendVarsel
+        // deduperer kun på de tre, så tillatDuplikat: false var en no-op her
+        // (#503-review, funnet igjen i #518). To cron-kjøringer på rad gir
+        // altså to alarmer uansett — tillatDuplikat: true sier det ærlig.
+        tillatDuplikat: true,
       }).catch((err: unknown) => logg.feil('cron.klientfeil.varsel.feilet', err))
     }
   }
