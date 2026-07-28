@@ -47,7 +47,7 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   revalidatePath('/klubbinfo/medlemmer')
 }
 
-export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean }) {
+export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean }) {
   const { supabase } = await ensureAdmin()
 
   const navn = data.navn.trim()
@@ -91,8 +91,11 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
     telefon: normaliserTelefon(data.telefon),
     fodselsdato: data.fodselsdato || null,
     aktiv: data.aktiv,
-    // Hvem som mottar innspill-/systemvarsler — admin-styrt per medlem (migrasjon 104)
+    // To uavhengige varsel-brytere, begge admin-styrt per medlem:
+    // faar_issue_varsler = nye innspill (migrasjon 104), faar_feilvarsler =
+    // døgnalarmen om feil (migrasjon 123) — bevisst delt, se migrasjonen.
     faar_issue_varsler: data.faar_issue_varsler,
+    faar_feilvarsler: data.faar_feilvarsler,
     oppdatert: naa(),
   }
   // Fail-safe: rør rolle KUN hvis vi har bekreftet at gjeldende rolle ikke

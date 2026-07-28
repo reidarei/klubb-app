@@ -18,7 +18,7 @@ export default async function RedigerMedlem({ params }: { params: Promise<{ id: 
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, navn, visningsnavn, epost, telefon, rolle, aktiv, fodselsdato, faar_issue_varsler')
+      .select('id, navn, visningsnavn, epost, telefon, rolle, aktiv, fodselsdato, faar_issue_varsler, faar_feilvarsler')
       .eq('id', id)
       .maybeSingle(),
     supabase

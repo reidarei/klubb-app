@@ -58,8 +58,9 @@ export async function POST(request: Request) {
       ?.trim()
       ?.slice(0, 200) ?? 'Nytt innspill i appen'
 
-    // Mottakerne styres per medlem via profiles.faar_issue_varsler —
-    // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
+    // Mottakerne styres per medlem via profiles.faar_issue_varsler — denne
+    // bryteren gjelder kun innspill (ikke feilalarmer, se faar_feilvarsler
+    // og migrasjon 123). Admin setter flagget i RedigerMedlemSkjema.
     const { data: admins, error: adminsFeil } = await admin
       .from('profiles')
       .select('id')

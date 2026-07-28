@@ -24,6 +24,7 @@ type Medlem = {
   aktiv: boolean
   fodselsdato: string | null
   faar_issue_varsler: boolean
+  faar_feilvarsler: boolean
 }
 
 type NaavaerendeGeneralsekretaer = { id: string; navn: string } | null
@@ -107,8 +108,11 @@ export default function RedigerMedlemSkjema({
     medlem.rolle === 'generalsekretaer',
   )
 
-  // Innspill-varsler: admin-styrt per medlem, uavhengig av rolle (migrasjon 104).
+  // To uavhengige varsel-brytere, begge admin-styrt per medlem, uavhengig av
+  // rolle: innspill (migrasjon 104) og feilalarm (migrasjon 123). Delt i to
+  // fordi de dekker helt ulike ting.
   const [faarIssueVarsler, setFaarIssueVarsler] = useState(medlem.faar_issue_varsler)
+  const [faarFeilvarsler, setFaarFeilvarsler] = useState(medlem.faar_feilvarsler)
 
   // handleToggleGs kalles av ToggleSwitch — confirm skjer her, ikke ved submit.
   function handleToggleGs(nyVerdi: boolean) {
@@ -164,6 +168,7 @@ export default function RedigerMedlemSkjema({
         aktiv: aktiv === 'aktiv',
         fodselsdato: fodselsdato || undefined,
         faar_issue_varsler: faarIssueVarsler,
+        faar_feilvarsler: faarFeilvarsler,
       })
 
       // Steg 2: fjern GS-tittel (om nødvendig).
@@ -334,8 +339,8 @@ export default function RedigerMedlemSkjema({
         </div>
 
         {/* Innspill-varsler: hvem som får push/epost om nye innspill (GitHub-
-            issues) og klientfeil-alarmer. Uavhengig av rolle — lagres ved submit
-            sammen med resten av skjemaet, ingen confirm nødvendig. */}
+            issues). Uavhengig av rolle — lagres ved submit sammen med resten
+            av skjemaet, ingen confirm nødvendig. */}
         <div
           style={{
             padding: '10px 4px',
@@ -349,7 +354,7 @@ export default function RedigerMedlemSkjema({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...labelStil, marginBottom: 2 }}>Innspill-varsler</div>
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-              Får varsel om nye innspill og systemalarmer.
+              Får varsel når noen sender inn et innspill i appen.
             </div>
           </div>
           <ToggleRad
@@ -357,6 +362,32 @@ export default function RedigerMedlemSkjema({
             onChange={setFaarIssueVarsler}
             disabled={isPending}
             ariaLabel="Innspill-varsler"
+          />
+        </div>
+
+        {/* Feilvarsler: egen bryter fra innspill — dette er
+            feilhåndtering, ikke dialog om nye ønsker. */}
+        <div
+          style={{
+            padding: '10px 4px',
+            borderBottom: '0.5px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...labelStil, marginBottom: 2 }}>Feilvarsler</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+              Får daglig alarm hvis appen har feil.
+            </div>
+          </div>
+          <ToggleRad
+            on={faarFeilvarsler}
+            onChange={setFaarFeilvarsler}
+            disabled={isPending}
+            ariaLabel="Feilvarsler"
           />
         </div>
 

@@ -43,8 +43,9 @@ describe('roller – rettighetsmatrise', () => {
     })
   })
 
-  // NB: issue-/systemvarsler er ikke rollestyrt lenger — mottakerne styres av
-  // profiles.faar_issue_varsler (admin-styrt per medlem, migrasjon 104).
+  // NB: innspill-/feilvarsler er ikke rollestyrt lenger — mottakerne styres
+  // av profiles.faar_issue_varsler og profiles.faar_feilvarsler, to
+  // uavhengige felt (admin-styrt per medlem, migrasjon 104 og 123).
 
   describe('loeserTiebreak', () => {
     it('kun generalsekretær løser tiebreak', () => {

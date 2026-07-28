@@ -2,7 +2,8 @@
 // Ruten hadde ingen testfil i det hele tatt: reviewer mutasjonstestet #496 og
 // fant at .neq('nivaa','warn') kunne fjernes uten at én eneste test ble rød.
 // Filtrene ER alarmens oppførsel — terskelen er 0, så hver rad som slipper
-// gjennom sender push + e-post til alle med faar_issue_varsler. (#498-review)
+// gjennom sender push + e-post til alle med faar_feilvarsler. (#498-review,
+// feltnavnet oppdatert da innspill-/feilvarsler ble delt i to, se migrasjon 123.)
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'

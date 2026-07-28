@@ -51,12 +51,13 @@ async function handle(req: NextRequest) {
   // ── Send varsel hvis over terskel ────────────────────────────────────────
 
   if (antall > KLIENT_FEIL_ALARM_TERSKEL) {
-    // Mottakerne styres per medlem via profiles.faar_issue_varsler —
-    // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
+    // Mottakerne styres per medlem via profiles.faar_feilvarsler — egen
+    // bryter fra innspill-varslene (migrasjon 123), admin setter flagget i
+    // RedigerMedlemSkjema.
     const { data: admins, error: adminsFeil } = await admin
       .from('profiles')
       .select('id')
-      .eq('faar_issue_varsler', true)
+      .eq('faar_feilvarsler', true)
       .eq('aktiv', true)
 
     // Logges (ikke kastes) — retention-slettingen under skal kjøre uansett,

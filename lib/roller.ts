@@ -67,9 +67,11 @@ export const kanAdministrere = (rolle: string | null | undefined): boolean =>
 export const harGulGloed = (rolle: string | null | undefined): boolean =>
   rettigheterFor(rolle).harGulGloed
 
-// NB: hvem som mottar issue-/systemvarsler er IKKE rollestyrt lenger —
-// det bor i profiles.faar_issue_varsler (admin-styrt per medlem, se
-// migrasjon 104). Mottaker-spørringer filtrerer på kolonnen direkte.
+// NB: hvem som mottar innspill-varsler og feilvarsler er IKKE rollestyrt
+// lenger — det bor i to uavhengige kolonner, profiles.faar_issue_varsler
+// (nye innspill, migrasjon 104) og profiles.faar_feilvarsler (døgnalarmen
+// om feil, migrasjon 123), begge admin-styrt per medlem. Mottaker-
+// spørringer filtrerer på riktig kolonne direkte, aldri på rolle.
 
 export const loeserTiebreak = (rolle: string | null | undefined): boolean =>
   rettigheterFor(rolle).loeserTiebreak

@@ -119,7 +119,7 @@ export const KLIENT_FEIL_ALARM_TERSKEL = 0
 
 // Event-navn som IKKE teller mot alarmen i sjekk-klientfeil-cronet (#498-review).
 // Terskelen er bevisst 0 — ett treff i døgnet varsler alle med
-// faar_issue_varsler. Disse tre fyrer på kjent transiente forhold som ikke
+// faar_feilvarsler. Disse tre fyrer på kjent transiente forhold som ikke
 // krever menneskelig inngripen, og ville gjort morgenvarselet til støy:
 //   ai.datoforslag.feilet     — 429/529/timeout fra Anthropic, i bakgrunnen
 //                               mens brukeren skriver

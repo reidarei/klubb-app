@@ -1318,6 +1318,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv: boolean
           chat_sist_sett: string | null
           epost: string
+          faar_feilvarsler: boolean
           faar_issue_varsler: boolean
           fodselsdato: string | null
           id: string
@@ -1334,6 +1335,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv?: boolean
           chat_sist_sett?: string | null
           epost: string
+          faar_feilvarsler?: boolean
           faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id: string
@@ -1350,6 +1352,7 @@ export type Database = {
           bursdagsgratulasjon_aktiv?: boolean
           chat_sist_sett?: string | null
           epost?: string
+          faar_feilvarsler?: boolean
           faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id?: string
