@@ -206,8 +206,12 @@ export default async function Innstillinger() {
     { data: kaaringmaler, error: kaaringmalerFeil },
     aapneIssues,
   ] = await Promise.all([
-    admin.from('arrangementmaler').select('*').order('rekkefølge'),
-    admin.from('kaaringmaler').select('id, navn, rekkefolge').order('rekkefolge'),
+    // `navn` som tiebreaker: `rekkefølge`/`rekkefolge` har ingen unique-
+    // constraint (#505), så to maler kan dele verdi. Uten en andre
+    // sorteringsnøkkel er rekkefølgen mellom dem vilkårlig — kan bytte plass
+    // mellom to sidelastinger uten at noe faktisk er endret.
+    admin.from('arrangementmaler').select('*').order('rekkefølge').order('navn'),
+    admin.from('kaaringmaler').select('id, navn, rekkefolge').order('rekkefolge').order('navn'),
     hentAapneIssues(),
   ])
   // Editerbare admin-lister (ArrangementmalerAdmin/KaaringMalAdmin) — samme

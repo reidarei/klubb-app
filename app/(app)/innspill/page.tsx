@@ -1,10 +1,10 @@
-import Link from 'next/link'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { hentInnspill } from '@/lib/innspill'
 import { formaterDato } from '@/lib/dato'
 import { createServerClient } from '@/lib/supabase/server'
 import SectionLabel from '@/components/ui/SectionLabel'
+import FilterChip, { CHIP_RAD_GAP } from '@/components/ui/FilterChip'
 import { logg } from '@/lib/logg'
 
 type Props = {
@@ -90,8 +90,14 @@ export default async function InnspillSide({ searchParams }: Props) {
         </p>
       </header>
 
-      {/* Filter */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+      {/* Filter. nav-landmark så skjermleser kan hoppe hit og få vite hva raden
+          filtrerer — aria-current på chippene sier bare hvilken som er valgt.
+          Radgap = CHIP_RAD_GAP selv om tre chips ikke brytes i dag: med én chip
+          til gjør de det, og da ville treffområdene overlappe (se FilterChip). */}
+      <nav
+        aria-label="Filtrer innspill"
+        style={{ display: 'flex', gap: `${CHIP_RAD_GAP}px 6px`, flexWrap: 'wrap', marginBottom: 22 }}
+      >
         {([
           { key: 'alle', label: 'Alle', n: innspill.length },
           { key: 'apne', label: 'Åpne', n: innspill.filter(i => i.status === 'open').length },
@@ -99,28 +105,16 @@ export default async function InnspillSide({ searchParams }: Props) {
         ] as const).map(f => {
           const aktiv = visning === f.key
           return (
-            <Link
+            <FilterChip
               key={f.key}
               href={f.key === 'alle' ? '/innspill' : `/innspill?visning=${f.key}`}
-              style={{
-                padding: '7px 12px',
-                borderRadius: 999,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: '1.4px',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                background: aktiv ? 'var(--accent-soft)' : 'transparent',
-                color: aktiv ? 'var(--accent)' : 'var(--text-tertiary)',
-                border: `0.5px solid ${aktiv ? 'var(--border-strong)' : 'var(--border-subtle)'}`,
-                textDecoration: 'none',
-              }}
+              aktiv={aktiv}
             >
               {f.label} · {f.n}
-            </Link>
+            </FilterChip>
           )
         })}
-      </div>
+      </nav>
 
       {filtrerte.length === 0 && (
         <p

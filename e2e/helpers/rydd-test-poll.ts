@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { adminKlient } from './admin-klient'
 
 /**
  * Felles cleanup-helper for e2e-tester som oppretter poller. Bruker
@@ -32,15 +32,8 @@ const TEST_MOENSTRE = [
 ]
 
 export async function ryddTestPoll() {
-  const url = process.env.E2E_SUPABASE_URL
-  const serviceKey = process.env.E2E_SUPABASE_SERVICE_KEY
-  if (!url || !serviceKey) {
-    // Uten test-instans kjører ingen specs (skip i harTestCreds) — men vær
-    // eksplisitt om hvorfor cleanup ikke gjør noe hvis vi likevel havner her.
-    console.warn('[rydd-test-poll] E2E_SUPABASE_* mangler — hopper over cleanup')
-    return
-  }
-  const supabase = createClient(url, serviceKey)
+  const supabase = adminKlient('rydd-test-poll')
+  if (!supabase) return
 
   // Primær: slett via kjent ID (satt av setTestPollId)
   if (testPollId) {

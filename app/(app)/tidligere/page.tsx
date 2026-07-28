@@ -503,9 +503,12 @@ export default async function TidligereSide({
                 cursor: nesteCursor,
               })}`}
               style={{
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 marginTop: 20,
-                padding: '10px 14px',
+                minHeight: 44, // WCAG 2.5.8 / iOS touch-target-minimum — samme mål som «Prøv igjen» under
+                padding: '0 14px',
                 textAlign: 'center',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,

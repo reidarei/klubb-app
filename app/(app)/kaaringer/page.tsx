@@ -19,10 +19,13 @@ export default async function Kaaringer() {
     { data: medlemmer, error: medlemmerFeil },
     { data: arrangementer, error: arrangementerFeil },
   ] = await Promise.all([
+    // `navn` som tiebreaker — se app/(app)/innstillinger/page.tsx for hvorfor
+    // (#505: rekkefolge har ingen unique-constraint, kan kollidere).
     supabase
       .from('kaaringmaler')
       .select('id, navn, rekkefolge')
-      .order('rekkefolge'),
+      .order('rekkefolge')
+      .order('navn'),
     supabase
       .from('kaaring_vinnere')
       .select(

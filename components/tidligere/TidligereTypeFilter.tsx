@@ -4,37 +4,31 @@
 // components/arrangement/TypeVelger.tsx (som velger arrangøransvar-mal).
 // Issue #487.
 
-import Link from 'next/link'
 import { TIDLIGERE_FILTRE, type TidligereFilter } from '@/lib/tidligere-filter'
+import FilterChip, { CHIP_RAD_GAP } from '@/components/ui/FilterChip'
 
 export default function TidligereTypeFilter({ aktiv }: { aktiv: TidligereFilter }) {
   return (
     // nav-landmark så skjermleser kan hoppe rett til filtrene og annonsere hva
     // chip-lenkene gjør — aria-current alene sier ikke hva raden er til for.
-    <nav aria-label="Filtrer historikken" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+    // Radgap = CHIP_RAD_GAP (2 * chippens usynlige padding): raden brytes på
+    // smale skjermer, og med et mindre radgap ville treffområdene overlappe slik
+    // at chippen på rad to stjal trykk fra rad én (#508-klassen). Kolonnegapet
+    // er upåvirket — chippens horisontale padding er 0.
+    <nav
+      aria-label="Filtrer historikken"
+      style={{ display: 'flex', gap: `${CHIP_RAD_GAP}px 6px`, flexWrap: 'wrap', marginBottom: 20 }}
+    >
       {TIDLIGERE_FILTRE.map(f => {
         const erAktiv = aktiv === f.verdi
         return (
-          <Link
+          <FilterChip
             key={f.verdi}
             href={f.verdi === 'alle' ? '/tidligere' : `/tidligere?type=${f.verdi}`}
-            aria-current={erAktiv ? 'page' : undefined}
-            style={{
-              padding: '7px 12px',
-              borderRadius: 999,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              letterSpacing: '1.4px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              background: erAktiv ? 'var(--accent-soft)' : 'transparent',
-              color: erAktiv ? 'var(--accent)' : 'var(--text-tertiary)',
-              border: `0.5px solid ${erAktiv ? 'var(--border-strong)' : 'var(--border-subtle)'}`,
-              textDecoration: 'none',
-            }}
+            aktiv={erAktiv}
           >
             {f.etikett}
-          </Link>
+          </FilterChip>
         )
       })}
     </nav>

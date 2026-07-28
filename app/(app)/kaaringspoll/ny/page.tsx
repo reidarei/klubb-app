@@ -26,10 +26,13 @@ export default async function NyKaaringspoll() {
     { data: aaretsMoeter, error: aaretsMoeterFeil },
     { data: aktuelleArr, error: aktuelleArrFeil },
   ] = await Promise.all([
+    // `navn` som tiebreaker — se app/(app)/innstillinger/page.tsx for hvorfor
+    // (#505: rekkefolge har ingen unique-constraint, kan kollidere).
     supabase
       .from('kaaringmaler')
       .select('id, navn, kandidat_kilde, rekkefolge')
-      .order('rekkefolge'),
+      .order('rekkefolge')
+      .order('navn'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
     supabase
       .from('arrangementer')

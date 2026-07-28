@@ -84,13 +84,20 @@ export async function hentMalValg(
     }
   })
 
-  // Sortering: (aar asc, purredato asc nulls last)
+  // Sortering: (aar asc, purredato asc nulls last, mal_navn asc)
+  // Navnet er tiebreaker fordi arrangoransvar-spørringen over ikke har noen
+  // .order() — uten den arver alle maler med lik (aar, purredato), typisk hele
+  // gjengen med purredato = null, rekkefølgen Postgres tilfeldigvis returnerte.
+  // Da kan TypeVelger-dropdownen bytte orden mellom to lastinger uten at noe er
+  // endret (samme symptom som #505 punkt 3).
   valg.sort((a, b) => {
     if (a.aar !== b.aar) return (a.aar ?? 0) - (b.aar ?? 0)
-    if (a.purredato == null && b.purredato == null) return 0
-    if (a.purredato == null) return 1
-    if (b.purredato == null) return -1
-    return a.purredato.localeCompare(b.purredato)
+    if (a.purredato != null && b.purredato != null && a.purredato !== b.purredato) {
+      return a.purredato.localeCompare(b.purredato)
+    }
+    if (a.purredato == null && b.purredato != null) return 1
+    if (a.purredato != null && b.purredato == null) return -1
+    return a.mal_navn.localeCompare(b.mal_navn, 'nb')
   })
 
   // "Annet" alltid til slutt
