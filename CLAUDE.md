@@ -215,6 +215,27 @@ Server actions og route handlers skal bruke `ensureAdmin()` eller `ensureInnlogg
 
 **RLS er fortsatt sannheten:** `ensureAdmin()` er en raskere/penere feilmelding — sikkerhetsmessig stoles det fortsatt på `er_admin()`-policyer i Postgres.
 
+## Policy: Databasespørringer
+
+`error` skal **alltid** hentes ut fra en Supabase-spørring, ikke bare `data`. `const { data } = await supabase.from(...)` gjør «ingen rader» umulig å skille fra «spørringen feilet» — begge gir `data = null`/`[]`. Konsekvensen har historisk vært tapte varsler og sider som ser tomme ut i stedet for å feile synlig.
+
+**`.single()` vs `.maybeSingle()`-fella:** `.single()` setter `Accept: application/vnd.pgrst.object+json`, og PostgREST rapporterer 0 rader fra den som **error `PGRST116`**, ikke som `data = null`. Det slår ut på to måter:
+- **Med vakt:** legger du en `if (error) throw`-vakt foran et `.single()`-oppslag, treffer vakten på 0-rader-tilfellet også — koden din som skulle skille «finnes ikke» fra «spørringen feilet» blir død kode, og «raden finnes ikke» eskalerer til en feilside.
+- **Uten vakt:** `const x = await …single()` uten at `x.error` leses gir `data = null` på 0 rader, og en `?? 'fallback'` slår stille inn — ingen spørringsfeil blir synlig.
+
+**Hva brukeren faktisk ser:** feilmeldings-teksten du skriver i `throw new Error(...)` er **logg-tekst, ikke UI-tekst**. Next 15 maskerer meldinger fra server components i prod-bygg, og `app/error.tsx` viser uansett alltid en fast norsk brødtekst + digest-hashen — aldri `error.message`. Meldingen din havner i feil-logging, og det er der den skal være presis.
+
+**Regel: legger du en feil-vakt foran et Supabase-oppslag, bytt `.single()` til `.maybeSingle()` i samme håndgrep.**
+
+Unntak: mutasjoner som returnerer raden (`insert().select().single()`), og den etablerte kombiformen `if (error || !x) throw new Error(...)` der 0-rader og feil bevisst behandles likt.
+
+**Bestem hva «0 rader» skal bety per kallsted FØR du skriver vakten — tre utfall:**
+- **Kast** — raden finnes ikke. Detaljsider med `[id]` bruker `notFound()`, andre steder et kastet `Error`.
+- **Fallback** — oppslaget beriker noe annet (en lenke, et navn); manglende rad er en normal tilstand, ikke en feil.
+- **Fortsett stille (men logg feilen)** — idempotent eller ikke-kritisk nok til å ta ned resten. Bruk `logg.warn()`/`logg.feil()` slik feilen er synlig i observability uten å blokkere brukeren.
+
+**Bevisst fail-open:** hvis du med vilje lar en spørring feile stille, skriv `eslint-disable-next-line hk/supabase-feil-maa-hentes` med en kort begrunnelse på linjen over. (Destrukturerer du `error` og faktisk bruker den, f.eks. i logging, trenger du **ikke** disable — regelen krever kun at `error` hentes ut og leses.)
+
 ## Policy: Konstanter
 
 Domene-konstanter (tegnegrenser, dag-vinduer, levetider) ligger i `lib/konstanter.ts`. **Aldri** hardkode magiske tall som 500/2000/7/24 i actions eller komponenter — importér konstanten.
