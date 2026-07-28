@@ -19,12 +19,16 @@ export async function ensureAdmin() {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Ikke innlogget')
 
-  const { data: profil } = await supabase
+  const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
     .select('rolle')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
+  // Fail closed: er vi i tvil om hvem brukeren er eller hva han har lov
+  // til, slipper vi ham ikke inn. En feilet spørring skal ALDRI tolkes
+  // som «ingen rolle» og falle gjennom til kanAdministrere(undefined).
+  if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
   if (!kanAdministrere(profil?.rolle)) throw new Error('Ikke admin')
 
   return { supabase, user, profil }
@@ -41,12 +45,14 @@ export async function ensureLoeserTiebreak() {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Ikke innlogget')
 
-  const { data: profil } = await supabase
+  const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
     .select('rolle')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
+  // Fail closed — se begrunnelse i ensureAdmin() over.
+  if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
   if (!loeserTiebreak(profil?.rolle)) throw new Error('Kun generalsekretær kan løse tiebreak')
 
   return { supabase, user, profil }

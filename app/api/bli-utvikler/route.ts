@@ -19,12 +19,17 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ feil: 'Ikke innlogget' }, { status: 401 })
 
-  const { data: profil } = await supabase
+  const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
     .select('visningsnavn, navn')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
+  // Ren berikelse av issue-teksten (hvem sendte inn) — ikke kritisk nok til
+  // å blokkere selve innsendingen. Logges så feilen ikke drukner stille.
+  if (profilFeil) {
+    await logg.feil('bli-utvikler.profil.oppslag.feilet', profilFeil, { ctx: { profil_id: user.id } })
+  }
   const navn = profil?.visningsnavn ?? profil?.navn ?? 'Ukjent'
 
   const { tekst } = await request.json()

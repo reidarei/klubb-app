@@ -5,27 +5,9 @@
 // via navigator.sendBeacon. Se #366.
 
 import { useEffect } from 'react'
-
-function sendFeilBeacon(event: string, message: string, stack?: string) {
-  if (typeof navigator === 'undefined' || !navigator.sendBeacon) return
-  navigator.sendBeacon(
-    '/api/logg-feil',
-    new Blob(
-      [
-        JSON.stringify({
-          event,
-          nivaa: 'error',
-          kontekst: {
-            message,
-            stack: stack?.slice(0, 2000),
-            url: typeof window !== 'undefined' ? window.location.href : '',
-          },
-        }),
-      ],
-      { type: 'application/json' },
-    ),
-  )
-}
+// Beacon-transporten bor i lib/klient-logg.ts, slik at håndterte klientfeil
+// (f.eks. i chat-hookene) kan bruke samme vei til feil_logg som de ufangede.
+import { sendFeilBeacon } from '@/lib/klient-logg'
 
 export default function FeilFangst() {
   useEffect(() => {

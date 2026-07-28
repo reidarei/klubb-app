@@ -31,13 +31,21 @@ async function hentPurredato(arrangementNavn: string, aar: number): Promise<stri
 export async function leggTilArrangoransvarForAar(aar: number) {
   const { supabase } = await ensureAdmin()
 
-  const [{ data: maler }, { data: eksisterende }] = await Promise.all([
+  const [
+    { data: maler, error: malerFeil },
+    { data: eksisterende, error: eksisterendeFeil },
+  ] = await Promise.all([
     supabase.from('arrangementmaler').select('navn, purredato'),
     supabase
       .from('arrangoransvar')
       .select('arrangement_navn')
       .eq('aar', aar),
   ])
+  // Begge må lykkes: feiler «eksisterende»-oppslaget stille, tror koden at
+  // ingen maler er oppfylt ennå og forsøker å sette inn duplikater av rader
+  // som faktisk finnes fra før.
+  if (malerFeil) throw new Error(`Kunne ikke hente arrangementmaler: ${malerFeil.message}`)
+  if (eksisterendeFeil) throw new Error(`Kunne ikke hente eksisterende arrangoransvar: ${eksisterendeFeil.message}`)
 
   const finnesNavn = new Set((eksisterende ?? []).map(r => r.arrangement_navn))
   const nyeRader = (maler ?? [])

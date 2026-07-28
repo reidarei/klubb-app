@@ -39,10 +39,12 @@ export default async function SamtalerInbox() {
   if (!user) return null
 
   // RLS gjør at vi kun ser samtaler vi er i — ingen ekstra filter trengs.
-  const { data: samtaler } = await supabase
+  const { data: samtaler, error: samtalerFeil } = await supabase
     .from('samtale')
     .select('id, profil_a, profil_b, sist_aktivitet')
     .order('sist_aktivitet', { ascending: false })
+
+  if (samtalerFeil) throw new Error(`Kunne ikke hente samtaler: ${samtalerFeil.message}`)
 
   const samtaleListe = (samtaler ?? []) as SamtaleRad[]
 
@@ -84,7 +86,10 @@ export default async function SamtalerInbox() {
     s.profil_a === user.id ? s.profil_b : s.profil_a,
   )
 
-  const [{ data: alleMeldinger }, { data: profiler }] = await Promise.all([
+  const [
+    { data: alleMeldinger, error: alleMeldingerFeil },
+    { data: profiler, error: profilerFeil },
+  ] = await Promise.all([
     supabase
       .from('samtale_chat')
       .select('id, samtale_id, profil_id, innhold, bilde_url, opprettet, lest')
@@ -95,6 +100,11 @@ export default async function SamtalerInbox() {
       .select('id, navn, visningsnavn, bilde_url, rolle')
       .in('id', motpartIder),
   ])
+  // Begge er kjernedata for hver rad i inbox-lista (forhåndsvisning + hvem
+  // motparten er) — ikke en berikelse, kaster i stedet for å vise en
+  // misvisende «ingen meldinger»/anonym rad.
+  if (alleMeldingerFeil) throw new Error(`Kunne ikke hente meldinger: ${alleMeldingerFeil.message}`)
+  if (profilerFeil) throw new Error(`Kunne ikke hente profiler: ${profilerFeil.message}`)
 
   const meldinger = (alleMeldinger ?? []) as ChatRad[]
   const profilMap = new Map<string, ProfilRad>(

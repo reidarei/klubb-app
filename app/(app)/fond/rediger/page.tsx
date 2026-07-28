@@ -19,11 +19,11 @@ export default async function FondRediger() {
   const supabase = await createServerClient()
 
   const [
-    { data: eiendommer },
-    { data: verdipapirer },
-    { data: innskudd },
-    { data: kontant },
-    { data: profiler },
+    { data: eiendommer, error: eiendommerFeil },
+    { data: verdipapirer, error: verdipapirerFeil },
+    { data: innskudd, error: innskuddFeil },
+    { data: kontant, error: kontantFeil },
+    { data: profiler, error: profilerFeil },
   ] = await Promise.all([
     supabase.from('fond_eiendom').select('*').order('navn'),
     supabase.from('fond_verdipapir').select('*').order('navn'),
@@ -32,6 +32,14 @@ export default async function FondRediger() {
     // Kun aktive profiler kan velges som innskytere
     supabase.from('profiles').select('id, navn').eq('aktiv', true).order('navn'),
   ])
+  // Redigeringsside for admin — en feilet spørring må aldri vises som en tom
+  // liste her: editor-komponentene under kan lagre HELE lista tilbake, og en
+  // tom liste fra en svelget feil ville da slettet ekte rader ved neste save.
+  if (eiendommerFeil) throw new Error(`Kunne ikke hente eiendommer: ${eiendommerFeil.message}`)
+  if (verdipapirerFeil) throw new Error(`Kunne ikke hente verdipapirer: ${verdipapirerFeil.message}`)
+  if (innskuddFeil) throw new Error(`Kunne ikke hente innskudd: ${innskuddFeil.message}`)
+  if (kontantFeil) throw new Error(`Kunne ikke hente kontantsaldo: ${kontantFeil.message}`)
+  if (profilerFeil) throw new Error(`Kunne ikke hente profiler: ${profilerFeil.message}`)
 
   return (
     <div style={{ padding: '0 20px 40px' }}>

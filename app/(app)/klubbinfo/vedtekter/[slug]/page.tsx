@@ -11,20 +11,23 @@ export default async function VedtektSide({ params }: { params: Promise<{ slug: 
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  const { data: vedtekt } = await supabase
+  const { data: vedtekt, error: vedtektFeil } = await supabase
     .from('vedtekter')
     .select('id, slug, tittel, innhold, oppdatert')
     .eq('slug', slug)
-    .single()
+    .maybeSingle()
 
+  if (vedtektFeil) throw new Error(`Kunne ikke hente vedtekt: ${vedtektFeil.message}`)
   if (!vedtekt) notFound()
 
-  const { data: versjoner } = await supabase
+  const { data: versjoner, error: versjonerFeil } = await supabase
     .from('vedtekter_versjoner')
     .select('id, vedtaksdato, endringsnotat, opprettet, profiles (navn)')
     .eq('vedtekt_id', vedtekt.id)
     .order('opprettet', { ascending: false })
     .limit(10)
+
+  if (versjonerFeil) throw new Error(`Kunne ikke hente versjonshistorikk: ${versjonerFeil.message}`)
 
   return (
     <div style={{ padding: '0 20px 20px' }}>

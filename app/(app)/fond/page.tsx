@@ -58,10 +58,10 @@ export default async function FondSide() {
 
   // Hent alle fond-data parallelt
   const [
-    { data: eiendommer },
-    { data: verdipapirer },
-    { data: innskudd },
-    { data: kontant },
+    { data: eiendommer, error: eiendommerFeil },
+    { data: verdipapirer, error: verdipapirerFeil },
+    { data: innskudd, error: innskuddFeil },
+    { data: kontant, error: kontantFeil },
   ] = await Promise.all([
     supabase.from('fond_eiendom').select('*').order('navn'),
     supabase.from('fond_verdipapir').select('*').order('navn'),
@@ -71,6 +71,13 @@ export default async function FondSide() {
       .order('dato', { ascending: false }),
     supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
   ])
+  // Totalverdi er en sum på tvers av alle fire kildene — en feilet delspørring
+  // ville stille vist en for lav (løgnaktig) totalverdi i stedet for å feile
+  // synlig. Kaster på alle fire (Policy: Databasespørringer, aggregater).
+  if (eiendommerFeil) throw new Error(`Kunne ikke hente eiendommer: ${eiendommerFeil.message}`)
+  if (verdipapirerFeil) throw new Error(`Kunne ikke hente verdipapirer: ${verdipapirerFeil.message}`)
+  if (innskuddFeil) throw new Error(`Kunne ikke hente innskudd: ${innskuddFeil.message}`)
+  if (kontantFeil) throw new Error(`Kunne ikke hente kontantsaldo: ${kontantFeil.message}`)
 
   // Aggregater — tåler 0-verdier og tomme lister
   const eiendomListe = eiendommer ?? []

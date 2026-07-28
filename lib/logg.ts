@@ -54,6 +54,19 @@
 //   album.revalidering.oppslag.feilet    — arrangement_id-oppslag for revalidatePath feiler etter committet album-mutasjon (pulje A)
 //   album.slett.bilder_oppslag.feilet    — bilder-oppslag for R2-opprydding feiler før album slettes (pulje A)
 //   arrangement.slett.bilde_oppslag.feilet — bilde_url-oppslag for R2-opprydding feiler før arrangement slettes (pulje A)
+//   arrangement.kobletPoll.oppslag.feilet  — koblet kåringspoll-oppslag feiler på arrangementsiden, siden rendres uten lenken (pulje B)
+//   tidligere.minProfil.oppslag.feilet     — egen rolle-oppslag feiler på /tidligere, faller tilbake til «ikke admin» (pulje B)
+//   album.profiler.oppslag.feilet          — @mention-profiler-oppslag feiler på albumsiden (pulje C)
+//   arrangement.rediger.gjeldendeAnsvar.oppslag.feilet — forhåndsvalgt dropdown-verdi feiler på rediger-siden (pulje C)
+//   innspill.profiler.oppslag.feilet       — innsender-navn-oppslag feiler på innspill-siden (pulje C)
+//   tiebreak.profiler.oppslag.feilet       — kandidat-navn/bilde-oppslag feiler på tiebreak-siden (pulje C)
+//   medlem.rediger.generalsekretaer.oppslag.feilet — GS-confirm-dialog-oppslag feiler på medlem-rediger-siden (pulje C)
+//   bli-utvikler.profil.oppslag.feilet     — innsender-navn-oppslag feiler ved innspill-opprettelse (pulje C)
+//   cron.klientfeil.mottakere.feilet       — admin-mottaker-oppslag feiler i sjekk-klientfeil-cronet, alarm uteblir (pulje C)
+//   github.webhook.mottakere.feilet        — admin-mottaker-oppslag feiler i GitHub-webhooken, 500 så GitHub retryer (pulje C)
+//   admin.varsel_logg.hent.feilet          — varsel_logg-oppslag feiler i admin-API-et; klienten får generisk 500 (pulje C-review)
+//   klient.chat.meldinger.feilet           — chat-meldingshenting feiler i nettleseren (pulje C-review)
+//   klient.chat.reaksjoner.feilet          — reaksjonshenting feiler i nettleseren (pulje C-review)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

@@ -9,13 +9,14 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
   const { id } = await params
   const [supabase, user] = await Promise.all([createServerClient(), getInnloggetBruker()])
 
-  const { data: varsel } = await supabase
+  const { data: varsel, error: varselFeil } = await supabase
     .from('varsel_logg')
     .select('id, tittel, melding, lest, opprettet, url')
     .eq('id', id)
     .eq('profil_id', user!.id)
-    .single()
+    .maybeSingle()
 
+  if (varselFeil) throw new Error(`Kunne ikke hente varsel: ${varselFeil.message}`)
   if (!varsel) notFound()
 
   // Mutasjon + revalidatePath flyttet til klient-mountet server action

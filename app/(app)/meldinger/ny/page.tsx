@@ -7,7 +7,7 @@ import NyMeldingSkjema, { type AlbumValg } from './NyMeldingSkjema'
 export default async function NyMelding() {
   const supabase = await createServerClient()
 
-  const { data: albumer } = await supabase
+  const { data: albumer, error: albumerFeil } = await supabase
     .from('album')
     .select(
       `id, tittel,
@@ -15,6 +15,8 @@ export default async function NyMelding() {
        antall:album_bilde!album_bilde_album_id_fkey (count)`,
     )
     .order('opprettet', { ascending: false })
+
+  if (albumerFeil) throw new Error(`Kunne ikke hente album: ${albumerFeil.message}`)
 
   type Rad = {
     id: string

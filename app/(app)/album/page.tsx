@@ -14,7 +14,7 @@ export default async function AlbumOversikt() {
   // Henter cover-bildet via FK-join (album_cover_fk) og antall via aggregat
   // — ikke hele bildelista. Album uten cover viser placeholder-ikonet
   // (eksplisitt > implisitt).
-  const { data: albumer } = await supabase
+  const { data: albumer, error: albumerFeil } = await supabase
     .from('album')
     .select(
       `id, tittel, arrangement_id, opprettet,
@@ -23,6 +23,8 @@ export default async function AlbumOversikt() {
        antall:album_bilde!album_bilde_album_id_fkey (count)`,
     )
     .order('opprettet', { ascending: false })
+
+  if (albumerFeil) throw new Error(`Kunne ikke hente album: ${albumerFeil.message}`)
 
   type AlbumRad = {
     id: string

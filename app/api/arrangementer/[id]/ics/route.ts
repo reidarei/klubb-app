@@ -23,12 +23,13 @@ function formatIcsDateUtc(iso: string): string {
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createServerClient()
-  const { data: arr } = await supabase
+  const { data: arr, error } = await supabase
     .from('arrangementer')
     .select('id, type, tittel, beskrivelse, start_tidspunkt, slutt_tidspunkt, oppmoetested, destinasjon')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
+  if (error) return new NextResponse('Internal error', { status: 500 })
   if (!arr) return new NextResponse('Not found', { status: 404 })
 
   const sluttIso = arr.slutt_tidspunkt

@@ -83,13 +83,25 @@ export async function opprettMelding(input: {
   }
 
   // Varsle alle aktive (utenom forfatter) om nytt innlegg.
-  const avsender = await supabase
+  // maybeSingle + eksplisitt error: med .single() rapporterer PostgREST 0 rader
+  // som error PGRST116 og lar data være null — leses ikke feilen, faller vi
+  // stille tilbake på «Noen skrev» i stedet for navnet. Se CLAUDE.md
+  // § Policy: Databasespørringer.
+  const { data: avsender, error: avsenderFeil } = await supabase
     .from('profiles')
     .select('navn, visningsnavn')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
-  const avsenderNavn = avsender.data?.visningsnavn ?? avsender.data?.navn ?? 'Noen'
+  // Navneoppslaget skal ikke velte et innlegg som allerede er lagret — vi
+  // logger og bruker fallbacken, men da vet vi i det minste hvorfor.
+  if (avsenderFeil) {
+    await logg.feil('melding.avsendernavn.feilet', avsenderFeil, {
+      ctx: { profil_id: user.id, code: avsenderFeil.code },
+    })
+  }
+
+  const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
   // Hvis meldingen kun er bilder vises et standardutdrag i stedet for tekst
   const utdrag = tekst
     ? (tekst.length > 80 ? tekst.slice(0, 77) + '...' : tekst)
@@ -189,13 +201,17 @@ export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
   // regel som ved opprettelse. Ellers kreves INNLEGG_MIN_LENGDE tegn. Uten
   // denne sjekken feilet redigering av et bilde-innlegg der man ville tømme
   // teksten (min-lengde 1 slo inn selv om bildet er innholdet).
-  const [{ count: antallBilder }, { data: melding }] = await Promise.all([
+  const [{ count: antallBilder }, { data: melding, error: meldingFeil }] = await Promise.all([
     supabase
       .from('melding_bilder')
       .select('id', { count: 'exact', head: true })
       .eq('melding_id', meldingId),
-    supabase.from('meldinger').select('album_id').eq('id', meldingId).single(),
+    supabase.from('meldinger').select('album_id').eq('id', meldingId).maybeSingle(),
   ])
+  // Feiler oppslaget, kan vi ikke avgjøre om innlegget bæres av et album —
+  // valideringen under ville da basert seg på feil grunnlag. Kast i stedet
+  // for å risikere feil min-lengde-regel på et innlegg som faktisk har album.
+  if (meldingFeil) throw new Error(`Kunne ikke hente innlegg: ${meldingFeil.message}`)
   const harBildeEllerAlbum = (antallBilder ?? 0) > 0 || !!melding?.album_id
 
   if (harBildeEllerAlbum) {

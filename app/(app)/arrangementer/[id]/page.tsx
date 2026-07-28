@@ -15,6 +15,7 @@ import AlbumSeksjon from '@/components/album/AlbumSeksjon'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
 import { Linkified } from '@/lib/linkify'
+import { logg } from '@/lib/logg'
 
 type Paamelding = {
   profil_id: string
@@ -47,12 +48,12 @@ export default async function ArrangementDetaljer({
   ])
 
   const [
-    { data: arr },
-    { data: chatMeldinger },
-    { data: chatProfiler },
-    { data: passInfoRader },
-    { data: passForespørsler },
-    { data: albumRader },
+    { data: arr, error: arrFeil },
+    { data: chatMeldinger, error: chatMeldingerFeil },
+    { data: chatProfiler, error: chatProfilerFeil },
+    { data: passInfoRader, error: passInfoFeil },
+    { data: passForespørsler, error: passForespørslerFeil },
+    { data: albumRader, error: albumRaderFeil },
   ] = await Promise.all([
     supabase
       .from('arrangementer')
@@ -64,7 +65,7 @@ export default async function ArrangementDetaljer({
          paameldinger (profil_id, status, profiles (navn, bilde_url, rolle))`,
       )
       .eq('id', id)
-      .single(),
+      .maybeSingle(),
     supabase
       .from('arrangement_chat')
       .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
@@ -101,16 +102,32 @@ export default async function ArrangementDetaljer({
       .limit(1),
   ])
 
+  // Detaljside — en reell spørringsfeil skal vises som feil, ikke som en tom
+  // seksjon som later som ingenting skjedde (Policy: Databasespørringer).
+  // .maybeSingle() over gir data=null/error=null på 0 rader; notFound() under
+  // eier det tilfellet alene.
+  if (arrFeil) throw new Error(`Kunne ikke hente arrangement: ${arrFeil.message}`)
+  if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
+  if (chatProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${chatProfilerFeil.message}`)
+  if (passInfoFeil) throw new Error(`Kunne ikke hente pass-info: ${passInfoFeil.message}`)
+  if (passForespørslerFeil) throw new Error(`Kunne ikke hente pass-forespørsler: ${passForespørslerFeil.message}`)
+  if (albumRaderFeil) throw new Error(`Kunne ikke hente album: ${albumRaderFeil.message}`)
+
   // Kåringspoll knyttet til arrangementet (#87). Vi henter separat for å
   // ikke gjøre Promise.all-blokken over mer kompleks; resultatet er
   // typisk 0 eller 1 rad.
-  const { data: koblede } = await supabase
+  const { data: koblede, error: kobledeFeil } = await supabase
     .from('poll')
     .select('id, spoersmaal, svarfrist, avsluttet_paa')
     .eq('arrangement_id', id)
     .not('kaaring_mal_id', 'is', null)
     .order('svarfrist', { ascending: false })
     .limit(1)
+  // Ren berikelse av siden (lenke til koblet kåringspoll) — ikke kritisk nok
+  // til å ta ned hele arrangementssiden. Logges så feilen ikke drukner stille.
+  if (kobledeFeil) {
+    await logg.feil('arrangement.kobletPoll.oppslag.feilet', kobledeFeil, { ctx: { arrangement_id: id } })
+  }
   const koblet_kaaringspoll = koblede?.[0] ?? null
 
   if (!arr) notFound()

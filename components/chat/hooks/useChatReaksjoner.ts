@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import type { createClient } from '@/lib/supabase/client'
 import { leggTilReaksjon, fjernReaksjon } from '@/lib/actions/chat'
+import { meldKlientfeil } from '@/lib/klient-logg'
 
 export type Reaksjon = { melding_id: string; profil_id: string; emoji: string }
 
@@ -40,7 +41,15 @@ export function useChatReaksjoner(
       .from('chat_reaksjoner')
       .select('melding_id, profil_id, emoji')
       .in('melding_id', nye)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        // Klientkomponent — ingen lib/logg her (server-only). En feilet
+        // reaksjons-henting skal ikke ta ned chatten; realtime-abonnementet
+        // over fanger fortsatt nye reaksjoner som kommer inn etterpå. Meldes
+        // likevel til feil_logg — console.error alene når ingen observability.
+        if (error) {
+          console.error('Henting av reaksjoner feilet:', error)
+          meldKlientfeil('klient.chat.reaksjoner.feilet', error)
+        }
         if (cancelled || !data || data.length === 0) return
         setReaksjoner(prev => {
           // Slå sammen — fjerne dubletter for samme (melding_id, profil_id, emoji)

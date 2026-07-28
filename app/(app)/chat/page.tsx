@@ -19,7 +19,11 @@ export default async function KlubbChatSide() {
 
   // Flagget hentes parallelt med chat-dataene — gating skjer før render, og
   // innholdet er ikke hemmelig når fanen er av (bare skjult), så det er trygt.
-  const [{ data: siste }, { data: profiler }, chatFane] = await Promise.all([
+  const [
+    { data: siste, error: sisteFeil },
+    { data: profiler, error: profilerFeil },
+    chatFane,
+  ] = await Promise.all([
     supabase
       .from('klubb_chat')
       .select('id, profil_id, innhold, bilde_url, video_url, opprettet, fra_facebook')
@@ -28,6 +32,10 @@ export default async function KlubbChatSide() {
     supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
     hentAppFlagg(supabase, CHAT_FANE, true),
   ])
+  // Tom chat er normalt (ingen har skrevet ennå), men en feilet spørring skal
+  // ikke se identisk ut — kaster for å skille de to (Policy: Databasespørringer).
+  if (sisteFeil) throw new Error(`Kunne ikke hente chat: ${sisteFeil.message}`)
+  if (profilerFeil) throw new Error(`Kunne ikke hente profiler: ${profilerFeil.message}`)
 
   // Gating som på /fond, men speilvendt default: chat er på inntil admin skrur
   // av via /innstillinger (app_innstillinger.chat_fane). Admin har alltid tilgang.

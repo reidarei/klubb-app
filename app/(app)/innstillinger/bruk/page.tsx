@@ -18,7 +18,10 @@ export default async function AktivitetAdmin() {
 
   // Hent nyeste først (enklest å plukke "siste N" uten dato-aritmetikk),
   // reverser til kronologisk rekkefølge (eldst → nyest) for grafene.
-  const [{ data: dagerDataRaw }, { data: ukerDataRaw }] = await Promise.all([
+  const [
+    { data: dagerDataRaw, error: dagerFeil },
+    { data: ukerDataRaw, error: ukerFeil },
+  ] = await Promise.all([
     admin
       .from('aktivitet_dag')
       .select('dag, unike, treff')
@@ -30,6 +33,10 @@ export default async function AktivitetAdmin() {
       .order('uke_start', { ascending: false })
       .limit(AKTIVITET_GRAF_UKER),
   ])
+  // Statistikkside — en feilet spørring skal ikke vise et feilaktig 0 i
+  // nøkkeltallene (Policy: Databasespørringer, aggregater).
+  if (dagerFeil) throw new Error(`Kunne ikke hente aktivitet_dag: ${dagerFeil.message}`)
+  if (ukerFeil) throw new Error(`Kunne ikke hente aktivitet_uke: ${ukerFeil.message}`)
 
   const dagerDesc = (dagerDataRaw ?? []) as DagRad[]
   const ukerDesc = (ukerDataRaw ?? []) as UkeRad[]

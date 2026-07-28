@@ -28,23 +28,29 @@ export default async function SamtaleDetalj({
   if (!user) return null
 
   // RLS sørger for at vi kun ser samtaler vi deltar i — vi får null
-  // ellers og rendrer 404.
-  const { data: samtale } = await supabase
+  // ellers og rendrer 404. maybeSingle() fordi 0 rader (ikke deltaker,
+  // eller samtalen finnes ikke) er en gyldig — og vanlig — respons her,
+  // ikke en feil.
+  const { data: samtale, error: samtaleFeil } = await supabase
     .from('samtale')
     .select('id, profil_a, profil_b')
     .eq('id', id)
-    .single<SamtaleRad>()
+    .maybeSingle<SamtaleRad>()
 
+  if (samtaleFeil) throw new Error(`Kunne ikke hente samtale: ${samtaleFeil.message}`)
   if (!samtale) notFound()
 
   const motpartId = samtale.profil_a === user.id ? samtale.profil_b : samtale.profil_a
 
-  const [{ data: motpart }, { data: chatMeldinger }] = await Promise.all([
+  const [
+    { data: motpart, error: motpartFeil },
+    { data: chatMeldinger, error: chatMeldingerFeil },
+  ] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, navn, visningsnavn, bilde_url, rolle')
       .eq('id', motpartId)
-      .single(),
+      .maybeSingle(),
     supabase
       .from('samtale_chat')
       .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
@@ -52,6 +58,11 @@ export default async function SamtaleDetalj({
       .order('opprettet', { ascending: false })
       .limit(30),
   ])
+  // motpartId kommer fra samtale-raden vi allerede har hentet (RLS-verifisert
+  // over), så 0 rader her ville være uventet — men vi kaster kun på reell
+  // feil, ikke på det umulige tilfellet, for å unngå å duplisere notFound().
+  if (motpartFeil) throw new Error(`Kunne ikke hente motpart: ${motpartFeil.message}`)
+  if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
 
   // Marker innkomne meldinger som lest når siden lastes. Trigges som side-
   // effekt — UI venter ikke på dette. RLS hindrer at vi kan markere

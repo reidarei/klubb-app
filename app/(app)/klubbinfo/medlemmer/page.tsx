@@ -29,13 +29,20 @@ export default async function Medlemmer() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  const [{ data: profiler }, { data: stat }] = await Promise.all([
+  const [
+    { data: profiler, error: profilerFeil },
+    { data: stat, error: statFeil },
+  ] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, navn, rolle, aktiv, bilde_url')
       .order('navn'),
     supabase.rpc('get_statistikk'),
   ])
+  // Medlemslisten er kjerneinnholdet, og statistikken driver nærvær-% per
+  // medlem — begge kaster fremfor å vise en tom liste / feilaktig 0 %.
+  if (profilerFeil) throw new Error(`Kunne ikke hente medlemmer: ${profilerFeil.message}`)
+  if (statFeil) throw new Error(`Kunne ikke hente statistikk: ${statFeil.message}`)
 
   // get_statistikk returnerer `json` i DB, så generert type er bare Json.
   // overrideTypes avviser objekt-form (Json kan være array), så en enkel

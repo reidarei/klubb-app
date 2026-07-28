@@ -55,10 +55,10 @@ export default async function MeldingDetalj({
   ])
 
   const [
-    { data: melding },
-    { data: reaksjoner },
-    { data: chatMeldinger },
-    { data: chatProfiler },
+    { data: melding, error: meldingFeil },
+    { data: reaksjoner, error: reaksjonerFeil },
+    { data: chatMeldinger, error: chatMeldingerFeil },
+    { data: chatProfiler, error: chatProfilerFeil },
   ] = await Promise.all([
     supabase
       .from('meldinger')
@@ -69,7 +69,7 @@ export default async function MeldingDetalj({
          ${ALBUM_KORT_SELECT}`,
       )
       .eq('id', id)
-      .single<MeldingRad>(),
+      .maybeSingle<MeldingRad>(),
     supabase
       .from('melding_reaksjon')
       .select('emoji, profil_id')
@@ -86,6 +86,13 @@ export default async function MeldingDetalj({
       .eq('aktiv', true),
   ])
 
+  // Detaljside — .maybeSingle() over gir data=null/error=null på 0 rader;
+  // notFound() under eier det tilfellet alene. En reell feil på noen av de
+  // fire skal vises som feil, ikke som et tomt innlegg/tom chat.
+  if (meldingFeil) throw new Error(`Kunne ikke hente innlegg: ${meldingFeil.message}`)
+  if (reaksjonerFeil) throw new Error(`Kunne ikke hente reaksjoner: ${reaksjonerFeil.message}`)
+  if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
+  if (chatProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${chatProfilerFeil.message}`)
   if (!melding) notFound()
 
   const erAdmin = kanAdministrere(profil?.rolle)

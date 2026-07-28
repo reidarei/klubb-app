@@ -53,7 +53,12 @@ export default async function PollDetalj({
     getProfil(),
   ])
 
-  const [{ data: poll }, { data: chatMeldinger }, { data: chatProfiler }, stemmerAggregat] = await Promise.all([
+  const [
+    { data: poll, error: pollFeil },
+    { data: chatMeldinger, error: chatMeldingerFeil },
+    { data: chatProfiler, error: chatProfilerFeil },
+    stemmerAggregat,
+  ] = await Promise.all([
     supabase
       .from('poll')
       .select(
@@ -63,7 +68,7 @@ export default async function PollDetalj({
          poll_stemme (valg_id, profil_id)`,
       )
       .eq('id', id)
-      .single<PollRad>(),
+      .maybeSingle<PollRad>(),
     supabase
       .from('poll_chat')
       .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
@@ -86,6 +91,12 @@ export default async function PollDetalj({
     hentPollStemmerAggregat(supabase, id),
   ])
 
+  // .maybeSingle() over gir data=null/error=null på 0 rader; notFound() under
+  // eier det tilfellet alene. En reell feil på noen av de tre skal vises som
+  // feil, ikke som en tom poll/chat.
+  if (pollFeil) throw new Error(`Kunne ikke hente poll: ${pollFeil.message}`)
+  if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
+  if (chatProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${chatProfilerFeil.message}`)
   if (!poll) notFound()
 
   // Vinner hentes fra kaaring_vinnere (lesbar for alle, RLS skjuler stemmer
@@ -94,12 +105,16 @@ export default async function PollDetalj({
   // skriver dit.
   let vinnerRad: { profil_id: string | null; arrangement_id: string | null } | null = null
   if (poll.kaaring_mal_id && poll.aar !== null) {
-    const { data: v } = await supabase
+    const { data: v, error: vFeil } = await supabase
       .from('kaaring_vinnere')
       .select('profil_id, arrangement_id')
       .eq('mal_id', poll.kaaring_mal_id)
       .eq('aar', poll.aar)
       .maybeSingle()
+    // Manglende rad her er normalt (kåringen er ikke avgjort ennå), men en
+    // feilet spørring ville vist samme tilstand som «ingen vinner» — feil
+    // for en allerede avgjort kåring, så vi kaster i stedet.
+    if (vFeil) throw new Error(`Kunne ikke hente kåringsvinner: ${vFeil.message}`)
     vinnerRad = v ?? null
   }
 

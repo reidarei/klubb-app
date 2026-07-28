@@ -5,6 +5,7 @@ import RedigerSkjema from './RedigerSkjema'
 import { kanAdministrere } from '@/lib/roller'
 import { hentMalValg } from '@/lib/mal-valg'
 import { ANNET_KEY } from '@/components/arrangement/mal-valg-typer'
+import { logg } from '@/lib/logg'
 
 export default async function RedigerArrangement({
   params,
@@ -20,12 +21,13 @@ export default async function RedigerArrangement({
 
   if (!user) redirect('/login')
 
-  const { data: arr } = await supabase
+  const { data: arr, error: arrFeil } = await supabase
     .from('arrangementer')
     .select('*')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
+  if (arrFeil) throw new Error(`Kunne ikke hente arrangement: ${arrFeil.message}`)
   if (!arr) notFound()
 
   const erAdmin = kanAdministrere(profil?.rolle)
@@ -34,7 +36,7 @@ export default async function RedigerArrangement({
   if (!kanRedigere) redirect(`/arrangementer/${id}`)
 
   // Hent valg (inkluder gjeldende kobling) og finn initialKey
-  const [valg, { data: gjeldendeAnsvar }] = await Promise.all([
+  const [valg, { data: gjeldendeAnsvar, error: gjeldendeAnsvarFeil }] = await Promise.all([
     hentMalValg(supabase, id),
     supabase
       .from('arrangoransvar')
@@ -43,6 +45,11 @@ export default async function RedigerArrangement({
       .limit(1)
       .maybeSingle(),
   ])
+  // Ren berikelse (forhåndsvalgt dropdown-verdi) — faller tilbake til
+  // ANNET_KEY under uansett, ikke kritisk nok til å ta ned redigeringssiden.
+  if (gjeldendeAnsvarFeil) {
+    await logg.feil('arrangement.rediger.gjeldendeAnsvar.oppslag.feilet', gjeldendeAnsvarFeil, { ctx: { arrangement_id: id } })
+  }
 
   let initialKey = ANNET_KEY
   if (gjeldendeAnsvar?.arrangement_navn && gjeldendeAnsvar.aar != null) {

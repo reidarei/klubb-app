@@ -19,16 +19,16 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
   const erMegSelv = megUser?.id === id
 
   const [
-    { data: medlem },
-    { data: egneKaaringer },
-    { data: arrKaaringer },
-    { data: arrangementer },
+    { data: medlem, error: medlemFeil },
+    { data: egneKaaringer, error: egneKaaringerFeil },
+    { data: arrKaaringer, error: arrKaaringerFeil },
+    { data: arrangementer, error: arrangementerFeil },
   ] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, navn, visningsnavn, epost, telefon, rolle, fodselsdato, aktiv, bilde_url')
       .eq('id', id)
-      .single(),
+      .maybeSingle(),
 
     // Kåringer medlemmet selv har vunnet (f.eks. «Årets herre»)
     supabase
@@ -52,6 +52,15 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
       .eq('opprettet_av', id)
       .order('start_tidspunkt', { ascending: false }),
   ])
+
+  // Detaljside for et medlem — en feilet spørring skal ikke se ut som «ingen
+  // kåringer»/«ingen arrangementer», det er en løgn om historikken hans.
+  // .maybeSingle() over gir data=null/error=null på 0 rader; notFound() under
+  // eier det tilfellet alene.
+  if (medlemFeil) throw new Error(`Kunne ikke hente medlem: ${medlemFeil.message}`)
+  if (egneKaaringerFeil) throw new Error(`Kunne ikke hente kåringer: ${egneKaaringerFeil.message}`)
+  if (arrKaaringerFeil) throw new Error(`Kunne ikke hente arrangement-kåringer: ${arrKaaringerFeil.message}`)
+  if (arrangementerFeil) throw new Error(`Kunne ikke hente arrangementer: ${arrangementerFeil.message}`)
 
   // Slå sammen de to kåringslistene, sortert synkende på år. Hver oppføring
   // er tagget med `kilde` slik at UI kan vise arrangement-tittelen når den

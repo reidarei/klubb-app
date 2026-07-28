@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { ensureLoeserTiebreak } from '@/lib/auth'
 import TiebreakSkjema from './TiebreakSkjema'
+import { logg } from '@/lib/logg'
 
 type ValgRad = {
   id: string
@@ -18,15 +19,16 @@ export default async function TiebreakSide({
   const { id } = await params
   const { supabase } = await ensureLoeserTiebreak()
 
-  const { data: poll } = await supabase
+  const { data: poll, error: pollFeil } = await supabase
     .from('poll')
     .select(
       `id, spoersmaal, aar, tiebreak_status, kaaring_mal_id,
        poll_valg (id, tekst, rekkefoelge, referanse_profil_id, referanse_arrangement_id)`,
     )
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
+  if (pollFeil) throw new Error(`Kunne ikke hente poll: ${pollFeil.message}`)
   if (!poll) notFound()
   if (!poll.kaaring_mal_id) redirect(`/poll/${id}`)
   if (poll.tiebreak_status !== 'venter_paa_tiebreak') {
@@ -42,13 +44,18 @@ export default async function TiebreakSide({
     .map(v => v.referanse_profil_id)
     .filter((x): x is string => !!x)
 
-  const { data: profiler } = profilIder.length
+  const { data: profiler, error: profilerFeil } = profilIder.length
     ? await supabase
         .from('profiles')
         .select('id, navn, bilde_url, rolle')
         .in('id', profilIder)
-    : { data: [] as { id: string; navn: string | null; bilde_url: string | null; rolle: string | null }[] }
+    : { data: [] as { id: string; navn: string | null; bilde_url: string | null; rolle: string | null }[], error: null }
 
+  // Ren berikelse (navn/bilde på kandidatene) — faller tilbake til
+  // v.tekst under uansett, ikke kritisk nok til å ta ned tiebreak-siden.
+  if (profilerFeil) {
+    await logg.feil('tiebreak.profiler.oppslag.feilet', profilerFeil)
+  }
   const profilMap = new Map((profiler ?? []).map(p => [p.id, p]))
 
   const kandidater = valg.map(v => {

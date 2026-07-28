@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
+import { logg } from '@/lib/logg'
 
 /**
  * Returnerer true hvis det finnes klubb_chat-meldinger fra andre enn brukeren
@@ -24,13 +25,17 @@ export async function harUlestChat(
   // Null = aldri åpnet chat → alt regnes som ulest (alle meldinger fra andre).
   const cutoff = sistSett ?? '1970-01-01T00:00:00Z'
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('klubb_chat')
     .select('id')
     .gt('opprettet', cutoff)
     .neq('profil_id', brukerId)
     .limit(1)
 
+  // Fail-open, MED logging: kalles ved hver sidevisning (app/(app)/layout.tsx)
+  // for kun en ulest-prikk i headeren — å kaste her ville tatt ned hele appen
+  // for én prikk (se CLAUDE.md § Policy: Databasespørringer).
+  if (error) logg.warn('ulest.chat.oppslag.feilet', { code: error.code })
   return (data?.length ?? 0) > 0
 }
 
@@ -49,12 +54,14 @@ export async function harUlestVarsler(
   supabase: SupabaseClient<Database>,
   brukerId: string,
 ): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('varsel_logg')
     .select('id')
     .eq('profil_id', brukerId)
     .eq('lest', false)
     .limit(1)
 
+  // Fail-open, MED logging — samme begrunnelse som harUlestChat over.
+  if (error) logg.warn('ulest.varsler.oppslag.feilet', { code: error.code })
   return (data?.length ?? 0) > 0
 }

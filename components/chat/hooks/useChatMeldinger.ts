@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { createClient } from '@/lib/supabase/client'
 import type { ChatScope, ChatKonfig } from '@/lib/chat-konfig'
 import type { ChatMelding } from '../Chat'
+import { meldKlientfeil } from '@/lib/klient-logg'
 
 // Antall meldinger som lastes first-batch og per "Vis eldre"-klikk
 const SIDE_STORRELSE = 30
@@ -79,7 +80,16 @@ export function useChatMeldinger({
       if (forTidspunkt) q = q.lt('opprettet', forTidspunkt)
       // Select-strengen er en runtime-union (med/uten fra_facebook) som
       // type-parseren ikke klarer å løse — overrideTypes gir riktig form (se #364)
-      const { data } = await q.overrideTypes<ChatMelding[], { merge: false }>()
+      const { data, error } = await q.overrideTypes<ChatMelding[], { merge: false }>()
+      // Klientkomponent — ingen lib/logg her (server-only, se lib/logg.ts).
+      // En feilet «Vis eldre»-henting skal ikke ta ned hele chat-vinduet, bare
+      // vise færre meldinger enn forventet. Men den skal være SYNLIG: en ren
+      // console.error treffer ingen av FeilFangst sine lyttere, så dette kunne
+      // feilet i månedsvis uten at noen fikk vite det.
+      if (error) {
+        console.error('Henting av meldinger feilet:', error)
+        meldKlientfeil('klient.chat.meldinger.feilet', error)
+      }
       return data ? [...data].reverse() : []
     },
     // konfig/scope/tabell utelates bevisst — de er rent utledet av scope-feltene over,

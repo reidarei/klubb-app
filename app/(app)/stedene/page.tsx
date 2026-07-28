@@ -24,7 +24,7 @@ const SR_ONLY: CSSProperties = {
 export default async function Stedene() {
   const [supabase] = await Promise.all([createServerClient(), getInnloggetBruker()])
 
-  const { data: rader } = await supabase
+  const { data: rader, error: raderFeil } = await supabase
     .from('arrangementer')
     .select(
       // Album embed-es på arrangementet (album.arrangement_id → arrangementer)
@@ -40,6 +40,8 @@ export default async function Stedene() {
     .eq('type', 'tur')
     .not('destinasjon', 'is', null)
     .order('start_tidspunkt', { ascending: true })
+
+  if (raderFeil) throw new Error(`Kunne ikke hente turer: ${raderFeil.message}`)
 
   type RawCover = { thumb_url: string | null; bilde_url: string }
   type RawAlbum = {

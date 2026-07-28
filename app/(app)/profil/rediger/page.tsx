@@ -5,11 +5,13 @@ import RedigerProfilForm from './RedigerProfilForm'
 export default async function RedigerProfil() {
   const [supabase, user] = await Promise.all([createServerClient(), getInnloggetBruker()])
 
-  const { data: profil } = await supabase
+  const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
     .select('navn, visningsnavn, telefon, fodselsdato, epost, rolle, bilde_url')
     .eq('id', user!.id)
-    .single()
+    .maybeSingle()
+
+  if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
 
   return (
     <RedigerProfilForm

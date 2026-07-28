@@ -53,13 +53,19 @@ async function handle(req: NextRequest) {
   if (antall > KLIENT_FEIL_ALARM_TERSKEL) {
     // Mottakerne styres per medlem via profiles.faar_issue_varsler —
     // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
-    const { data: admins } = await admin
+    const { data: admins, error: adminsFeil } = await admin
       .from('profiles')
       .select('id')
       .eq('faar_issue_varsler', true)
       .eq('aktiv', true)
 
-    if (admins && admins.length > 0) {
+    // Logges (ikke kastes) — retention-slettingen under skal kjøre uansett,
+    // samme resonnement som varsel-catch'en et par linjer ned. En feilet
+    // mottaker-spørring betyr i praksis «morgenalarmen uteble stille» hvis
+    // vi ikke logger den.
+    if (adminsFeil) {
+      await logg.feil('cron.klientfeil.mottakere.feilet', adminsFeil)
+    } else if (admins && admins.length > 0) {
       // Egen spørring for topp-3-aggregeringen — bare hentet når alarmen
       // faktisk fyrer, og bare til dette formålet (tellingen over er uendret
       // rask head:true-spørring).

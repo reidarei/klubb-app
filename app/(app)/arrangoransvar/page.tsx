@@ -56,13 +56,22 @@ export default async function Arrangoransvar() {
   const [user, profil] = await Promise.all([getInnloggetBruker(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  const [{ data: ansvar }, { data: medlemmer }] = await Promise.all([
+  const [
+    { data: ansvar, error: ansvarFeil },
+    { data: medlemmer, error: medlemmerFeil },
+  ] = await Promise.all([
     supabase
       .from('arrangoransvar')
       .select(`id, aar, arrangement_navn, ansvarlig_id, purredato, profiles (id, navn), arrangementer (id, tittel, start_tidspunkt)`)
       .order('aar'),
     supabase.from('profiles').select('id, navn').eq('aktiv', true).order('navn'),
   ])
+
+  // Begge er kjernedata for siden (ansvar-listen, og medlemmene admin kan
+  // tildele den til) — ikke en berikelse, kaster i stedet for å vise en
+  // tom/ufullstendig side.
+  if (ansvarFeil) throw new Error(`Kunne ikke hente arrangoransvar: ${ansvarFeil.message}`)
+  if (medlemmerFeil) throw new Error(`Kunne ikke hente medlemmer: ${medlemmerFeil.message}`)
 
   const aarGrupper = bygMalRader(ansvar ?? [])
 

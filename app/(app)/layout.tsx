@@ -13,7 +13,15 @@ import { harUlestChat, harUlestVarsler } from '@/lib/ulest'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
 
 async function HeaderMedProfil() {
-  const profil = await getProfil()
+  // getProfil() kaster ved DB-feil (fail-closed, se lib/auth-cache.ts) — riktig
+  // for ensureAdmin()/ensureLoeserTiebreak(), som er brukerinitierte handlinger
+  // der en feilmelding er det riktige utfallet. Her er den gal: headeren
+  // rendres på HVER side i (app), så en forbigående feil ga feilskjerm overalt
+  // der brukeren før så en normal side med navnløs avatar. Sikkerhetsgevinsten
+  // er null — headeren bruker profil.rolle kun til gul glød, og
+  // kanAdministrere(undefined) er allerede fail-closed. Degraderer derfor som
+  // naboene under.
+  const profil = await getProfil().catch(() => null)
   const user = await getInnloggetBruker() // cachet via React cache()
   // Ulest-prikkene og funksjonsflaggene er nice-to-have. Vi sluker feil så en
   // forbigående DB-feil aldri kræsjer headeren — verste utfall er at prikken

@@ -22,10 +22,19 @@ export async function hentMalValg(
     ? ansvarQuery.or(`arrangement_id.is.null,arrangement_id.eq.${includeArrangementId}`)
     : ansvarQuery.is('arrangement_id', null)
 
-  const [{ data: ansvar }, { data: maler }] = await Promise.all([
+  const [
+    { data: ansvar, error: ansvarFeil },
+    { data: maler, error: malerFeil },
+  ] = await Promise.all([
     ansvarPromise,
     supabase.from('arrangementmaler').select('navn, type, purredato'),
   ])
+  // Driver TypeVelger-dropdownen på både ny- og rediger-siden — en feilet
+  // spørring her skal ikke stille vise et tomt/ufullstendig valgsett, den
+  // som oppretter et arrangement må vite at koblingen til arrangoransvar
+  // kan mangle. Kastes videre til kallerens side (error boundary).
+  if (ansvarFeil) throw new Error(`Kunne ikke hente arrangoransvar: ${ansvarFeil.message}`)
+  if (malerFeil) throw new Error(`Kunne ikke hente arrangementmaler: ${malerFeil.message}`)
 
   const malMap = new Map<string, { type: 'moete' | 'tur' | null; purredato: string | null }>()
   for (const m of maler ?? []) {

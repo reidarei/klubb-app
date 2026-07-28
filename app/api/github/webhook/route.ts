@@ -60,11 +60,18 @@ export async function POST(request: Request) {
 
     // Mottakerne styres per medlem via profiles.faar_issue_varsler —
     // admin setter flagget i RedigerMedlemSkjema (se migrasjon 104).
-    const { data: admins } = await admin
+    const { data: admins, error: adminsFeil } = await admin
       .from('profiles')
       .select('id')
       .eq('faar_issue_varsler', true)
       .eq('aktiv', true)
+
+    // 500 (ikke 200 med tomt resultat) — GitHub retryer webhooken ved feil
+    // status, og tillatDuplikat: true under gjør en re-levering trygg.
+    if (adminsFeil) {
+      logg.warn('github.webhook.mottakere.feilet', { code: adminsFeil.code })
+      return NextResponse.json({ feil: 'Kunne ikke hente mottakere' }, { status: 500 })
+    }
 
     const adminIder = (admins ?? []).map(a => a.id)
     const oppretterId = issue.body?.match(/<!-- profil_id:([a-f0-9-]+) -->/)?.[1]

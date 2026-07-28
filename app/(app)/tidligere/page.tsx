@@ -43,11 +43,17 @@ export default async function TidligereSide({
 
   // Innlogget brukers rolle — styrer om av-arkiver-knappen vises på andres
   // innlegg (admin kan av-arkivere alle, ellers kun egne). (#312)
-  const { data: minProfil } = await supabase
+  const { data: minProfil, error: minProfilFeil } = await supabase
     .from('profiles')
     .select('rolle')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+  // Feiler oppslaget, faller vi tilbake til «ikke admin» (fail closed) — det
+  // skjuler kun av-arkiver-knappen for andres innlegg, ikke sensitivt nok til
+  // å ta ned hele historikk-siden. Logges likevel så feilen ikke drukner.
+  if (minProfilFeil) {
+    await logg.feil('tidligere.minProfil.oppslag.feilet', minProfilFeil, { ctx: { profil_id: user.id } })
+  }
   const erAdmin = kanAdministrere(minProfil?.rolle ?? null)
 
   const grense = TIDLIGERE_SIDESTOERRELSE + 1 // hent én ekstra for å sjekke om det er mer

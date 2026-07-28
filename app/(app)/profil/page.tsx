@@ -25,23 +25,23 @@ export default async function Profil() {
   ])
 
   const [
-    { data: profil },
-    { count: oppmoeter },
-    { count: kaaringer },
-    { data: ansvar },
-    { data: varselPref },
-    { data: varsler },
-    { count: antallUlesteVarsler },
-    { data: passInfo },
-    { count: ulestPrivat },
-    { data: fondInnskudd },
+    { data: profil, error: profilFeil },
+    { count: oppmoeter, error: oppmoeterFeil },
+    { count: kaaringer, error: kaaringerFeil },
+    { data: ansvar, error: ansvarFeil },
+    { data: varselPref, error: varselPrefFeil },
+    { data: varsler, error: varslerFeil },
+    { count: antallUlesteVarsler, error: antallUlesteVarslerFeil },
+    { data: passInfo, error: passInfoFeil },
+    { count: ulestPrivat, error: ulestPrivatFeil },
+    { data: fondInnskudd, error: fondInnskuddFeil },
     fondFane,
   ] = await Promise.all([
     supabase
       .from('profiles')
       .select('navn, visningsnavn, rolle, bilde_url')
       .eq('id', user!.id)
-      .single(),
+      .maybeSingle(),
     supabase
       .from('paameldinger')
       .select('arrangement_id', { count: 'exact', head: true })
@@ -100,6 +100,22 @@ export default async function Profil() {
     // Samme synlighetsregel som Fond-taben: admin alltid, medlemmer når bryteren er på
     hentAppFlagg(supabase, FOND_FANE),
   ])
+
+  // Egen profilside — statistikk (oppmøter/kåringer/fondandel) og toggle-
+  // tilstander (varselPref) skal aldri vises feilaktig som 0/av på grunn av
+  // en svelget feil (Policy: Databasespørringer). .maybeSingle() på profil
+  // over: en manglende egen profil-rad her ville uansett vært en dypere
+  // inkonsistens enn denne siden kan håndtere pent, så vi kaster på begge.
+  if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
+  if (oppmoeterFeil) throw new Error(`Kunne ikke telle oppmøter: ${oppmoeterFeil.message}`)
+  if (kaaringerFeil) throw new Error(`Kunne ikke telle kåringer: ${kaaringerFeil.message}`)
+  if (ansvarFeil) throw new Error(`Kunne ikke hente arrangøransvar: ${ansvarFeil.message}`)
+  if (varselPrefFeil) throw new Error(`Kunne ikke hente varselpreferanser: ${varselPrefFeil.message}`)
+  if (varslerFeil) throw new Error(`Kunne ikke hente varsler: ${varslerFeil.message}`)
+  if (antallUlesteVarslerFeil) throw new Error(`Kunne ikke telle uleste varsler: ${antallUlesteVarslerFeil.message}`)
+  if (passInfoFeil) throw new Error(`Kunne ikke hente pass-info: ${passInfoFeil.message}`)
+  if (ulestPrivatFeil) throw new Error(`Kunne ikke telle uleste privatmeldinger: ${ulestPrivatFeil.message}`)
+  if (fondInnskuddFeil) throw new Error(`Kunne ikke hente fondinnskudd: ${fondInnskuddFeil.message}`)
 
   const navn = profil?.navn ?? 'Ukjent'
   const rolle = tittelFor(profil?.rolle)

@@ -13,10 +13,14 @@ export const getProfil = cache(async () => {
   const supabase = await createServerClient()
   const user = await getInnloggetBruker()
   if (!user) return null
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('rolle, navn, bilde_url, chat_sist_sett')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+  // Fail closed (autorisasjon): brukes til rolle-sjekker i hele appen
+  // (kanAdministrere osv.) — en svelget feil her ville stille latt en
+  // feilende spørring se ut som «ingen rolle», ikke som en feil.
+  if (error) throw new Error(`Kunne ikke hente profil: ${error.message}`)
   return data
 })

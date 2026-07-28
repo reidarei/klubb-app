@@ -58,7 +58,7 @@ export async function hentAgendaData(
   async function hentPollerMedAggregat() {
     // poll_chat(count) gir totalt kommentarantall per poll via PostgREST
     // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
-    const { data: pollerRaad } = await supabase
+    const { data: pollerRaad, error: pollerFeil } = await supabase
       .from('poll')
       .select(
         `id, spoersmaal, svarfrist, flervalg, opprettet_av,
@@ -69,6 +69,9 @@ export async function hentAgendaData(
       )
       .gte('svarfrist', cutoffIso)
       .order('svarfrist', { ascending: true })
+    // Forsiden — en feilet spørring skal aldri se ut som «ingen polls»
+    // (Policy: Databasespørringer). Kastes videre gjennom Promise.all under.
+    if (pollerFeil) throw new Error(`Kunne ikke hente polls: ${pollerFeil.message}`)
 
     // Kåringspoll-aggregater hentes via RPC (mig. 079), fordi RLS skjuler
     // andres stemmer for vanlige medlemmer på åpne kåringspoller. For
@@ -82,17 +85,17 @@ export async function hentAgendaData(
   }
 
   const [
-    { data: arrangementer },
-    { data: profilerMedBursdag },
-    { data: ansvar },
+    { data: arrangementer, error: arrangementerFeil },
+    { data: profilerMedBursdag, error: profilerMedBursdagFeil },
+    { data: ansvar, error: ansvarFeil },
     { pollerRaad, kaaringAggregater },
-    { data: arrKommentarer },
-    { data: pollKommentarer },
-    { data: meldingerRaad },
-    { data: meldingReaksjoner },
-    { data: meldingKommentarer },
-    { data: albumMedArrangement },
-    { data: aktiveProfiler },
+    { data: arrKommentarer, error: arrKommentarerFeil },
+    { data: pollKommentarer, error: pollKommentarerFeil },
+    { data: meldingerRaad, error: meldingerRaadFeil },
+    { data: meldingReaksjoner, error: meldingReaksjonerFeil },
+    { data: meldingKommentarer, error: meldingKommentarerFeil },
+    { data: albumMedArrangement, error: albumMedArrangementFeil },
+    { data: aktiveProfiler, error: aktiveProfilerFeil },
   ] = await Promise.all([
     // arrangement_chat(count) gir totalt kommentarantall per arr via PostgREST
     // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
@@ -196,6 +199,19 @@ export async function hentAgendaData(
       .select('id, navn, bilde_url, rolle')
       .eq('aktiv', true),
   ])
+
+  // Forsiden — driver hele agenda-feeden. En feilet delspørring skal aldri
+  // stille gi en tom/ufullstendig forside (Policy: Databasespørringer).
+  if (arrangementerFeil) throw new Error(`Kunne ikke hente arrangementer: ${arrangementerFeil.message}`)
+  if (profilerMedBursdagFeil) throw new Error(`Kunne ikke hente bursdager: ${profilerMedBursdagFeil.message}`)
+  if (ansvarFeil) throw new Error(`Kunne ikke hente arrangoransvar: ${ansvarFeil.message}`)
+  if (arrKommentarerFeil) throw new Error(`Kunne ikke hente arrangement-kommentarer: ${arrKommentarerFeil.message}`)
+  if (pollKommentarerFeil) throw new Error(`Kunne ikke hente poll-kommentarer: ${pollKommentarerFeil.message}`)
+  if (meldingerRaadFeil) throw new Error(`Kunne ikke hente meldinger: ${meldingerRaadFeil.message}`)
+  if (meldingReaksjonerFeil) throw new Error(`Kunne ikke hente meldingsreaksjoner: ${meldingReaksjonerFeil.message}`)
+  if (meldingKommentarerFeil) throw new Error(`Kunne ikke hente meldingskommentarer: ${meldingKommentarerFeil.message}`)
+  if (albumMedArrangementFeil) throw new Error(`Kunne ikke hente album: ${albumMedArrangementFeil.message}`)
+  if (aktiveProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${aktiveProfilerFeil.message}`)
 
   // Aggreger poll-stemmer: antall unike profiler + om innlogget bruker er
   // blant dem, + hvilke valg jeg har stemt på. Valgene sorteres etter
@@ -368,12 +384,13 @@ export async function hentAgendaData(
   // Dedup før .in()-kallet — samme mønster som mottakerlisten i lib/varsler.ts.
   const kommentarIder = Array.from(new Set(kommentarIderRaw))
 
-  const { data: chatReaksjoner } = kommentarIder.length > 0
+  const { data: chatReaksjoner, error: chatReaksjonerFeil } = kommentarIder.length > 0
     ? await supabase
         .from('chat_reaksjoner')
         .select('melding_id, profil_id, emoji')
         .in('melding_id', kommentarIder)
-    : { data: [] as RawChatReaksjon[] }
+    : { data: [] as RawChatReaksjon[], error: null }
+  if (chatReaksjonerFeil) throw new Error(`Kunne ikke hente reaksjoner: ${chatReaksjonerFeil.message}`)
 
   // Aggreger reaksjoner per kommentar-id (arrangement_chat/poll_chat/melding_chat).
   // Samme logikk som reaksjonerPerMelding over, men for chat_reaksjoner-tabellen. se #359.

@@ -5,6 +5,7 @@ import { hentInnspill } from '@/lib/innspill'
 import { formaterDato } from '@/lib/dato'
 import { createServerClient } from '@/lib/supabase/server'
 import SectionLabel from '@/components/ui/SectionLabel'
+import { logg } from '@/lib/logg'
 
 type Props = {
   searchParams: Promise<{ visning?: 'alle' | 'apne' | 'lukket' }>
@@ -25,9 +26,14 @@ export default async function InnspillSide({ searchParams }: Props) {
 
   // Hent navn på alle innsendere (for admin-visning)
   const profilIder = [...new Set(innspill.map(i => i.profilId).filter((x): x is string => !!x))]
-  const { data: profiler } = profilIder.length
+  const { data: profiler, error: profilerFeil } = profilIder.length
     ? await supabase.from('profiles').select('id, navn').in('id', profilIder)
-    : { data: [] }
+    : { data: [], error: null }
+  // Ren berikelse (viser innsenders navn på admin-visningen) — faller tilbake
+  // til «ingen navn» under, ikke kritisk nok til å ta ned hele innspill-siden.
+  if (profilerFeil) {
+    await logg.feil('innspill.profiler.oppslag.feilet', profilerFeil)
+  }
   const navnMap = new Map((profiler ?? []).map(p => [p.id, p.navn ?? '—']))
 
   const filtrerte = innspill.filter(i => {

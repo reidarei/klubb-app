@@ -22,28 +22,43 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
   revalidatePath('/innstillinger')
 }
 
-export async function oppdaterTestEpost(epost: string) {
+// Returnerer resultat i stedet for å kaste: kallet skjer fra en
+// startTransition() i TestEpostVelger, og en avvist server action i en
+// transition propagerer til nærmeste error boundary i React 19 — altså ville
+// hele /innstillinger blitt byttet ut med feilskjermen fordi et nedtrekk
+// feilet. Samme mønster som fond.ts (#459). Feilen vises inline ved velgeren.
+export async function oppdaterTestEpost(
+  epost: string,
+): Promise<{ ok: true } | { ok: false; feil: string }> {
   const profil = await getProfil()
-  if (!kanAdministrere(profil?.rolle)) return
+  if (!kanAdministrere(profil?.rolle)) return { ok: false, feil: 'Du har ikke tilgang til å endre dette' }
 
   const admin = createAdminClient()
   // Kun aktive admin-profiler er gyldige test-mottakere — testmodus skal
   // aldri kunne rute varsler til et vanlig medlem ved en feiltastet epost.
-  const { data: mottaker } = await admin
+  const { data: mottaker, error: mottakerFeil } = await admin
     .from('profiles')
     .select('id')
     .eq('epost', epost)
     .eq('aktiv', true)
     .in('rolle', rollerMed('kanAdministrere'))
     .maybeSingle()
-  if (!mottaker) return
+  if (mottakerFeil) return { ok: false, feil: `Kunne ikke slå opp testmottaker: ${mottakerFeil.message}` }
+  // Praktisk talt uoppnåelig — <select> fôres kun med admin-eposter fra
+  // serveren — men en deaktivert admin midt i økta ville treffe her.
+  if (!mottaker) return { ok: false, feil: 'Fant ingen aktiv admin med den eposten' }
 
-  await admin
+  // Uten error-uthenting ville en feilet update sett ut som suksess i UI-et
+  // (Policy: Databasespørringer) — nedtrekket ville sprette tilbake ved neste
+  // lasting uten at noen forsto hvorfor.
+  const { error: skriveFeil } = await admin
     .from('varsel_innstillinger')
     .update({ beskrivelse: epost, oppdatert: naa() })
     .eq('noekkel', 'test_modus')
+  if (skriveFeil) return { ok: false, feil: `Kunne ikke lagre test-epost: ${skriveFeil.message}` }
 
   revalidatePath('/innstillinger')
+  return { ok: true }
 }
 
 // Oppdaterer ett funksjonsflagg i app_innstillinger.

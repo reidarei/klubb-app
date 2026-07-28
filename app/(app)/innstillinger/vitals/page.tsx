@@ -56,12 +56,16 @@ export default async function VitalsAdmin({ searchParams }: Props) {
   const fra = new Date(Date.now() - dager * 24 * 60 * 60 * 1000).toISOString()
 
   // Vi bryr oss kun om mobil — appen er en PWA og brukes ikke på desktop i praksis.
-  const { data: rader } = await admin
+  const { data: rader, error: raderFeil } = await admin
     .from('vitals_logg')
     .select('rute, metric, verdi, device_type')
     .gte('opprettet', fra)
     .eq('device_type', 'mobile')
     .limit(20_000)
+
+  // Aggregat-side — «0 målinger» må bety faktisk 0 rader, ikke en feilet
+  // spørring som ser ut som en stille dag.
+  if (raderFeil) throw new Error(`Kunne ikke hente ytelsesmålinger: ${raderFeil.message}`)
 
   // Grupper (rute, metric) → verdier
   const grupper = new Map<string, { rute: string; metric: string; verdier: number[] }>()

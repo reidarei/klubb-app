@@ -21,10 +21,10 @@ export default async function NyKaaringspoll() {
   const tidligsteArrIso = addDays(norskDatoNaa(), -ARRANGEMENT_TILBAKE_DAGER).toISOString()
 
   const [
-    { data: maler },
-    { count: medlemAntall },
-    { data: aaretsMoeter },
-    { data: aktuelleArr },
+    { data: maler, error: malerFeil },
+    { count: medlemAntall, error: medlemAntallFeil },
+    { data: aaretsMoeter, error: aaretsMoeterFeil },
+    { data: aktuelleArr, error: aktuelleArrFeil },
   ] = await Promise.all([
     supabase
       .from('kaaringmaler')
@@ -43,13 +43,24 @@ export default async function NyKaaringspoll() {
       .gte('start_tidspunkt', tidligsteArrIso)
       .order('start_tidspunkt', { ascending: false }),
   ])
+  // Skjemaet under styrer hvilke maler/arrangementer en kåringspoll kan
+  // opprettes for — samme "kast heller enn å gjette"-resonnement som
+  // brukteMaler-oppslaget under.
+  if (malerFeil) throw new Error(`Kunne ikke hente kåringmaler: ${malerFeil.message}`)
+  if (medlemAntallFeil) throw new Error(`Kunne ikke telle medlemmer: ${medlemAntallFeil.message}`)
+  if (aaretsMoeterFeil) throw new Error(`Kunne ikke hente årets møter: ${aaretsMoeterFeil.message}`)
+  if (aktuelleArrFeil) throw new Error(`Kunne ikke hente arrangementer: ${aktuelleArrFeil.message}`)
 
   // Fjern maler som allerede har en åpen eller avgjort kåringspoll for året.
-  const { data: brukteMaler } = await supabase
+  const { data: brukteMaler, error: brukteMalerFeil } = await supabase
     .from('poll')
     .select('kaaring_mal_id')
     .eq('aar', aar)
     .not('kaaring_mal_id', 'is', null)
+
+  // Feiler denne stille, viser skjemaet maler som «ledige» selv om de alt er
+  // brukt — det kan gi en duplikat kåringspoll. Kast heller enn å gjette.
+  if (brukteMalerFeil) throw new Error(`Kunne ikke hente brukte kåringsmaler: ${brukteMalerFeil.message}`)
 
   const tatt = new Set((brukteMaler ?? []).map(b => b.kaaring_mal_id))
   const tilgjengelige = (maler ?? []).filter(m => !tatt.has(m.id))

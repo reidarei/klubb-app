@@ -14,10 +14,10 @@ export default async function Kaaringer() {
   const gjeldende_aar = norskAar()
 
   const [
-    { data: maler },
-    { data: vinnere },
-    { data: medlemmer },
-    { data: arrangementer },
+    { data: maler, error: malerFeil },
+    { data: vinnere, error: vinnereFeil },
+    { data: medlemmer, error: medlemmerFeil },
+    { data: arrangementer, error: arrangementerFeil },
   ] = await Promise.all([
     supabase
       .from('kaaringmaler')
@@ -43,6 +43,12 @@ export default async function Kaaringer() {
       .select('id, tittel, start_tidspunkt')
       .order('start_tidspunkt', { ascending: false }),
   ])
+  // Kjerneinnhold på siden (kåringshistorikk) — kaster i stedet for å vise
+  // en tom/ufullstendig historikk (Policy: Databasespørringer).
+  if (malerFeil) throw new Error(`Kunne ikke hente kåringmaler: ${malerFeil.message}`)
+  if (vinnereFeil) throw new Error(`Kunne ikke hente kåringsvinnere: ${vinnereFeil.message}`)
+  if (medlemmerFeil) throw new Error(`Kunne ikke hente medlemmer: ${medlemmerFeil.message}`)
+  if (arrangementerFeil) throw new Error(`Kunne ikke hente arrangementer: ${arrangementerFeil.message}`)
 
   // År fra 2008 til nå, pluss evt. eldre med vinnere
   const aarSet = new Set<number>()

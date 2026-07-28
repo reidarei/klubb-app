@@ -7,6 +7,7 @@ import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import AlbumTittel from '@/components/album/AlbumTittel'
 import TillatLandskap from '@/components/album/TillatLandskap'
 import { kanAdministrere } from '@/lib/roller'
+import { logg } from '@/lib/logg'
 
 export default async function AlbumSide({
   params,
@@ -25,7 +26,10 @@ export default async function AlbumSide({
 
   // Album og profiler (til mention-forslag i bilde-kommentarer, #481) hentes
   // parallelt — samme profil-form (ChatProfil) som resten av chat-flaten.
-  const [{ data: album }, { data: profiler }] = await Promise.all([
+  const [
+    { data: album, error: albumFeil },
+    { data: profiler, error: profilerFeil },
+  ] = await Promise.all([
     supabase
       .from('album')
       .select(
@@ -38,11 +42,19 @@ export default async function AlbumSide({
          )`,
       )
       .eq('id', id)
-      .single(),
+      .maybeSingle(),
     supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
   ])
 
+  if (albumFeil) throw new Error(`Kunne ikke hente album: ${albumFeil.message}`)
   if (!album) notFound()
+
+  // profiler brukes kun til @mention-forslag i bilde-kommentarer — ren
+  // berikelse, ikke kritisk nok til å ta ned hele albumsiden. Logges så
+  // feilen ikke drukner stille.
+  if (profilerFeil) {
+    await logg.feil('album.profiler.oppslag.feilet', profilerFeil, { ctx: { album_id: id } })
+  }
 
   const arrangement = Array.isArray(album.arrangement) ? album.arrangement[0] : album.arrangement
   const bilder = ((album.album_bilde ?? []) as Array<{

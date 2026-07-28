@@ -12,9 +12,12 @@ type StatistikkData = {
 export default async function Statistikk() {
   const supabase = await createServerClient()
 
-  const { data } = await supabase.rpc('get_statistikk')
+  const { data, error } = await supabase.rpc('get_statistikk')
+  if (error) throw new Error(`Kunne ikke hente statistikk: ${error.message}`)
   const stats = data as StatistikkData | null
 
+  // Aggregat-RPC uten feil, men uten data (skal ikke skje i praksis) — vis
+  // ingenting fremfor å kaste på et helt tomt datasett.
   if (!stats) return null
 
   const sortert = stats.deltagelse ?? []

@@ -83,18 +83,18 @@ export default async function Innstillinger() {
   const sisteDognIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const sjuDagerIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const [
-    { data: logg, count: varselTotal },
-    { count: pushCount },
-    { data: innstillinger },
-    { count: passVentende },
-    { count: varselSisteDogn },
-    { data: vitalsRader },
-    { data: adminProfiler },
-    { data: egenProfil },
+    { data: logg, count: varselTotal, error: loggFeil },
+    { count: pushCount, error: pushCountFeil },
+    { data: innstillinger, error: innstillingerFeil },
+    { count: passVentende, error: passVentendeFeil },
+    { count: varselSisteDogn, error: varselSisteDognFeil },
+    { data: vitalsRader, error: vitalsFeil },
+    { data: adminProfiler, error: adminProfilerFeil },
+    { data: egenProfil, error: egenProfilFeil },
     fondFaneAktiv,
     chatFaneAktiv,
-    { data: aktivitetDagerRaw },
-    { data: aktivitetUkerRaw },
+    { data: aktivitetDagerRaw, error: aktivitetDagerFeil },
+    { data: aktivitetUkerRaw, error: aktivitetUkerFeil },
   ] = await Promise.all([
     admin
       .from('varsel_logg')
@@ -144,6 +144,21 @@ export default async function Innstillinger() {
       .order('uke_start', { ascending: false })
       .limit(2),
   ])
+  // Admin-siden viser og lar admin justere brytere (varsel_innstillinger,
+  // bursdagsgratulasjon_aktiv) og statistikk (vitals, aktivitet, varsel-tall)
+  // — en svelget feil her ville enten vist en feilaktig 0/av-tilstand eller
+  // latt admin styre ut fra feil grunnlag. Kaster på alle (Policy:
+  // Databasespørringer).
+  if (loggFeil) throw new Error(`Kunne ikke hente varsel_logg: ${loggFeil.message}`)
+  if (pushCountFeil) throw new Error(`Kunne ikke telle push-abonnementer: ${pushCountFeil.message}`)
+  if (innstillingerFeil) throw new Error(`Kunne ikke hente varsel_innstillinger: ${innstillingerFeil.message}`)
+  if (passVentendeFeil) throw new Error(`Kunne ikke telle ventende pass: ${passVentendeFeil.message}`)
+  if (varselSisteDognFeil) throw new Error(`Kunne ikke telle varsler siste døgn: ${varselSisteDognFeil.message}`)
+  if (vitalsFeil) throw new Error(`Kunne ikke hente vitals_logg: ${vitalsFeil.message}`)
+  if (adminProfilerFeil) throw new Error(`Kunne ikke hente adminprofiler: ${adminProfilerFeil.message}`)
+  if (egenProfilFeil) throw new Error(`Kunne ikke hente egen profil: ${egenProfilFeil.message}`)
+  if (aktivitetDagerFeil) throw new Error(`Kunne ikke hente aktivitet_dag: ${aktivitetDagerFeil.message}`)
+  if (aktivitetUkerFeil) throw new Error(`Kunne ikke hente aktivitet_uke: ${aktivitetUkerFeil.message}`)
 
   // Aggreger vitals — p75 per metric for mobil siste 7 dager
   type VitalsRow = { metric: string; verdi: number }
@@ -186,11 +201,20 @@ export default async function Innstillinger() {
   const mandag = osloUkestart()
   const wau = aktivitetUker.find(r => r.uke_start !== mandag)?.unike ?? 0
 
-  const [{ data: maler }, { data: kaaringmaler }, aapneIssues] = await Promise.all([
+  const [
+    { data: maler, error: malerFeil },
+    { data: kaaringmaler, error: kaaringmalerFeil },
+    aapneIssues,
+  ] = await Promise.all([
     admin.from('arrangementmaler').select('*').order('rekkefølge'),
     admin.from('kaaringmaler').select('id, navn, rekkefolge').order('rekkefolge'),
     hentAapneIssues(),
   ])
+  // Editerbare admin-lister (ArrangementmalerAdmin/KaaringMalAdmin) — samme
+  // fare som fond/rediger: en tom liste fra en svelget feil kan overskrive
+  // ekte rader ved neste lagring.
+  if (malerFeil) throw new Error(`Kunne ikke hente arrangementmaler: ${malerFeil.message}`)
+  if (kaaringmalerFeil) throw new Error(`Kunne ikke hente kåringmaler: ${kaaringmalerFeil.message}`)
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
