@@ -134,7 +134,9 @@ Varsler er asynkrone og kan mislykkes midt i utsendingen. For å unngå duplikat
 
 6. **`varsel_logg` er medlemmets innboks, ikke appens kvitteringsbok.** Logg-rader prunes aldri. De er brukerens synlige varselhistorikk.
 
-7. **Markøren dekker det utfallet som var kjent da den ble satt.** Hvis to ulike varsler skal sendes for samme hendelse (f.eks. pass godkjent → både «du ble passet inn» og en påminnelses-pussh), krever det to markør-kolonner. Hver markør styrer sin egen retry-kø uavhengig.
+7. **Markøren dekker det utfallet som var kjent da den ble satt.** Hvis to ulike varsler skal sendes for samme hendelse (f.eks. tiebreak-varslet «generalsekretæren må avgjøre» og senere vinner-varslet «kampen er avgjort»), krever det to markør-kolonner. Hver markør styrer sin egen retry-kø uavhengig. Prøv aldri å tolke én markør ut fra kontekst — lag en ny kolonne i stedet.
+
+**Dedup-nøkkelen må finnes** for at `tillatDuplikat: false` skal ha effekt. Funksjonen sjekker duplikater kun for varsler som har enten `arrangementId` eller `pollId` (eller eksplisitt `dedupNoekkel`). Et varsel som sender ingen av disse med `tillatDuplikat: false` beskytter ingenting — det er en stille no-op. Varsler som tåler duplikater, som `arrangor_purring`, `melding-ny` og `klient_alarm`, setter `tillatDuplikat: true` eksplisitt for å være ærlige om oppførselen.
 
 **Feilkontrakt — `sendVarsel()` kaster:**
 
