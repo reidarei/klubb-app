@@ -33,10 +33,18 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+// Sidene importeres på modulnivå, ikke inne i hver test. `vi.mock` hoistes
+// over imports, så mockene er på plass uansett — men en `await import()` inne
+// i testkroppen betaler transform-kostnaden for hele sidens avhengighetstre
+// under testens 5s-timeout, og tippet av og til over. Det ga en test som var
+// rød ca. hver femte kjøring uten at noe var galt med koden.
+const { default: VedtektSide } = await import('@/app/(app)/klubbinfo/vedtekter/[slug]/page')
+const { default: VarselSide } = await import('@/app/(app)/varsler/[id]/page')
+const { default: SamtalerInbox } = await import('@/app/(app)/samtaler/page')
+
 describe('klubbinfo/vedtekter/[slug] — vedtekt-oppslag', () => {
   it('gir notFound() når slug-en faktisk ikke finnes (0 rader, ingen feil)', async () => {
     mockFrom.mockImplementation(() => lagChain(null))
-    const { default: VedtektSide } = await import('@/app/(app)/klubbinfo/vedtekter/[slug]/page')
     await expect(
       VedtektSide({ params: Promise.resolve({ slug: 'finnes-ikke' }) }),
     ).rejects.toThrow('NEXT_NOT_FOUND')
@@ -46,7 +54,6 @@ describe('klubbinfo/vedtekter/[slug] — vedtekt-oppslag', () => {
     mockFrom.mockImplementation((tabell: string) =>
       tabell === 'vedtekter' ? lagChain(null, { message: 'DB nede' }) : lagChain(null),
     )
-    const { default: VedtektSide } = await import('@/app/(app)/klubbinfo/vedtekter/[slug]/page')
     await expect(
       VedtektSide({ params: Promise.resolve({ slug: 'vedtekter' }) }),
     ).rejects.toThrow('Kunne ikke hente vedtekt: DB nede')
@@ -58,7 +65,6 @@ describe('klubbinfo/vedtekter/[slug] — vedtekt-oppslag', () => {
       if (tabell === 'vedtekter_versjoner') return lagChain(null, { message: 'DB nede' })
       return lagChain(null)
     })
-    const { default: VedtektSide } = await import('@/app/(app)/klubbinfo/vedtekter/[slug]/page')
     await expect(
       VedtektSide({ params: Promise.resolve({ slug: 'vedtekter' }) }),
     ).rejects.toThrow('Kunne ikke hente versjonshistorikk: DB nede')
@@ -68,7 +74,6 @@ describe('klubbinfo/vedtekter/[slug] — vedtekt-oppslag', () => {
 describe('varsler/[id] — enkeltvarsel', () => {
   it('gir notFound() når varselet ikke finnes for denne brukeren (0 rader, ingen feil)', async () => {
     mockFrom.mockImplementation(() => lagChain(null))
-    const { default: VarselSide } = await import('@/app/(app)/varsler/[id]/page')
     await expect(
       VarselSide({ params: Promise.resolve({ id: 'varsel-borte' }) }),
     ).rejects.toThrow('NEXT_NOT_FOUND')
@@ -76,7 +81,6 @@ describe('varsler/[id] — enkeltvarsel', () => {
 
   it('kaster (ikke notFound) når varsel-oppslaget faktisk feiler', async () => {
     mockFrom.mockImplementation(() => lagChain(null, { message: 'DB nede' }))
-    const { default: VarselSide } = await import('@/app/(app)/varsler/[id]/page')
     await expect(
       VarselSide({ params: Promise.resolve({ id: 'varsel-1' }) }),
     ).rejects.toThrow('Kunne ikke hente varsel: DB nede')
@@ -86,13 +90,11 @@ describe('varsler/[id] — enkeltvarsel', () => {
 describe('samtaler — inbox-liste', () => {
   it('tom liste (0 rader, ingen feil) kaster ikke — viser tom-tilstand', async () => {
     mockFrom.mockImplementation(() => lagChain([]))
-    const { default: SamtalerInbox } = await import('@/app/(app)/samtaler/page')
     await expect(SamtalerInbox()).resolves.toBeDefined()
   })
 
   it('kaster når samtaler-spørringen faktisk feiler', async () => {
     mockFrom.mockImplementation(() => lagChain(null, { message: 'DB nede' }))
-    const { default: SamtalerInbox } = await import('@/app/(app)/samtaler/page')
     await expect(SamtalerInbox()).rejects.toThrow('Kunne ikke hente samtaler: DB nede')
   })
 })

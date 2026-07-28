@@ -106,7 +106,10 @@ export const LONG_PRESS_BEVEGELSE_PX = 10
 export const LOGG_FEIL_RATE_LIMIT_PER_MIN = 10
 
 // Antall dager feil_logg-rader beholdes. Sletting utføres av sjekk-klientfeil-cron.
-export const LOGG_FEIL_RETENSJONSDAGER = 30
+// Hevet fra 30 til 180 da feilloggen begynte å motta server-feil og ikke bare
+// klientfeil (#496) — 30 dager er nok til å feilsøke, men for kort til å se om
+// noe kommer igjen sesongvis. Se docs/feilstrategi.md § 4.
+export const LOGG_FEIL_RETENSJONSDAGER = 180
 
 // Antall klientfeil siste 24t som trigger admin-varsel i sjekk-klientfeil-cron.
 // 0 = varsle på alle feil (>= 1 feil siste døgn). Bevisst valg: etter at begge
