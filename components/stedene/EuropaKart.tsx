@@ -47,6 +47,7 @@ export default function EuropaKart({ steder }: Props) {
   return (
     <div>
       <div
+        data-testid="europa-kart"
         onClick={() => setValgt(null)}
         style={{
           position: 'relative',
@@ -144,8 +145,11 @@ export default function EuropaKart({ steder }: Props) {
         })}
       </div>
 
-      {/* Detaljkort: valgt sted, eller hint */}
+      {/* Detaljkort: valgt sted, eller hint. data-testid brukt av
+          e2e/stedene.spec.ts (#514) — «Lisboa» vises både i kart-etiketten og
+          her, så en ren tekst-locator ville vært flertydig uten disse. */}
       <div
+        data-testid="sted-detaljkort"
         style={{
           marginTop: 18,
           minHeight: 64,
@@ -166,6 +170,7 @@ export default function EuropaKart({ steder }: Props) {
               }}
             >
               <div
+                data-testid="sted-detaljkort-navn"
                 style={{
                   flex: 1,
                   fontFamily: 'var(--font-display)',
@@ -291,6 +296,7 @@ export default function EuropaKart({ steder }: Props) {
           </div>
         ) : (
           <div
+            data-testid="sted-hint"
             style={{
               fontSize: 13,
               color: 'var(--text-tertiary)',

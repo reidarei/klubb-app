@@ -40,11 +40,35 @@ if (/supabase\.(co|com)/.test(E2E_SUPABASE_URL)) {
   )
 }
 
+// Egen port (3100) for test-dev-serveren: en vanlig `npm run dev` mot prod-DB
+// kjører på 3000, og reuseExistingServer må aldri kunne gjenbruke den.
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3100'
+
 // Innloggingen for testene er den seedede admin-brukeren fra supabase/seed.sql.
 // Verdiene er ikke hemmeligheter — de finnes bare i test-instansen.
 if (HAR_TEST_INSTANS) {
+  // Literalen er bevisst duplisert fra SEED_PASSORD i e2e/helpers/auth.ts og
+  // ikke importert derfra: auth.ts leser TEST_EPOST/TEST_PASSORD på modul-
+  // last, så en import her ville evaluert modulen FØR linjene under kjørte og
+  // låst begge til tom streng — hvorpå harTestCreds() ville skippet alt.
   process.env.TEST_EPOST = 'e2e-admin@klubb.test'
   process.env.TEST_PASSORD = 'e2e-lokal-hemmelighet'
+
+  // Overstyr prod-verdiene fra .env.local i SELVE TESTPROSESSEN, ikke bare i
+  // dev-server-barnet via webServer.env. Uten dette satt testrunneren igjen
+  // med prod-Supabase (URL + service-key) og prod-BASE_URL i process.env —
+  // og siden BLOKKER_UTSENDING i lib/varsler.ts utledes av at BASE_URL er
+  // lokal, ville en spec som importerer server-kode direkte (i stedet for å
+  // gå via HTTP mot :3100) truffet prod med varselvakten AV. Ingen spec gjør
+  // det i dag; dette er felle-fjerning, ikke bugfiks. Se e2e/README.md
+  // § Sikkerhetsmodellen.
+  //
+  // Rekkefølgen er trygg: dev-server-barnet arver process.env OG får
+  // webServer.env på toppen, så barnet ser samme verdier uansett.
+  process.env.NEXT_PUBLIC_SUPABASE_URL = E2E_SUPABASE_URL
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = E2E_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY = E2E_SUPABASE_SERVICE_KEY
+  process.env.NEXT_PUBLIC_BASE_URL = BASE_URL
 } else {
   // Uten test-instans skal ingen spec kjøre — nullstill creds slik at
   // harTestCreds() i helpers/auth.ts gir skip med tydelig melding, selv om
@@ -52,10 +76,6 @@ if (HAR_TEST_INSTANS) {
   delete process.env.TEST_EPOST
   delete process.env.TEST_PASSORD
 }
-
-// Egen port (3100) for test-dev-serveren: en vanlig `npm run dev` mot prod-DB
-// kjører på 3000, og reuseExistingServer må aldri kunne gjenbruke den.
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3100'
 
 export default defineConfig({
   testDir: './e2e',
@@ -86,6 +106,12 @@ export default defineConfig({
             NEXT_PUBLIC_SUPABASE_ANON_KEY: E2E_SUPABASE_ANON_KEY,
             SUPABASE_SERVICE_ROLE_KEY: E2E_SUPABASE_SERVICE_KEY,
             NEXT_PUBLIC_BASE_URL: BASE_URL,
+            // Pinnes eksplisitt til 'false': barnet arver process.env, så en
+            // ALLOW_LOCAL_NOTIFICATIONS=true som en utvikler har lagt i
+            // .env.local for feilsøking ville ellers sluppet e2e-suiten
+            // (som med vilje kjører hele varsel-cronen) helt frem til
+            // sendEpostBatch/sendPush med prod-Resend- og VAPID-nøkler.
+            ALLOW_LOCAL_NOTIFICATIONS: 'false',
           },
         },
       }

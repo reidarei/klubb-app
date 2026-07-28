@@ -175,6 +175,12 @@ export default async function Stedene() {
           <div
             // Indeksen alene gjør nøkkelen unik: samme år kan ha flere turer
             key={`${t.aar}-${i}`}
+            // data-testid + data-aar brukt av e2e/stedene.spec.ts (#514) til å
+            // plukke ut nøyaktig hull-raden for et gitt år — ren tekst-locator
+            // på årstallet er flertydig fordi selve wrapper-diven også
+            // «inneholder» årstallet i sin textContent.
+            data-testid={erHullRad(t) ? 'reiserute-hull' : 'reiserute-rad'}
+            data-aar={t.aar}
             style={{
               display: 'flex',
               alignItems: 'baseline',

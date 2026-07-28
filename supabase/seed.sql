@@ -255,3 +255,126 @@ select
   v.idx
 from generate_series(0, 3) as i
 cross join (values ('Ja', 0), ('Nei', 1)) as v(tekst, idx);
+
+-- ─── Turer med destinasjon for /stedene (#514) ─────────────────────────────
+-- Ingen av turene i /tidligere-bulken over har `destinasjon` satt (den bulken
+-- tester en annen flate) — uten denne blokka har test-instansen NULL
+-- plottbare turer, og /stedene viser bare hint-teksten og en tom reiserute
+-- uansett hva man endrer. lat/lng er de reelle koordinatene til bysentrum
+-- (kun brukt til projeksjon på kartet via lib/europa-kart-data.ts — ingen
+-- klubbidentitet i tallene).
+--
+-- Prefiks 9600 (ikke 9100-9400): e2e/tidligere.spec.ts sin SEED_HREF_RE
+-- (`-4000-9[1-4]00-`) skal ikke telle disse med i ANT_TUR — de hører til en
+-- annen spec sin telling og ville ellers krevd en oppdatering der for en
+-- endring som ikke har noe med /tidligere å gjøre.
+--
+-- Byvalg er bevisst spredt langt fra hverandre på kartprojeksjonen (Lisboa/
+-- Stockholm/Edinburgh, ikke f.eks. Berlin/København som ligger < 44 px fra
+-- hverandre i denne forenklede projeksjonen) — markørenes 44 px treffområder
+-- (se TREFF i EuropaKart.tsx) må IKKE overlappe, ellers blir
+-- e2e/stedene.spec.ts sine klikk flaky (samme klasse feil som #508 fikset
+-- for produksjonskartet).
+--
+-- Lisboa brukes to ganger (2015 og 2017) for å dekke kartetikettens
+-- «x{antall}»-visning. 2018 er bevisst utelatt: fyllHullAar() (lib/reiserute.ts)
+-- fyller automatisk inn et hull-år mellom laveste og høyeste registrerte år,
+-- og dekker dermed strek-raden i Reiseruta uten en egen «tom»-rad her.
+insert into public.arrangementer (id, type, tittel, destinasjon, lat, lng, start_tidspunkt, opprettet_av)
+values
+  (
+    '00000000-0000-4000-9600-000000000001',
+    'tur', 'Sommertur til Lisboa', 'Lisboa', 38.7223, -9.1393,
+    '2015-06-20T15:00:00Z', '00000000-0000-4000-8000-000000000001'
+  ),
+  (
+    '00000000-0000-4000-9600-000000000002',
+    'tur', 'Vintertur til Stockholm', 'Stockholm', 59.3293, 18.0686,
+    '2016-11-10T15:00:00Z', '00000000-0000-4000-8000-000000000002'
+  ),
+  (
+    '00000000-0000-4000-9600-000000000003',
+    'tur', 'Høsttur til Lisboa', 'Lisboa', 38.7223, -9.1393,
+    '2017-09-15T15:00:00Z', '00000000-0000-4000-8000-000000000003'
+  ),
+  (
+    '00000000-0000-4000-9600-000000000004',
+    'tur', 'Vårtur til Edinburgh', 'Edinburgh', 55.9533, -3.1883,
+    '2019-05-05T15:00:00Z', '00000000-0000-4000-8000-000000000001'
+  );
+
+-- ─── Kåringspoller for retry-testen (#520) ─────────────────────────────────
+-- Prod har 0 avsluttede kåringspoller og denne fila holdt historisk
+-- kaaring_mal_id null overalt — retry-stien i behandleKaaringspoller()
+-- (lib/actions/paaminnelser.ts, #495/#504/#521) har derfor ALDRI kjørt mot en
+-- ekte database. e2e/kaaring-varsel-retry.spec.ts kjører den ekte cronen
+-- (/api/cron/paaminne) mot disse fire radene og verifiserer etterpå at
+-- riktige rader ble/ikke ble plukket opp — og setter dem tilbake til
+-- tilstanden under i sin egen afterEach (se e2e/helpers/rydd-kaaring-seed.ts),
+-- slik at en gjentatt kjøring finner samme utgangspunkt.
+--
+-- kaaring_mal_id løses via navn (ikke hardkodet uuid): kaaringmaler.id settes
+-- av migrasjon 026 med gen_random_uuid() default — verdien er ikke
+-- deterministisk på tvers av miljøer/reset. Merk at oppslaget gir NULL uten å
+-- feile hvis malen mangler, og cronen filtrerer bort rader uten mal — derfor
+-- har e2e/kaaring-varsel-retry.spec.ts en beforeEach som kaster hvis noen av
+-- de fire står med kaaring_mal_id = null. Ellers blir speccen grønn på tom luft.
+--
+-- svarfrist ligger 400 dager tilbake — bevisst LANGT utenfor
+-- AGENDA_VINDU_MND (12 mnd), som er vinduet forsiden henter poller i
+-- (.gte('svarfrist', cutoff) i lib/queries/agenda.ts). Med en fersk svarfrist
+-- havnet «Kåringtest …»-fixturene i agendaens tidligere-seksjon og dermed i
+-- de OFFENTLIGE README-skjermbildene som e2e/readme-skjermbilder.spec.ts
+-- fanger av «/». Ingen av cron-grenene bryr seg om hvor gammel svarfristen
+-- er: fersk-spørringen krever bare `svarfrist < nå`, og retry-vinduet måles
+-- på avsluttet_paa. Endres dette må e2e/helpers/rydd-kaaring-seed.ts følge
+-- etter i samme commit.
+--
+-- Fire rader, ikke tre (#520 foreslo «helst tre»): en fjerde («GAMMEL»,
+-- avsluttet FØR retry-vinduet) er nødvendig for å faktisk bevise at
+-- KAARING_VARSEL_RETRY_DAGER lar en gammel, permanent uvarslebar poll falle
+-- ut av køen — ingen av de tre opprinnelige radene dekker den grenen.
+insert into public.poll (id, spoersmaal, svarfrist, opprettet_av, kaaring_mal_id, aar, avsluttet_paa, tiebreak_status, vinner_varslet_paa)
+values
+  (
+    -- FERSK: svarfrist passert, ikke behandlet ennå. Plukkes opp av
+    -- «fersk»-spørringen (avsluttet_paa is null), som kaller den ekte RPC-en
+    -- avslutt_kaaringspoll og lukker pollen. Ingen poll_valg seedes — RPC-en
+    -- gir da 'ingen_stemmer' (v_topp_antall er null), som er en gyldig,
+    -- ufarlig utgang for testen (se migrasjon 077).
+    '00000000-0000-4000-9700-000000000001',
+    'Kåringtest FERSK — retry (#520)', now() - interval '400 days',
+    '00000000-0000-4000-8000-000000000001',
+    (select id from public.kaaringmaler where navn = 'Årets herre'), 2020,
+    null, null, null
+  ),
+  (
+    -- AVSLUTTET_MARKERT: allerede avsluttet OG allerede varslet
+    -- (vinner_varslet_paa satt) — retry-spørringen skal IKKE plukke denne
+    -- opp. Dekker «backfillen gjør at historiske poller ikke plukkes opp».
+    '00000000-0000-4000-9700-000000000002',
+    'Kåringtest AVSLUTTET_MARKERT — retry (#520)', now() - interval '400 days',
+    '00000000-0000-4000-8000-000000000001',
+    (select id from public.kaaringmaler where navn = 'Årets herre'), 2021,
+    now() - interval '3 days', 'avgjort', now() - interval '3 days'
+  ),
+  (
+    -- AVSLUTTET_UMARKERT: avsluttet, INNENFOR retry-vinduet, uten markør —
+    -- SKAL plukkes opp og stemples av retry-spørringen. Dette ER #520s
+    -- kjernepåstand.
+    '00000000-0000-4000-9700-000000000003',
+    'Kåringtest AVSLUTTET_UMARKERT — retry (#520)', now() - interval '400 days',
+    '00000000-0000-4000-8000-000000000001',
+    (select id from public.kaaringmaler where navn = 'Årets herre'), 2022,
+    now() - interval '2 days', 'avgjort', null
+  ),
+  (
+    -- AVSLUTTET_GAMMEL: avsluttet UTENFOR retry-vinduet (10 dager > 7 =
+    -- KAARING_VARSEL_RETRY_DAGER), uten markør — skal IKKE plukkes opp,
+    -- fordi tidsvinduet lar den falle ut selvhelende (jf. #504).
+    '00000000-0000-4000-9700-000000000004',
+    'Kåringtest AVSLUTTET_GAMMEL — retry (#520)', now() - interval '400 days',
+    '00000000-0000-4000-8000-000000000001',
+    (select id from public.kaaringmaler where navn = 'Årets herre'), 2023,
+    now() - interval '10 days', 'avgjort', null
+  );
