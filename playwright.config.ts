@@ -134,6 +134,24 @@ export default defineConfig({
       }
     : {}),
   projects: [
+    // RLS-suiten (#533) kjøres FØRST og HELT UAVHENGIG av setup/chromium:
+    // spec-ene tar ingen `page`-fixture (de snakker direkte med supabase-js/
+    // fetch, se e2e/README.md § RLS-tester), så de trenger verken en dev-
+    // server-session eller `auth.setup.ts` sin lagrede storageState. Ingen
+    // `dependencies`, ingen `storageState` — bevisst, ikke en forglemmelse:
+    // sikkerhetsgrensen skal gi raskest mulig feedback, og skal aldri kunne
+    // gå glipp av å kjøre fordi setup-prosjektet feilet.
+    //
+    // Presisering: spec-ene BRUKER ikke dev-serveren, men de venter fortsatt
+    // på den. `webServer` over er global i Playwright og startes før alle
+    // prosjekter — også ved `--project=rls`. Vi gjør den ikke betinget: det
+    // ville krevd å utlede prosjektvalget fra process.argv i configen, som er
+    // mer risiko (en feiltolkning skrur av serveren for HELE suiten) enn de
+    // sekundene det sparer.
+    {
+      name: 'rls',
+      testMatch: /rls[\\/].*\.spec\.ts$/,
+    },
     // Setup-prosjektet logger inn én gang og lagrer session til disk.
     // Reduserer auth-kall fra én per spec til én per kjøring. Se #381.
     {
@@ -147,7 +165,10 @@ export default defineConfig({
       // en implisitt avhengighet — vi vil ikke at auth.setup.ts skal kjøres to
       // ganger (én gang som setup-prosjekt, én gang her). Se #381.
       testMatch: /\.spec\.ts$/,
-      // I CI (#534) ekskluderes to spec-er som ikke er egnet som CI-port:
+      // rls/-mappen har sitt EGET prosjekt over og skal aldri også kjøre her
+      // — uten denne linjen (ikke betinget av CI, i motsetning til
+      // unntakene under) ville hver RLS-spec kjørt to ganger på enhver
+      // maskin. De to øvrige unntakene gjelder KUN i CI (#534):
       // - visuell.spec.ts fanger hver rute i try/catch og lagrer et
       //   skjermbilde uansett status — en 500-side blir «ok» der, så den
       //   asserterer i praksis ingenting. Den er et verktøy for MANUELL
@@ -155,9 +176,12 @@ export default defineConfig({
       // - readme-skjermbilder.spec.ts krever ekte medlemsnavn/prod-data (se
       //   e2e/README.md) og produserer «riktige men tomme» bilder mot
       //   test-instansens fiktive seed-data — ingen verdi i CI.
-      // Lokal kjøring er UPÅVIRKET: testIgnore er tom utenfor CI, og begge
-      // kjører fortsatt med `npx playwright test` på en utviklers maskin.
-      testIgnore: process.env.CI ? [/visuell\.spec\.ts$/, /readme-skjermbilder\.spec\.ts$/] : undefined,
+      // Lokal kjøring er upåvirket utover rls-utelatelsen: de to CI-spesifikke
+      // unntakene er fortsatt tom liste utenfor CI.
+      testIgnore: [
+        /rls[\\/]/,
+        ...(process.env.CI ? [/visuell\.spec\.ts$/, /readme-skjermbilder\.spec\.ts$/] : []),
+      ],
       use: {
         // Bevisst INGEN devices['Desktop Chrome']-spread her: prosjekt-use
         // overstyrer global use, og desktop-presetet ville byttet ut

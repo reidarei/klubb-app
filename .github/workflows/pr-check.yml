@@ -4,6 +4,8 @@
 # ekte secrets trengs. E2e-instansen startes fra bunn i selve jobben (fersk
 # `supabase start`) — se e2e/README.md § Sikkerhetsmodellen for hvorfor dette
 # er trygt og docs/ci-minuttbudsjett.md for hvorfor e2e kan bli kuttet.
+# E2e-steget inkluderer nå også e2e/rls/ (#533) — RLS-policyene verifiseres
+# her med ekte anon/authenticated-klienter, ikke bare service_role.
 
 name: PR-sjekk
 

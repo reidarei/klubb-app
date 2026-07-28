@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import fs from 'node:fs'
+import path from 'node:path'
 import { harTestCreds } from './helpers/auth'
 
 // Vakt over vakten. Hendelsen 2026-07-04 (#381/#386) var at e2e traff prod og
@@ -37,6 +39,30 @@ test('e2e kjørte faktisk: E2E_SUPABASE_* er satt i CI', () => {
   // Hermetegn ville ikke gjort variabelen tom, bare ubrukelig (jf. godotenv-
   // formatet CLI-en skriver) — sjekkes derfor eksplisitt.
   expect(process.env.E2E_SUPABASE_URL ?? '').not.toMatch(/["']/)
+})
+
+// «rls-prosjektet plukker opp spec-ene sine.» Må stå HER, i chromium-
+// prosjektet, ikke i e2e/rls/: drifter `testMatch` slik at rls-mappa faller
+// utenfor, kjører ingenting derfra — heller ikke en vakt plassert der. Da ville
+// hele RLS-porten forsvunnet uten et eneste rødt kryss (chromium ignorerer
+// e2e/rls/ med vilje, se testIgnore i playwright.config.ts).
+// Mønsteret speiles bevisst her i stedet for å importere playwright.config.ts:
+// den fila har side-effekter på process.env (env-lasting, overstyring av
+// Supabase-variablene) som vi ikke vil kjøre om igjen midt i en testkjøring.
+// Duplikatet er poenget — testen skal bli rød når de to går fra hverandre.
+const RLS_TEST_MATCH = /rls[\\/].*\.spec\.ts$/
+test('rls-prosjektet plukker opp alle spec-ene i e2e/rls/', () => {
+  const rlsDir = path.join(__dirname, 'rls')
+  const filer = fs.readdirSync(rlsDir).filter(f => f.endsWith('.spec.ts'))
+
+  expect(filer.length, 'e2e/rls/ har ingen spec-er — er de flyttet?').toBeGreaterThan(0)
+  for (const fil of filer) {
+    expect(
+      RLS_TEST_MATCH.test(path.join(rlsDir, fil)),
+      `${fil} matcher ikke rls-prosjektets testMatch — da kjøres den ingen steder ` +
+        `(chromium ignorerer e2e/rls/). Sjekk projects[name=rls].testMatch i playwright.config.ts.`,
+    ).toBe(true)
+  }
 })
 
 test.describe('sikkerhetsvakt: testprosessen peker mot test-instansen', () => {

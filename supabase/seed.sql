@@ -3,8 +3,9 @@
 -- Kjøres ALDRI mot sky-prosjektet: `supabase db push` kjører kun migrasjoner,
 -- aldri seed — denne fila treffer bare lokale instanser startet med CLI-en.
 --
--- Innholdet er fiktivt: tre testmedlemmer og to fremtidige arrangementer,
--- nok til at e2e-suiten (golden-path, poll-flytene) har noe å jobbe mot.
+-- Innholdet er fiktivt: fire testmedlemmer (inkl. én generalsekretær, #533)
+-- og to fremtidige arrangementer, nok til at e2e-suiten (golden-path,
+-- poll-flytene, RLS-suiten) har noe å jobbe mot.
 
 -- ─── Testbrukere i auth ──────────────────────────────────────────────────────
 -- Passord hashes med bcrypt slik GoTrue forventer. handle_ny_bruker-triggeren
@@ -49,6 +50,21 @@ values
     now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(),
     '', '', '', '',
     '', '', '', ''
+  ),
+  (
+    -- Fjerde testbruker — generalsekretær (#533). RLS-testene trenger en ekte
+    -- innlogget bruker med denne rollen for å bevise at er_admin() dekker
+    -- BEGGE admin-rollene, ikke bare 'admin' (se e2e/rls/admin-grense.spec.ts).
+    -- Ingen av de tre andre brukerne kan dekke det: rolle settes under, ikke
+    -- her — triggeren gir alle nye auth.users-rader rolle='medlem' først.
+    '00000000-0000-0000-0000-000000000000',
+    '00000000-0000-4000-8000-000000000004',
+    'authenticated', 'authenticated',
+    'gunnar.general@klubb.test',
+    extensions.crypt('e2e-lokal-hemmelighet', extensions.gen_salt('bf')),
+    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+    '', '', '', '',
+    '', '', '', ''
   );
 
 insert into auth.identities (
@@ -79,6 +95,11 @@ update public.profiles set
   navn = 'Ola Testesen', visningsnavn = 'Ola', rolle = 'medlem',
   fodselsdato = '1990-11-05'
 where id = '00000000-0000-4000-8000-000000000003';
+
+update public.profiles set
+  navn = 'Gunnar General', visningsnavn = 'Gunnar', rolle = 'generalsekretaer',
+  fodselsdato = '1978-01-30'
+where id = '00000000-0000-4000-8000-000000000004';
 
 -- ─── Arrangementer ───────────────────────────────────────────────────────────
 -- Golden-path trenger minst ett KOMMENDE arrangement på agendaen. Relative
@@ -388,7 +409,27 @@ values
 do $$
 declare
   antall int;
+  tabellnavn text;
 begin
+  -- RLS PÅ alle public-tabeller. Migrasjon 023 gjorde `drop table
+  -- kaaring_vinnere cascade` + gjenskapte tabellen, migrasjon 106 gjenopprettet
+  -- policyene — men ingen migrasjon skrudde RLS PÅ igjen. En ny tabell har RLS
+  -- av som default, og policies uten RLS er ren dekorasjon: de håndheves ikke.
+  -- Det sto slik i to år og ble først funnet av e2e/rls/-suiten (#533), lukket
+  -- av migrasjon 125. Denne sjekken lukker PROBLEMKLASSEN i stedet for det ene
+  -- tilfellet: enhver fremtidig tabell som lander uten `enable row level
+  -- security` feiler `db reset` høylytt her, ved kilden, med navnet sitt i
+  -- meldingen.
+  select count(*), string_agg(c.relname, ', ' order by c.relname)
+    into antall, tabellnavn
+  from pg_class c
+  where c.relnamespace = 'public'::regnamespace
+    and c.relkind = 'r'
+    and not c.relrowsecurity;
+  if antall <> 0 then
+    raise exception 'Seed-verifisering: % public-tabell(er) har RLS AV — policyene deres håndheves IKKE: %. Legg «alter table public.<tabell> enable row level security;» i en migrasjon (jf. mig. 125 / #533).', antall, tabellnavn;
+  end if;
+
   select count(*) into antall from public.kaaringmaler where navn = 'Årets herre';
   if antall = 0 then
     raise exception 'Seed-verifisering: fant ikke kaaringmalen «Årets herre» — #520-fixturene får kaaring_mal_id = null uten å feile.';
@@ -419,5 +460,14 @@ begin
     raise exception 'Seed-verifisering: e2e-admin@klubb.test mangler i auth.users/profiles, eller har ikke admin-rolle.';
   end if;
 
-  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer og e2e-admin er alle på plass.';
+  -- Nøyaktig én generalsekretær (#533-testbrukeren Gunnar). Partial unique
+  -- index profiles_unik_generalsekretaer (mig. 094) ville uansett feilet
+  -- HARDT ved et duplikat — denne sjekken fanger i stedet det MOTSATTE
+  -- feilmodus: at oppdateringen aldri traff (feil id, kolonne omdøpt).
+  select count(*) into antall from public.profiles where rolle = 'generalsekretaer';
+  if antall <> 1 then
+    raise exception 'Seed-verifisering: forventet nøyaktig 1 profil med rolle=generalsekretaer (Gunnar General), fant %.', antall;
+  end if;
+
+  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer, e2e-admin og generalsekretæren er alle på plass.';
 end $$;
