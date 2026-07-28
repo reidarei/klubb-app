@@ -8,9 +8,17 @@ vi.mock('next/headers', () => ({
   }),
 }))
 
+// Importene ligger på modulnivå, ikke inne i testkroppene. En `await import()`
+// der betaler transform-kostnaden for hele modultreet under testens 5s-timeout;
+// den første testen brukte 2,1 s lokalt og 5,1 s i CI, og feilet dermed på
+// timeout selv om selve ytelsespåstanden bestod. Samme felle som
+// pages-svelget-error-b.test.tsx gikk i. Kollekteringen har ingen timeout.
+const { formaterDato, FORMAT_DATO_KLOKKE, norskDatoNaa, datetimeLocalTilIso, isoTilDatetimeLocal } =
+  await import('@/lib/dato')
+const { kjorPaaminnelser } = await import('@/lib/actions/paaminnelser')
+
 describe('responstid – dato-operasjoner', () => {
   it('formaterDato kjører under 1ms', async () => {
-    const { formaterDato, FORMAT_DATO_KLOKKE } = await import('@/lib/dato')
     const iso = '2026-06-15T14:00:00Z'
 
     // Varm opp
@@ -27,7 +35,6 @@ describe('responstid – dato-operasjoner', () => {
   })
 
   it('norskDatoNaa kjører under 1ms', async () => {
-    const { norskDatoNaa } = await import('@/lib/dato')
 
     norskDatoNaa() // Varm opp
 
@@ -42,7 +49,6 @@ describe('responstid – dato-operasjoner', () => {
   })
 
   it('datetimeLocalTilIso roundtrip kjører under 2ms', async () => {
-    const { datetimeLocalTilIso, isoTilDatetimeLocal } = await import('@/lib/dato')
 
     const iso = '2026-06-15T14:00:00Z'
     isoTilDatetimeLocal(iso) // Varm opp
@@ -172,7 +178,6 @@ describe('responstid – cron-jobb overhead', () => {
       rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
 
-    const { kjorPaaminnelser } = await import('@/lib/actions/paaminnelser')
 
     const start = performance.now()
     await kjorPaaminnelser(mockAdmin as unknown as Parameters<typeof kjorPaaminnelser>[0])

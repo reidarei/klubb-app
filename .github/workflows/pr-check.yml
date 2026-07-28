@@ -1,6 +1,9 @@
 # CI-sjekk for pull requests mot main.
-# Kjører lint, tester og produksjonsbygg for å fange regresjoner
-# før merge. Build-steget bruker dummy-env slik at ingen ekte secrets trengs.
+# Kjører lint, tester, produksjonsbygg OG Playwright-e2e for å fange
+# regresjoner før merge (#534). Build-steget bruker dummy-env slik at ingen
+# ekte secrets trengs. E2e-instansen startes fra bunn i selve jobben (fersk
+# `supabase start`) — se e2e/README.md § Sikkerhetsmodellen for hvorfor dette
+# er trygt og docs/ci-minuttbudsjett.md for hvorfor e2e kan bli kuttet.
 
 name: PR-sjekk
 
@@ -9,9 +12,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Minste privilegium — jobben trenger bare å lese koden.
+# actions:read kreves av budsjettvakten (leser egne workflow-runs for å måle
+# forbrukte CI-minutter denne måneden), samme mønster som db-restore-drill.yml.
 permissions:
   contents: read
+  actions: read
 
 # Avbryt pågående run for samme branch ved nytt push — sparer CI-tid.
 # Gruppen inkluderer workflow-navn slik at fremtidige workflows ikke
@@ -23,7 +28,16 @@ concurrency:
 jobs:
   sjekk:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Var 15 (lint/typecheck/vitest/build). Med e2e (supabase start, migrasjoner,
+    # Chromium, selve Playwright-kjøringen) tar jobben ~9-10 min i normaltilfellet —
+    # 25 gir slingring uten å maskere en jobb som faktisk henger.
+    timeout-minutes: 25
+    env:
+      # kaaring-varsel-retry.spec.ts (linje ~34) skipper hele specen uten denne —
+      # den kjører den ekte /api/cron/paaminne-cronen og krever CRON_SECRET-auth.
+      # Verdien er en dummy: cronen kjører kun mot den ferske, isolerte
+      # test-instansen i denne jobben (se e2e/README.md § Sikkerhetsmodellen).
+      CRON_SECRET: ci-dummy-hemmelighet
 
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +47,39 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      # Budsjettvakt (#534) — kjøres FØR npm ci med vilje: den er ren Node uten
+      # avhengigheter, og et kutt her skal ikke betale for docker-pull/npm
+      # install vi likevel ikke trenger. Se .github/scripts/ci-minuttbudsjett.mjs
+      # og docs/ci-minuttbudsjett.md.
+      - name: CI-minuttbudsjett
+        id: budsjett
+        env:
+          REPO_PRIVAT: ${{ github.event.repository.private }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/ci-minuttbudsjett.mjs
+
       - name: Installer avhengigheter
         run: npm ci
 
+      # Bakgrunnsstart: supabase start tar 1-2 min (docker-pull + containere).
+      # Startes her, FØR de raske stegene (lint/typecheck/vitest/build), slik at
+      # oppstarten skjer parallelt med dem i stedet for sekvensielt etterpå.
+      # -x utelater tjenester e2e-suiten ikke bruker (studio, postgres-meta,
+      # mailpit, imgproxy, edge-runtime, logflare, vector, supavisor) — færre
+      # containere å starte og vedlikeholde i loggen.
+      - name: Start Supabase (bakgrunn)
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        run: |
+          # Exit-koden til en bakgrunnsprosess er utilgjengelig for et SENERE
+          # steg (`wait` virker kun på egne barn, og hvert run:-steg er sin egen
+          # shell). Vi skriver den derfor til en sentinel-fil som ventesteget
+          # poller. Uten dette forsvant exit-koden helt — en feilende seed.sql
+          # (raise exception-vakten, #534) ville vært usynlig.
+          nohup bash -c 'npx supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,supavisor > supabase-start.log 2>&1; echo $? > supabase-start.exit' > /dev/null 2>&1 &
+          echo "supabase start kjører i bakgrunnen (pid $!)."
+
+      # Kjerneporten — uendret og ubetinget uansett budsjettvaktens verdikt.
+      # Billig, og skal aldri ofres.
       - name: Lint
         run: npm run lint
 
@@ -54,3 +98,164 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: dummy
         run: npm run build
+
+      - name: Vent på Supabase
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        run: |
+          # Vi venter på at `supabase start` er FERDIG — ikke på at
+          # `supabase status` svarer. status sjekker kun at db-containeren er
+          # frisk (assertContainerHealthy(ctx, utils.DbId)) og lister stoppede
+          # tjenester til stderr uten å feile, så den kan bli grønn MENS de 123
+          # migrasjonene og seed.sql fortsatt kjører — hvorpå migrasjons-
+          # tellingen under leser et delvis antall og gir falsk rødt.
+          for i in $(seq 1 60); do
+            if [ -f supabase-start.exit ]; then
+              echo "supabase start ferdig etter ~$((i * 5)) s."
+              break
+            fi
+            sleep 5
+          done
+
+          if [ ! -f supabase-start.exit ]; then
+            echo "::error::supabase start ble ikke ferdig innen ~5 minutter. Logg:"
+            cat supabase-start.log || true
+            exit 1
+          fi
+
+          kode=$(tr -d '[:space:]' < supabase-start.exit)
+          if [ "$kode" != "0" ]; then
+            # Ubetinget logg-dump ved feil: seed.sql-vakten (#534) rapporterer
+            # via `raise exception`, og den meldingen finnes KUN her.
+            echo "::error::supabase start feilet med exit $kode. Logg:"
+            cat supabase-start.log || true
+            exit 1
+          fi
+
+          # --override-name mapper fra CLI-ens interne feltnavn
+          # (api.url / auth.publishable_key / auth.secret_key) til navnene
+          # playwright.config.ts og e2e/README.md allerede bruker.
+          npx supabase status -o env \
+            --override-name api.url=E2E_SUPABASE_URL \
+            --override-name auth.publishable_key=E2E_SUPABASE_ANON_KEY \
+            --override-name auth.secret_key=E2E_SUPABASE_SERVICE_KEY \
+            > supabase-status.env
+
+          # CLI-en formaterer med godotenv.Marshal, som skriver KEY="value" MED
+          # hermetegn. $GITHUB_ENV stripper dem IKKE, så uten strippingen her
+          # ble NEXT_PUBLIC_SUPABASE_URL bokstavelig talt
+          # '"http://127.0.0.1:54321"' — en ugyldig URL, og hele suiten falt.
+          sed -E 's/^([A-Z0-9_]+)="(.*)"$/\1=\2/' supabase-status.env > status-strippet.env
+
+          verdi_for() { sed -n "s/^$1=//p" status-strippet.env | tail -n1; }
+
+          # Fallback til de eldre feltnavnene: publishable/secret key er den nye
+          # nøkkelgenerasjonen, og en CLI-versjon som ikke fyller dem ville gitt
+          # tomme verdier. Da er ANON_KEY/SERVICE_ROLE_KEY fortsatt riktig svar,
+          # og vi slipper en rød CI-runde på ren navnedrift.
+          url=$(verdi_for E2E_SUPABASE_URL);            [ -n "$url" ]    || url=$(verdi_for API_URL)
+          anon=$(verdi_for E2E_SUPABASE_ANON_KEY);      [ -n "$anon" ]   || anon=$(verdi_for ANON_KEY)
+          secret=$(verdi_for E2E_SUPABASE_SERVICE_KEY); [ -n "$secret" ] || secret=$(verdi_for SERVICE_ROLE_KEY)
+
+          # Lås 1 mot «grønn på tom luft»: er en av variablene tom (endret
+          # feltnavn i en fremtidig CLI, en tjeneste som ikke kom opp), ville
+          # HAR_TEST_INSTANS i playwright.config.ts blitt false, hver spec
+          # skippet og jobben blitt grønn med NULL dekning. Vi validerer lokale
+          # variabler og ikke $E2E_SUPABASE_URL: $GITHUB_ENV slår først inn i
+          # NESTE steg, så en `[ -n "$E2E_SUPABASE_URL" ]` her ville alltid vært
+          # tom og alltid feilet. Lås 2 er testen i e2e/sikkerhetsvakt.spec.ts.
+          feil=0
+          sjekk() {
+            if [ -z "$2" ]; then
+              echo "::error::$1 er tom etter «supabase status -o env» — e2e ville skippet stille og gitt grønn CI uten dekning."
+              feil=1
+            else
+              case "$2" in
+                *'"'*|*"'"*)
+                  echo "::error::$1 inneholder hermetegn — strippingen traff ikke formatet CLI-en skrev."
+                  feil=1
+                  ;;
+              esac
+            fi
+          }
+          sjekk E2E_SUPABASE_URL "$url"
+          sjekk E2E_SUPABASE_ANON_KEY "$anon"
+          sjekk E2E_SUPABASE_SERVICE_KEY "$secret"
+          if [ "$feil" -ne 0 ]; then
+            echo "Feltnavn CLI-en faktisk ga (verdier utelatt med vilje):"
+            cut -d= -f1 supabase-status.env
+            exit 1
+          fi
+
+          # Skriver KUN disse tre til $GITHUB_ENV. Bevisst ALDRI
+          # NEXT_PUBLIC_SUPABASE_*/SUPABASE_SERVICE_ROLE_KEY her — pinningen i
+          # playwright.config.ts (config-vakten, se e2e/README.md §
+          # Sikkerhetsmodellen) skal være det som setter dem. Setter vi
+          # NEXT_PUBLIC_*-variablene direkte i workflow-env, omgår vi den vakten
+          # og sikkerhetsvakt.spec.ts mister sin betydning i CI. At vi plukker
+          # tre navngitte verdier — i stedet for å appende hele stdout — er også
+          # det som holder DB_URL/JWT_SECRET/S3_PROTOCOL_* ute av jobb-env.
+          {
+            echo "E2E_SUPABASE_URL=$url"
+            echo "E2E_SUPABASE_ANON_KEY=$anon"
+            echo "E2E_SUPABASE_SERVICE_KEY=$secret"
+          } >> "$GITHUB_ENV"
+
+      # Fanger «grønn på tom luft»: en migrasjon som feiler stille (eller aldri
+      # ble lagt til supabase/migrations/) skal gjøre jobben rød, ikke la
+      # e2e kjøre mot et ufullstendig skjema. psql er forhåndsinstallert på
+      # ubuntu-latest.
+      - name: Verifiser at alle migrasjoner kjørte
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          kjort=$(psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -tAc \
+            "select count(*) from supabase_migrations.schema_migrations")
+          kjort=$(echo "$kjort" | tr -d '[:space:]')
+          # Tom output med exit 0 fra psql ville sluppet gjennom stille:
+          # `[ "" -ne "123" ]` returnerer 2 (syntaksfeil), og `if` leser 2 som
+          # usant — altså «ingen avvik». Sjekk derfor at vi faktisk fikk et tall.
+          if [ -z "$kjort" ]; then
+            echo "::error::psql ga tom migrasjonstelling — kunne ikke verifisere skjemaet."
+            exit 1
+          fi
+          pa_disk=$(ls -1 supabase/migrations/*.sql | wc -l)
+          echo "Migrasjoner kjørt i DB: $kjort — filer i supabase/migrations/: $pa_disk"
+          if [ "$kjort" -ne "$pa_disk" ]; then
+            echo "::error::Migrasjonsavvik — $kjort kjørt mot $pa_disk filer på disk. En migrasjon feilet stille eller mangler."
+            exit 1
+          fi
+
+      - name: Cache Playwright-browsere
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          # Uten restore-keys ga ENHVER package-lock.json-endring (også en som
+          # ikke rører Playwright) full Chromium-nedlasting på nytt. Prefikset
+          # treffer forrige cache; `playwright install` legger bare til det som
+          # faktisk mangler hvis versjonen har endret seg.
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Installer Chromium
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
+      # ingen egen env-linje trengs for at playwright.config.ts sine
+      # CI-betingede justeringer (retries, forbidOnly, testIgnore av
+      # visuell/readme-skjermbilder osv.) skal slå inn.
+      - name: E2e (Playwright)
+        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        run: npx playwright test
+
+      - name: Last opp Playwright-rapport ved feil
+        if: failure() && steps.budsjett.outputs.kjor_e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 3

@@ -82,9 +82,19 @@ export default defineConfig({
   // Spec-ene deler én bruker og global agenda-state; parallellkjøring gir
   // kryss-interferens (f.eks. poll-cleanup sletter annens test-data).
   workers: 1,
+  // En gjenglemt test.only ville lokalt bare redusert porten til én spec uten
+  // at noen så det — i CI (#534) er det en usynlig hull i dekningen på hver
+  // PR, så der skal Playwright nekte å starte i stedet.
+  forbidOnly: !!process.env.CI,
+  // CI-instansen er fersk hver gang (ingen lokal flakiness-historikk å lene seg
+  // på), så vi tillater én retry der. Lokalt vil vi se feilen umiddelbart.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: BASE_URL,
-    screenshot: 'on',
+    // I CI vil vi ikke fylle artefakt-opplastingen med skjermbilder fra de
+    // ~35 testene som består — kun ved feil. Lokalt vil vi fortsatt se alle
+    // (bl.a. brukt av visuell.spec.ts til side-ved-side-sammenligning).
+    screenshot: process.env.CI ? 'only-on-failure' : 'on',
     viewport: { width: 390, height: 844 }, // iPhone 14-størrelse
   },
   // webServer defineres kun når test-instansen er konfigurert — uten den
@@ -95,8 +105,15 @@ export default defineConfig({
         webServer: {
           command: 'npm run dev -- -p 3100',
           url: BASE_URL,
-          reuseExistingServer: true,
-          timeout: 120_000,
+          // Lokalt vil vi gjenbruke en dev-server utvikleren allerede har
+          // kjørende på :3100. I CI (#534) finnes aldri en forhåndskjørende
+          // server — reuseExistingServer der ville i beste fall vært en
+          // no-op, men i verste fall gjenbrukt en server fra en forrige,
+          // krasjet jobb-kjøring på samme runner-image.
+          reuseExistingServer: !process.env.CI,
+          // CI har mer variabel oppstartstid (delt runner, kaldere cache) enn
+          // en utviklers egen maskin — 180s mot 120s lokalt.
+          timeout: process.env.CI ? 180_000 : 120_000,
           // Prosess-env overstyrer .env.local i Next.js — dev-serveren for
           // testene kobles til test-instansen, ikke prod. NEXT_PUBLIC_BASE_URL
           // settes til localhost slik at varsler-vakten i lib/varsler.ts
@@ -130,6 +147,17 @@ export default defineConfig({
       // en implisitt avhengighet — vi vil ikke at auth.setup.ts skal kjøres to
       // ganger (én gang som setup-prosjekt, én gang her). Se #381.
       testMatch: /\.spec\.ts$/,
+      // I CI (#534) ekskluderes to spec-er som ikke er egnet som CI-port:
+      // - visuell.spec.ts fanger hver rute i try/catch og lagrer et
+      //   skjermbilde uansett status — en 500-side blir «ok» der, så den
+      //   asserterer i praksis ingenting. Den er et verktøy for MANUELL
+      //   sammenligning mot Design/skjermbilder/, ikke en regresjonstest.
+      // - readme-skjermbilder.spec.ts krever ekte medlemsnavn/prod-data (se
+      //   e2e/README.md) og produserer «riktige men tomme» bilder mot
+      //   test-instansens fiktive seed-data — ingen verdi i CI.
+      // Lokal kjøring er UPÅVIRKET: testIgnore er tom utenfor CI, og begge
+      // kjører fortsatt med `npx playwright test` på en utviklers maskin.
+      testIgnore: process.env.CI ? [/visuell\.spec\.ts$/, /readme-skjermbilder\.spec\.ts$/] : undefined,
       use: {
         // Bevisst INGEN devices['Desktop Chrome']-spread her: prosjekt-use
         // overstyrer global use, og desktop-presetet ville byttet ut

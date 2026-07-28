@@ -378,3 +378,46 @@ values
     (select id from public.kaaringmaler where navn = 'Årets herre'), 2023,
     now() - interval '10 days', 'avgjort', null
   );
+
+-- ─── Verifiser at seeden faktisk landet (#534) ─────────────────────────────
+-- «Grønn på tom luft» ved KILDEN: kåringsfixturene over løser kaaring_mal_id
+-- via et navneoppslag som gir stille NULL hvis malen mangler (se kommentaren
+-- ved #520-blokken) — samme klasse feil kan ramme andre stille avhengigheter
+-- i denne fila. I stedet for å oppdage det når en enkelt e2e-spec uventet blir
+-- grønn på tomt datagrunnlag, feiler `db reset` HØYLYTT her, med én gang.
+do $$
+declare
+  antall int;
+begin
+  select count(*) into antall from public.kaaringmaler where navn = 'Årets herre';
+  if antall = 0 then
+    raise exception 'Seed-verifisering: fant ikke kaaringmalen «Årets herre» — #520-fixturene får kaaring_mal_id = null uten å feile.';
+  end if;
+
+  -- De fire 9700-pollene (retry-testen, #520) må finnes MED kaaring_mal_id satt.
+  select count(*) into antall
+  from public.poll
+  where id::text like '00000000-0000-4000-9700-%' and kaaring_mal_id is not null;
+  if antall <> 4 then
+    raise exception 'Seed-verifisering: forventet 4 kåringspoller (prefiks 9700) med kaaring_mal_id satt, fant %.', antall;
+  end if;
+
+  -- De fire 9600-turene (/stedene, #514) må ha lat/lng satt.
+  select count(*) into antall
+  from public.arrangementer
+  where id::text like '00000000-0000-4000-9600-%' and lat is not null and lng is not null;
+  if antall <> 4 then
+    raise exception 'Seed-verifisering: forventet 4 turer (prefiks 9600) med lat/lng satt, fant %.', antall;
+  end if;
+
+  -- e2e-innloggingsbrukeren må finnes i BEGGE auth.users og profiles, med admin-rolle.
+  select count(*) into antall
+  from auth.users u
+  join public.profiles p on p.id = u.id
+  where u.email = 'e2e-admin@klubb.test' and p.rolle = 'admin';
+  if antall <> 1 then
+    raise exception 'Seed-verifisering: e2e-admin@klubb.test mangler i auth.users/profiles, eller har ikke admin-rolle.';
+  end if;
+
+  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer og e2e-admin er alle på plass.';
+end $$;
