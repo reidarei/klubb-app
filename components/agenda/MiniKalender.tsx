@@ -1,13 +1,15 @@
 'use client'
 
 // Mikro-månedskalender i agenda-headeren (#429).
-// Ligger i luken mellom dato-blokka og NyFAB: ✈️ = tur, 🍺 = annet arrangement,
-// 🎂 = bursdag, outline-prikk = tom dag, accent-ring = i dag.
+// Ligger i luken mellom dato-blokka og NyFAB: 🏆 = klubbens stiftelsesdag,
+// ✈️ = tur, 🍺 = annet arrangement, 🎂 = bursdag, outline-prikk = tom dag,
+// accent-ring = i dag.
 // Kun visning — ingen klikk på dager.
 
 import { useMemo, useState, type CSSProperties } from 'react'
 import { byggMaanedsGrid, harInnhold, harBursdag } from '@/lib/mini-kalender'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
+import { KLUBB_STIFTET } from '@/lib/klubb-config'
 import Icon from '@/components/ui/Icon'
 
 // Kort månedsnavn til mikro-labelen. Småbokstaver med vilje: CSS textTransform
@@ -46,6 +48,10 @@ const MIN_OFFSET = -AGENDA_VINDU_MND
 // gir (Reidar-feedback på #429). Velgerne flankerer grid-et horisontalt.
 const PRIKK = 12
 const GAP = 2
+
+// Stiftelsesdagen som MM-dd, samme form som bursdagene bruker — den gjentar
+// seg årlig, så året i KLUBB_STIFTET er irrelevant her. (#528)
+const STIFTET_MMDD = `${String(KLUBB_STIFTET.maaned).padStart(2, '0')}-${String(KLUBB_STIFTET.dag).padStart(2, '0')}`
 
 export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD, iDag }: Props) {
   const [maanedOffset, setMaanedOffset] = useState(0)
@@ -127,12 +133,17 @@ export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD
           const harArr = harInnhold(nokkel, datoSett)
           const harTur = harInnhold(nokkel, turSett)
           const harBdag = harBursdag(nokkel, bursdagSett)
+          // Stiftelsesdagen gjentar seg årlig som bursdagene, så vi sammenligner
+          // på MM-dd. Kommer fra klubb-config, ikke fra en prop — det er en
+          // konfigverdi, ikke data siden trenger å hente. (#528)
+          const erStiftelsesdag = nokkel.slice(5) === STIFTET_MMDD
           const erIdag = nokkel === iDag
           const dagtall = parseInt(nokkel.slice(-2), 10)
 
           // Skjermleser-label kun for dager som «betyr noe» — resten skjules
           // fra a11y-treet så ikke 30 løse prikker annonseres som støy.
           const deler: string[] = []
+          if (erStiftelsesdag) deler.push('klubbens stiftelsesdag')
           if (harArr) deler.push(harTur ? 'tur' : 'arrangement')
           if (harBdag) deler.push('bursdag')
           if (erIdag) deler.push('i dag')
@@ -140,12 +151,17 @@ export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD
             ? `${dagtall}. ${MAANED_FULL[visMaaned0]} – ${deler.join(', ')}`
             : undefined
 
-          // Ikon-dager: ✈️ for tur, 🍺 for øvrige arrangementer, 🎂 for bursdag.
-          // Kolliderer de på samme dag vinner det mest sjeldne (én celle rommer
-          // ett ikon) — a11y-labelen over nevner uansett begge. Emoji er bevisst
-          // valgt over SVG-ikoner her: gjenkjennbare på 12px og brukes ellers i
-          // appen. Tur får eget ikon fordi det er årets høydepunkt (#510).
-          const ikon = harTur ? '✈️' : harArr ? '🍺' : harBdag ? '🎂' : null
+          // Ikon-dager: 🏆 for stiftelsesdagen, ✈️ for tur, 🍺 for øvrige
+          // arrangementer, 🎂 for bursdag. Kolliderer de på samme dag vinner det
+          // mest sjeldne (én celle rommer ett ikon) — a11y-labelen over nevner
+          // uansett alt. Emoji er bevisst valgt over SVG-ikoner her:
+          // gjenkjennbare på 12px og brukes ellers i appen.
+          // Tur slår arrangement fordi det er årets høydepunkt (#510);
+          // stiftelsesdagen slår alt fordi den er én dag i året for hele
+          // klubben (#528).
+          const ikon = erStiftelsesdag
+            ? '🏆'
+            : harTur ? '✈️' : harArr ? '🍺' : harBdag ? '🎂' : null
 
           return (
             <div
