@@ -64,6 +64,31 @@ npx playwright test e2e/poll.spec.ts
 PLAYWRIGHT_BASE_URL=http://localhost:3002 npx playwright test
 ```
 
+## Sikkerhetsmodellen
+
+Fire lag hindrer at testene rører prod. Testprosessen og dev-server-barnet er
+to ulike prosesser med hver sin `process.env`.
+
+1. **Config-vakt (testprosessen):** `playwright.config.ts` kaster hvis
+   `E2E_SUPABASE_URL` matcher sky-Supabase — testene kan fysisk ikke pekes mot
+   prod.
+2. **Env-overstyring i testprosessen:** når test-instansen er konfigurert,
+   overskriver configen `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` og
+   `NEXT_PUBLIC_BASE_URL` i sin egen `process.env`. Uten dette ville test-kode
+   som importerer server-moduler direkte (i stedet for via HTTP mot :3100)
+   fått prod-credentials fra `.env.local`.
+3. **Egen port (dev-server-barnet):** test-dev-serveren kjører på 3100 med
+   `webServer.env` tvunget mot test-instansen; en kjørende prod-dev-server på
+   3000 gjenbrukes aldri.
+4. **Varsler-vakt (begge prosesser):** `NEXT_PUBLIC_BASE_URL` settes til
+   localhost under testing, så varsler-vakten i `lib/varsler.ts` blokkerer all
+   push/epost-utsending. I tillegg pinnes `ALLOW_LOCAL_NOTIFICATIONS: 'false'`
+   i `webServer.env`, slik at vakten ikke kan omgås av en verdi i `.env.local`.
+
+Test-speccene oppretter og sletter data fritt — det er hele poenget med
+test-isolasjonen. Cleanup går alltid mot test-instansen.
+
 ## Når Playwright IKKE er riktig verktøy
 
 Playwright kjører mot Chromium (og WebKit hvis vi aktiverer det). **Det er ikke ekte iOS Safari.** En del bug-klasser i denne appen reproduserer ikke i runneren:
