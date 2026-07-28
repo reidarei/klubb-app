@@ -39,6 +39,8 @@ function genererPassord() {
 // Trigger-retten er asynkron; vi poller opptil ~5 sekunder.
 async function ventPaaProfil(adminClient, userId, maxForsok = 10) {
   for (let i = 0; i < maxForsok; i++) {
+    // Polling-loop med timeout — spørringsfeil i setup-script er ikke kritisk.
+    // eslint-disable-next-line hk/supabase-feil-maa-hentes
     const { data } = await adminClient
       .from('profiles')
       .select('id')
@@ -96,6 +98,8 @@ if (telFeil) avbryt(`Klarte ikke telle profiler: ${telFeil.message}`)
 if (count > 0) {
   // Idempotens-gren: re-kjøring etter delvis feil (kun hvis eposten finnes).
   // Vi gjør ikke en full abort — sjekk om akkurat denne eposten finnes.
+  // Setup-script — spørringsfeil er ikke kritisk.
+  // eslint-disable-next-line hk/supabase-feil-maa-hentes
   const { data: eksisterende } = await adminClient
     .from('profiles')
     .select('id, rolle, navn')
