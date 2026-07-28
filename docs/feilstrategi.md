@@ -128,9 +128,9 @@ I et lite miljø der alle kjenner hverandre oppdages rare ting ofte raskere av e
 
 ### Hvem som får alarmen
 
-Det styres av to separate brytere i medlemsredigering, begge admin-styrt per medlem: **«Innspill-varsler»** (`profiles.faar_issue_varsler`) for varsel når noen sender inn et innspill i appen, og **«Feilvarsler»** (`profiles.faar_feilvarsler`) for den daglige klientfeil-alarmen. De delte opprinnelig én kolonne; skilt fordi innspill er dialog med medlemmene og feilalarmen er drift.
+Det styres av bryteren **«Feilvarsler»** i medlemsredigering, som admin setter per medlem. Kolonnen heter `faar_feilvarsler` i databasen.
 
-**Bryterne er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer, og et vanlig medlem kan derfor motta alarmer uten å være admin.
+**Bryteren er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer, og et vanlig medlem kan derfor motta alarmer uten å være admin.
 
 ### To logger med hvert sitt formål
 
@@ -156,7 +156,7 @@ Verdiene her kan endres uten at strategien over endres. Konstanter uten oppgitt 
 | Alarmterskel | `0` | `KLIENT_FEIL_ALARM_TERSKEL` | `0` betyr alarm ved enhver feil. Heves den, blir feil under terskelen tause. Det er som regel bedre å unnta enkelte event-navn enn å heve terskelen |
 | Unntatte event-navn | 3 stk | `ALARM_IGNORERTE_EVENTS` | Radene skrives fortsatt til loggen, men gir ikke alarm. Vi blir blinde for akkurat de feilene |
 | Når alarmen kjøres | 05:00 UTC | `.github/workflows/sjekk-klientfeil.yml` | Flere kjøringer i døgnet gir flere varsler om den samme feilen |
-| Hvem som varsles | Per medlem | To brytere i medlemsredigering: «Innspill-varsler» (`profiles.faar_issue_varsler`) og «Feilvarsler» (`profiles.faar_feilvarsler`) | Begge kan styres uavhengig. Er ingen merket for feilvarsel, går det ingen alarm |
+| Hvem som varsles | Per medlem | Bryteren «Feilvarsler» i medlemsredigering (`profiles.faar_feilvarsler`) | Er ingen merket, går det ingen alarm |
 | Hvor lenge feil beholdes | 180 dager | `LOGG_FEIL_RETENSJONSDAGER` | Eldre rader slettes automatisk. Kortere tid skjuler mønstre som gjentar seg sesongvis; lengre tid lagrer profil-id og nettleserinfo lenger |
 | Hvor lenge varsler beholdes | Slettes ikke | — | Sletting ville brutt muligheten til å se om et varsel allerede er sendt |
 | Antall feil i alarmteksten | 3 | `lib/feil-alarm.ts` | Hvor mange event-navn meldingen lister opp |
