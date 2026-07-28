@@ -158,7 +158,7 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 - `harGulGloed` — særegen gul ring rundt avatar
 - `loeserTiebreak` — løser uavgjort i kåringspoll
 
-**Issue-/systemvarsler er IKKE rollestyrt:** hvem som mottar varsler om nye innspill og klientfeil-alarmer styres av kolonnen `profiles.faar_issue_varsler` (admin-styrt per medlem via RedigerMedlemSkjema, se migrasjon 104). Mottaker-spørringer filtrerer på `.eq('faar_issue_varsler', true)` — aldri på rolle.
+**Innspill-varsler og feilvarsler er IKKE rollestyrt:** hvem som mottar hvilket varsel styres av to uavhengige kolonner, begge admin-styrt per medlem via RedigerMedlemSkjema — `profiles.faar_issue_varsler` for varsel om nye innspill (migrasjon 104) og `profiles.faar_feilvarsler` for den daglige klientfeil-alarmen (migrasjon 123). De to formålene delte opprinnelig én kolonne; skilt fordi innspill er dialog med medlemmene og feilalarmen er drift. Mottaker-spørringer filtrerer på riktig kolonne (`.eq('faar_issue_varsler', true)` hhv. `.eq('faar_feilvarsler', true)`) — aldri på rolle.
 
 **Bruk disse hjelperne:**
 - `kanAdministrere(rolle)` — admin-sjekk i UI, server actions, API-ruter
