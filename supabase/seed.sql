@@ -400,6 +400,115 @@ values
     now() - interval '10 days', 'avgjort', null
   );
 
+-- ─── Fixtures for røyktesten (e2e/sider-laster.spec.ts) ────────────────────
+-- Bakgrunn: 17 av appens sider gjør databasespørringer uten at noen test
+-- noensinne LASTET dem. En brutt spørring der (feil kolonnenavn etter en
+-- migrasjon, en manglende GRANT, en join som ryker) ble først oppdaget av et
+-- medlem i prod. Røyktesten laster hver rute og krever 200 + rendret
+-- overskrift; dette er radene detaljsidene (`[id]`-rutene) trenger for å
+-- treffe INNHOLDS-grenen i stedet for notFound().
+--
+-- Prefiks 9800 — utenfor både SEED_HREF_RE i tidligere.spec.ts (9[1-4]00),
+-- 9600 (/stedene) og 9700 (kåringsretry), slik at tellingene i de spec-ene
+-- ikke rører seg av at vi legger til data her.
+--
+-- Alle tidsstempler er relative (now() - interval) så fixturene aldri «går ut
+-- på dato», og alle rader er knyttet til de fire seedede testprofilene.
+
+-- Klubb-chat (/chat). Tom tabell rendrer også fint, men da tester vi
+-- tom-tilstanden i stedet for meldingslista — og det er lista som joiner mot
+-- profiles og dermed kan ryke.
+insert into public.klubb_chat (id, profil_id, innhold, opprettet)
+values
+  (
+    '00000000-0000-4000-9800-000000000001',
+    '00000000-0000-4000-8000-000000000001',
+    'Røyktest: første melding i klubb-chatten.', now() - interval '2 days'
+  ),
+  (
+    '00000000-0000-4000-9800-000000000002',
+    '00000000-0000-4000-8000-000000000002',
+    'Røyktest: svar fra et annet medlem.', now() - interval '1 day'
+  );
+
+-- Privat samtale (/samtaler og /samtaler/[id]). Partene er e2e-admin og
+-- Petter — admin er den innloggede brukeren i suiten, så inboksen viser raden.
+-- Merk at e2e/rls/privat-samtale.spec.ts lager sine EGNE samtaler og rører
+-- ikke denne; den skal kunne stå urørt mellom kjøringer.
+insert into public.samtale (id, profil_a, profil_b, opprettet, sist_aktivitet)
+values
+  (
+    '00000000-0000-4000-9800-000000000010',
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    now() - interval '5 days', now() - interval '1 day'
+  );
+
+insert into public.samtale_chat (id, samtale_id, profil_id, innhold, lest, opprettet)
+values
+  (
+    '00000000-0000-4000-9800-000000000011',
+    '00000000-0000-4000-9800-000000000010',
+    '00000000-0000-4000-8000-000000000002',
+    'Røyktest: melding i privat samtale.', true, now() - interval '1 day'
+  );
+
+-- Album (/album og /album/[id]). bilde_url peker på en URL som aldri hentes:
+-- Playwright asserterer på DOM-en, ikke på at bildet dekoder, og R2-bøtta har
+-- ingen testdata. Domenet må likevel stå i next.config.ts → remotePatterns,
+-- ellers kaster <Image> på ugyldig host — derfor r2.dev og ikke example.com.
+insert into public.album (id, tittel, opprettet_av, opprettet, oppdatert)
+values
+  (
+    '00000000-0000-4000-9800-000000000020',
+    'Røyktest-album', '00000000-0000-4000-8000-000000000001',
+    now() - interval '30 days', now() - interval '30 days'
+  );
+
+insert into public.album_bilde (id, album_id, bilde_url, lastet_opp_av, rekkefolge, bredde, hoyde, opprettet)
+values
+  (
+    '00000000-0000-4000-9800-000000000021',
+    '00000000-0000-4000-9800-000000000020',
+    'https://fixtur.r2.dev/roykttest/bilde-1.jpg',
+    '00000000-0000-4000-8000-000000000001', 0, 1600, 1200, now() - interval '30 days'
+  ),
+  (
+    '00000000-0000-4000-9800-000000000022',
+    '00000000-0000-4000-9800-000000000020',
+    'https://fixtur.r2.dev/roykttest/bilde-2.jpg',
+    '00000000-0000-4000-8000-000000000001', 1, 1600, 1200, now() - interval '30 days'
+  );
+
+-- Varsel i innboksen (/varsler/[id]). profil_id må være den innloggede
+-- brukeren: RLS på varsel_logg gir kun egne rader, så en rad på en annen
+-- profil ville gitt notFound() og testet feil gren.
+insert into public.varsel_logg (id, profil_id, tittel, melding, type, kanal, url, lest, opprettet)
+values
+  (
+    '00000000-0000-4000-9800-000000000030',
+    '00000000-0000-4000-8000-000000000001',
+    'Røyktest-varsel', 'Dette varselet finnes kun i test-instansen.',
+    'oppdatert', 'kun_app', '/', false, now() - interval '3 days'
+  );
+
+-- Arrangøransvar (/arrangoransvar). To rader: én med ansvarlig og én uten —
+-- siden rendrer de to tilstandene ulikt (navn+avatar mot «ikke fordelt»), og
+-- en spørring som ryker på left join mot profiles treffer bare den første.
+insert into public.arrangoransvar (id, aar, arrangement_navn, ansvarlig_id, purredato, opprettet, oppdatert)
+values
+  (
+    '00000000-0000-4000-9800-000000000040',
+    2020, 'Røyktest-sammenkomst',
+    '00000000-0000-4000-8000-000000000002',
+    (now() - interval '365 days')::date, now(), now()
+  ),
+  (
+    '00000000-0000-4000-9800-000000000041',
+    2020, 'Røyktest-tur uten ansvarlig',
+    null, null, now(), now()
+  );
+
 -- ─── Verifiser at seeden faktisk landet (#534) ─────────────────────────────
 -- «Grønn på tom luft» ved KILDEN: kåringsfixturene over løser kaaring_mal_id
 -- via et navneoppslag som gir stille NULL hvis malen mangler (se kommentaren
@@ -469,5 +578,34 @@ begin
     raise exception 'Seed-verifisering: forventet nøyaktig 1 profil med rolle=generalsekretaer (Gunnar General), fant %.', antall;
   end if;
 
-  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer, e2e-admin og generalsekretæren er alle på plass.';
+  -- Røyktest-fixturene (prefiks 9800): detaljsidene i e2e/sider-laster.spec.ts
+  -- gir notFound() uten dem, og speccen ville da grønt bekreftet 404-grenen i
+  -- stedet for innholds-grenen den er skrevet for. Vi teller radene per tabell
+  -- i stedet for totalen, slik at meldingen navngir HVA som mangler.
+  select count(*) into antall from public.samtale
+  where id = '00000000-0000-4000-9800-000000000010';
+  if antall <> 1 then
+    raise exception 'Seed-verifisering: røyktest-samtalen (9800…010) mangler — /samtaler/[id] ville testet notFound() i stedet for innhold.';
+  end if;
+
+  select count(*) into antall from public.album_bilde
+  where album_id = '00000000-0000-4000-9800-000000000020';
+  if antall <> 2 then
+    raise exception 'Seed-verifisering: forventet 2 bilder i røyktest-albumet (9800…020), fant %.', antall;
+  end if;
+
+  select count(*) into antall from public.varsel_logg
+  where id = '00000000-0000-4000-9800-000000000030'
+    and profil_id = '00000000-0000-4000-8000-000000000001';
+  if antall <> 1 then
+    raise exception 'Seed-verifisering: røyktest-varselet (9800…030) mangler eller står på feil profil — RLS ville skjult det for e2e-admin.';
+  end if;
+
+  select count(*) into antall from public.arrangoransvar
+  where id::text like '00000000-0000-4000-9800-%';
+  if antall <> 2 then
+    raise exception 'Seed-verifisering: forventet 2 arrangøransvar-rader (prefiks 9800), fant %.', antall;
+  end if;
+
+  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer, røyktest-fixturene, e2e-admin og generalsekretæren er alle på plass.';
 end $$;

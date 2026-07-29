@@ -51,10 +51,17 @@ function riggProfiler(profilData: unknown, profilFeil: unknown = null) {
   })
 }
 
+// Modulnivå-import, ikke `await import()` inne i testkroppen: vi.mock hoistes
+// over imports, så mockene er på plass uansett — men en dynamisk import i
+// testen betaler transform-kostnaden for hele avhengighetstreet under testens
+// 5s-timeout, og tipper over ca. hver femte fulle kjøring. Samme fiks som
+// 9447de1 gjorde for pages-svelget-error-b.test.tsx; denne fila hadde samme
+// mønster igjen og ble observert rød 1 av 5 kjøringer.
+const { opprettMelding } = await import('@/lib/actions/meldinger')
+
 // opprettMelding avsluttes med redirect('/'), som kaster i Next. Vi svelger
 // akkurat den — alt vi vil verifisere har allerede skjedd.
 async function opprett(innhold = 'Gutta, det blir tur') {
-  const { opprettMelding } = await import('@/lib/actions/meldinger')
   await expect(opprettMelding({ innhold })).rejects.toThrow('NEXT_REDIRECT')
 }
 

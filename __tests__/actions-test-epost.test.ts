@@ -26,8 +26,13 @@ beforeEach(() => {
   getProfil.mockResolvedValue({ rolle: 'admin' })
 })
 
+// Modulnivå-import, ikke `await import()` i testkroppen: vi.mock hoistes over
+// imports, så mockene er på plass uansett — men dynamisk import her betaler
+// transform-kostnaden for hele avhengighetstreet under testens 5s-timeout og
+// gjør suiten tidvis rød uten at noe er galt. Jf. 9447de1.
+const { oppdaterTestEpost } = await import('@/app/(app)/innstillinger/actions')
+
 async function kall(epost = 'admin@example.com') {
-  const { oppdaterTestEpost } = await import('@/app/(app)/innstillinger/actions')
   return oppdaterTestEpost(epost)
 }
 

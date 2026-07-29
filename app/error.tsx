@@ -44,6 +44,10 @@ export default function Error({
 
   return (
     <div
+      // Stabilt holdepunkt for e2e/sider-laster.spec.ts, som asserterer at
+      // ingen rute havner i error-boundaryen. Uten det måtte speccen matchet
+      // på «Noe gikk galt»-teksten, som er redaksjonell og kan endres.
+      data-testid="feil-side"
       style={{
         minHeight: '70vh',
         display: 'flex',

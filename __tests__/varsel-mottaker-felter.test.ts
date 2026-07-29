@@ -71,6 +71,16 @@ vi.mock('@/lib/feil-alarm', () => ({
   lagToppEventTekst: () => '',
 }))
 
+// Modulnivå-import: vi.mock hoistes over imports, så mockene over er på plass.
+// Trygt her fordi ruten leser CRON_SECRET inne i handleren (route.ts:32), ikke
+// ved modul-last — beforeEach rekker derfor fortsatt å sette den. Dynamisk
+// import i testkroppen betalte transform-kostnaden under 5s-timeouten og gjorde
+// suiten tidvis rød uten at noe var galt (jf. 9447de1).
+// Webhook-blokken lenger nede beholder sin `beforeAll`-import med vilje: DEN
+// ruten leser GITHUB_WEBHOOK_SECRET ved modul-last, så rekkefølgen er reell der.
+const { POST: postKlientfeil } = await import('@/app/api/cron/sjekk-klientfeil/route')
+const { NextRequest } = await import('next/server')
+
 describe('/api/cron/sjekk-klientfeil – mottakere filtreres på faar_feilvarsler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -87,14 +97,12 @@ describe('/api/cron/sjekk-klientfeil – mottakere filtreres på faar_feilvarsle
     })
     mockCreateAdmin.mockReturnValue(klient)
 
-    const { POST } = await import('@/app/api/cron/sjekk-klientfeil/route')
-    const { NextRequest } = await import('next/server')
     const req = new NextRequest('http://localhost:3000/api/cron/sjekk-klientfeil', {
       method: 'POST',
       headers: { authorization: 'Bearer test-cron-secret' },
     })
 
-    const res = await POST(req)
+    const res = await postKlientfeil(req)
     expect(res.status).toBe(200)
 
     expect(eqKallFor('profiles')).toEqual([
