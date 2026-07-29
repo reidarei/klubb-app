@@ -56,18 +56,22 @@ export const DRIFTSRESERVE_MIN = 700
 
 export const CI_BUDSJETT_MIN = KVOTE_MIN - DRIFTSRESERVE_MIN // 1300
 
-export const E2E_KOST_MIN = 8
+export const E2E_KOST_MIN = 10
 // TILLEGG over kjerneporten (lint+typecheck+vitest+build), som lå på ~3,4 min
 // før e2e (målt 406 min / 120 kjøringer i juli).
 //
-// MÅLT i første CI-kjøring (PR #535): total jobbtid 10,1 min, altså et tillegg
-// på ~6,7 min. De tyngste postene var Playwright 233 s og Chromium-install 24 s;
-// `supabase start` figurerer ikke fordi den kjørte ferdig i bakgrunnen mens
-// lint/tester/bygg gikk — overlappen fungerer som planlagt.
+// MÅLT PR #535 (66 e2e-tester): tillegg ~6,7 min ⇒ konstanten sto på 8.
+// MÅLT PR #538 (103 tester, etter røyktesten): e2e-steget 505 s +
+// Chromium-install 22 s + Supabase-vent 2 s = ~8,8 min tillegg, av en total
+// jobbtid på 14,5 min. `supabase start` figurerer ikke fordi den kjører ferdig
+// i bakgrunnen mens lint/tester/bygg går — overlappen fungerer som planlagt.
 //
-// 8 = målt 6,7 + margin for `retries: 1`, som ikke slo inn i målingen. Fortsatt
-// i trygg retning: bommer vi høyt kutter vakten litt for tidlig, bommer vi lavt
-// sprenger vi budsjettet vi skulle vokte.
+// 10 = målt 8,8 + margin for `retries: 1`, som ikke slo inn i målingen.
+// Fortsatt i trygg retning: bommer vi høyt kutter vakten litt for tidlig,
+// bommer vi lavt sprenger vi budsjettet vi skulle vokte.
+//
+// Merk at konstanten kun gjelder PR-kjøringer. Push til main kjører aldri e2e
+// (se pr-check.yml § Avgjør e2e-omfang), så de koster kjerneporten alene.
 // Mål på nytt hvis suiten vokser vesentlig — se docs/ci-minuttbudsjett.md
 // § Etter første CI-kjøring: mål E2E_KOST_MIN på nytt.
 

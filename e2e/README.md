@@ -64,6 +64,22 @@ npx playwright test e2e/poll.spec.ts
 PLAYWRIGHT_BASE_URL=http://localhost:3002 npx playwright test
 ```
 
+## Røyktesten — `sider-laster.spec.ts`
+
+Laster hver rute i appen (én test per rute) og krever tre ting: HTTP 200, ingen omdirigering til `/login`, og at `<main>` faktisk fikk innhold uten å havne i error-boundaryen.
+
+Dette er en **bredde**-test, ikke en dybde-test. Den beviser at siden svarer og rendrer — ikke at innholdet er riktig. Dybden hører hjemme i de øvrige spec-ene.
+
+Verdien er at en brutt databasespørring på en side ingen andre tester besøker (feil kolonnenavn etter en migrasjon, en join som ryker, en manglende `GRANT`) fanges før merge i stedet for av en bruker. Særlig relevant for `GRANT`-feil: de gir `42501` selv når RLS tillater raden, og en side som aldri lastes får aldri sin `42501` oppdaget.
+
+**Legger du til en ny rute i appen, legg den i `RUTER`-lista.** Detaljruter (`[id]`) trenger en matchende rad i `supabase/seed.sql` — uten den treffer testen `notFound()` og bekrefter 404-grenen i stedet for innholds-grenen. Seed-fixturene for dette har prefiks `9800` og er dekket av seed-vakten nederst i fila.
+
+## CI: to omfang
+
+Suiten kjører i `.github/workflows/pr-check.yml` på **pull requests** (full port, inkludert e2e). Pushes rett til `main` kjører kun kjerneporten — lint, typecheck, vitest og bygg, uten e2e.
+
+Konsekvensen er at **kodeendringer bør gå gjennom pull request**: en direkte push til `main` får aldri e2e-dekning. Se [docs/ci-minuttbudsjett.md](../docs/ci-minuttbudsjett.md) § Two run scopes for detaljer, og for hvorfor `skipped` på e2e-steget betyr to ulike ting.
+
 ## Sikkerhetsmodellen
 
 Fire lag hindrer at testene rører prod. Testprosessen og dev-server-barnet er

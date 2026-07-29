@@ -1,16 +1,35 @@
-# CI-sjekk for pull requests mot main.
-# Kjører lint, tester, produksjonsbygg OG Playwright-e2e for å fange
-# regresjoner før merge (#534). Build-steget bruker dummy-env slik at ingen
-# ekte secrets trengs. E2e-instansen startes fra bunn i selve jobben (fersk
-# `supabase start`) — se e2e/README.md § Sikkerhetsmodellen for hvorfor dette
-# er trygt og docs/ci-minuttbudsjett.md for hvorfor e2e kan bli kuttet.
-# E2e-steget inkluderer nå også e2e/rls/ (#533) — RLS-policyene verifiseres
-# her med ekte anon/authenticated-klienter, ikke bare service_role.
+# CI-sjekk for endringer mot main. To omfang, styrt av «Avgjør e2e-omfang»:
+#
+#   pull_request  → FULL   (~14,5 min): kjerneport + Playwright-e2e
+#   push til main → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
+#
+# Kjerneporten er ubetinget i begge tilfeller og skal aldri ofres. E2e ligger i
+# SAMME job som resten (ikke et eget) fordi et eget job ville vært usynlig for
+# merge-loopens vente-sjekk — se .claude/commands/agentic.md steg 10.
+#
+# Build-steget bruker dummy-env slik at ingen ekte secrets trengs. E2e-instansen
+# startes fra bunn i selve jobben (fersk `supabase start`) — se e2e/README.md
+# § Sikkerhetsmodellen for hvorfor det er trygt, og docs/ci-minuttbudsjett.md
+# for hvorfor e2e kan bli kuttet også på en PR.
+# E2e-steget inkluderer også e2e/rls/ (#533) — RLS-policyene verifiseres her
+# med ekte anon/authenticated-klienter, ikke bare service_role.
 
 name: PR-sjekk
 
 on:
   pull_request:
+    branches: [main]
+  # Push til main kjører KJERNEPORTEN (lint/typecheck/vitest/bygg), aldri e2e.
+  # Bakgrunn: workflowen kjørte tidligere kun på pull_request, og 7 av de siste
+  # 30 commitene på main var direkte pushes — de fikk null porter. Pipelinen har
+  # dessuten en legitim direkte-push-sti (agentic steg 10.5, typeregenerering
+  # etter migrasjon), så hullet var strukturelt og ikke bare slurv.
+  #
+  # Hvorfor ikke e2e her: kom endringen via PR, var e2e allerede grønt der, og
+  # en ny full kjøring per merge ville doblet forbruket (~290 min/mnd) og spist
+  # mesteparten av driftsreserven på 700. Kjerneporten koster ~5,5 min mot
+  # ~14,5 for full — vi kjøper mesteparten av verdien for en tredjedel.
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -23,16 +42,22 @@ permissions:
 # Avbryt pågående run for samme branch ved nytt push — sparer CI-tid.
 # Gruppen inkluderer workflow-navn slik at fremtidige workflows ikke
 # kolliderer med denne på samme ref.
+#
+# cancel-in-progress KUN på pull_request: der er en ny push til branchen et
+# signal om at forrige kjøring er uinteressant. På main er hver kjøring knyttet
+# til en commit som allerede ER historikk — kansellerer vi den, står commiten
+# igjen uten port, som er nøyaktig hullet push-triggeren over skulle lukke.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   sjekk:
     runs-on: ubuntu-latest
-    # Var 15 (lint/typecheck/vitest/build). Med e2e (supabase start, migrasjoner,
-    # Chromium, selve Playwright-kjøringen) tar jobben ~9-10 min i normaltilfellet —
-    # 25 gir slingring uten å maskere en jobb som faktisk henger.
+    # Målt på PR #538: kjerneport 5,5 min (npm ci 29 s, lint 21 s, typecheck
+    # 34 s, vitest 2 min 6 s, bygg 1 min 46 s), e2e-tillegg 8,5 min ⇒ 14,5 min
+    # totalt. 25 gir slingring uten å maskere en jobb som faktisk henger.
+    # Push-kjøringer bruker bare kjerneporten og lander på ~5,5.
     timeout-minutes: 25
     env:
       # kaaring-varsel-retry.spec.ts (linje ~34) skipper hele specen uten denne —
@@ -60,6 +85,26 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/ci-minuttbudsjett.mjs
 
+      # Ett sted å resonnere om «skal e2e kjøre». To uavhengige grunner til å
+      # hoppe over, samlet her i stedet for duplisert på seks steg-betingelser
+      # (der ett glemt ledd ville gitt en jobb som starter Supabase den ikke
+      # bruker — eller verre, kjører e2e vi trodde var av).
+      - name: Avgjør e2e-omfang
+        id: omfang
+        env:
+          HENDELSE: ${{ github.event_name }}
+          BUDSJETT_OK: ${{ steps.budsjett.outputs.kjor_e2e }}
+        run: |
+          if [ "$HENDELSE" != "pull_request" ]; then
+            echo "::notice::$HENDELSE mot main — kjerneporten kjøres, e2e hoppes over (kjørte allerede på PR-en)."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          elif [ "$BUDSJETT_OK" != "true" ]; then
+            echo "::notice::Budsjettvakten kuttet e2e — se docs/ci-minuttbudsjett.md."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Installer avhengigheter
         run: npm ci
 
@@ -70,7 +115,7 @@ jobs:
       # mailpit, imgproxy, edge-runtime, logflare, vector, supavisor) — færre
       # containere å starte og vedlikeholde i loggen.
       - name: Start Supabase (bakgrunn)
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         run: |
           # Exit-koden til en bakgrunnsprosess er utilgjengelig for et SENERE
           # steg (`wait` virker kun på egne barn, og hvert run:-steg er sin egen
@@ -102,7 +147,7 @@ jobs:
         run: npm run build
 
       - name: Vent på Supabase
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         run: |
           # Vi venter på at `supabase start` er FERDIG — ikke på at
           # `supabase status` svarer. status sjekker kun at db-containeren er
@@ -207,7 +252,7 @@ jobs:
       # e2e kjøre mot et ufullstendig skjema. psql er forhåndsinstallert på
       # ubuntu-latest.
       - name: Verifiser at alle migrasjoner kjørte
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         run: |
           export PGPASSWORD=postgres
           kjort=$(psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -tAc \
@@ -228,7 +273,7 @@ jobs:
           fi
 
       - name: Cache Playwright-browsere
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -241,7 +286,7 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: Installer Chromium
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         run: npx playwright install --with-deps chromium
 
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
@@ -249,11 +294,11 @@ jobs:
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av
       # visuell/readme-skjermbilder osv.) skal slå inn.
       - name: E2e (Playwright)
-        if: steps.budsjett.outputs.kjor_e2e == 'true'
+        if: steps.omfang.outputs.e2e == 'true'
         run: npx playwright test
 
       - name: Last opp Playwright-rapport ved feil
-        if: failure() && steps.budsjett.outputs.kjor_e2e == 'true'
+        if: failure() && steps.omfang.outputs.e2e == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report

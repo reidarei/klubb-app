@@ -34,7 +34,33 @@ If you fork this template to run on a **private repository**, the watcher will a
 
 2. **Monitor the step summary** in your Actions. Every PR run shows a budget table (see `tabell()` function in the script) that breaks down consumption and the e2e decision.
 
-3. **If e2e is skipped,** check the PR's workflow run details. The `CI-minuttbudsjett (#534)` step in the job summary explains why. It's not a failure — core CI still ran. Note: e2e skipping includes security tests in `e2e/rls/` (Row Level Security coverage).
+3. **If e2e is skipped,** check the PR's workflow run details. The `CI-minuttbudsjett` step in the job summary explains why. It's not a failure — core CI still ran. Note: e2e skipping includes security tests in `e2e/rls/` (Row Level Security coverage).
+
+## Two run scopes: `pull_request` vs `push`
+
+`pr-check.yml` runs on **both** pull requests and pushes to `main`, with different scopes:
+
+| Event | Scope | What runs |
+|---|---|---|
+| `pull_request` | FULL | lint, typecheck, vitest, build **+ Playwright e2e** |
+| `push` to `main` | CORE | lint, typecheck, vitest, build |
+
+E2e is deliberately left out on `push`. If the change arrived via a PR, e2e already passed there; re-running it on every merge roughly doubles consumption for no new information. The point of the `push` trigger is to catch changes that **bypass** pull requests entirely — a direct commit to `main` would otherwise get no CI at all.
+
+**The practical rule: if a change touches code, put it through a pull request.** The core gate on `main` is a safety net, not a substitute — code pushed directly never gets e2e coverage.
+
+### `skipped` means two different things
+
+Because of the above, `E2e (Playwright) → skipped` is ambiguous. Check which:
+
+```bash
+gh run view <run-id> --json event --jq '.event'
+```
+
+- `push` → expected. Push runs never include e2e.
+- `pull_request` → the budget guard cut it. That run is **not** e2e-covered; treat green as "unknown", not "passed".
+
+The `Avgjør e2e-omfang` step writes a `::notice::` stating which case it was, in both situations.
 
 ## Measuring e2e cost
 
