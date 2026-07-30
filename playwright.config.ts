@@ -79,6 +79,11 @@ if (HAR_TEST_INSTANS) {
 
 export default defineConfig({
   testDir: './e2e',
+  // Kjører ÉN gang per kjøring, i runner-prosessen — ikke per worker. Fanger
+  // høyeste feil_logg.id før første test, slik at feil_logg-vakten i
+  // sider-laster.spec.ts har en grense som en retry ikke kan flytte på. Se
+  // e2e/global-setup.ts for hvorfor test.beforeAll ikke holdt (#539-review).
+  globalSetup: './e2e/global-setup.ts',
   // Spec-ene deler én bruker og global agenda-state; parallellkjøring gir
   // kryss-interferens (f.eks. poll-cleanup sletter annens test-data).
   workers: 1,

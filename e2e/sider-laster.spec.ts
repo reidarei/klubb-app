@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
+import { adminKlient } from './helpers/admin-klient'
+import { lesFeilLoggGrense } from './helpers/feil-logg-grense'
 
 /**
  * Røyktest: hver rute i appen skal LASTE.
@@ -165,6 +167,78 @@ test.describe('Røyktest — alle sider laster', () => {
       }
     })
   }
+
+  // Playwright kjører test()-kall i deklarasjonsrekkefølge (workers: 1, se
+  // playwright.config.ts) — denne SKAL stå sist, etter alle rute-testene, slik
+  // at den ser feil_logg-rader fra hele suitens navigering.
+  //
+  // Røyktesten over beviser at sidene svarer 200 og rendrer innhold — den
+  // fanger IKKE en server-feil som logges og svelges stille (#539 var akkurat
+  // dette: markerSamtaleLest() kastet på revalidatePath under render, siden
+  // rendret helt normalt). Denne testen gjør nettopp det synlig, via
+  // feil_logg i stedet for browser-konsollen — konsollen spammes av
+  // getSession()-advarselen på hver eneste rute (se WebServer-loggen over),
+  // og å filtrere den bort der er skjørere enn å lese feil_logg direkte.
+  //
+  // Egen describe utelukkende for `retries: 0`: med CI-ens `retries: 1` ble et
+  // treff her retriet ALENE, og den gamle tidsgrensen (satt i test.beforeAll)
+  // ble da satt på nytt etter at rute-testene var ferdige — vakten reparerte
+  // seg selv til «flaky» og exit 0. Grensen ligger nå i globalSetup (utenfor
+  // worker-livssyklusen), og retry-en er skrudd av her: et treff skal stå.
+  test.describe('feil_logg-vakt', () => {
+    test.describe.configure({ retries: 0 })
+
+    test('ingen av sidene over logget en server-feil (feil_logg)', async () => {
+      const supabase = adminKlient('sider-laster-feillogg-vakt')
+      // Fail-closed: en vakt som stille returnerer uten en eneste assertion er
+      // grønn på falske premisser. Kaster, som i samtale-marker-lest.spec.ts.
+      if (!supabase) {
+        throw new Error(
+          'E2E_SUPABASE_* mangler — feil_logg-vakten kan ikke verifisere noe. Se docs/test-instans.md.',
+        )
+      }
+
+      // Grensen er høyeste feil_logg.id ved KJØRINGENS start (e2e/global-setup.ts).
+      // Id og ikke tidsstempel: runnerens klokke og Postgres sin er to ulike
+      // maskiner lokalt, og et DB-ur som ligger bak ville filtrert bort ekte
+      // rader (falskt grønt). Konsekvens av at grensen er kjørings-global: også
+      // rader fra spec-ene som kjørte FØR denne fanges. Det er bevisst
+      // konservativt — en server-feil logget hvor som helst i kjøringen er et
+      // signal vi vil se, ikke støy vi vil filtrere bort.
+      const grense = lesFeilLoggGrense()
+
+      // Fast pause, IKKE expect.poll: persisterFeilLogg() (lib/logg.ts) skriver
+      // ETTER at responsen allerede er sendt til klienten, så en rad kan dukke
+      // opp et par sekunder etter at siste rute-test er ferdig. expect.poll sin
+      // vanlige retry-til-match-semantikk ville avsluttet ved FØRSTE tomme
+      // lesning — altså før eventuelle sene skrivinger rekker å komme inn — så
+      // her må vi faktisk vente ut vinduet før vi leser.
+      await new Promise(resolve => setTimeout(resolve, 2_000))
+
+      // nivaa = 'error': /api/logg-feil godtar også 'warn' fra klient-beaconen,
+      // og en klient-warn skal ikke gjøre en test som heter «server-feil» rød.
+      const { data, error } = await supabase
+        .from('feil_logg')
+        .select('id, event')
+        .gt('id', grense)
+        .eq('nivaa', 'error')
+        .order('id', { ascending: true })
+      if (error) throw new Error(`Kunne ikke lese feil_logg: ${error.message}`)
+
+      // Merk hva vakten faktisk garanterer: unik-indeksen
+      // feil_logg_profil_event_minutt_uq (migrasjon 122) deduperer på
+      // (profil_id, event, UTC-minutt), så gjentatte treff på SAMME event
+      // innenfor samme minutt gir 23505 og ingen ny rad. Kontrakten er derfor
+      // «minst én rad per event per minutt», ikke «én rad per feil». Det er
+      // nok for en vakt som spør «logget noe seg i det hele tatt?», og
+      // indeksen skal ikke omgås for å skjerpe tellingen.
+      const hendelser = (data ?? []).map(r => r.event)
+      expect(
+        hendelser,
+        `Sidene svarte 200 og rendret innhold, men disse server-feilene ble logget til feil_logg i løpet av kjøringen (grense id > ${grense}): ${hendelser.join(', ')}`,
+      ).toEqual([])
+    })
+  })
 })
 
 // Ikke med i listen, med begrunnelse:

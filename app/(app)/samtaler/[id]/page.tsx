@@ -7,6 +7,7 @@ import Avatar from '@/components/ui/Avatar'
 import Chat from '@/components/chat/Chat'
 import ChatAutoScrollScript from '@/components/chat/ChatAutoScrollScript'
 import { markerSamtaleLest } from '@/lib/actions/samtaler'
+import { logg } from '@/lib/logg'
 
 type SamtaleRad = {
   id: string
@@ -66,8 +67,12 @@ export default async function SamtaleDetalj({
 
   // Marker innkomne meldinger som lest når siden lastes. Trigges som side-
   // effekt — UI venter ikke på dette. RLS hindrer at vi kan markere
-  // andres meldinger eller andre samtaler.
-  markerSamtaleLest(id).catch(console.error)
+  // andres meldinger eller andre samtaler. Actionen kalles under render,
+  // så den får IKKE revalidere /profil (Next kaster) — den siden er
+  // dynamisk rendret og henter et ferskt tall uansett neste gang (#539).
+  markerSamtaleLest(id).catch((err: unknown) =>
+    logg.feil('samtaler.marker_lest.feilet', err).catch(() => {}),
+  )
 
   const navn = motpart?.visningsnavn || motpart?.navn || 'Ukjent'
   const erAdmin = kanAdministrere(profil?.rolle)

@@ -6,6 +6,7 @@ import ChatAutoScrollScript from '@/components/chat/ChatAutoScrollScript'
 import { kanAdministrere } from '@/lib/roller'
 import { markerChatSett } from '@/lib/actions/ulest'
 import { hentAppFlagg, CHAT_FANE } from '@/lib/app-innstillinger'
+import { logg } from '@/lib/logg'
 
 // Klubb-chat: én felles kronologisk tråd for hele klubben.
 // Initial-last er siste 30 meldinger (i desc-rekkefølge fra DB, reversert til
@@ -42,8 +43,13 @@ export default async function KlubbChatSide() {
   if (!kanAdministrere(profil?.rolle) && !chatFane) return notFound()
 
   // Marker at brukeren nå ser klubb-chat — prikken forsvinner ved neste
-  // navigasjon. Fire-and-forget: vi venter ikke, men heller ikke stille.
-  markerChatSett().catch(() => {})
+  // navigasjon. Fire-and-forget: vi venter ikke, men heller ikke stille — en
+  // tom lambda her ville svelget kastet og gjort feilen usynlig for
+  // feil_logg-vakten i e2e/sider-laster.spec.ts (CLAUDE.md § Policy:
+  // Side-effekter ved sidelast).
+  markerChatSett().catch((err: unknown) =>
+    logg.feil('ulest.marker_chat_sett.feilet', err).catch(() => {}),
+  )
 
   const erAdmin = kanAdministrere(profil?.rolle)
   const initialMeldinger = [...(siste ?? [])].reverse()

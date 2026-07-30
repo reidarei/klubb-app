@@ -2,8 +2,8 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
 
 /**
  * Finn eller opprett samtalen mellom innlogget bruker og motpart.
@@ -77,15 +77,21 @@ export async function markerSamtaleLest(samtaleId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  await supabase
+  const { error } = await supabase
     .from('samtale_chat')
     .update({ lest: true })
     .eq('samtale_id', samtaleId)
     .neq('profil_id', user.id)
     .eq('lest', false)
 
-  // Oppdater ulest-tellingen som nå vises på profil-siden (#256)
-  revalidatePath('/profil')
+  if (error) {
+    await logg.feil('samtaler.marker_lest.oppdatering.feilet', error, { ctx: { code: error.code } })
+  }
+
+  // Ingen revalidatePath her: /profil er dynamisk rendret (createServerClient()),
+  // så ulest-tallet er ferskt ved neste server-render uansett. revalidatePath ville
+  // vært ulovlig — actionen kalles som løs promise under render av /samtaler/[id]
+  // og nådde uansett aldri klienten (#539).
 }
 
 // Send/oppdater/slett private meldinger går via sendChatMelding /

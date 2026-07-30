@@ -12,22 +12,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagChain } from './helpers/supabase-mock'
 
-const { mockFrom, mockSupabase, mockRedirect } = vi.hoisted(() => {
+const { mockFrom, mockSupabase, mockRedirect, mockGetUser } = vi.hoisted(() => {
   const mockFrom = vi.fn<(tabell: string) => unknown>()
-  const mockSupabase = { from: mockFrom }
+  const mockGetUser = vi.fn<() => unknown>()
+  const mockSupabase = { from: mockFrom, auth: { getUser: mockGetUser } }
   // Ekte redirect() kaster NEXT_REDIRECT for å stoppe server action-en der.
   const mockRedirect = vi.fn((..._a: unknown[]): never => { throw new Error('NEXT_REDIRECT') })
-  return { mockFrom, mockSupabase, mockRedirect }
+  return { mockFrom, mockSupabase, mockRedirect, mockGetUser }
 })
+
+const { mockLoggFeil } = vi.hoisted(() => ({ mockLoggFeil: vi.fn().mockResolvedValue(undefined) }))
 
 vi.mock('@/lib/auth', () => ({
   ensureInnlogget: vi.fn().mockResolvedValue({ supabase: mockSupabase, user: { id: 'aaa' } }),
 }))
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn().mockResolvedValue(mockSupabase) }))
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+// revalidatePath KASTER med samme feilform Next 15 faktisk kaster med når en
+// server action kaller den under render (se markerSamtaleLest-T1 under). Det
+// simulerer render-konteksten fra /samtaler/[id]s ekte kallsted — kontrakten
+// er at markerSamtaleLest() er trygg å kalle der selv om revalidatePath ryker.
+// aapneSamtale kaller aldri revalidatePath, så mocken forstyrrer ikke testene
+// over.
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(() => {
+    throw new Error('used "revalidatePath /profil" during render which is unsupported')
+  }),
+}))
 vi.mock('next/navigation', () => ({ redirect: (...a: unknown[]) => mockRedirect(...a) }))
+vi.mock('@/lib/logg', () => ({ logg: { feil: mockLoggFeil, warn: vi.fn() } }))
 
-import { aapneSamtale } from '@/lib/actions/samtaler'
+import { aapneSamtale, markerSamtaleLest } from '@/lib/actions/samtaler'
+import { revalidatePath } from 'next/cache'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -111,5 +126,54 @@ describe('aapneSamtale', () => {
   it('nekter samtale med deg selv', async () => {
     settOppSamtale({ selectSvar: [] })
     await expect(aapneSamtale('aaa')).rejects.toThrow('Kan ikke åpne samtale med deg selv')
+  })
+})
+
+// Regresjonsvakt for #539: revalidatePath('/profil') ble kalt under render av
+// /samtaler/[id] og Next 15 kaster på det (se next/cache-mocken over). Fjernet
+// fra markerSamtaleLest — disse testene beviser at den ikke kommer tilbake.
+describe('markerSamtaleLest', () => {
+  it('T1 — er trygg å kalle under render: revalidatePath kalles aldri, og actionen resolver uansett', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'aaa' } } })
+    mockFrom.mockImplementation(() => lagChain({}))
+
+    await expect(markerSamtaleLest('s-1')).resolves.toBeUndefined()
+    expect(revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('T2 — oppdaterer kun andres uleste meldinger i riktig samtale (ikke vakuøs)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'aaa' } } })
+    const chain = lagChain({})
+    mockFrom.mockImplementation(() => chain)
+
+    await markerSamtaleLest('s-1')
+
+    expect(mockFrom).toHaveBeenCalledWith('samtale_chat')
+    expect(chain.update).toHaveBeenCalledWith({ lest: true })
+    expect(chain.eq).toHaveBeenCalledWith('samtale_id', 's-1')
+    expect(chain.neq).toHaveBeenCalledWith('profil_id', 'aaa')
+    expect(chain.eq).toHaveBeenCalledWith('lest', false)
+  })
+
+  it('T3 — en feilet oppdatering svelges ikke stille: logges, men actionen resolver fortsatt', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'aaa' } } })
+    mockFrom.mockImplementation(() =>
+      lagChain(null, { code: '42501', message: 'permission denied for table samtale_chat' }),
+    )
+
+    await expect(markerSamtaleLest('s-1')).resolves.toBeUndefined()
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'samtaler.marker_lest.oppdatering.feilet',
+      expect.objectContaining({ code: '42501' }),
+      expect.objectContaining({ ctx: { code: '42501' } }),
+    )
+  })
+
+  it('T4 — uinnlogget er fortsatt en silent no-op (#305): ingen update, ingen logging', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } })
+
+    await expect(markerSamtaleLest('s-1')).resolves.toBeUndefined()
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockLoggFeil).not.toHaveBeenCalled()
   })
 })

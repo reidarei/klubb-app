@@ -68,6 +68,9 @@
 //   klient.chat.meldinger.feilet           — chat-meldingshenting feiler i nettleseren (pulje C-review)
 //   klient.chat.reaksjoner.feilet          — reaksjonshenting feiler i nettleseren (pulje C-review)
 //   varsel.dedup.ingen_noekkel  — tillatDuplikat: false uten arrangementId/pollId/dedupNoekkel i lib/varsler.ts — ingen nøkkel å deduplisere på, sjekken under er en no-op (#518)
+//   samtaler.marker_lest.oppdatering.feilet — samtale_chat-oppdateringen til lest = true feiler ved sidelast, siden rendres videre (#539)
+//   samtaler.marker_lest.feilet — markerSamtaleLest() kastet uventet fra /samtaler/[id] (#539)
+//   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat, fire-and-forget under render (#539-review)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
