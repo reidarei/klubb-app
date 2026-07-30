@@ -4,7 +4,8 @@ import { harTestCreds } from './helpers/auth'
 
 // Fond-fane skjermbilde-spec (#443).
 // Kjøres mot test-instansen (playwright.config.ts peker aldri mot prod).
-// Tar dark + light screenshot av /fond i tom tilstand (ingen DB-data fra seed).
+// Tar dark + light screenshot av /fond. Merk: siden er ikke lenger helt tom —
+// seeden har én innskyter med bevegelser siden #543 (se fond-bevegelser.spec.ts).
 
 const UT_DIR = '.screenshots/fond'
 

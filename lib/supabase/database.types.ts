@@ -510,6 +510,38 @@ export type Database = {
           },
         ]
       }
+      fond_bevegelse: {
+        Row: {
+          belop: number
+          dato: string
+          id: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          belop: number
+          dato: string
+          id?: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          belop?: number
+          dato?: string
+          id?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_bevegelse_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fond_eiendom: {
         Row: {
           anskaffelsesverdi: number
@@ -540,21 +572,27 @@ export type Database = {
           dato: string
           id: string
           opprettet: string
+          oppspart_akkumulert: number
           profil_id: string
+          renteandel_i_fjor: number
         }
         Insert: {
           belop: number
           dato: string
           id?: string
           opprettet?: string
+          oppspart_akkumulert?: number
           profil_id: string
+          renteandel_i_fjor?: number
         }
         Update: {
           belop?: number
           dato?: string
           id?: string
           opprettet?: string
+          oppspart_akkumulert?: number
           profil_id?: string
+          renteandel_i_fjor?: number
         }
         Relationships: [
           {
@@ -1760,6 +1798,10 @@ export type Database = {
           forrige_navn: string
           forrige_profil: string
         }[]
+      }
+      skriv_fond_bevegelser: {
+        Args: { p_aar: number; p_data: Json }
+        Returns: undefined
       }
       stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
       tell_aktivitet: {

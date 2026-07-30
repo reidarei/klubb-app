@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { hentPublisertOppgjor, skrivPublisertOppgjor, type OppgjorDiff } from '@/lib/actions/fond'
+import { byggOppgjorPayload } from '@/lib/fond-oppgjor-payload'
 import { formaterDato } from '@/lib/dato'
 
 // Formaterer et beløp som kr med to desimaler
@@ -51,17 +52,10 @@ export default function HentOppgjor() {
     if (!diff) return
     setFeil(null)
     setSuksess(false)
-    // Bygg oppgjør-payload fra diff (rekonstruerer Oppgjor-kontrakten for server-re-validering)
-    const payload = {
-      versjon: 1 as const,
-      generert: diff.generert,
-      snapshot_dato: diff.snapshot_dato,
-      saldo: diff.saldo.hentet,
-      andeler: diff.rader.map((r) => ({
-        visningsnavn: r.visningsnavn,
-        belop: r.hentetVerdi,
-      })),
-    }
+    // Rekonstruerer Oppgjor-kontrakten fra diff-DTO-en for server-re-validering.
+    // Ligger i egen ren modul fordi gjennomgangen av felter er en felle som må
+    // kunne testes — se kommentaren i lib/fond-oppgjor-payload.ts.
+    const payload = byggOppgjorPayload(diff)
     startSkriv(async () => {
       const resultat = await skrivPublisertOppgjor(payload)
       if (resultat.ok) { setSuksess(true); setDiff(null) }

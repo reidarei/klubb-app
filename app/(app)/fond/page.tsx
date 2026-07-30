@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Card from '@/components/ui/Card'
-import Avatar from '@/components/ui/Avatar'
+import InnskyterRad from '@/components/fond/InnskyterRad'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
@@ -62,6 +62,7 @@ export default async function FondSide() {
     { data: verdipapirer, error: verdipapirerFeil },
     { data: innskudd, error: innskuddFeil },
     { data: kontant, error: kontantFeil },
+    { data: bevegelser, error: bevegelserFeil },
   ] = await Promise.all([
     supabase.from('fond_eiendom').select('*').order('navn'),
     supabase.from('fond_verdipapir').select('*').order('navn'),
@@ -70,6 +71,13 @@ export default async function FondSide() {
       .select('*, profiles(navn, visningsnavn, bilde_url, rolle)')
       .order('dato', { ascending: false }),
     supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
+    // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: ~17 personer
+    // × ~12 bevegelser er neglisjerbart i payload, og alternativet ville lagt en
+    // nettverksrunde inn i en interaksjon som skal føles umiddelbar.
+    supabase
+      .from('fond_bevegelse')
+      .select('profil_id, dato, belop')
+      .order('dato', { ascending: true }),
   ])
   // Totalverdi er en sum på tvers av alle fire kildene — en feilet delspørring
   // ville stille vist en for lav (løgnaktig) totalverdi i stedet for å feile
@@ -78,12 +86,25 @@ export default async function FondSide() {
   if (verdipapirerFeil) throw new Error(`Kunne ikke hente verdipapirer: ${verdipapirerFeil.message}`)
   if (innskuddFeil) throw new Error(`Kunne ikke hente innskudd: ${innskuddFeil.message}`)
   if (kontantFeil) throw new Error(`Kunne ikke hente kontantsaldo: ${kontantFeil.message}`)
+  // Bevegelsene er en oppdeling av tall som allerede vises. Feiler spørringen og
+  // vi bare lot listen være tom, ville radene sett uutvidbare ut — altså «det
+  // finnes ingen bevegelser», som er en påstand vi ikke har grunnlag for. Kaster.
+  if (bevegelserFeil) throw new Error(`Kunne ikke hente fondsbevegelser: ${bevegelserFeil.message}`)
 
   // Aggregater — tåler 0-verdier og tomme lister
   const eiendomListe = eiendommer ?? []
   const vpListe = verdipapirer ?? []
   const innskuddListe = innskudd ?? []
   const kontantSaldo = kontant?.saldo ?? 0
+
+  // Bevegelser gruppert per profil, i datorekkefølge (spørringen sorterer).
+  // Number() fordi PostgREST kan serialisere numeric som string.
+  const bevegelserPerProfil = new Map<string, { dato: string; belop: number }[]>()
+  for (const b of bevegelser ?? []) {
+    const liste = bevegelserPerProfil.get(b.profil_id) ?? []
+    liste.push({ dato: b.dato, belop: Number(b.belop) })
+    bevegelserPerProfil.set(b.profil_id, liste)
+  }
 
   const eiendomSum = eiendomListe.reduce((s, e) => s + e.markedsverdi, 0)
   const vpVerdi = vpListe.reduce((s, v) => s + v.verdi, 0)
@@ -495,40 +516,27 @@ export default async function FondSide() {
                 const navn = p?.navn ?? 'Ukjent'
                 // Kallenavnet er det gutta kjenner hverandre som — fullt navn kun som Avatar-hue-kilde
                 const kallenavn = p?.visningsnavn ?? navn.split(' ')[0]
+                // Vis bare bevegelser fra året andelen gjelder. Tabellen beholder
+                // eldre år, så uten filteret ville en import av neste år dratt
+                // forrige års linjer inn i samme oppdeling.
+                const aar = inn.dato.slice(0, 4)
+                const egneBevegelser = (bevegelserPerProfil.get(inn.profil_id) ?? []).filter(
+                  b => b.dato.slice(0, 4) === aar,
+                )
                 return (
-                  <div
+                  <InnskyterRad
                     key={inn.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '10px 16px',
-                      borderBottom: i < innskuddListe.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                    }}
-                  >
-                    <Avatar name={navn} size={28} src={p?.bilde_url ?? null} rolle={p?.rolle ?? null} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>
-                        {kallenavn}
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        {/* «Per»-formulering (ikke «Innskudd») — beløpene er øyeblikksbilder av
-                            hver innskyters andel, ikke enkeltinnskudd. Reidars eksakte tekst. */}
-                        Per {formaterDato(inn.dato, 'd. MMMM')}
-                      </div>
-                    </div>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {kr(inn.belop)}
-                    </span>
-                  </div>
+                    navn={navn}
+                    kallenavn={kallenavn}
+                    bildeUrl={p?.bilde_url ?? null}
+                    rolle={p?.rolle ?? null}
+                    dato={inn.dato}
+                    belop={Number(inn.belop)}
+                    oppspartAkkumulert={Number(inn.oppspart_akkumulert)}
+                    renteandelIFjor={Number(inn.renteandel_i_fjor)}
+                    bevegelser={egneBevegelser}
+                    sisteRad={i === innskuddListe.length - 1}
+                  />
                 )
               })}
             </>

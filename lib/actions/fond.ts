@@ -293,6 +293,18 @@ export type OppgjorDiff = {
     appVerdi: number | null   // null = ingen rad i fond_innskudd enda
     hentetVerdi: number
     antallRader: number       // > 1 = blokkerende tilstand
+    // Detaljpakken fra kilden. null = eldre API-svar uten detaljer.
+    //
+    // VIKTIG: HentOppgjor.tsx bygger skrive-payloaden på nytt FRA DENNE DTO-en,
+    // ikke fra JSON-en som ble hentet. Alt som ikke ligger her forsvinner stille
+    // mellom «Hent» og «Skriv», uten en eneste feilmelding. Legger du til et nytt
+    // felt i oppgjørs-kontrakten, må det inn her også — ellers hentes det og
+    // skrives aldri. Pinnet i __tests__/fond-oppgjor-dto.test.ts.
+    detaljer: {
+      oppspart_akkumulert: number
+      renteandel_i_fjor: number
+      bevegelser: { dato: string; belop: number }[]
+    } | null
   }[]
 }
 
@@ -354,7 +366,10 @@ export async function hentPublisertOppgjor(): Promise<
       profil_id: string
       visningsnavn: string
       hentetVerdi: number
+      detaljer: OppgjorDiff['rader'][number]['detaljer']
     }[] = []
+
+    const { harDetaljer } = await import('@/lib/fond-oppgjor')
 
     for (const andel of oppgjor.andeler) {
       const match = matchProfil(profilListe, andel.visningsnavn)
@@ -362,6 +377,15 @@ export async function hentPublisertOppgjor(): Promise<
         profil_id: match.id,
         visningsnavn: andel.visningsnavn,
         hentetVerdi: andel.belop,
+        // Pakke-regelen er alt håndhevet i validerOppgjor, så dette er enten
+        // hele pakken eller ingenting — aldri en halv.
+        detaljer: harDetaljer(andel)
+          ? {
+              oppspart_akkumulert: andel.oppspart_akkumulert,
+              renteandel_i_fjor: andel.renteandel_i_fjor,
+              bevegelser: andel.bevegelser,
+            }
+          : null,
       })
     }
 
@@ -404,6 +428,7 @@ export async function hentPublisertOppgjor(): Promise<
         appVerdi,
         hentetVerdi: r.hentetVerdi,
         antallRader,
+        detaljer: r.detaljer,
       }
     })
 
@@ -458,10 +483,31 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     const profilListe = profiler ?? []
 
     // Match alle andeler til profiler — kast hvis ukjent eller tvetydig navn
-    const matchede: { profil_id: string; visningsnavn: string; belop: number }[] = []
+    const { harDetaljer } = await import('@/lib/fond-oppgjor')
+    const matchede: {
+      profil_id: string
+      visningsnavn: string
+      belop: number
+      detaljer: {
+        oppspart_akkumulert: number
+        renteandel_i_fjor: number
+        bevegelser: { dato: string; belop: number }[]
+      } | null
+    }[] = []
     for (const andel of oppgjor.andeler) {
       const match = matchProfil(profilListe, andel.visningsnavn)
-      matchede.push({ profil_id: match.id, visningsnavn: andel.visningsnavn, belop: andel.belop })
+      matchede.push({
+        profil_id: match.id,
+        visningsnavn: andel.visningsnavn,
+        belop: andel.belop,
+        detaljer: harDetaljer(andel)
+          ? {
+              oppspart_akkumulert: andel.oppspart_akkumulert,
+              renteandel_i_fjor: andel.renteandel_i_fjor,
+              bevegelser: andel.bevegelser,
+            }
+          : null,
+      })
     }
 
     // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving.
@@ -488,11 +534,19 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     // Skriv andeler — upsert per profil (update hvis rad finnes, insert ellers).
     // snapshot_dato overstyrer alltid dato — det er snapshot-semantikken (#453).
     for (const m of matchede) {
+      // Fjorårstallene skrives sammen med totalen. Mangler detaljpakken (eldre
+      // API-svar), nullstilles de bevisst framfor å bli stående: da ville en
+      // gammel oppdeling overlevd et nytt oppgjør og sluttet å summere seg til
+      // den nye totalen — nøyaktig løgnen invarianten skal hindre.
+      const fjor = {
+        oppspart_akkumulert: m.detaljer?.oppspart_akkumulert ?? 0,
+        renteandel_i_fjor: m.detaljer?.renteandel_i_fjor ?? 0,
+      }
       const eksisterende = alleRader.find((i) => i.profil_id === m.profil_id)
       if (eksisterende) {
         const { error } = await supabase
           .from('fond_innskudd')
-          .update({ belop: m.belop, dato: oppgjor.snapshot_dato })
+          .update({ belop: m.belop, dato: oppgjor.snapshot_dato, ...fjor })
           .eq('id', eksisterende.id)
         if (error)
           throw new Error(
@@ -501,11 +555,31 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       } else {
         const { error } = await supabase
           .from('fond_innskudd')
-          .insert({ profil_id: m.profil_id, belop: m.belop, dato: oppgjor.snapshot_dato })
+          .insert({ profil_id: m.profil_id, belop: m.belop, dato: oppgjor.snapshot_dato, ...fjor })
         if (error)
           throw new Error(
             `Feil ved opprettelse av rad for ${m.visningsnavn}: ${error.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
           )
+      }
+    }
+
+    // Bevegelsene: én RPC som gjør slett-så-sett-inn atomisk per person (se
+    // migrasjon 126). Kalles kun når kilden faktisk sendte detaljer — et eldre
+    // API-svar skal IKKE tørke ut bevegelser som alt ligger i appen.
+    const medDetaljer = matchede.filter((m) => m.detaljer !== null)
+    if (medDetaljer.length > 0) {
+      const { error: bevegelseFeil } = await supabase.rpc('skriv_fond_bevegelser', {
+        p_aar: Number(oppgjor.snapshot_dato.slice(0, 4)),
+        p_data: medDetaljer.map((m) => ({
+          profil_id: m.profil_id,
+          bevegelser: m.detaljer!.bevegelser,
+        })),
+      })
+      if (bevegelseFeil) {
+        await logg.feil('fond.oppgjor.bevegelser.feilet', bevegelseFeil)
+        throw new Error(
+          `Feil ved skriving av bevegelser: ${bevegelseFeil.message}. Totalene er skrevet — hent og skriv på nytt for å fullføre.`,
+        )
       }
     }
 

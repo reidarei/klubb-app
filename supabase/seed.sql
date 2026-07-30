@@ -509,6 +509,50 @@ values
     null, null, now(), now()
   );
 
+-- ─── Fondsandel med bevegelser (e2e/fond-bevegelser.spec.ts, #543) ─────────
+-- Én innskyter med hele detaljpakken, så accordionen på /fond har noe å utvide.
+--
+-- Står på Petter (8000…002), IKKE på e2e-admin (8000…001): den sistnevntes
+-- fondsandel skal forbli 0 kr, ellers ryker assertionen i profil-fond-andel.spec.ts.
+--
+-- Tallene summerer seg: 9000 + 450 + (500 + 500 + 4500 − 2000) = 12950.
+-- Et seed som IKKE summerte seg ville vist en oppdeling som ikke stemmer med
+-- totalen over seg, og da tester vi at UI-et gjengir feil data pent.
+--
+-- Datoene er relative til inneværende år (date_trunc), aldri hardkodet årstall:
+-- bevegelsene må ligge i samme år som innskuddets dato, ellers filtrerer siden
+-- dem bort — og en hardkodet 2026-dato ville stille tømt accordionen 1. januar.
+-- Alle legges i januar, så de er i fortiden uansett når suiten kjøres.
+
+-- Ola (8000…003) er kontrasten: en andel UTEN detaljpakke, altså slik en rad ser
+-- ut når den er importert fra et eldre API-svar. Raden skal vises i lista, men
+-- IKKE være utvidbar — en accordion som åpner ingenting er verre enn ingen.
+insert into public.fond_innskudd (id, profil_id, belop, dato, oppspart_akkumulert, renteandel_i_fjor)
+values
+  (
+    '00000000-0000-4000-9800-000000000050',
+    '00000000-0000-4000-8000-000000000002',
+    12950.00, current_date, 9000.00, 450.00
+  ),
+  (
+    '00000000-0000-4000-9800-000000000055',
+    '00000000-0000-4000-8000-000000000003',
+    3000.00, current_date, 0, 0
+  );
+
+-- To bevegelser på samme dato (…052 og …053) skal IKKE slås sammen — de er to
+-- hendelser. Den siste er negativ: et uttak.
+insert into public.fond_bevegelse (id, profil_id, dato, belop)
+values
+  ('00000000-0000-4000-9800-000000000051', '00000000-0000-4000-8000-000000000002',
+   (date_trunc('year', now()) + interval '14 days')::date,  500.00),
+  ('00000000-0000-4000-9800-000000000052', '00000000-0000-4000-8000-000000000002',
+   (date_trunc('year', now()) + interval '20 days')::date,  500.00),
+  ('00000000-0000-4000-9800-000000000053', '00000000-0000-4000-8000-000000000002',
+   (date_trunc('year', now()) + interval '20 days')::date, 4500.00),
+  ('00000000-0000-4000-9800-000000000054', '00000000-0000-4000-8000-000000000002',
+   (date_trunc('year', now()) + interval '25 days')::date, -2000.00);
+
 -- ─── Verifiser at seeden faktisk landet (#534) ─────────────────────────────
 -- «Grønn på tom luft» ved KILDEN: kåringsfixturene over løser kaaring_mal_id
 -- via et navneoppslag som gir stille NULL hvis malen mangler (se kommentaren
@@ -607,5 +651,36 @@ begin
     raise exception 'Seed-verifisering: forventet 2 arrangøransvar-rader (prefiks 9800), fant %.', antall;
   end if;
 
-  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer, røyktest-fixturene, e2e-admin og generalsekretæren er alle på plass.';
+  -- Fondsandelen må summere seg, ellers tester accordion-speccen at UI-et
+  -- gjengir inkonsistente tall pent. Regnes i øre, som i validerOppgjor.
+  select count(*) into antall
+    from public.fond_innskudd i
+   where i.id = '00000000-0000-4000-9800-000000000050'
+     and round(i.belop * 100) = round(i.oppspart_akkumulert * 100)
+                              + round(i.renteandel_i_fjor * 100)
+                              + coalesce((
+                                  select sum(round(b.belop * 100))
+                                    from public.fond_bevegelse b
+                                   where b.profil_id = i.profil_id
+                                     and extract(year from b.dato) = extract(year from i.dato)
+                                ), 0);
+  if antall <> 1 then
+    raise exception 'Seed-verifisering: fondsandelen (9800…050) summerer seg ikke — accordionen på /fond ville vist en oppdeling som ikke stemmer med totalen.';
+  end if;
+
+  select count(*) into antall from public.fond_bevegelse
+  where profil_id = '00000000-0000-4000-8000-000000000002';
+  if antall <> 4 then
+    raise exception 'Seed-verifisering: forventet 4 fondsbevegelser på Petter, fant %.', antall;
+  end if;
+
+  -- Ola skal være uten detaljer — kontrasten testen bruker for å bekrefte at
+  -- rader uten data ikke blir knapper. Får han bevegelser, tester speccen ingenting.
+  select count(*) into antall from public.fond_bevegelse
+  where profil_id = '00000000-0000-4000-8000-000000000003';
+  if antall <> 0 then
+    raise exception 'Seed-verifisering: Ola skal IKKE ha fondsbevegelser (han er «uten detaljer»-tilfellet), fant %.', antall;
+  end if;
+
+  raise notice 'Seed-verifisering OK: kåringsmal, 4 kåringspoller, 4 stedene-turer, røyktest-fixturene, fondsandel med bevegelser, e2e-admin og generalsekretæren er alle på plass.';
 end $$;
