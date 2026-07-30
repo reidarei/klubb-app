@@ -344,6 +344,18 @@ create policy "..." on public.<tabell> ...;
 
 **Grants-opprydding:** Migrasjonene som følger med (grants-audit + `alter default privileges ... revoke all on tables/sequences/functions from anon`) trimmer eksisterende tabeller til minste privilegium og skrur av anon-default på public-schema, så nye tabeller ikke arver anon-grants. `authenticated`-default røres ikke (RLS backstopper; Supabase fjerner uansett alle default-grants 30. oktober 2026). Følg malen over for nye tabeller.
 
+## Policy: Side-effekter ved sidelast
+
+En server action kalt som løs promise **under render** av en server component får **ikke** kalle `revalidatePath`/`revalidateTag` — Next 15 kaster på det, og kallet nådde uansett aldri klienten (ingen Full Route Cache å invalidere på en dynamisk rendret side). Et `.catch(console.error)`/`.catch(() => {})` på kallet svelger kastet i taushet, så siden ser helt normal ut mens effekten aldri fullfører.
+
+To tillatte mønstre:
+- **(a) Server-side fire-and-forget uten revalidering**, der ferskheten kommer av at målsiden er dynamisk rendret.
+- **(b) Klientkomponent + `useEffect` + action + `router.refresh()`** når tellingen må oppdateres umiddelbart i UI-et.
+
+**Ufravikelig for mønster (a): catch-en skal alltid gå til `logg.feil('<omraade>.feilet', err)` — aldri `console.error`, aldri en tom lambda.** `logg.feil()` returnerer en promise, så formen er `.catch((err: unknown) => logg.feil('<omraade>.feilet', err).catch(() => {}))` (den ytre catch-en hindrer at loggingen selv blir en uhåndtert rejection). Raden i `feil_logg` er kvitteringen e2e-tester leser: en side som svarer 200 og rendrer fint, men svelger et kast i en tom lambda, er per definisjon usynlig for dem. Nytt event-navn skal samtidig inn i event-taksonomien i filhodet til `lib/logg.ts`.
+
+Tredje gang samme problem slår til bør vurderes som en arkitektonisk vakt (jf. § Arbeidsmåter), ikke en ny lapp.
+
 ## Policy: Visuell verifikasjon
 
 For UI-endringer på vanlig flyt: kjør Playwright lokalt før push (`npx playwright test`). Se `e2e/README.md` for setup.

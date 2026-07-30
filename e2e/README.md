@@ -74,6 +74,8 @@ Verdien er at en brutt databasespørring på en side ingen andre tester besøker
 
 **Legger du til en ny rute i appen, legg den i `RUTER`-lista.** Detaljruter (`[id]`) trenger en matchende rad i `supabase/seed.sql` — uten den treffer testen `notFound()` og bekrefter 404-grenen i stedet for innholds-grenen. Seed-fixturene for dette har prefiks `9800` og er dekket av seed-vakten nederst i fila.
 
+**Feil_logg-vakten:** Røyktesten kjøres med `retries: 0` og inkluderer en dedikert vakt som feiler hvis en side rendret (200 + innhold), men server-feil ble logget til `feil_logg` i løpet av kjøringen. Vakten finansieres av `e2e/global-setup.ts` (skriver høyeste `feil_logg.id` på kjøringsstart) og `e2e/helpers/feil-logg-grense.ts` (filtrerer vakten til kun nye rader). Det betyr at hvis du legger til en server action som kalles løst under render uten `.catch(logg.feil(...))` — eller hvis en server component feiler stille og svelger kastet — blir det fanget av vakten på neste e2e-kjøring. Rød test = sjekk `feil_logg`-tabellen i test-instansen; en rød som viser seg å være legitim manglende infrastruktur (mock, seed-data) må løses før commit.
+
 ## CI: to omfang
 
 Suiten kjører i `.github/workflows/pr-check.yml` på **pull requests** (full port, inkludert e2e). Pushes rett til `main` kjører kun kjerneporten — lint, typecheck, vitest og bygg, uten e2e.
