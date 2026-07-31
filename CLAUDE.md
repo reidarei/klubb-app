@@ -360,6 +360,10 @@ Tredje gang samme problem slår til bør vurderes som en arkitektonisk vakt (jf.
 
 For UI-endringer på vanlig flyt: kjør Playwright lokalt før push (`npx playwright test`). Se `e2e/README.md` for setup.
 
-For iOS-PWA-quirks (visualViewport, safe-area, focus/blur på iOS): Playwright reproduserer ikke. Test manuelt på iPhone og dokumenter i PR-en at automatisk verifikasjon ikke er mulig.
+**E2e er også en CI-port på hver PR** (`.github/workflows/pr-check.yml`, mot en fersk `supabase start` i selve jobben). Lokal kjøring er førstelinjen for rask iterasjon, men er ikke eneste dekning — en PR som glemmer suiten lokalt fanges likevel før merge.
+
+Samme workflow kjører på `push` til main, men da kun kjerneporten (lint, typecheck, vitest, bygg — uten e2e). **Kodeendringer bør derfor gå gjennom PR**; en direkte push til main får aldri e2e. Budsjettvakten (`.github/scripts/ci-minuttbudsjett.mjs`) kan i tillegg kutte e2e-steget på et privat repo når Actions-kvoten er knapp — en grønn kjøring med kuttet e2e er «ukjent», ikke «grønt». Se [docs/ci-minuttbudsjett.md](docs/ci-minuttbudsjett.md).
+
+For iOS-PWA-quirks (visualViewport, safe-area, focus/blur på iOS): Playwright reproduserer ikke, verken lokalt eller i CI. Test manuelt på iPhone og dokumenter i PR-en at automatisk verifikasjon ikke er mulig.
 
 Supabase: ditt eget prosjekt (se [docs/oppsett.md](docs/oppsett.md)). Database-passordet ligger i `.env.local` som `SUPABASE_DB_PASSWORD`. Hent fra Supabase Dashboard → Project Settings → Database. Skript som trenger direkte Postgres-tilgang kjøres med `node --env-file=.env.local scripts/<navn>.mjs`.

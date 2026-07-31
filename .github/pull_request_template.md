@@ -9,6 +9,7 @@
 ## Sjekkliste
 
 - [ ] `npm run lint` er grønt
+- [ ] `npm run typecheck` er grønt
 - [ ] `npm test` er grønt
 - [ ] `npm run build` er grønt
 - [ ] Eventuelle nye migrasjoner følger malen i CLAUDE.md (GRANTs + RLS)

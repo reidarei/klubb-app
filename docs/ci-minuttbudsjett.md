@@ -30,7 +30,7 @@ If you fork this template to run on a **private repository**, the watcher will a
 1. **Before the first run,** adjust the constants in `.github/scripts/ci-minuttbudsjett.mjs` to match your account's usage:
    - `KVOTE_MIN` — your plan's monthly quota (2000 for Free)
    - `DRIFTSRESERVE_MIN` — minutes to reserve for drift jobs (cron workflows). Measure your scheduled jobs' monthly cost and add headroom.
-   - `E2E_KOST_MIN` — estimated additional minutes for running Playwright. Start with 8 and measure after a few runs.
+   - `E2E_KOST_MIN` — estimated additional minutes for running Playwright. Ships at 10; measure your own after a few runs and adjust.
 
 2. **Monitor the step summary** in your Actions. Every PR run shows a budget table (see `tabell()` function in the script) that breaks down consumption and the e2e decision.
 
@@ -66,14 +66,15 @@ The `Avgjør e2e-omfang` step writes a `::notice::` stating which case it was, i
 
 After enabling this template on a private repo, run a few PRs with e2e enabled (early in the month when quota is plentiful). Note the job duration with and without e2e, and update `E2E_KOST_MIN` accordingly.
 
-For future reference, the cost breakdown in Herreklubben (the original project) was:
-- Playwright: ~233 s
-- Chromium install: ~24 s
-- Total overhead: ~6–7 min
-- Margin for retries: +1–2 min
-- Constant set to: 8 min
+For reference, the reference deployment measured this on a suite of ~100 e2e tests:
+- Full job (core gate + e2e): ~14.5 min
+- Core gate alone (lint, typecheck, vitest, build): ~5.5 min
+- Measured e2e overhead: ~8.8 min (Playwright step, Chromium install, Supabase wait)
+- Constant set to: **10** min — measured value plus margin for `retries: 1`
 
-Your deployment's cost may differ based on test count and Chromium cache freshness.
+Note that `supabase start` barely shows up in that breakdown: the workflow starts it in the background before the fast steps, so container startup overlaps with lint/test/build instead of adding to the total.
+
+Your deployment's cost may differ based on test count and Chromium cache freshness. **If your suite grows substantially, measure again** — an undersized constant lets the guard approve runs it has no budget for.
 
 ## Constants
 

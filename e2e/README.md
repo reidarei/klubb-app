@@ -35,11 +35,10 @@ og settes av configen — du trenger ikke å oppgi TEST_EPOST/TEST_PASSORD. Mang
 Når du har startet `supabase start`, kjør migrasjoner og seed-data:
 
 ```bash
-npx supabase db push
 npx supabase db reset
 ```
 
-`db reset` kjører alle migrasjoner og fyller inn test-data fra `supabase/seed.sql`. Seed-data inneholder:
+`db reset` kjører alle migrasjoner og fyller inn test-data fra `supabase/seed.sql` — den gjør altså jobben til `db push` også, og du trenger ikke begge. Seed-data inneholder:
 - Test-bruker (`e2e-admin@klubb.test`)
 - Noen vanlige medlemmer
 - Arrangement-data som spec-ene verifiserer mot
@@ -117,6 +116,25 @@ to ulike prosesser med hver sin `process.env`.
 
 Test-speccene oppretter og sletter data fritt — det er hele poenget med
 test-isolasjonen. Cleanup går alltid mot test-instansen.
+
+### Femte lag i CI: «kjørte suiten i det hele tatt?»
+
+De fire lagene over hindrer at testene rører prod. I CI trengs et lag til, mot
+motsatt feil: at suiten *ikke kjørte* uten at noen merket det. Er
+`E2E_SUPABASE_*` tomme, skipper hver spec på sin egen guard — og Playwright
+avslutter med 0. Grønn CI, null dekning.
+
+To låser lukker dette:
+
+1. **Workflowen** plukker de tre verdiene ved navn fra `supabase status -o env`,
+   validerer at hver av dem faktisk fikk en verdi, og skriver først da til
+   `$GITHUB_ENV`. En tom variabel gjør jobben rød i stedet for tom.
+2. **`sikkerhetsvakt.spec.ts`** har én test utenfor skip-guarden som asserter det
+   samme i testprosessen. Den er armet kun når `CI` er satt — lokalt er «ingen
+   test-instans ⇒ alt skipper» et bevisst oppsett. Kjør `CI=1 npx playwright test`
+   for å arme den lokalt.
+
+Endrer du hvordan CI får tak i test-instansen, behold begge låsene.
 
 ## Når Playwright IKKE er riktig verktøy
 

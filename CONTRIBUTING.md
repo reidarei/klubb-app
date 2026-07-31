@@ -53,12 +53,15 @@ endrer kode — policyene gjelder også for bidrag. De viktigste:
 
 ```bash
 npm run lint          # ESLint
-npm test              # Vitest enhets-tester
+npm run typecheck     # tsc --noEmit
+npm test              # Vitest enhets- og integrasjonstester
 npx playwright test   # E2E (krever kjørende instans, se e2e/README.md)
 npm run build         # produksjonsbygg skal være grønt
 ```
 
-Kjør lint + test + build før du åpner PR.
+Kjør lint + typecheck + test + build før du åpner PR — det er nøyaktig kjerneporten CI kjører, så en feil her blir rød på PR-en uansett.
+
+E2e kjøres i tillegg automatisk på hver PR, mot en fersk Supabase-instans som CI starter selv. Du trenger altså ikke sette opp e2e lokalt for å bidra — men gjør du det, oppdager du feilen før roboten gjør det.
 
 ## Pull requests
 
