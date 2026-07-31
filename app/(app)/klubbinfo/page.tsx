@@ -71,8 +71,8 @@ export default async function Klubbinfo() {
     },
     {
       icon: 'mapPin',
-      title: 'Stedene',
-      sub: 'Turene på Europakart',
+      title: 'Turene',
+      sub: 'Hvor vi har vært',
       href: '/stedene',
     },
     {
