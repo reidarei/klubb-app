@@ -10,9 +10,6 @@ import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2, KLUB
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
-// Hentes fra KLUBB_STIFTET i stedet for hardkodet konstant
-const KLUBBEN_START_AAR = KLUBB_STIFTET.aar
-
 // Hele stiftelsesdatoen formatert på norsk («24. november 2007»).
 // Lokal fast dato uten tidssone-aspekt — new Date(y, m-1, d) er trygt her.
 const STIFTET_TEKST = format(
@@ -31,8 +28,6 @@ export default async function Klubbinfo() {
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
     supabase.from('album').select('id', { count: 'exact', head: true }),
   ])
-
-  const antallAar = norskAar() - KLUBBEN_START_AAR + 1
 
   type Rad = {
     icon: IkonNavn
@@ -185,39 +180,6 @@ export default async function Klubbinfo() {
           {KLUBB_NAVN_LINJE_2}
         </h2>
 
-        {/* Nøkkeltall */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 22,
-            marginTop: 22,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.5px',
-            textTransform: 'uppercase',
-          }}
-        >
-          {[
-            { val: antallMedlemmer ?? 0, lbl: 'Medlemmer' },
-            { val: antallAar, lbl: 'Årganger' },
-          ].map(s => (
-            <div key={s.lbl}>
-              <div
-                style={{
-                  color: 'var(--accent)',
-                  fontSize: 18,
-                  fontFamily: 'var(--font-display)',
-                  letterSpacing: '-0.3px',
-                  marginBottom: 2,
-                }}
-              >
-                {s.val}
-              </div>
-              {s.lbl}
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Om klubben */}
