@@ -73,9 +73,9 @@ Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
 | Cron | GitHub Actions (`paaminne.yml`, daglig 06:00 UTC) |
 | Hosting | Vercel (Hobby) |
 | Domene | Valgfritt — konfigureres via env-vars |
-| Testing | Vitest (enhetstester) + Playwright (e2e mot lokal Supabase) |
+| Testing | Vitest (enhetstester) + Playwright (e2e og RLS-tester, CI-port på hver PR) |
 
-~400 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~110 nummererte SQL-migrasjoner.
+~400 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~125 nummererte SQL-migrasjoner.
 
 ---
 
@@ -285,6 +285,10 @@ npx playwright test
 
 `playwright.config.ts` har innebygde vakter: den nekter å starte hvis `E2E_SUPABASE_URL` peker mot sky-Supabase, og test-dev-serveren startes på egen port (3100) med egen env slik at en vanlig `npm run dev` mot prod aldri gjenbrukes. Uten `E2E_*`-variablene i `.env.local` skipper alle spec-ene med tydelig melding — e2e-oppsettet er valgfritt for å bruke appen. Full oppskrift i [e2e/README.md](e2e/README.md).
 
+I CI trenger du ikke sette opp noe: `.github/workflows/pr-check.yml` starter sin egen `supabase start` i jobben, kjører suiten mot den og kaster den etterpå.
+
+**RLS-tester (Playwright, `e2e/rls/`):** verifiserer at Row Level Security faktisk stenger det den skal, med ekte `anon`- og `authenticated`-klienter — resten av testsuiten går via `service_role`, som omgår RLS fullstendig. Kjøres med `npx playwright test --project=rls`. Legger du til en ny tabell med egne policyer, bør den få sin egen test her.
+
 **Hva som ikke dekkes automatisk:** iOS-spesifikke quirks (visualViewport, safe-area, PWA focus/blur) reproduserer ikke i Chromium-runneren og må verifiseres manuelt på iPhone.
 
 ---
@@ -302,11 +306,15 @@ npx playwright test
 - `.github/workflows/db-backup.yml` → daglig `pg_dump` av databasen, lagret som Actions-artifact (90 dagers retention). **Free tier har ingen Supabase-backup — dette er den eneste.** Krever secret + aktivering av schedule etter oppsett (se [docs/drift.md](docs/drift.md)). Restore verifiseres med `db-restore-drill.yml` (manuell knapp, årlig drill) — se [docs/disaster-recovery.md](docs/disaster-recovery.md).
 De to første bruker `CRON_SECRET`-header. Valgt GitHub Actions foran Vercel Cron for bedre logging og synlig feilrapportering.
 
-**Migrasjoner:** kjøres lokalt med `npx supabase db push` mot prod-prosjektet. Det er **ingen CI-orkestrering** — migrasjoner er en manuell utviklerhandling.
+**Migrasjoner:** kan kjøres lokalt med `npx supabase db push`, eller fra CI med `.github/workflows/db-migrer.yml` (`gh workflow run db-migrer.yml`) hvis du legger inn secreten `SUPABASE_DB_URL`. Workflowen har bevisst manuell trigger og ikke `push` — skjemaendringer mot en database uten leverandør-backup skal ha et eksplisitt «kjør nå». `--dry-run` kjøres alltid først, og etterpå verifiseres at migrasjonskøen faktisk er tom.
 
 **Secrets:** Vercel env-vars. R2-credentials er markert «Sensitive» (kan ikke pulles tilbake).
 
-**CI på pull requests:** `.github/workflows/pr-check.yml` kjører lint, TypeScript-sjekk, enhetstester og produksjonsbygg på hver PR mot `main`. E2e-testene kjører ikke i CI — de er en lokal utviklerhandling (se [Testing](#testing)). Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets. Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk` (navnet på jobben i `pr-check.yml`), og blokker force-push og sletting av branchen. Da kan ingen PR merges før CI er grønn. Merk at status-sjekken først dukker opp i ruleset-velgeren etter at workflow-en har kjørt minst én gang — åpne en liten test-PR først, eller skriv inn navnet manuelt.
+**CI:** `.github/workflows/pr-check.yml` har to omfang. På **pull request** kjøres full port (~14,5 min): lint, TypeScript-sjekk, Vitest, produksjonsbygg, og Playwright-e2e inkludert RLS-testene mot en fersk Supabase-instans som startes i jobben — med en egen sjekk på at alle migrasjonsfilene faktisk kjørte. På **push til `main`** kjøres kun kjerneporten (~5,5 min, uten e2e); det er derfor kodeendringer bør gå via PR. Build-steget bruker dummy-env-verdier og trenger ingen ekte secrets.
+
+Budsjettvakten (`.github/scripts/ci-minuttbudsjett.mjs`) hopper over e2e-steget når månedens GitHub Actions-kvote er knapp. En grønn kjøring med kuttet e2e er «ukjent», ikke «verifisert» — se [docs/ci-minuttbudsjett.md](docs/ci-minuttbudsjett.md) for hvordan du sjekker hva som faktisk kjørte, og for hvordan tersklene justeres til ditt eget forbruk. Et offentlig repo har ubegrenset kvote og trenger i praksis ikke bry seg.
+
+Anbefalt oppsett i GitHub: legg en **branch ruleset** på `main` med required status check `sjekk` (navnet på jobben i `pr-check.yml`), og blokker force-push og sletting av branchen. Da kan ingen PR merges før CI er grønn. Merk at status-sjekken først dukker opp i ruleset-velgeren etter at workflow-en har kjørt minst én gang — åpne en liten test-PR først, eller skriv inn navnet manuelt. Rulesets er gratis på offentlige repoer; på et privat repo krever de betalt plan.
 
 ---
 
@@ -358,14 +366,14 @@ Disse er bevisste valg for et hobbyprosjekt med én utvikler — men en tradisjo
 
 - **Den største komponenten er ~860 linjer.** `NyMeldingSkjema.tsx` har vokst med festedato- og AI-forslag-funksjonene og er nå størst; `Chat.tsx` er delt opp (meldings- og reaksjonslogikk bor i egne hooks under `components/chat/hooks/`) og er nede i ~670 linjer. Begge, pluss arrangement-detaljsiden (~680), er katedraler etter tradisjonell målestokk.
 - **Styling via inline `style={{...}}` med CSS-variabler — et bevisst, vurdert valg.** Tokens (`var(--accent)` osv) overalt, aldri hardkodede verdier. Migrering til CSS-moduler/Tailwind er vurdert og avvist: en mobil-først touch-app har marginalt pseudo-klasse-behov, og smale inline-diffs passer AI-arbeidsflyten. Ikke skalerbart for større team, men riktig her.
-- **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers, integrasjonstester for utvalgte server actions (mocket Supabase) og Playwright-e2e for hovedflytene. Men komponentlaget imellom er ikke dekket, og e2e kjører lokalt, ikke i CI.
+- **Test-dekning er tynn i midtsjiktet.** Enhetstester for helpers, integrasjonstester for utvalgte server actions (mocket Supabase) og Playwright-e2e for hovedflytene. Komponentlaget imellom er nesten ikke dekket: de få render-testene som finnes er skrevet som vakter etter en konkret bug, ikke som systematisk dekning.
 - **Tre spørringer med manuell type-annotasjon** der Supabase-inferensen ikke når: en RPC som returnerer `json`, og to select-strenger type-parseren ikke klarer (dynamisk select-union, ø i FK-navn). Manuelt annotert (to via `.overrideTypes`, RPC-en med eksplisitt type) og kommentert i koden. De historiske `as unknown as`-castene er ellers fjernet — type-inferensen har tatt dem igjen.
 
 ### Hva en profesjonell modning ville krevd
 
 For et selskap eller team:
 
-1. **Mer CI:** dagens PR-sjekk dekker lint, typer, enhets- og integrasjonstester og bygg — men ikke DB-migrasjon-validering eller e2e.
+1. **Håndhevet CI:** PR-sjekken dekker lint, typer, enhets- og integrasjonstester, bygg, migrasjonsverifisering og e2e — men porten er bare påkrevd hvis du selv legger på en branch ruleset, og budsjettvakten kan kutte e2e på et privat repo.
 2. **Observability:** strukturert logging og latency-metrics utover `web-vitals` (Sentry finnes, men kun server-side).
 3. **Skikkelig rollebasert tilgang i CI** + secrets via OIDC, ikke long-lived tokens.
 
