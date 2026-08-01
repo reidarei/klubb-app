@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { formaterDato } from '@/lib/dato'
+import { varselKortNavn } from '@/lib/varsel-typer'
 
 type VarselRad = {
   id: string
@@ -11,18 +12,6 @@ type VarselRad = {
   opprettet: string | null
   profil_id: string | null
   profiles: { visningsnavn: string | null } | null
-}
-
-const typeLabels: Record<string, string> = {
-  nytt_arrangement: 'Nytt arrangement',
-  ny_poll: 'Ny avstemming',
-  oppdatert: 'Arrangement oppdatert',
-  paaminne_7: 'Påminnelse 7 dager',
-  paaminne_1: 'Påminnelse 1 dag',
-  purring: 'Purring',
-  mention: 'Chat-mention',
-  'ønske_ny': 'Nytt innspill',
-  'ønske_lukket': 'Innspill gjennomført',
 }
 
 const PER_SIDE = 10
@@ -65,7 +54,7 @@ export default function VarselLogg({
                   borderTop: i > 0 ? '1px solid var(--border)' : undefined,
                 }}>
                 <div className="min-w-0 flex-1">
-                  <p style={{ color: 'var(--text-primary)' }}>{typeLabels[v.type ?? ''] ?? v.type ?? '—'}</p>
+                  <p style={{ color: 'var(--text-primary)' }}>{varselKortNavn(v.type)}</p>
                   <p className="truncate" style={{ color: 'var(--text-secondary)' }}>
                     {v.profiles?.visningsnavn ?? '—'}{v.kanal ? ` · ${v.kanal}` : ''}
                   </p>

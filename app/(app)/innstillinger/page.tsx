@@ -15,56 +15,9 @@ import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
+import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { osloUkestart } from '@/lib/dato'
 import { AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
-
-const innstillingLabels: Record<string, string> = {
-  // Arrangementer
-  nytt_arrangement: 'Nytt arrangement opprettet',
-  oppdatert: '«Varsle nå»-knapp på arrangement',
-  paaminnelse_7d: 'Påminnelse 7 dager før',
-  paaminnelse_1d: 'Påminnelse dagen før',
-  purring_aktiv: 'Purring til de som ikke har svart (3 d før)',
-  arrangor_purring: 'Auto-purring til arrangøransvarlige',
-  purring_ansvar: 'Manuell purring fra «purr»-knapp',
-  // Poll og innlegg
-  ny_poll: 'Ny avstemming',
-  'melding-ny': 'Nytt innlegg på agenda',
-  // Chat
-  mention: '@-mention i chat',
-  'privat-melding': 'Ny privatmelding',
-  // Pass
-  'pass-forespørsel': 'Forespørsel om pass-info (til generalsekretær)',
-  'pass-godkjent': 'Pass-tilgang godkjent (til søker)',
-  'pass-avslatt': 'Pass-tilgang avslått (til søker)',
-  // Innspill
-  ønske_ny: 'Nytt innspill (til admin)',
-  ønske_lukket: 'Ditt innspill er håndtert',
-  // Drift
-  test_modus: 'Testmodus — varsler kun til test-eposten',
-}
-
-// Foretrukket rekkefølge for visning. Noekler som ikke er i lista
-// havner sist (alfabetisk).
-const VARSEL_REKKEFOLGE = [
-  'nytt_arrangement',
-  'oppdatert',
-  'paaminnelse_7d',
-  'paaminnelse_1d',
-  'purring_aktiv',
-  'arrangor_purring',
-  'purring_ansvar',
-  'ny_poll',
-  'melding-ny',
-  'mention',
-  'privat-melding',
-  'pass-forespørsel',
-  'pass-godkjent',
-  'pass-avslatt',
-  'ønske_ny',
-  'ønske_lukket',
-  'test_modus',
-]
 
 export default async function Innstillinger() {
   const [supabase, profil, bruker] = await Promise.all([
@@ -379,7 +332,7 @@ export default async function Innstillinger() {
                   <VarselToggle
                     noekkel={inn.noekkel}
                     aktiv={inn.aktiv}
-                    beskrivelse={innstillingLabels[inn.noekkel] ?? inn.beskrivelse ?? inn.noekkel}
+                    beskrivelse={varselPanelNavn(inn.noekkel, inn.beskrivelse)}
                     last={i === arr.length - 1 || inn.noekkel === 'test_modus'}
                   />
                   {/* For test_modus er beskrivelse-feltet selve test-eposten */}

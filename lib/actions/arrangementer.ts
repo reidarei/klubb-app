@@ -308,14 +308,15 @@ export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
   // Vi sender IKKE en pre-beregnet mottakerliste — sendPurringVarsler beregner
   // utenSvar selv så tett opp mot utsendingen som mulig. Det lukker et TOCTOU-vindu
   // hvor noen rekker å svare mellom beregning her og utsending der. Vi signaliserer
-  // bare at dette er en manuell admin-handling som skal ignorere cron-bryteren. (#287)
+  // bare at dette er en manuell admin-handling, som får sin egen varseltype og
+  // dermed sin egen bryter i kontrollpanelet. (#287, #547)
   await sendPurringVarsler({
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,
     fraNavn,
     hilsen: trimmetHilsen,
-    ignorerAktivBryter: true,
+    manuell: true,
   })
 
   // Refresh siden så «Ikke svart»-listen oppdateres hvis noen svarte

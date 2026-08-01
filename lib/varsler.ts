@@ -21,6 +21,10 @@ import { BASE_URL, absoluttUrl } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
 import { logg } from '@/lib/logg'
+// Mapping type → noekkel bor i lib/varsel-typer.ts sammen med de norske
+// navnene på hver type, så kontrollpanelet og denne gaten aldri kan uenige
+// om hvilken bryter som styrer hvilket varsel.
+import { typeTilNoekkel } from '@/lib/varsel-typer'
 
 const formaterDatoKlokke = (iso: string) => formaterDato(iso, FORMAT_DATO_KLOKKE)
 
@@ -39,16 +43,6 @@ const TILLAT_LOKAL = process.env.ALLOW_LOCAL_NOTIFICATIONS === 'true'
 // Vitest setter VITEST=true automatisk.
 const ER_UNIT_TEST = !!process.env.VITEST
 const BLOKKER_UTSENDING = ER_LOKAL_BASE && !TILLAT_LOKAL && !ER_UNIT_TEST
-
-// Mapping fra type (slik den lagres i varsel_logg) til noekkel
-// (slik den ligger i varsel_innstillinger). Historisk har de fått
-// litt forskjellige navn; mapping holder det fra å bli rotete.
-function typeTilNoekkel(type: string): string {
-  if (type === 'paaminne_7') return 'paaminnelse_7d'
-  if (type === 'paaminne_1') return 'paaminnelse_1d'
-  if (type === 'purring') return 'purring_aktiv'
-  return type
-}
 
 // Sjekk om en varseltype er aktivert i admin-innstillinger
 async function erVarselAktiv(noekkel: string): Promise<boolean> {
@@ -547,7 +541,6 @@ export async function sendNyttArrangementVarsler({
   tittel: string
   startTidspunkt: string
 }) {
-  if (!(await erVarselAktiv('nytt_arrangement'))) return
   const dato = formaterDatoKlokke(startTidspunkt)
   await sendVarsel({
     tittel: 'Nytt arrangement',
@@ -606,8 +599,6 @@ export async function sendPaaminneVarsler({
   startTidspunkt: string
   type: 'paaminne_7' | 'paaminne_1'
 }) {
-  const noekkel = type === 'paaminne_7' ? 'paaminnelse_7d' : 'paaminnelse_1d'
-  if (!(await erVarselAktiv(noekkel))) return
   const dato = formaterDatoKlokke(startTidspunkt)
   const dager = type === 'paaminne_7' ? 7 : 1
   await sendVarsel({
@@ -628,7 +619,6 @@ export async function sendArrangorPurringVarsler({
   arrangementNavn: string
   aar: number
 }) {
-  if (!(await erVarselAktiv('arrangor_purring'))) return
   await sendVarsel({
     mottakere: [ansvarligId],
     tittel: 'Husk arrangøransvaret ditt!',
@@ -654,7 +644,6 @@ export async function sendNyPollVarsler({
   spoersmaal: string
   svarfrist: string
 }) {
-  if (!(await erVarselAktiv('ny_poll'))) return
   const frist = formaterDatoKlokke(svarfrist)
   await sendVarsel({
     tittel: 'Ny avstemming',
@@ -753,7 +742,7 @@ export async function sendPurringVarsler({
   startTidspunkt,
   fraNavn,
   hilsen,
-  ignorerAktivBryter = false,
+  manuell = false,
 }: {
   arrangementId: string
   tittel: string
@@ -762,13 +751,18 @@ export async function sendPurringVarsler({
   // Når disse er oppgitt brukes personlig meldingstekst i stedet for cron-meldingen.
   fraNavn?: string
   hilsen?: string
-  // Manuell admin-purring skal ikke gates av cron-bryteren purring_aktiv — det er
-  // en bevisst handling, ikke en cron-jobb. Default false (cron-sti). (#287)
-  ignorerAktivBryter?: boolean
+  // Manuell purring fra «Purre disse» skal ikke stanses av cron-bryteren — det er
+  // en bevisst handling, ikke en cron-jobb (#287). Løsningen er EGEN VARSELTYPE,
+  // ikke et «hopp over sjekken»-flagg: flagget het tidligere ignorerAktivBryter og
+  // hoppet kun over en sjekk her i wrapperen, mens porten i sendVarsel slo opp
+  // samme nøkkel på nytt og stoppet purringen likevel — stille, med grønn
+  // kvittering til admin. Se #547. Nå bærer manuell purring typen
+  // 'purring_manuell' med sin egen bryter, så porten kan skille de to uten at
+  // noen trenger å overstyre den. Default false (cron-sti).
+  manuell?: boolean
 }) {
-  if (!ignorerAktivBryter) {
-    if (!(await erVarselAktiv('purring_aktiv'))) return
-  }
+  // Ingen bryter-sjekk her — porten i sendVarsel slår opp riktig nøkkel for
+  // typen vi sender. Wrapperen skal ikke ha sin egen mening om det.
 
   // Beregn mottakere her — så tett opp mot utsendingen som mulig. Tidligere lot vi
   // kalleren sende inn en mottakerliste, men det åpnet et TOCTOU-vindu der noen
@@ -810,11 +804,11 @@ export async function sendPurringVarsler({
     melding,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
     knappTekst: 'Svar nå',
-    type: 'purring',
+    type: manuell ? 'purring_manuell' : 'purring',
     arrangementId,
     // Manuell purring fra admin er en bevisst handling — alltid send uavhengig av
     // om de allerede har mottatt en cron-purring for dette arrangementet. (#287)
-    tillatDuplikat: ignorerAktivBryter,
+    tillatDuplikat: manuell,
   })
 }
 

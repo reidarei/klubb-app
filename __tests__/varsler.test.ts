@@ -46,6 +46,8 @@ import {
   sendNyttArrangementVarsler,
   sendPaaminneVarsler,
   sendArrangorPurringVarsler,
+  sendNyPollVarsler,
+  sendPurringVarsler,
   sendChatMentionVarsler,
   formaterHilsenMelding,
 } from '@/lib/varsler'
@@ -1014,5 +1016,129 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
       expect.anything(),
     )
     expect(utfall).toEqual({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 1 })
+  })
+})
+
+// ─── ÉN PORT, IKKE TO (#547) ────────────────────────────────────────────────
+// Bryter-oppslaget skal skje NØYAKTIG ett sted: i sendVarsel. Fram til #547
+// gjorde fem wrapper-funksjoner samme oppslag selv, rett før de kalte
+// sendVarsel som slo opp på nytt. To DB-spørringer der én holder — og verre:
+// forsøket på å lage et unntak fra bryteren (ignorerAktivBryter) hoppet kun
+// over den ytre sjekken, mens porten stoppet varselet likevel. Stille, med
+// grønn kvittering til admin.
+describe('bryter-oppslaget skjer kun i porten (#547)', () => {
+  /** Teller oppslag mot varsel_innstillinger og returnerer `aktiv` per nøkkel. */
+  function mockMedTeller(aktivPerNoekkel: Record<string, boolean>) {
+    const spurteNoekler: string[] = []
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell !== 'varsel_innstillinger') return lagChain([])
+      // Nøkkelen er ikke kjent når chainen lages — .eq('noekkel', x) kommer
+      // etterpå — så maybeSingle leser den fra en lukket variabel.
+      let noekkel = ''
+      const chain = lagChain({ aktiv: true, beskrivelse: null }) as Record<string, unknown>
+      chain.eq = vi.fn((col: string, val: string) => {
+        if (col === 'noekkel') {
+          noekkel = val
+          spurteNoekler.push(val)
+        }
+        return chain
+      })
+      chain.maybeSingle = vi.fn(async () => ({
+        data: { aktiv: aktivPerNoekkel[noekkel] ?? true, beskrivelse: null },
+        error: null,
+      }))
+      return chain
+    })
+    return spurteNoekler
+  }
+
+  it.each([
+    ['sendNyttArrangementVarsler', 'nytt_arrangement', () =>
+      sendNyttArrangementVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z' })],
+    ['sendPaaminneVarsler', 'paaminnelse_7d', () =>
+      sendPaaminneVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', type: 'paaminne_7' })],
+    ['sendArrangorPurringVarsler', 'arrangor_purring', () =>
+      sendArrangorPurringVarsler({ ansvarligId: 'p1', arrangementNavn: 'Tur', aar: 2026 })],
+    ['sendNyPollVarsler', 'ny_poll', () =>
+      sendNyPollVarsler({ pollId: 'p1', spoersmaal: 'Hva?', svarfrist: '2026-06-15T16:00:00Z' })],
+  ])('%s slår opp %s nøyaktig én gang', async (_navn, forventetNoekkel, kall) => {
+    const spurte = mockMedTeller({ [forventetNoekkel]: false })
+    await kall()
+    // Nøyaktig én — to betyr at wrapperen har fått tilbake sin egen sjekk.
+    expect(spurte).toEqual([forventetNoekkel])
+  })
+
+  it('manuell purring går ut selv når den automatiske purringen er skrudd av', async () => {
+    // Selve bugen i #547: admin skrur av cron-purringen, trykker «Purre disse»,
+    // får grønn kvittering — og ingen får noe.
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_innstillinger') {
+        let noekkel = ''
+        const chain = lagChain([]) as Record<string, unknown>
+        chain.eq = vi.fn((col: string, val: string) => {
+          if (col === 'noekkel') noekkel = val
+          return chain
+        })
+        chain.maybeSingle = vi.fn(async () => ({
+          // Den automatiske purringen er AV, den manuelle er PÅ.
+          data: { aktiv: noekkel !== 'purring_aktiv', beskrivelse: null },
+          error: null,
+        }))
+        return chain
+      }
+      if (tabell === 'paameldinger') return lagChain([])  // ingen har svart
+      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
+      if (tabell === 'push_subscriptions') return lagChain([])
+      if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
+      return lagChain([])
+    })
+
+    await sendPurringVarsler({
+      arrangementId: 'a1',
+      tittel: 'Vårtur',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      fraNavn: 'Reidar',
+      hilsen: 'Kom igjen, gutta',
+      manuell: true,
+    })
+
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'ola@test.no', emne: 'Husk å svare!' }),
+    ])
+  })
+
+  it('automatisk purring stoppes fortsatt av sin egen bryter', async () => {
+    // Speilvendt av testen over — uten denne kunne fiksen ha vært «skru av
+    // sjekken for purring» i stedet for «gi manuell purring sin egen bryter».
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_innstillinger') {
+        let noekkel = ''
+        const chain = lagChain([]) as Record<string, unknown>
+        chain.eq = vi.fn((col: string, val: string) => {
+          if (col === 'noekkel') noekkel = val
+          return chain
+        })
+        chain.maybeSingle = vi.fn(async () => ({
+          data: { aktiv: noekkel !== 'purring_aktiv', beskrivelse: null },
+          error: null,
+        }))
+        return chain
+      }
+      if (tabell === 'paameldinger') return lagChain([])
+      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
+      if (tabell === 'push_subscriptions') return lagChain([])
+      if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
+      return lagChain([])
+    })
+
+    await sendPurringVarsler({
+      arrangementId: 'a1',
+      tittel: 'Vårtur',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+    })
+
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
   })
 })
