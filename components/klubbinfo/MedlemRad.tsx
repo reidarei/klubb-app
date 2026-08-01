@@ -25,14 +25,19 @@ export default function MedlemRad({
   bildeUrl,
   last,
 }: Props) {
+  // Trafikklys på oppmøte i år: 50+ grønn, 25–49 gul, under 25 rød. Tersklene
+  // er satt lavt med vilje — nevneren er årets AVHOLDTE arrangementer (4–6 i
+  // året), så skalaen er grovkornet og gamle 85/70-terskler ga bøtter som
+  // aldri fyltes. Uten nærværstall (null) står tallet ikke i UI-et i det hele
+  // tatt, så fargen der er bare en trygg default.
   const narvColor =
     narv == null
       ? 'var(--text-tertiary)'
-      : narv >= 85
-      ? 'var(--accent)'
-      : narv >= 70
-      ? 'var(--text-secondary)'
-      : 'var(--text-tertiary)'
+      : narv >= 50
+      ? 'var(--success)'
+      : narv >= 25
+      ? 'var(--warning)'
+      : 'var(--danger)'
 
   return (
     <Link
