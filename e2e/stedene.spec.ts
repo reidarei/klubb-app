@@ -23,20 +23,18 @@ test.describe('/stedene — Europakartet (#514)', () => {
   })
 
   test('trykk på en by viser detaljkortet med begge årene', async ({ page }) => {
-    // Hint-teksten skal vises før noe er valgt.
-    await expect(page.getByTestId('sted-hint')).toBeVisible()
-    await expect(page.getByTestId('sted-detaljkort-navn')).toHaveCount(0)
+    // Ingen rute i det hele tatt før noe er valgt — kortet rendres ikke.
+    await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
 
     await page.getByRole('button', { name: /^Lisboa, 2 turer$/ }).click()
 
     await expect(page.getByTestId('sted-detaljkort-navn')).toHaveText('Lisboa')
-    await expect(page.getByTestId('sted-hint')).toHaveCount(0)
     const kort = page.getByTestId('sted-detaljkort')
     await expect(kort.getByText('2015')).toBeVisible()
     await expect(kort.getByText('2017')).toBeVisible()
   })
 
-  test('trykk utenfor en markør lukker detaljkortet og viser hint-teksten igjen', async ({ page }) => {
+  test('trykk utenfor en markør lukker detaljkortet', async ({ page }) => {
     await page.getByRole('button', { name: /^Lisboa, 2 turer$/ }).click()
     await expect(page.getByTestId('sted-detaljkort-navn')).toBeVisible()
 
@@ -47,8 +45,7 @@ test.describe('/stedene — Europakartet (#514)', () => {
     // OGSÅ en aria-hidden svg, så den generiske selectoren var flertydig.
     await page.getByTestId('europa-kart').click({ position: { x: 5, y: 5 } })
 
-    await expect(page.getByTestId('sted-hint')).toBeVisible()
-    await expect(page.getByTestId('sted-detaljkort-navn')).toHaveCount(0)
+    await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
   })
 
   test('lukk-knappen og Escape lukker detaljkortet', async ({ page }) => {
@@ -56,13 +53,13 @@ test.describe('/stedene — Europakartet (#514)', () => {
     await page.getByRole('button', { name: /^Stockholm, 1 tur$/ }).click()
     await expect(page.getByTestId('sted-detaljkort-navn')).toHaveText('Stockholm')
     await page.getByRole('button', { name: 'Lukk' }).click()
-    await expect(page.getByTestId('sted-hint')).toBeVisible()
+    await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
 
     // Escape
     await page.getByRole('button', { name: /^Edinburgh, 1 tur$/ }).click()
     await expect(page.getByTestId('sted-detaljkort-navn')).toHaveText('Edinburgh')
     await page.keyboard.press('Escape')
-    await expect(page.getByTestId('sted-hint')).toBeVisible()
+    await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
   })
 
   test('kart-etiketten viser x{antall} for byer med flere turer', async ({ page }) => {

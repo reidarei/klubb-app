@@ -145,21 +145,22 @@ export default function EuropaKart({ steder }: Props) {
         })}
       </div>
 
-      {/* Detaljkort: valgt sted, eller hint. data-testid brukt av
-          e2e/stedene.spec.ts (#514) — «Lisboa» vises både i kart-etiketten og
-          her, så en ren tekst-locator ville vært flertydig uten disse. */}
-      <div
-        data-testid="sted-detaljkort"
-        style={{
-          marginTop: 18,
-          minHeight: 64,
-          padding: '14px 16px',
-          border: '0.5px solid var(--border-subtle)',
-          borderRadius: 10,
-          background: 'var(--bg-elevated)',
-        }}
-      >
-        {valgtSted ? (
+      {/* Detaljkort — rendres KUN når en by er valgt. Ingen tom ramme og ingen
+          hint-tekst når ingenting er trykket: kartet forklarer seg selv, og en
+          ramme uten innhold ser ut som noe som mangler.
+          data-testid brukt av e2e/stedene.spec.ts (#514) — «Lisboa» vises både
+          i kart-etiketten og her, så en ren tekst-locator ville vært flertydig. */}
+      {valgtSted && (
+        <div
+          data-testid="sted-detaljkort"
+          style={{
+            marginTop: 18,
+            padding: '14px 16px',
+            border: '0.5px solid var(--border-subtle)',
+            borderRadius: 10,
+            background: 'var(--bg-elevated)',
+          }}
+        >
           <div>
             <div
               style={{
@@ -294,20 +295,8 @@ export default function EuropaKart({ steder }: Props) {
                 </div>
               ))}
           </div>
-        ) : (
-          <div
-            data-testid="sted-hint"
-            style={{
-              fontSize: 13,
-              color: 'var(--text-tertiary)',
-              fontFamily: 'var(--font-body)',
-              lineHeight: 1.5,
-            }}
-          >
-            Trykk på en by for å se hvilke år gutta var der.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
