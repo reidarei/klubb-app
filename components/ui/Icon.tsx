@@ -6,6 +6,7 @@ export type IkonNavn =
   | 'doc' | 'building' | 'chart' | 'cog' | 'arrowRight' | 'checkmark'
   | 'x' | 'send' | 'list' | 'search' | 'cake' | 'cigar' | 'wine' | 'crown'
   | 'sparkle' | 'diamond' | 'flame' | 'image' | 'thumbsUp'
+  | 'beer' | 'flute' | 'medal'
 
 const PATHS: Record<IkonNavn, React.ReactNode> = {
   calendar: <path d="M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />,
@@ -14,7 +15,10 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   mapPin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z" /><circle cx="12" cy="10" r="3" /></>,
-  plane: <path d="M12 19l9-7-9-7v4L3 12l9 3v4z" />,
+  // Agenda-familien (plane/beer/flute/medal) er tegnet som LUKKEDE silhuetter
+  // så den samme pathen bærer to optiske størrelser: fylt på 11 px i
+  // MiniKalender, som omriss på 24 px på kortene. Se #550.
+  plane: <path d="M12 2c1 0 1.8 1.6 1.8 3.6v3.1l7.2 4.1v2.1l-7.2-2.1v4.1l2 1.6v1.9l-3.8-1.1-3.8 1.1v-1.9l2-1.6v-4.1L3 14.9v-2.1l7.2-4.1V5.6C10.2 3.6 11 2 12 2z" />,
   chevron: <path d="M9 6l6 6-6 6" />,
   chevronDown: <path d="M6 9l6 6 6-6" />,
   chevronUp: <path d="M6 15l6-6 6 6" />,
@@ -43,6 +47,38 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   // Én sammenhengende path (Feather-stil) — fungerer både som stroke-outline
   // (ureagert tommel) og fylt med fill-prop (reagert med 👍). Se #468.
   thumbsUp: <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />,
+  // Seidel — møter. Håndtaket er en utstansing (andre subpath ligger inni
+  // første), og krever derfor fill-rule evenodd; med nonzero blir det en
+  // massiv klump i stedet for et håndtak.
+  beer: <path d="M4.2 8.4c-.5-2.8 1.1-4.6 3-4.4.8-1.6 2.9-2.1 4.2-1 1.9-1 4.2.3 4.2 2.5v2.9h1.6a3.6 3.6 0 010 7.2h-1.6v2.9a2.4 2.4 0 01-2.4 2.4H6.6a2.4 2.4 0 01-2.4-2.4V8.4z M15.6 11.4v2.6h1.4a1.3 1.3 0 000-2.6h-1.4z" />,
+  // Smalt glass — bursdager. Rett kjegle, ikke tulipan som `wine`. Stett og fot
+  // er STREKER, ikke smale rektangler: et omrisset rektangel leser som en ramme
+  // rundt et hulrom når glyfen blir stor. Boblene gjør glyfen til «skål» heller
+  // enn bare «drikke», og er bevisst store (r=1,7) — mindre bobler overlever
+  // ikke nedskaleringen til 11 px i MiniKalender. Glasset er derfor skjøvet mot
+  // venstre så komposisjonen balanserer mot dem.
+  // Stetten starter på 11,8 — inne i koppens bue, som bunner ut på 12,6. Uten
+  // den overlappen står det et synlig opphold mellom kopp og stett.
+  flute: <path d="M6.8 2.4h6.8v6.8a3.4 3.4 0 01-6.8 0V2.4z M10.2 11.8v9.6 M5.9 21.4h8.6 M16.8 3.1a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z M19.1 7.7a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z" />,
+  // Medalje — klubbens stiftelsesdag. Valgt foran pokal og krone: krona er
+  // opptatt av generalsekretæren, og medaljen sier «merkedag» uten å si
+  // «premie til en person».
+  medal: <path d="M12 1.8a6.6 6.6 0 110 13.2 6.6 6.6 0 010-13.2z M8.1 14.7L5.8 22.2l6.2-2.7 6.2 2.7-2.3-7.5a8.5 8.5 0 01-7.8 0z" />,
+}
+
+// Overstyringer for `fylt`-modus. De fleste glyfer klarer seg med én tegning,
+// men noen har elementer som er naturlige STREKER — stetten og foten på et
+// glass — og en strek har ingen innside å fylle. Der trengs to varianter:
+// omrisset i PATHS tegner dem som linjer, silhuetten her som lukkede former.
+// Motivet skal være IDENTISK i begge; det er kun tegnemåten som skiller dem.
+// Se #550.
+const PATHS_FYLT: Partial<Record<IkonNavn, React.ReactNode>> = {
+  // Kopp, stett og fot er ÉN sammenhengende kontur, ikke tre subpaths. Tre
+  // subpaths ville enten latt et hårfint gap stå igjen der stetten møter den
+  // buede koppbunnen, eller — om de overlappet for å lukke gapet — stanset et
+  // hull i overlappet, siden fylt modus bruker fill-rule evenodd. Boblene er
+  // egne subpaths; de rører ikke glasset, så evenodd er trygt der.
+  flute: <path d="M6.8 2.4h6.8v6.8c0 2.2-1.15 3.4-2.25 3.6v6.6h3.15v2.2H5.9v-2.2h3.15v-6.6c-1.1-.2-2.25-1.4-2.25-3.6V2.4z M16.8 3.1a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z M19.1 7.7a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z" />,
 }
 
 type Props = {
@@ -50,6 +86,10 @@ type Props = {
   size?: number
   color?: string
   strokeWidth?: number
+  /** Tegn glyfen som fylt silhuett i stedet for omriss. For små flater
+   *  (≈12 px) der et omriss kollapser til grøt — se MiniKalender, #550.
+   *  Forutsetter at pathen er lukket; kun agenda-familien er det i dag. */
+  fylt?: boolean
 } & Omit<SVGProps<SVGSVGElement>, 'name' | 'color'>
 
 export default function Icon({
@@ -57,6 +97,7 @@ export default function Icon({
   size = 20,
   color = 'currentColor',
   strokeWidth = 1.5,
+  fylt = false,
   ...rest
 }: Props) {
   return (
@@ -64,14 +105,17 @@ export default function Icon({
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
+      fill={fylt ? color : 'none'}
+      // fill-rule arves ned til pathen. evenodd kun i fylt modus, fordi
+      // seidelens håndtak er en utstansing som nonzero ville fylt igjen.
+      fillRule={fylt ? 'evenodd' : undefined}
+      stroke={fylt ? 'none' : color}
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       {...rest}
     >
-      {PATHS[name]}
+      {(fylt && PATHS_FYLT[name]) || PATHS[name]}
     </svg>
   )
 }

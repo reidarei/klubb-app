@@ -48,7 +48,8 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
           justifyContent: 'center',
         }}
       >
-        <Icon name="wine" size={24} color={erIDag ? 'var(--accent)' : 'var(--text-tertiary)'} strokeWidth={1.25} />
+        {/* Samme glyf som bursdager får i MiniKalender — se #550. */}
+        <Icon name="flute" size={24} color={erIDag ? 'var(--accent)' : 'var(--text-tertiary)'} strokeWidth={1.25} />
       </div>
 
       <div

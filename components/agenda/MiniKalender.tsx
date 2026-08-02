@@ -1,16 +1,16 @@
 'use client'
 
 // Mikro-månedskalender i agenda-headeren (#429).
-// Ligger i luken mellom dato-blokka og NyFAB: 🏆 = klubbens stiftelsesdag,
-// ✈️ = tur, 🍺 = annet arrangement, 🎂 = bursdag, outline-prikk = tom dag,
-// accent-ring = i dag.
+// Ligger i luken mellom dato-blokka og NyFAB: medalje = klubbens stiftelsesdag,
+// fly = tur, seidel = annet arrangement, smalt glass = bursdag,
+// outline-prikk = tom dag, accent-ring = i dag.
 // Kun visning — ingen klikk på dager.
 
 import { useMemo, useState, type CSSProperties } from 'react'
 import { byggMaanedsGrid, harInnhold, harBursdag } from '@/lib/mini-kalender'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
-import Icon from '@/components/ui/Icon'
+import Icon, { type IkonNavn } from '@/components/ui/Icon'
 
 // Kort månedsnavn til mikro-labelen. Småbokstaver med vilje: CSS textTransform
 // versaliserer visuelt, mens skjermlesere får normal tekst (all-caps kan leses
@@ -151,17 +151,19 @@ export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD
             ? `${dagtall}. ${MAANED_FULL[visMaaned0]} – ${deler.join(', ')}`
             : undefined
 
-          // Ikon-dager: 🏆 for stiftelsesdagen, ✈️ for tur, 🍺 for øvrige
-          // arrangementer, 🎂 for bursdag. Kolliderer de på samme dag vinner det
-          // mest sjeldne (én celle rommer ett ikon) — a11y-labelen over nevner
-          // uansett alt. Emoji er bevisst valgt over SVG-ikoner her:
-          // gjenkjennbare på 12px og brukes ellers i appen.
+          // Ikon-dager: medalje for stiftelsesdagen, fly for tur, seidel for
+          // øvrige arrangementer, smalt glass for bursdag. Kolliderer de på
+          // samme dag vinner det mest sjeldne (én celle rommer ett ikon) —
+          // a11y-labelen over nevner uansett alt.
           // Tur slår arrangement fordi det er årets høydepunkt (#510);
           // stiftelsesdagen slår alt fordi den er én dag i året for hele
           // klubben (#528).
-          const ikon = erStiftelsesdag
-            ? '🏆'
-            : harTur ? '✈️' : harArr ? '🍺' : harBdag ? '🎂' : null
+          // Emoji frem til #550 — byttet til appens egne glyfer så kalenderen
+          // og kortene under den snakker samme ikonspråk. De rendres FYLT:
+          // et omriss faller sammen til grøt på 11 px.
+          const ikon: IkonNavn | null = erStiftelsesdag
+            ? 'medal'
+            : harTur ? 'plane' : harArr ? 'beer' : harBdag ? 'flute' : null
 
           return (
             <div
@@ -182,11 +184,19 @@ export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD
                 ...(ikon ? {} : { border: '0.5px solid var(--border-strong)' }),
                 // Diskret accent-ring for i dag
                 ...(erIdag ? { boxShadow: '0 0 0 1px var(--accent)' } : {}),
-                fontSize: PRIKK - 1,
                 lineHeight: 1,
               }}
             >
-              {ikon}
+              {ikon && (
+                <Icon
+                  name={ikon}
+                  size={PRIKK - 1}
+                  color="var(--accent)"
+                  fylt
+                  aria-hidden="true"
+                  focusable="false"
+                />
+              )}
             </div>
           )
         })}

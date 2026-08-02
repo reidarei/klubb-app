@@ -39,7 +39,8 @@ export default function KlubbJubileumKort({ jubileum }: { jubileum: KlubbJubileu
           justifyContent: 'center',
         }}
       >
-        <Icon name="sparkle" size={24} color="var(--accent)" strokeWidth={1.25} />
+        {/* Samme glyf som stiftelsesdagen får i MiniKalender — se #550. */}
+        <Icon name="medal" size={24} color="var(--accent)" strokeWidth={1.25} />
       </div>
 
       <div
