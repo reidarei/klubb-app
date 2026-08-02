@@ -1,13 +1,13 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import Link from 'next/link'
-import Image from 'next/image'
-import Icon from '@/components/ui/Icon'
 import OpprettAlbumKnapp from '@/components/album/OpprettAlbumKnapp'
+import BildeBunke from '@/components/album/BildeBunke'
 
 // Album-oversikt — alle album i klubben. Standalone-album og arrangement-
-// koblede vises samme sted, sortert nyeste først. Kortet viser cover (eller
-// første bilde som fallback), tittel, evt. arrangement-navn og bilde-antall.
+// koblede vises samme sted, sortert nyeste først. Kortet vises som en bunke
+// fremkalte bilder (BildeBunke) med tittel, evt. arrangement-navn og antall
+// under.
 export default async function AlbumOversikt() {
   const [supabase] = await Promise.all([createServerClient(), getInnloggetBruker()])
 
@@ -104,9 +104,19 @@ export default async function AlbumOversikt() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: 10,
-            marginTop: 14,
+            // minmax(0, 1fr), ikke 1fr: `1fr` er `minmax(auto, 1fr)`, og
+            // auto-minimum er innholdets min-content — her meta-linja
+            // («22 BILDER · UTLANDSTUR 2025») som har white-space: nowrap.
+            // Kolonnene vokste da forbi viewporten og høyre kort ble klippet
+            // av `overflow-x: clip` på body. Kortet hadde tidligere
+            // `overflow: hidden` som skjulte problemet; bunken har ikke det.
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            // Rausere gap enn de gamle 10 px: kortene er skjeve nå, og
+            // hjørnene til to nabo-bunker ville ellers kommet i berøring.
+            // 20 px horisontalt gir ~4 px klaring ved maks utslag.
+            gap: '26px 20px',
+            marginTop: 18,
+            padding: '0 4px',
           }}
         >
           {rader.map(r => (
@@ -117,43 +127,15 @@ export default async function AlbumOversikt() {
                 display: 'block',
                 textDecoration: 'none',
                 color: 'inherit',
-                borderRadius: 'var(--radius-card)',
-                overflow: 'hidden',
-                background: 'var(--bg-elevated)',
-                border: '0.5px solid var(--border-subtle)',
               }}
             >
-              <div
-                style={{
-                  position: 'relative',
-                  aspectRatio: '1 / 1',
-                  background: 'var(--bg-elevated-2)',
-                }}
-              >
-                {r.thumb ? (
-                  <Image
-                    src={r.thumb}
-                    alt=""
-                    fill
-                    sizes="(max-width: 480px) 50vw, 240px"
-                    style={{ objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--text-tertiary)',
-                    }}
-                  >
-                    <Icon name="image" size={28} color="currentColor" strokeWidth={1.25} />
-                  </div>
-                )}
-              </div>
-              <div style={{ padding: '10px 12px 12px' }}>
+              <BildeBunke
+                id={r.id}
+                src={r.thumb}
+                antall={r.antall}
+                sizes="(max-width: 480px) 50vw, 240px"
+              />
+              <div style={{ padding: '12px 2px 0' }}>
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
@@ -168,8 +150,16 @@ export default async function AlbumOversikt() {
                 >
                   {r.tittel}
                 </div>
+                {/* Arrangement først, antall sist. Flex (ikke én tekstlinje)
+                    fordi rekkefølgen ellers ville ofret feil del: med begge i
+                    samme nowrap-linje spiser ellipsen slutten, og et langt
+                    arrangementsnavn ville kuttet vekk selve antallet.
+                    Navnet krymper, antallet står. */}
                 <div
                   style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    gap: 6,
                     fontFamily: 'var(--font-mono)',
                     fontSize: 10,
                     color: 'var(--text-tertiary)',
@@ -177,13 +167,30 @@ export default async function AlbumOversikt() {
                     fontWeight: 600,
                     textTransform: 'uppercase',
                     marginTop: 4,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {r.antall} {r.antall === 1 ? 'bilde' : 'bilder'}
-                  {r.arrangement && ` · ${r.arrangement.tittel}`}
+                  {r.arrangement && (
+                    <>
+                      <span
+                        style={{
+                          // minWidth: 0 er det som lar flex-barnet krympe under
+                          // sin min-content-bredde — uten den virker ikke ellipsen.
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {r.arrangement.tittel}
+                      </span>
+                      <span aria-hidden="true" style={{ flexShrink: 0 }}>
+                        ·
+                      </span>
+                    </>
+                  )}
+                  <span style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    {r.antall} {r.antall === 1 ? 'bilde' : 'bilder'}
+                  </span>
                 </div>
               </div>
             </Link>

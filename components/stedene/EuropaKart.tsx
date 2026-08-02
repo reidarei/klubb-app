@@ -243,53 +243,42 @@ export default function EuropaKart({ steder }: Props) {
                     {t.aar}
                   </span>
                   <span>{t.tittel}</span>
-                  {/* Lenke til turens bildealbum (kun turer som faktisk har ett) */}
+                  {/* Lenke til turens bildealbum (kun turer som faktisk har ett).
+                      Ordet «Bilder» er borte: minibunken viser allerede at det
+                      er bilder, og etiketten forklarte det bare en gang til.
+                      Antallet blir igjen — det er eneste stedet på Turene du
+                      ser hvor mye som ligger bak. */}
                   {t.album && (
                     <Link
                       href={`/album/${t.album.id}`}
+                      aria-label={`Bilder fra ${t.tittel} ${t.aar} — ${t.album.antall} ${t.album.antall === 1 ? 'bilde' : 'bilder'}`}
                       style={{
                         marginLeft: 'auto',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 7,
+                        gap: 10,
                         textDecoration: 'none',
                         flexShrink: 0,
                       }}
                     >
-                      {t.album.thumb && (
+                      <MiniBunke src={t.album.thumb} />
+                      {t.album.antall > 0 && (
                         <span
+                          aria-hidden="true"
                           style={{
-                            position: 'relative',
-                            width: 28,
-                            height: 28,
-                            borderRadius: 5,
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                            background: 'var(--bg-elevated-2)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 12,
+                            color: 'var(--text-tertiary)',
+                            // Tallene står under hverandre i en kolonne — uten
+                            // tabular-nums danser de sidelengs mellom rader.
+                            fontVariantNumeric: 'tabular-nums',
+                            minWidth: 22,
+                            textAlign: 'right',
                           }}
                         >
-                          <Image
-                            src={t.album.thumb}
-                            alt=""
-                            fill
-                            sizes="28px"
-                            style={{ objectFit: 'cover' }}
-                          />
+                          {t.album.antall}
                         </span>
                       )}
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 11,
-                          color: 'var(--accent)',
-                          letterSpacing: '1px',
-                          fontWeight: 600,
-                          textTransform: 'uppercase',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Bilder{t.album.antall > 0 ? ` (${t.album.antall})` : ''}
-                      </span>
                     </Link>
                   )}
                 </div>
@@ -298,6 +287,63 @@ export default function EuropaKart({ steder }: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+// Album-markør i turlista: tre små ark på skakke som leser som en bunke
+// bilder på 34 px. Kun det øverste arket bærer et ekte bilde — de to bak er
+// tomme papirkanter, samme grep som BildeBunke på albumsiden.
+//
+// Vinklene er faste (ikke utledet av id som i BildeBunke): her er bunken så
+// liten at variasjon mellom rader bare ville lest som skjelving, ikke som
+// karakter.
+const MINI_ARK = [
+  { left: 0, top: 3, rotate: -8 },
+  { left: 4, top: 1, rotate: 5 },
+  { left: 8, top: 2, rotate: -1 },
+]
+
+function MiniBunke({ src }: { src: string | null }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ position: 'relative', width: 34, height: 30, flexShrink: 0 }}
+    >
+      {MINI_ARK.map((ark, i) => {
+        const erOeverst = i === MINI_ARK.length - 1
+        return (
+          <span
+            key={i}
+            style={{
+              position: 'absolute',
+              left: ark.left,
+              top: ark.top,
+              width: 26,
+              height: 26,
+              borderRadius: 3,
+              background: 'var(--foto-papir)',
+              border: '0.5px solid var(--foto-papir-kant)',
+              boxShadow: 'var(--foto-skygge-ark)',
+              overflow: 'hidden',
+              transform: `rotate(${ark.rotate}deg)`,
+            }}
+          >
+            {erOeverst && src && (
+              <span
+                style={{
+                  position: 'absolute',
+                  inset: 2,
+                  overflow: 'hidden',
+                  background: 'var(--bg-elevated-2)',
+                }}
+              >
+                <Image src={src} alt="" fill sizes="26px" style={{ objectFit: 'cover' }} />
+              </span>
+            )}
+          </span>
+        )
+      })}
+    </span>
   )
 }
 
