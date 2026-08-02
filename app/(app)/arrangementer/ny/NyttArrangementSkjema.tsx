@@ -399,6 +399,22 @@ export default function NyttArrangementSkjema({
           {feil}
         </p>
       )}
+
+      {/* Setter forventningen FØR publisering. Uten den tror arrangøren at
+          han må varsle manuelt etterpå, og trykker «Varsle om endring» på et
+          arrangement ingen ennå har rukket å glemme — se #554. */}
+      <p
+        style={{
+          fontSize: 12.5,
+          lineHeight: 1.5,
+          color: 'var(--text-tertiary)',
+          margin: 0,
+          paddingTop: 4,
+        }}
+      >
+        Alle gutta blir varslet med én gang du publiserer. Du trenger ikke
+        gjøre noe mer.
+      </p>
     </div>
   )
 }

@@ -222,7 +222,8 @@ export default async function ArrangementDetaljer({
             border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)',
           }}
         >
-          Varsel er sendt
+          Gutta er varslet. Du trenger ikke varsle på nytt — knappen øverst er
+          for hvis noe endrer seg senere.
         </div>
       )}
 

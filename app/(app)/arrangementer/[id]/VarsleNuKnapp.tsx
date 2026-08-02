@@ -85,7 +85,10 @@ export default function VarsleNuKnapp({
     }
   }, [modalAapen])
 
-  const tekst = sendt ? 'Varslet' : isPending ? 'Sender…' : 'Varsle'
+  // «Varsle om endring», ikke «Varsle»: gutta ble allerede varslet da
+  // arrangementet ble opprettet, og en knapp som bare sier «Varsle» leser som
+  // et gjøremål som gjenstår. Se #554.
+  const tekst = sendt ? 'Varslet' : isPending ? 'Sender…' : 'Varsle om endring'
   const len = melding.length
 
   return (
@@ -137,7 +140,7 @@ export default function VarsleNuKnapp({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={`Varsle om ${arrangementTittel}`}
+            aria-label={`Varsle om endring på ${arrangementTittel}`}
             onClick={e => e.stopPropagation()}
             style={{
               width: '100%',
@@ -160,7 +163,7 @@ export default function VarsleNuKnapp({
                 color: 'var(--text-primary)',
               }}
             >
-              Varsle om {arrangementTittel}
+              Varsle om endring
             </div>
 
             <p
@@ -172,7 +175,8 @@ export default function VarsleNuKnapp({
                 lineHeight: 1.5,
               }}
             >
-              Skriv en valgfri hilsen, eller bare send.
+              Gutta ble varslet om {arrangementTittel} da det ble lagt ut. Bruk
+              denne hvis noe har endret seg — skriv gjerne hva.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -180,7 +184,7 @@ export default function VarsleNuKnapp({
                 value={melding}
                 onChange={e => setMelding(e.target.value)}
                 maxLength={VARSLE_MAKS_LENGDE}
-                placeholder="Valgfritt: en kort hilsen til gutta…"
+                placeholder="Valgfritt: hva har endret seg?"
                 rows={3}
                 autoFocus
                 style={{
