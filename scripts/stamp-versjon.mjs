@@ -2,6 +2,11 @@
 // Filen er committed, så Vercel leser bare resultatet uten git-avhengighet.
 // Format: V{major}.{minor}.{patch} der major+minor kommer fra package.json
 // og patch er det inkrementelle bygg-nummeret. F.eks. V3.0.42.
+// Telleren er PER major.minor-serie: bumper du package.json til 3.5, starter
+// neste stempel på V3.5.1 og ikke V3.5.111. Uten nullstillingen forteller
+// patch-tallet hvor mange bygg det har vært siden tidenes morgen, ikke hvor
+// mange bygg denne serien har fått — som er det tallet man faktisk leser det
+// som når man ser V3.5.111 i bunnen av appen.
 // Speiler også versjonen inn i public/sw.js sin CACHE_VERSION-konstant
 // slik at hver deploy automatisk invaliderer service worker-cachen.
 
@@ -16,9 +21,15 @@ const pkg = JSON.parse(readFileSync(join(rot, 'package.json'), 'utf8'))
 const fil = join(rot, 'lib', 'versjon.json')
 const forrige = JSON.parse(readFileSync(fil, 'utf8'))
 
-const neste = (forrige.nummer ?? 0) + 1
 const [major, minor] = pkg.version.split('.')
-const versjon = `V${major}.${minor}.${neste}`
+const serie = `V${major}.${minor}.`
+
+// Serien utledes av den lagrede versjons-STRENGEN, ikke av et eget felt —
+// da kan de to aldri komme ut av synk. Punktumet i prefikset er nødvendig:
+// uten det ville «V3.5» også matchet en lagret «V3.50.x».
+const sammeSerie = typeof forrige.versjon === 'string' && forrige.versjon.startsWith(serie)
+const neste = sammeSerie ? (forrige.nummer ?? 0) + 1 : 1
+const versjon = `${serie}${neste}`
 
 writeFileSync(fil, JSON.stringify({ nummer: neste, versjon }, null, 2) + '\n')
 
