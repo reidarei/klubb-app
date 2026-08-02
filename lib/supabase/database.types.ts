@@ -545,6 +545,8 @@ export type Database = {
       fond_eiendom: {
         Row: {
           anskaffelsesverdi: number
+          driftskostnader_i_aar: number
+          husleie_i_aar: number
           id: string
           markedsverdi: number
           navn: string
@@ -552,6 +554,8 @@ export type Database = {
         }
         Insert: {
           anskaffelsesverdi: number
+          driftskostnader_i_aar?: number
+          husleie_i_aar?: number
           id?: string
           markedsverdi: number
           navn: string
@@ -559,6 +563,8 @@ export type Database = {
         }
         Update: {
           anskaffelsesverdi?: number
+          driftskostnader_i_aar?: number
+          husleie_i_aar?: number
           id?: string
           markedsverdi?: number
           navn?: string
@@ -667,6 +673,7 @@ export type Database = {
           navn: string
           oppdatert: string
           type: string
+          utbytte_i_aar: number
           verdi: number
         }
         Insert: {
@@ -675,6 +682,7 @@ export type Database = {
           navn: string
           oppdatert?: string
           type: string
+          utbytte_i_aar?: number
           verdi: number
         }
         Update: {
@@ -683,6 +691,7 @@ export type Database = {
           navn?: string
           oppdatert?: string
           type?: string
+          utbytte_i_aar?: number
           verdi?: number
         }
         Relationships: []

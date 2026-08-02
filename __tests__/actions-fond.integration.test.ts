@@ -64,7 +64,7 @@ describe('oppdaterEiendom — historikk-oppslag kaster FØR skriving', () => {
       return lagChain(null)
     })
 
-    await oppdaterEiendom({ id: 'e-1', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90 })
+    await oppdaterEiendom({ id: 'e-1', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90, husleie_i_aar: 0, driftskostnader_i_aar: 0 })
 
     expect(historikkInsertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ kilde: 'eiendom', kilde_id: 'e-1', gammel_verdi: 100, ny_verdi: 150 }),
@@ -83,7 +83,7 @@ describe('oppdaterEiendom — historikk-oppslag kaster FØR skriving', () => {
     })
 
     await expect(
-      oppdaterEiendom({ id: 'e-1', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90 }),
+      oppdaterEiendom({ id: 'e-1', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90, husleie_i_aar: 0, driftskostnader_i_aar: 0 }),
     ).rejects.toThrow('Kunne ikke lese gjeldende markedsverdi for historikk')
 
     // Skrivingen skal ALDRI skje når vi ikke fikk lest gammel verdi —
@@ -169,7 +169,7 @@ describe('oppdaterEiendom / oppdaterVerdipapir — raden er borte', () => {
     })
 
     await expect(
-      oppdaterEiendom({ id: 'e-borte', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90 }),
+      oppdaterEiendom({ id: 'e-borte', navn: 'Hytta', markedsverdi: 150, anskaffelsesverdi: 90, husleie_i_aar: 0, driftskostnader_i_aar: 0 }),
     ).rejects.toThrow('Eiendommen finnes ikke lenger')
     expect(updateSpy).not.toHaveBeenCalled()
   })
@@ -180,7 +180,7 @@ describe('oppdaterEiendom / oppdaterVerdipapir — raden er borte', () => {
     )
 
     await expect(
-      oppdaterVerdipapir({ id: 'v-borte', navn: 'Aksjefond', type: 'fond', verdi: 100, anskaffelsesverdi: 90 }),
+      oppdaterVerdipapir({ id: 'v-borte', navn: 'Aksjefond', type: 'fond', verdi: 100, anskaffelsesverdi: 90, utbytte_i_aar: 0 }),
     ).rejects.toThrow('Verdipapiret finnes ikke lenger')
   })
 })
@@ -193,7 +193,7 @@ describe('oppdaterVerdipapir / slettVerdipapir — samme kontrakt som eiendom', 
     })
 
     await expect(
-      oppdaterVerdipapir({ id: 'v-1', navn: 'Aksjefond', type: 'fond', verdi: 100, anskaffelsesverdi: 90 }),
+      oppdaterVerdipapir({ id: 'v-1', navn: 'Aksjefond', type: 'fond', verdi: 100, anskaffelsesverdi: 90, utbytte_i_aar: 0 }),
     ).rejects.toThrow('Kunne ikke lese gjeldende verdi for historikk')
   })
 

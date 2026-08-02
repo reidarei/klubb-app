@@ -10,6 +10,8 @@ type Eiendom = {
   navn: string
   markedsverdi: number
   anskaffelsesverdi: number
+  husleie_i_aar: number
+  driftskostnader_i_aar: number
 }
 
 type Props = {
@@ -27,6 +29,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
         navn: formData.get('navn') as string,
         markedsverdi: parseFloat(formData.get('markedsverdi') as string),
         anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
+        husleie_i_aar: parseFloat(formData.get('husleie_i_aar') as string),
+        driftskostnader_i_aar: parseFloat(formData.get('driftskostnader_i_aar') as string),
       })
     } catch (e) {
       setFeil(e instanceof Error ? e.message : 'Ukjent feil')
@@ -41,6 +45,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
         navn: formData.get('navn') as string,
         markedsverdi: parseFloat(formData.get('markedsverdi') as string),
         anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
+        husleie_i_aar: parseFloat(formData.get('husleie_i_aar') as string),
+        driftskostnader_i_aar: parseFloat(formData.get('driftskostnader_i_aar') as string),
       })
       setRedigerer(null)
     } catch (e) {
@@ -75,6 +81,9 @@ export default function EiendomEditor({ eiendommer }: Props) {
             <Input name="navn" label="Navn" defaultValue={e.navn} required />
             <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.markedsverdi} required />
             <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.anskaffelsesverdi} required />
+            <Input name="husleie_i_aar" label="Husleie i år (kr)" type="number" min={0} step={0.01} defaultValue={e.husleie_i_aar} required />
+            {/* Positivt tall — trekkes fra i visningen. Se check-constraint i migrasjon 129. */}
+            <Input name="driftskostnader_i_aar" label="Driftskostnader i år (kr)" type="number" min={0} step={0.01} defaultValue={e.driftskostnader_i_aar} required />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="primary">Lagre</Button>
               <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
@@ -118,6 +127,8 @@ export default function EiendomEditor({ eiendommer }: Props) {
         <Input name="navn" label="Navn" placeholder="F.eks. Skogshytta, Ljørdalen" required />
         <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
+        <Input name="husleie_i_aar" label="Husleie i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
+        <Input name="driftskostnader_i_aar" label="Driftskostnader i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Button type="submit" variant="primary">Legg til</Button>
       </form>
     </div>

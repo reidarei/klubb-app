@@ -52,16 +52,24 @@ export async function opprettEiendom(input: {
   navn: string
   markedsverdi: number
   anskaffelsesverdi: number
+  husleie_i_aar: number
+  driftskostnader_i_aar: number
 }) {
   const { supabase } = await ensureAdmin()
   validerNavn(input.navn)
   validerBelop(input.markedsverdi, 'Markedsverdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
+  validerBelop(input.husleie_i_aar, 'Husleie i år')
+  // Driftskostnader lagres POSITIVT og trekkes fra i visningen — samme
+  // kontrakt som check-constrainten i migrasjon 129.
+  validerBelop(input.driftskostnader_i_aar, 'Driftskostnader i år')
 
   const { error } = await supabase.from('fond_eiendom').insert({
     navn: input.navn.trim(),
     markedsverdi: input.markedsverdi,
     anskaffelsesverdi: input.anskaffelsesverdi,
+    husleie_i_aar: input.husleie_i_aar,
+    driftskostnader_i_aar: input.driftskostnader_i_aar,
     oppdatert: naa(),
   })
   if (error) throw new Error(error.message)
@@ -73,11 +81,17 @@ export async function oppdaterEiendom(input: {
   navn: string
   markedsverdi: number
   anskaffelsesverdi: number
+  husleie_i_aar: number
+  driftskostnader_i_aar: number
 }) {
   const { supabase, user } = await ensureAdmin()
   validerNavn(input.navn)
   validerBelop(input.markedsverdi, 'Markedsverdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
+  validerBelop(input.husleie_i_aar, 'Husleie i år')
+  // Driftskostnader lagres POSITIVT og trekkes fra i visningen — samme
+  // kontrakt som check-constrainten i migrasjon 129.
+  validerBelop(input.driftskostnader_i_aar, 'Driftskostnader i år')
 
   // Les gammel markedsverdi før oppdatering for historikk-logging. Kaster FØR
   // selve oppdateringen: skriver vi den nye verdien uten å ha fått lest den
@@ -104,6 +118,8 @@ export async function oppdaterEiendom(input: {
       navn: input.navn.trim(),
       markedsverdi: input.markedsverdi,
       anskaffelsesverdi: input.anskaffelsesverdi,
+      husleie_i_aar: input.husleie_i_aar,
+      driftskostnader_i_aar: input.driftskostnader_i_aar,
       oppdatert: naa(),
     })
     .eq('id', input.id)
@@ -149,17 +165,20 @@ export async function opprettVerdipapir(input: {
   type: 'aksje' | 'fond'
   verdi: number
   anskaffelsesverdi: number
+  utbytte_i_aar: number
 }) {
   const { supabase } = await ensureAdmin()
   validerNavn(input.navn)
   validerBelop(input.verdi, 'Verdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
+  validerBelop(input.utbytte_i_aar, 'Utbytte i år')
 
   const { error } = await supabase.from('fond_verdipapir').insert({
     navn: input.navn.trim(),
     type: input.type,
     verdi: input.verdi,
     anskaffelsesverdi: input.anskaffelsesverdi,
+    utbytte_i_aar: input.utbytte_i_aar,
     oppdatert: naa(),
   })
   if (error) throw new Error(error.message)
@@ -172,11 +191,13 @@ export async function oppdaterVerdipapir(input: {
   type: 'aksje' | 'fond'
   verdi: number
   anskaffelsesverdi: number
+  utbytte_i_aar: number
 }) {
   const { supabase, user } = await ensureAdmin()
   validerNavn(input.navn)
   validerBelop(input.verdi, 'Verdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
+  validerBelop(input.utbytte_i_aar, 'Utbytte i år')
 
   // Samme historikk-resonnement som oppdaterEiendom over — kaster FØR
   // oppdateringen hvis vi ikke får lest gammel verdi, og maybeSingle så
@@ -199,6 +220,7 @@ export async function oppdaterVerdipapir(input: {
       type: input.type,
       verdi: input.verdi,
       anskaffelsesverdi: input.anskaffelsesverdi,
+      utbytte_i_aar: input.utbytte_i_aar,
       oppdatert: naa(),
     })
     .eq('id', input.id)

@@ -11,6 +11,7 @@ type Verdipapir = {
   type: string
   verdi: number
   anskaffelsesverdi: number
+  utbytte_i_aar: number
 }
 
 type Props = {
@@ -29,6 +30,7 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         type: formData.get('type') as 'aksje' | 'fond',
         verdi: parseFloat(formData.get('verdi') as string),
         anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
+        utbytte_i_aar: parseFloat(formData.get('utbytte_i_aar') as string),
       })
     } catch (e) {
       setFeil(e instanceof Error ? e.message : 'Ukjent feil')
@@ -44,6 +46,7 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         type: formData.get('type') as 'aksje' | 'fond',
         verdi: parseFloat(formData.get('verdi') as string),
         anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
+        utbytte_i_aar: parseFloat(formData.get('utbytte_i_aar') as string),
       })
       setRedigerer(null)
     } catch (e) {
@@ -104,6 +107,7 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
             <TypeVelger defaultValue={v.type} />
             <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={v.verdi} required />
             <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={v.anskaffelsesverdi} required />
+            <Input name="utbytte_i_aar" label="Utbytte i år (kr)" type="number" min={0} step={0.01} defaultValue={v.utbytte_i_aar} required />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button type="submit" variant="primary">Lagre</Button>
               <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
@@ -150,6 +154,7 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         <TypeVelger />
         <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
+        <Input name="utbytte_i_aar" label="Utbytte i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
         <Button type="submit" variant="primary">Legg til</Button>
       </form>
     </div>

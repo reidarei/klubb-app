@@ -3,6 +3,8 @@ import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Card from '@/components/ui/Card'
 import InnskyterRad from '@/components/fond/InnskyterRad'
+import FondPostRad from '@/components/fond/FondPostRad'
+import Avkastning from '@/components/fond/Avkastning'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
@@ -16,32 +18,9 @@ import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 // Delt formattering i lib/belop.ts — brukes også av profil-sidens fond-andel
 const kr = formaterKr
 
-const prosent = (n: number) =>
-  `${n > 0 ? '+' : ''}${n.toLocaleString('nb', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
-
-const signKr = (n: number) =>
-  `${n > 0 ? '+' : n < 0 ? '−' : ''}${kr(Math.abs(n))}`
-
-const retningFarge = (n: number) =>
-  n > 0 ? 'var(--success)' : n < 0 ? 'var(--danger)' : 'var(--text-secondary)'
-
-// Avkastningslinje i Nordnet-stil: fortegn, kroner og prosent, farget grønn/rød
-function Avkastning({ kroner, pst, size = 12 }: { kroner: number; pst: number; size?: number }) {
-  return (
-    <span
-      style={{
-        fontFamily: 'var(--font-body)',
-        fontSize: size,
-        fontWeight: 600,
-        color: retningFarge(kroner),
-        fontVariantNumeric: 'tabular-nums',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {signKr(kroner)} ({prosent(pst)})
-    </span>
-  )
-}
+// Avkastning bor nå i components/fond/Avkastning.tsx — FondPostRad trenger
+// den også, og en klientkomponent kan ikke importere fra en server-side
+// page-fil. Se #555.
 
 // ─── Side (async RSC) ─────────────────────────────────────────────────────────
 
@@ -264,54 +243,22 @@ export default async function FondSide() {
           ) : (
             <>
               {eiendomListe.map((e, i) => (
-                <div
+                <FondPostRad
                   key={e.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'baseline',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    padding: '14px 16px',
-                    borderBottom: i < eiendomListe.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 15,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        marginBottom: 2,
-                      }}
-                    >
-                      {e.navn}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                      Anskaffelsesverdi {kr(e.anskaffelsesverdi)}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 15,
-                        fontWeight: 600,
-                        color: 'var(--text-primary)',
-                        fontVariantNumeric: 'tabular-nums',
-                        marginBottom: 2,
-                      }}
-                    >
-                      {kr(e.markedsverdi)}
-                    </div>
-                    <Avkastning
-                      kroner={e.markedsverdi - e.anskaffelsesverdi}
-                      pst={e.anskaffelsesverdi > 0
-                        ? ((e.markedsverdi - e.anskaffelsesverdi) / e.anskaffelsesverdi) * 100
-                        : 0}
-                    />
-                  </div>
-                </div>
+                  navn={e.navn}
+                  undertekst={`Anskaffelsesverdi ${kr(e.anskaffelsesverdi)}`}
+                  verdi={e.markedsverdi}
+                  anskaffelsesverdi={e.anskaffelsesverdi}
+                  // Året tas fra postens oppdatert-dato, ikke dagens — ellers
+                  // ville etiketten skiftet år 1. januar, før noen har lagt
+                  // inn nye tall (jf. Policy: Tidshåndtering).
+                  aar={Number(formaterDato(e.oppdatert, 'yyyy'))}
+                  linjer={[
+                    { etikett: 'Husleie', belop: e.husleie_i_aar },
+                    { etikett: 'Driftskostnader', belop: e.driftskostnader_i_aar, erKostnad: true },
+                  ]}
+                  sisteRad={i === eiendomListe.length - 1}
+                />
               ))}
               {/* Sum-rad — kun når rader finnes */}
               <div
@@ -369,57 +316,20 @@ export default async function FondSide() {
             </div>
           ) : (
             <>
-              {vpListe.map((v, i) => {
-                const avk = v.verdi - v.anskaffelsesverdi
-                return (
-                  <div
-                    key={v.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'baseline',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      padding: '14px 16px',
-                      borderBottom: i < vpListe.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-body)',
-                          fontSize: 15,
-                          fontWeight: 500,
-                          color: 'var(--text-primary)',
-                          marginBottom: 2,
-                        }}
-                      >
-                        {v.navn}
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                        Anskaffelsesverdi {kr(v.anskaffelsesverdi)}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-body)',
-                          fontSize: 15,
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          fontVariantNumeric: 'tabular-nums',
-                          marginBottom: 2,
-                        }}
-                      >
-                        {kr(v.verdi)}
-                      </div>
-                      <Avkastning
-                        kroner={avk}
-                        pst={v.anskaffelsesverdi > 0 ? (avk / v.anskaffelsesverdi) * 100 : 0}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+              {vpListe.map((v, i) => (
+                <FondPostRad
+                  key={v.id}
+                  navn={v.navn}
+                  undertekst={`Anskaffelsesverdi ${kr(v.anskaffelsesverdi)}`}
+                  verdi={v.verdi}
+                  anskaffelsesverdi={v.anskaffelsesverdi}
+                  aar={Number(formaterDato(v.oppdatert, 'yyyy'))}
+                  // Kun én linje her — et verdipapir har ingen driftskostnad
+                  // å trekke fra, så FondPostRad utelater netto-raden.
+                  linjer={[{ etikett: 'Utbytte', belop: v.utbytte_i_aar }]}
+                  sisteRad={i === vpListe.length - 1}
+                />
+              ))}
               {/* Sum-rad med samlet avkastning — kun når rader finnes */}
               <div
                 style={{
