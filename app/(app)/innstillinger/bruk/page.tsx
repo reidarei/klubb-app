@@ -5,6 +5,7 @@ import { kanAdministrere } from '@/lib/roller'
 import { osloUkestart, formaterDato } from '@/lib/dato'
 import { AKTIVITET_GRAF_UKER, AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
 import SectionLabel from '@/components/ui/SectionLabel'
+import BarGraf from './BarGraf'
 
 type DagRad = { dag: string; unike: number; treff: number }
 type UkeRad = { uke_start: string; unike: number }
@@ -104,12 +105,12 @@ export default async function AktivitetAdmin() {
       {/* Grafer */}
       <section style={{ marginBottom: 28 }}>
         <SectionLabel>Unike per dag, siste {dagerGraf.length} d</SectionLabel>
-        <BarGraf data={dagerGraf.map(r => ({ nokkel: r.dag, verdi: r.unike }))} />
+        <BarGraf data={dagerGraf.map(r => ({ nokkel: r.dag, verdi: r.unike }))} enhet="unike" />
       </section>
 
       <section style={{ marginBottom: 28 }}>
         <SectionLabel>Unike per uke, siste {ukerGraf.length} uker</SectionLabel>
-        <BarGraf data={ukerGraf.map(r => ({ nokkel: r.uke_start, verdi: r.unike }))} />
+        <BarGraf data={ukerGraf.map(r => ({ nokkel: r.uke_start, verdi: r.unike }))} enhet="unike" />
       </section>
 
       {/* Microcopy */}
@@ -149,58 +150,6 @@ function Nokkeltall({ label, verdi, hovedtall }: { label: string; verdi: number;
       >
         {verdi}
       </span>
-    </div>
-  )
-}
-
-// Enkel vertikal kolonnegraf uten npm-dep — flexbox-divs med height i %
-// mot seriens maksverdi. Nok for en admin-only trendvisning.
-function BarGraf({ data }: { data: { nokkel: string; verdi: number }[] }) {
-  if (data.length === 0) {
-    return (
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>
-        Ingen data ennå.
-      </p>
-    )
-  }
-  const maks = Math.max(...data.map(d => d.verdi), 1)
-  // Synlige ytter-etiketter (første/siste) fordi title-attributtet ikke vises
-  // ved touch på mobil — gir leseren dato-kontekst uten en npm-akse-dep.
-  const forste = formaterDato(data[0].nokkel, 'd. MMM')
-  const siste = formaterDato(data[data.length - 1].nokkel, 'd. MMM')
-  return (
-    <div>
-      <div
-        style={{
-          display: 'flex', alignItems: 'flex-end', gap: 3, height: 100,
-          padding: '10px 8px', borderRadius: 8, background: 'var(--bg-elevated)',
-          border: '0.5px solid var(--border-subtle)',
-        }}
-      >
-        {data.map(d => (
-          <div
-            key={d.nokkel}
-            title={`${d.nokkel}: ${d.verdi}`}
-            style={{
-              flex: 1,
-              height: `${Math.max((d.verdi / maks) * 100, d.verdi > 0 ? 4 : 0)}%`,
-              minHeight: d.verdi > 0 ? 2 : 0,
-              background: 'var(--accent)',
-              borderRadius: '2px 2px 0 0',
-            }}
-          />
-        ))}
-      </div>
-      <div
-        style={{
-          display: 'flex', justifyContent: 'space-between', marginTop: 5,
-          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)',
-        }}
-      >
-        <span>{forste}</span>
-        {/* Skjul siste hvis serien har bare ett punkt (samme dato begge ender). */}
-        {data.length > 1 && <span>{siste}</span>}
-      </div>
     </div>
   )
 }
