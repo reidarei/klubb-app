@@ -54,12 +54,13 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   // Smalt glass — bursdager. Rett kjegle, ikke tulipan som `wine`. Stett og fot
   // er STREKER, ikke smale rektangler: et omrisset rektangel leser som en ramme
   // rundt et hulrom når glyfen blir stor. Boblene gjør glyfen til «skål» heller
-  // enn bare «drikke», og er bevisst store (r=1,7) — mindre bobler overlever
-  // ikke nedskaleringen til 11 px i MiniKalender. Glasset er derfor skjøvet mot
-  // venstre så komposisjonen balanserer mot dem.
-  // Stetten starter på 11,8 — inne i koppens bue, som bunner ut på 12,6. Uten
-  // den overlappen står det et synlig opphold mellom kopp og stett.
-  flute: <path d="M6.8 2.4h6.8v6.8a3.4 3.4 0 01-6.8 0V2.4z M10.2 11.8v9.6 M5.9 21.4h8.6 M16.8 3.1a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z M19.1 7.7a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z" />,
+  // enn bare «drikke»; glasset er skjøvet litt mot venstre så komposisjonen
+  // balanserer mot dem.
+  // Stetten starter på 12,6 — nøyaktig der koppens bue bunner ut. Starter den
+  // høyere, stikker den synlig opp INNI glasset, siden koppen er et omriss og
+  // ikke en fylt flate. Fugen mellom dem dekkes av round linecap (strekbredden
+  // er 1,25, så cap-en rekker 0,6 opp i buen) — ingen overlapp trengs.
+  flute: <path d="M7.4 2.4h6.8v6.8a3.4 3.4 0 01-6.8 0V2.4z M10.8 12.6v8.8 M6.5 21.4h8.6 M16.9 3.6a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6z M18.7 7.8a1 1 0 110 2 1 1 0 010-2z" />,
   // Medalje — klubbens stiftelsesdag. Valgt foran pokal og krone: krona er
   // opptatt av generalsekretæren, og medaljen sier «merkedag» uten å si
   // «premie til en person».
@@ -78,7 +79,7 @@ const PATHS_FYLT: Partial<Record<IkonNavn, React.ReactNode>> = {
   // buede koppbunnen, eller — om de overlappet for å lukke gapet — stanset et
   // hull i overlappet, siden fylt modus bruker fill-rule evenodd. Boblene er
   // egne subpaths; de rører ikke glasset, så evenodd er trygt der.
-  flute: <path d="M6.8 2.4h6.8v6.8c0 2.2-1.15 3.4-2.25 3.6v6.6h3.15v2.2H5.9v-2.2h3.15v-6.6c-1.1-.2-2.25-1.4-2.25-3.6V2.4z M16.8 3.1a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z M19.1 7.7a1.7 1.7 0 110 3.4 1.7 1.7 0 010-3.4z" />,
+  flute: <path d="M7.4 2.4h6.8v6.8c0 2.2-1.15 3.4-2.25 3.6v6.6h3.15v2.2H6.5v-2.2h3.15v-6.6c-1.1-.2-2.25-1.4-2.25-3.6V2.4z M16.9 3.6a1.3 1.3 0 110 2.6 1.3 1.3 0 010-2.6z M18.7 7.8a1 1 0 110 2 1 1 0 010-2z" />,
 }
 
 type Props = {

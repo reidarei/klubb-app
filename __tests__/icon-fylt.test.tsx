@@ -70,7 +70,12 @@ describe('flute har to tegninger', () => {
     // Regresjonsvakt: boblene lå en periode kun i omrisset, fordi de var for
     // små til å overleve 11 px. Da ble det to ulike motiver for samme ting.
     // Riktig fiks var å gjøre boblene større, ikke å fjerne dem i én størrelse.
-    const bobler = (d: string) => (d.match(/a1\.7 1\.7 0 110 3\.4/g) ?? []).length
+    // Teller sirkulære subpaths på formen «a<r> <r> 0 110 <2r>» — starten på
+    // en hel sirkel. Bevisst uavhengig av radius: boblene er justert i
+    // størrelse flere ganger, og en test som hardkoder radien går i stykker
+    // av en ren designjustering i stedet for av bugen den skal fange.
+    // Koppens bue bruker «0 01», ikke «0 110», så den telles ikke med.
+    const bobler = (d: string) => (d.match(/a[\d.]+ [\d.]+ 0 110 /g) ?? []).length
 
     for (const props of [{}, { fylt: true }]) {
       const d = svgFor(<Icon name="flute" {...props} />).querySelector('path')?.getAttribute('d') ?? ''
