@@ -39,13 +39,15 @@ function genererPassord() {
 // Trigger-retten er asynkron; vi poller opptil ~5 sekunder.
 async function ventPaaProfil(adminClient, userId, maxForsok = 10) {
   for (let i = 0; i < maxForsok; i++) {
-    // Polling-loop med timeout — spørringsfeil i setup-script er ikke kritisk.
-    // eslint-disable-next-line hk/supabase-feil-maa-hentes
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from('profiles')
       .select('id')
       .eq('id', userId)
       .maybeSingle()
+    // Engangs admin-skript — kast så operatøren ser det i stedet for å
+    // polle videre gjennom en reell feil og rapportere en misvisende
+    // «raden ble ikke opprettet innen 5 sek».
+    if (error) avbryt(`Klarte ikke sjekke profiles-raden: ${error.message}`)
     if (data) return true
     await new Promise(r => setTimeout(r, 500))
   }
@@ -98,13 +100,13 @@ if (telFeil) avbryt(`Klarte ikke telle profiler: ${telFeil.message}`)
 if (count > 0) {
   // Idempotens-gren: re-kjøring etter delvis feil (kun hvis eposten finnes).
   // Vi gjør ikke en full abort — sjekk om akkurat denne eposten finnes.
-  // Setup-script — spørringsfeil er ikke kritisk.
-  // eslint-disable-next-line hk/supabase-feil-maa-hentes
-  const { data: eksisterende } = await adminClient
+  const { data: eksisterende, error: eksisterendeFeil } = await adminClient
     .from('profiles')
     .select('id, rolle, navn')
     .eq('epost', epost)
     .maybeSingle()
+
+  if (eksisterendeFeil) avbryt(`Klarte ikke slå opp eksisterende profil: ${eksisterendeFeil.message}`)
 
   if (!eksisterende) {
     avbryt(

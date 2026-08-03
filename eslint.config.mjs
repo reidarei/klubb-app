@@ -9,8 +9,10 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 // ---------------------------------------------------------------------------
 // Regelen ligger inline her, ikke i en egen fil under scripts/ eller
 // eslint-rules/. Grunnen er konkret: eslint.config.mjs speiles til klubb-app,
-// mens scripts/ ikke gjør det — en import til en fil utenfor synk-scope hadde
-// gitt rød lint i klubb-app. Samme felle som Sentry-configene falt i (#523).
+// mens scripts/ kun speiles for de få filene som står i SCAN_SCRIPTS i
+// scripts/sync-klubb-app.mjs (#557) — en regelfil ville ikke vært blant dem, og
+// importen hadde gitt rød lint i klubb-app. Samme felle som Sentry-configene
+// falt i (#523).
 //
 // Arkitektur: regelen sporer BRUK, ikke syntaksform. I stedet for å lete
 // etter «destrukturering med data uten error» ett skjema om gangen, spør den
