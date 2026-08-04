@@ -19,7 +19,7 @@ test.describe('Profil — fond-andel', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByText('Min andel av fondet')).toBeVisible()
     // Test-instansen har ingen innskudd for e2e-admin — andelen skal være 0 kr
-    await expect(page.getByText('0 kr', { exact: true })).toBeVisible()
+    await expect(page.getByText('0,00 kr', { exact: true })).toBeVisible()
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
     await page.screenshot({ path: `${UT_DIR}/profil-fond-andel.png` })
   })

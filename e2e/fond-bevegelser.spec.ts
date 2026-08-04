@@ -73,14 +73,14 @@ test.describe('Fond — bevegelser per innskyter', () => {
     await expect(panel.getByText(`Renter ${AAR - 1} (din andel)`)).toBeVisible()
 
     // To bevegelser på samme dato skal stå som TO linjer, ikke nettes til én.
-    await expect(panel.getByText(belop('+500 kr'))).toHaveCount(2)
-    await expect(panel.getByText(belop('+4 500 kr'))).toBeVisible()
+    await expect(panel.getByText(belop('+500,00 kr'))).toHaveCount(2)
+    await expect(panel.getByText(belop('+4 500,00 kr'))).toBeVisible()
     // Uttaket: minus-tegn (U+2212), ikke bindestrek
-    await expect(panel.getByText(belop('−2 000 kr'))).toBeVisible()
+    await expect(panel.getByText(belop('−2 000,00 kr'))).toBeVisible()
     // exact for å ikke treffe «(din andel)» — som riktignok har liten a, men
     // exact gjør intensjonen tydelig framfor å hvile på store/små bokstaver.
     await expect(panel.getByText('Andel', { exact: true })).toBeVisible()
-    await expect(panel.getByText(belop('12 950 kr'))).toBeVisible()
+    await expect(panel.getByText(belop('12 950,00 kr'))).toBeVisible()
 
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
     await page.screenshot({ path: `${UT_DIR}/fond-bevegelser-apen.png`, fullPage: true })

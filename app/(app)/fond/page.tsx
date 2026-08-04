@@ -9,7 +9,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { formaterDato } from '@/lib/dato'
-import { formaterKr } from '@/lib/belop'
+import { formaterKr, formaterBelop } from '@/lib/belop'
 import { KLUBB_KORTNAVN, FOND_KONTONUMMER, FOND_FAST_TREKK_FORSLAG } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
@@ -193,7 +193,7 @@ export default async function FondSide() {
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                {s.val.toLocaleString('nb')}
+                {formaterBelop(s.val)}
               </div>
               {s.lbl}
             </div>
