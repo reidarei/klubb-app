@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { MapPinIcon } from '@heroicons/react/24/outline'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
-import { norskAar } from '@/lib/dato'
 import Icon, { IkonNavn } from '@/components/ui/Icon'
 import { kanAdministrere } from '@/lib/roller'
 import versjon from '@/lib/versjon.json'
@@ -32,7 +31,6 @@ export default async function Klubbinfo() {
   type Rad = {
     icon: IkonNavn
     title: string
-    sub: string
     meta?: string
     href: string
     kunAdmin?: boolean
@@ -42,57 +40,49 @@ export default async function Klubbinfo() {
     {
       icon: 'users',
       title: 'Medlemmer',
-      sub: `${antallMedlemmer ?? 0} aktive`,
+      meta: antallMedlemmer ? String(antallMedlemmer) : undefined,
       href: '/klubbinfo/medlemmer',
     },
     {
       icon: 'list',
       title: 'Arrangøransvar',
-      sub: `Hvem tar hva i ${norskAar()}`,
       href: '/arrangoransvar',
     },
     {
       icon: 'trophy',
       title: 'Kåringer',
-      sub: 'Årets hederspriser',
       href: '/kaaringer',
     },
     {
       icon: 'image',
-      title: 'Bildene',
-      sub: 'Album fra turer og møter',
+      title: 'Bilder',
       meta: antallAlbum ? String(antallAlbum) : undefined,
       href: '/album',
     },
     {
       icon: 'mapPin',
       title: 'Turene',
-      sub: 'Hvor vi har vært',
       href: '/stedene',
     },
     {
       icon: 'doc',
       title: 'Vedtekter',
-      sub: 'Regler og kvotering',
       href: '/klubbinfo/vedtekter/vedtekter',
     },
     {
       icon: 'chart',
       title: 'Statistikk',
-      sub: 'Deltakelse og rekorder',
       href: '/klubbinfo/statistikk',
     },
     {
       icon: 'cog',
       title: 'Innstillinger',
-      sub: 'Varsler og admin',
       href: '/innstillinger',
       kunAdmin: true,
     },
     {
       icon: 'info',
       title: 'Om appen',
-      sub: 'Sikkerhet, personvern og hvordan dette er bygget',
       href: '/om-appen',
     },
   ]
@@ -272,20 +262,9 @@ export default async function Klubbinfo() {
                   color: 'var(--text-primary)',
                   letterSpacing: '-0.3px',
                   lineHeight: 1.1,
-                  marginBottom: 2,
                 }}
               >
                 {r.title}
-              </div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  color: 'var(--text-tertiary)',
-                  letterSpacing: '0.1px',
-                }}
-              >
-                {r.sub}
               </div>
             </div>
             {r.meta && (
