@@ -21,12 +21,21 @@ export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  // To count-spørringer i parallell — sekvensielt ville lagt en ekstra
-  // rundtur til Supabase på responstiden (jf. ytelseskravet).
-  const [{ count: antallMedlemmer }, { count: antallAlbum }] = await Promise.all([
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
-    supabase.from('album').select('id', { count: 'exact', head: true }),
-  ])
+  // Tre count-spørringer i parallell — sekvensielt ville lagt to ekstra
+  // rundturer til Supabase på responstiden (jf. ytelseskravet).
+  const [{ count: antallMedlemmer }, { count: antallAlbum }, { count: antallTurer }] =
+    await Promise.all([
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
+      supabase.from('album').select('id', { count: 'exact', head: true }),
+      // Samme filter som /stedene bruker: en tur uten destinasjon vises ikke
+      // der, så den skal heller ikke telles med her. Ellers ville tallet lovet
+      // noe siden ikke leverer.
+      supabase
+        .from('arrangementer')
+        .select('id', { count: 'exact', head: true })
+        .eq('type', 'tur')
+        .not('destinasjon', 'is', null),
+    ])
 
   type Rad = {
     icon: IkonNavn
@@ -62,6 +71,7 @@ export default async function Klubbinfo() {
     {
       icon: 'mapPin',
       title: 'Turene',
+      meta: antallTurer ? String(antallTurer) : undefined,
       href: '/stedene',
     },
     {
