@@ -63,6 +63,12 @@ export const FOND_KONTONUMMER =
 export const FOND_FAST_TREKK_FORSLAG =
   process.env.NEXT_PUBLIC_FOND_FAST_TREKK_FORSLAG ?? '500 kr'
 
+// Hvem fondskontoen står i navnet til. Brukes i rentefordelings-forklaringen,
+// som må kunne si hvem renteskatten godskrives. Settes i genitiv i teksten
+// («{eier}s navn»), så et navn som slutter på s trenger en omskriving der.
+export const FOND_KONTOEIER =
+  process.env.NEXT_PUBLIC_FOND_KONTOEIER ?? 'kassereren'
+
 // Brand-farger — kan overstyres av andre klubber via NEXT_PUBLIC_KLUBB_FARGE_*-
 // env-vars. Standard-defaults er sand/gull (som originalen), men sett dine egne
 // for å gi klubben sin egen visuell identitet. Se docs/tema-arkitektur.md §4.

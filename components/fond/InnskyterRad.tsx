@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { formaterDato } from '@/lib/dato'
 import { formaterKr } from '@/lib/belop'
+import RentefordelingBoks from '@/components/fond/RentefordelingBoks'
 
 export type Bevegelse = { dato: string; belop: number }
 
@@ -27,7 +28,7 @@ function Linje({
   fortegn = false,
   sterk = false,
 }: {
-  etikett: string
+  etikett: React.ReactNode
   belop: number
   fortegn?: boolean
   sterk?: boolean
@@ -89,6 +90,7 @@ export default function InnskyterRad({
   sisteRad,
 }: Props) {
   const [aapen, setAapen] = useState(false)
+  const [visRenteforklaring, setVisRenteforklaring] = useState(false)
   const panelId = useId()
 
   // Utvidbar når det finnes noe å vise. En rad med fjorårstall men TOM
@@ -188,7 +190,35 @@ export default function InnskyterRad({
           }}
         >
           <Linje etikett={`Oppspart t.o.m. ${aar - 1}`} belop={oppspartAkkumulert} />
-          <Linje etikett={`Renter ${aar - 1} (din andel)`} belop={renteandelIFjor} />
+          {/* Kun ordet «andel» er lenken, etter Reidars presisering: forklaringen
+              skal bare være synlig for den som har klikket seg inn hit. Knappen
+              ligger i panelet, som er SØSKEN til accordion-knappen og ikke inni
+              den — en interaktiv node inni en <button> ville vært ugyldig. */}
+          <Linje
+            etikett={
+              <>
+                Renter {aar - 1} (din{' '}
+                <button
+                  type="button"
+                  onClick={() => setVisRenteforklaring(true)}
+                  style={{
+                    padding: 0,
+                    border: 'none',
+                    background: 'none',
+                    font: 'inherit',
+                    color: 'var(--accent)',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 2,
+                    cursor: 'pointer',
+                  }}
+                >
+                  andel
+                </button>
+                )
+              </>
+            }
+            belop={renteandelIFjor}
+          />
 
           <div style={{ borderTop: '0.5px solid var(--border-subtle)', margin: '6px 0' }} />
 
@@ -220,6 +250,10 @@ export default function InnskyterRad({
 
           <Linje etikett="Andel" belop={belop} sterk />
         </div>
+      )}
+
+      {visRenteforklaring && (
+        <RentefordelingBoks onLukk={() => setVisRenteforklaring(false)} />
       )}
     </div>
   )
