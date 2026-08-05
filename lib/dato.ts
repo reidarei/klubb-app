@@ -177,8 +177,6 @@ export function isoTilDatetimeLocal(iso: string | null): string {
  */
 export function datetimeLocalTilIso(localStr: string): string {
   if (!localStr) return ''
-  // Parse datoen som norsk tid ved å legge på tidssone-offset
-  const norskIso = `${localStr}:00`
   // Bruk formatInTimeZone "baklengs": finn UTC-ekvivalenten
   // ved å lage en Date med riktig norsk tid
   const [datePart, timePart] = localStr.split('T')

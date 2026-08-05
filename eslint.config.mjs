@@ -403,6 +403,15 @@ const config = [
       // kommentaren over for hvilke skjemaer som er dekket. Står på «error»:
       // en ny svelget feil skal blokkere build, ikke bare varsle.
       'hk/supabase-feil-maa-hentes': 'error',
+      // Død kode akkumulerte usett: eslint-config-next slår ikke på
+      // no-unused-vars, så en import som mistet sin siste bruker ble stående.
+      // Fanget først da en ubrukt norskAar-import ble oppdaget manuelt (#566).
+      //
+      // args: 'none' — ubrukte funksjonsargumenter er legitime i mock-signaturer
+      // (testene har ~80 av dem) og sier ingenting om død kode.
+      // caughtErrors: 'none' — «catch {}» uten binding er allerede idiomet vårt.
+      // varsIgnorePattern — «_navn» er den etablerte måten å si «med vilje».
+      'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
     },
   },
 ]

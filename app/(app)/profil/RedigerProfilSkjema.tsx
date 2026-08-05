@@ -32,7 +32,6 @@ export default function RedigerProfilSkjema({
   const [visPassord, setVisPassord] = useState(false)
   const [passord, setPassord] = useState('')
   const [bekreft, setBekreft] = useState('')
-  const [passordStatus, setPassordStatus] = useState<'idle' | 'lagrer' | 'ok' | 'feil'>('idle')
   const [passordFeil, setPassordFeil] = useState('')
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -61,30 +60,11 @@ export default function RedigerProfilSkjema({
       setVisPassord(false)
       setPassord('')
       setBekreft('')
-      setPassordStatus('idle')
       setLagret(true)
       setTimeout(() => setLagret(false), 3000)
     })
   }
 
-  async function handleEndrePassord(e: React.FormEvent) {
-    e.preventDefault()
-    setPassordFeil('')
-    if (passord.length < 6) { setPassordFeil('Passordet må være minst 6 tegn'); return }
-    if (passord !== bekreft) { setPassordFeil('Passordene er ikke like'); return }
-    setPassordStatus('lagrer')
-    const supabase = createClient()
-    const { error } = await supabase.auth.updateUser({ password: passord })
-    if (error) {
-      setPassordFeil(error.message)
-      setPassordStatus('feil')
-    } else {
-      setPassordStatus('ok')
-      setPassord('')
-      setBekreft('')
-      setTimeout(() => { setVisPassord(false); setPassordStatus('idle') }, 2000)
-    }
-  }
 
   return (
     <Card className="mb-4">

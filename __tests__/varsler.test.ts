@@ -218,7 +218,6 @@ describe('wrapper-funksjoner', () => {
     const eqCalls: string[] = []
     mockFrom.mockImplementation((tabell: string) => {
       const chain = lagChain({ aktiv: false })
-      const originalEq = chain.eq as ReturnType<typeof vi.fn>
       chain.eq = vi.fn((col: string, val: string) => {
         if (col === 'noekkel') eqCalls.push(val)
         return chain
