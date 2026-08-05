@@ -4,6 +4,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import Icon, { IkonNavn } from '@/components/ui/Icon'
 import { kanAdministrere } from '@/lib/roller'
+import { naa } from '@/lib/dato'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2, KLUBB_OM_AVSNITT } from '@/lib/klubb-config'
 import { format } from 'date-fns'
@@ -27,14 +28,17 @@ export default async function Klubbinfo() {
     await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
       supabase.from('album').select('id', { count: 'exact', head: true }),
-      // Samme filter som /stedene bruker: en tur uten destinasjon vises ikke
-      // der, så den skal heller ikke telles med her. Ellers ville tallet lovet
-      // noe siden ikke leverer.
+      // Turer klubben FAKTISK har vært på: passert start_tidspunkt, og med en
+      // destinasjon (en tur uten by vises ikke på /stedene og skal ikke telles).
+      // Kommende turer holdes utenfor med vilje — tallet svarer på «hvor mange
+      // turer har vi hatt», ikke «hvor mange ligger i kalenderen». Det er også
+      // riktigere for blåturer, der destinasjonen er sensurert til den er over.
       supabase
         .from('arrangementer')
         .select('id', { count: 'exact', head: true })
         .eq('type', 'tur')
-        .not('destinasjon', 'is', null),
+        .not('destinasjon', 'is', null)
+        .lt('start_tidspunkt', naa()),
     ])
 
   type Rad = {
