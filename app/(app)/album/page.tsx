@@ -14,17 +14,29 @@ export default async function AlbumOversikt() {
   // Henter cover-bildet via FK-join (album_cover_fk) og antall via aggregat
   // — ikke hele bildelista. Album uten cover viser placeholder-ikonet
   // (eksplisitt > implisitt).
-  const { data: albumer, error: albumerFeil } = await supabase
-    .from('album')
-    .select(
-      `id, tittel, arrangement_id, opprettet,
-       arrangement:arrangementer (id, tittel),
-       cover:album_bilde!album_cover_fk (bilde_url, thumb_url),
-       antall:album_bilde!album_bilde_album_id_fkey (count)`,
-    )
-    .order('opprettet', { ascending: false })
+  const [{ data: albumer, error: albumerFeil }, { data: chatBilder, error: chatFeil }] =
+    await Promise.all([
+      supabase
+        .from('album')
+        .select(
+          `id, tittel, arrangement_id, opprettet,
+           arrangement:arrangementer (id, tittel),
+           cover:album_bilde!album_cover_fk (bilde_url, thumb_url),
+           antall:album_bilde!album_bilde_album_id_fkey (count)`,
+        )
+        .order('opprettet', { ascending: false }),
+      // Chat-bildene vises som et eget album, men er en LEVENDE visning — ikke
+      // kopierte album_bilde-rader. Se app/(app)/album/chatten/page.tsx.
+      // Nyeste først, så [0] blir coveret.
+      supabase
+        .from('klubb_chat')
+        .select('bilde_url', { count: 'exact' })
+        .not('bilde_url', 'is', null)
+        .order('opprettet', { ascending: false }),
+    ])
 
   if (albumerFeil) throw new Error(`Kunne ikke hente album: ${albumerFeil.message}`)
+  if (chatFeil) throw new Error(`Kunne ikke hente chat-bilder: ${chatFeil.message}`)
 
   type AlbumRad = {
     id: string
@@ -48,6 +60,13 @@ export default async function AlbumOversikt() {
       thumb,
     }
   })
+
+  // Chat-albumet står først: det er den eneste samlingen som vokser
+  // fortløpende, så «nyeste først»-sorteringen gjør den permanent øverst
+  // uansett. Da er det ærligere å plassere den eksplisitt enn å late som den
+  // sorteres inn.
+  const chatAntall = chatBilder?.length ?? 0
+  const chatThumb = chatBilder?.[0]?.bilde_url ?? null
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -79,13 +98,13 @@ export default async function AlbumOversikt() {
             color: 'var(--text-primary)',
           }}
         >
-          Bildene
+          Bilder
         </h1>
       </div>
 
       <OpprettAlbumKnapp />
 
-      {rader.length === 0 ? (
+      {rader.length === 0 && chatAntall === 0 ? (
         <div
           style={{
             padding: 24,
@@ -119,6 +138,50 @@ export default async function AlbumOversikt() {
             padding: '0 4px',
           }}
         >
+          {chatAntall > 0 && (
+            <Link
+              href="/album/chatten"
+              style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+            >
+              <BildeBunke
+                id="chatten"
+                src={chatThumb}
+                antall={chatAntall}
+                sizes="(max-width: 480px) 50vw, 240px"
+              />
+              <div style={{ padding: '12px 2px 0' }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 16,
+                    color: 'var(--text-primary)',
+                    fontWeight: 500,
+                    letterSpacing: '-0.2px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Fra chatten
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 6,
+                    marginTop: 3,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    color: 'var(--text-tertiary)',
+                    letterSpacing: '1.2px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <span style={{ flexShrink: 0 }}>{chatAntall} bilder</span>
+                </div>
+              </div>
+            </Link>
+          )}
+
           {rader.map(r => (
             <Link
               key={r.id}

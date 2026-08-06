@@ -22,12 +22,22 @@ export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  // Tre count-spørringer i parallell — sekvensielt ville lagt to ekstra
+  // Fire count-spørringer i parallell — sekvensielt ville lagt tre ekstra
   // rundturer til Supabase på responstiden (jf. ytelseskravet).
-  const [{ count: antallMedlemmer }, { count: antallAlbum }, { count: antallTurer }] =
-    await Promise.all([
+  const [
+    { count: antallMedlemmer },
+    { count: antallAlbumBilder },
+    { count: antallChatBilder },
+    { count: antallTurer },
+  ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
-      supabase.from('album').select('id', { count: 'exact', head: true }),
+      // Antall BILDER, ikke antall album — raden heter «Bilder». Chat-bildene
+      // vises som et eget album på /album, så de hører med i totalen.
+      supabase.from('album_bilde').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('klubb_chat')
+        .select('id', { count: 'exact', head: true })
+        .not('bilde_url', 'is', null),
       // Turer klubben FAKTISK har vært på: passert start_tidspunkt, og med en
       // destinasjon (en tur uten by vises ikke på /stedene og skal ikke telles).
       // Kommende turer holdes utenfor med vilje — tallet svarer på «hvor mange
@@ -40,6 +50,8 @@ export default async function Klubbinfo() {
         .not('destinasjon', 'is', null)
         .lt('start_tidspunkt', naa()),
     ])
+
+  const antallBilder = (antallAlbumBilder ?? 0) + (antallChatBilder ?? 0)
 
   type Rad = {
     icon: IkonNavn
@@ -69,7 +81,7 @@ export default async function Klubbinfo() {
     {
       icon: 'image',
       title: 'Bilder',
-      meta: antallAlbum ? String(antallAlbum) : undefined,
+      meta: antallBilder ? String(antallBilder) : undefined,
       href: '/album',
     },
     {

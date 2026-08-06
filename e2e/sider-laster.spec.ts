@@ -47,7 +47,8 @@ const RUTER: Rute[] = [
   { sti: '/', overskrift: undefined }, // agenda; overskriften er klubbnavnet (env-styrt)
   { sti: '/chat', overskrift: 'Samtalen' },
   { sti: '/samtaler', overskrift: 'Samtaler' },
-  { sti: '/album', overskrift: 'Bildene' },
+  { sti: '/album', overskrift: 'Bilder' },
+  { sti: '/album/chatten', overskrift: 'Fra chatten' },
   { sti: '/arrangoransvar', overskrift: 'Arrangøransvar' },
   { sti: '/tidligere', overskrift: 'Hele historikken' },
   { sti: '/kaaringer', overskrift: 'Hall of Fame' },
