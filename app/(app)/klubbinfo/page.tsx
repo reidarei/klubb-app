@@ -5,6 +5,7 @@ import { getProfil } from '@/lib/auth-cache'
 import Icon, { IkonNavn } from '@/components/ui/Icon'
 import { kanAdministrere } from '@/lib/roller'
 import { naa } from '@/lib/dato'
+import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2, KLUBB_OM_AVSNITT } from '@/lib/klubb-config'
 import { format } from 'date-fns'
@@ -37,7 +38,8 @@ export default async function Klubbinfo() {
       supabase
         .from('klubb_chat')
         .select('id', { count: 'exact', head: true })
-        .not('bilde_url', 'is', null),
+        .not('bilde_url', 'is', null)
+        .not('bilde_url', 'like', CHAT_STICKER_MONSTER),
       // Turer klubben FAKTISK har vært på: passert start_tidspunkt, og med en
       // destinasjon (en tur uten by vises ikke på /stedene og skal ikke telles).
       // Kommende turer holdes utenfor med vilje — tallet svarer på «hvor mange

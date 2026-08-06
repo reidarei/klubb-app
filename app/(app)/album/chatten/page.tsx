@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import Link from 'next/link'
 import ChatBildeGalleri, { type ChatBilde } from '@/components/album/ChatBildeGalleri'
+import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 
 // Bildene fra klubbchatten, samlet som et album (#569).
 //
@@ -20,6 +21,8 @@ export default async function ChatBilderSide() {
     .from('klubb_chat')
     .select('id, bilde_url, opprettet, profiles (navn, bilde_url, rolle)')
     .not('bilde_url', 'is', null)
+    // Messenger-stickers er reaksjoner, ikke bilder — se konstanten.
+    .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
     .order('opprettet', { ascending: false })
 
   // Aggregat-side: en feilet spørring skal ikke vise et falskt tomt album.

@@ -3,6 +3,7 @@ import { getInnloggetBruker } from '@/lib/auth-cache'
 import Link from 'next/link'
 import OpprettAlbumKnapp from '@/components/album/OpprettAlbumKnapp'
 import BildeBunke from '@/components/album/BildeBunke'
+import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 
 // Album-oversikt — alle album i klubben. Standalone-album og arrangement-
 // koblede vises samme sted, sortert nyeste først. Kortet vises som en bunke
@@ -32,6 +33,7 @@ export default async function AlbumOversikt() {
         .from('klubb_chat')
         .select('bilde_url', { count: 'exact' })
         .not('bilde_url', 'is', null)
+        .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
         .order('opprettet', { ascending: false }),
     ])
 

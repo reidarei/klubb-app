@@ -182,3 +182,9 @@ export type TemaValg = typeof TEMA_VALG[number]
 // CustomEvent-navn for klient-side tema-bytte. Dispatches av UtseendeValg,
 // lyttes av TemaSync — bruk konstanten for å unngå magiske strenger.
 export const TEMA_EVENT = 'temaEndret' as const
+
+// Facebook-importen tok med Messenger-stickers som vanlige bilder — «likes»
+// lagret som PNG. De er reaksjoner, ikke bilder noen har delt, og hører ikke
+// hjemme i bildearkivet. Alle ligger under et /sticker-<id>-filnavn.
+// Brukes som PostgREST-mønster: .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
+export const CHAT_STICKER_MONSTER = '%/sticker-%'
