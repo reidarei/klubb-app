@@ -6,6 +6,12 @@
 // Se #366.
 
 import { useEffect } from 'react'
+import {
+  sendFeilBeacon,
+  feilNavn,
+  erChunkFeil,
+  proevChunkReload,
+} from '@/lib/klient-logg'
 
 export default function GlobalError({
   error,
@@ -17,28 +23,23 @@ export default function GlobalError({
   useEffect(() => {
     // sendBeacon er «fire-and-forget» og overlever navigasjon/reload.
     // Beacon sendes til /api/logg-feil som scrubber og lagrer i feil_logg.
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      navigator.sendBeacon(
-        '/api/logg-feil',
-        new Blob(
-          [
-            JSON.stringify({
-              event: 'klient.render.feilet',
-              nivaa: 'fatal',
-              kontekst: {
-                message: error.message,
-                // Stack kan avsløre internt, men er nyttig for feilsøking.
-                // Scrubbes til maks ~4 KB i route-handleren.
-                stack: error.stack?.slice(0, 2000),
-                digest: error.digest,
-                url: typeof window !== 'undefined' ? window.location.href : '',
-              },
-            }),
-          ],
-          { type: 'application/json' },
-        ),
-      )
-    }
+    // Transport + diagnosefelter deles med app/error.tsx og FeilFangst via
+    // lib/klient-logg.ts (#575) — nivået er det eneste som skiller dem.
+    sendFeilBeacon(
+      'klient.render.feilet',
+      error.message,
+      error.stack,
+      {
+        name: feilNavn(error),
+        digest: error.digest,
+        cause: error.cause ? String(error.cause) : undefined,
+      },
+      'fatal',
+    )
+
+    // Samme selvhelbredelse som i app/error.tsx: en manglende kodebit fikses
+    // av fersk HTML, ikke av at brukeren stirrer på «Noe knakk».
+    if (erChunkFeil(error)) proevChunkReload()
   }, [error])
 
   return (

@@ -3,9 +3,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Offentlige API-ruter som ikke krever auth (webhooks, cron)
+  // Offentlige API-ruter som ikke krever auth (webhooks, cron, tilkoblingssjekk)
+  // /api/ping er bevisst uten auth: den skal måle «når serveren fram?», ikke
+  // «er sesjonen gyldig?». Med auth ville en utløpt sesjon blitt rapportert som
+  // nettverksfeil i dra-ned-gesten (#572).
   if (request.nextUrl.pathname.startsWith('/api/github/') ||
-      request.nextUrl.pathname.startsWith('/api/cron/')) {
+      request.nextUrl.pathname.startsWith('/api/cron/') ||
+      request.nextUrl.pathname === '/api/ping') {
     return NextResponse.next()
   }
 
@@ -48,5 +52,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-|api/cron/|api/github/|.*\\.jpg|.*\\.png|.*\\.svg|.*\\.webp).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-|api/cron/|api/github/|api/ping|.*\\.jpg|.*\\.png|.*\\.svg|.*\\.webp).*)'],
 }

@@ -79,6 +79,16 @@ const KONTEKST_WHITELIST = new Set([
   'stack',
   'digest',
   'url',
+  // Diagnosefelter fra lib/klient-logg.ts (#575). Ingen av dem er
+  // bruker-identifiserende: de beskriver klienten og feilen, ikke personen.
+  // Legger du til et felt der, må det inn her — ellers strippes det stille.
+  'name', // Error-klassenavn: TypeError / ChunkLoadError / Error
+  'cause', // underliggende feil når en wrapper har kastet på nytt
+  'appversjon', // hvilken bundle klienten faktisk kjørte
+  'online', // navigator.onLine — skiller nettverksfeil fra kodefeil
+  'standalone', // PWA eller vanlig nettleserfane
+  'nettverk', // effectiveType (4g/3g/…), mangler i Safari
+  'ressurs', // URL-en til en <script>/<link> som ikke lastet
 ])
 
 // Grenser for klient-strengfelter. Rå error-messages/stacks kan inneholde
@@ -89,7 +99,14 @@ const STACK_MAKS_BYTES = 2048
 
 function saniterVerdi(nokkel: string, verdi: unknown): unknown {
   if (typeof verdi !== 'string') return verdi
-  if (nokkel === 'message' || nokkel === 'digest') {
+  // `cause` og `name` trunkeres som message: de er korte i praksis, men er
+  // fritekst fra et error-objekt og skal ikke kunne blåse opp raden (#575).
+  if (
+    nokkel === 'message' ||
+    nokkel === 'digest' ||
+    nokkel === 'cause' ||
+    nokkel === 'name'
+  ) {
     return verdi.length > MESSAGE_MAKS_TEGN
       ? verdi.slice(0, MESSAGE_MAKS_TEGN) + '…'
       : verdi
@@ -112,6 +129,17 @@ function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     try {
       const u = new URL(verdi, 'https://x.invalid')
       return u.pathname
+    } catch {
+      return verdi.slice(0, MESSAGE_MAKS_TEGN)
+    }
+  }
+  if (nokkel === 'ressurs') {
+    // Som url, men origin beholdes: en asset som ikke lastet kan ligge på et
+    // annet domene (R2), og «hvilken host svarte ikke» er halve svaret. Query
+    // strippes fortsatt — signerte URL-er kan bære token. (#575)
+    try {
+      const u = new URL(verdi, 'https://x.invalid')
+      return u.origin === 'https://x.invalid' ? u.pathname : u.origin + u.pathname
     } catch {
       return verdi.slice(0, MESSAGE_MAKS_TEGN)
     }

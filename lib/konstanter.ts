@@ -146,6 +146,14 @@ export const LOGG_KONTEKST_MAKS_KB = 4
 // Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
 
+// Sperrevindu mellom to automatiske reloads etter en chunk-feil (#575).
+// Klienten reloader for å hente fersk HTML når den mangler en kodebit, men
+// hvis den ferske HTML-en OGSÅ feiler ville vi reloadet i evig løkke. Andre
+// forsøk innen vinduet gir feilsiden i stedet — en ærlig blindvei framfor en
+// usynlig løkke. 30 s er godt over en normal sidelast og kort nok til at et
+// ekte nytt tilfelle senere i økten fortsatt selvhelbredes.
+export const CHUNK_RELOAD_SPERRE_MS = 30_000
+
 // Hard cap på antall rader sjekk-klientfeil-cronet henter for å regne ut
 // topp 3 event-navn i alarmteksten (#496). Dedup-indeksen i feil_logg
 // begrenser allerede verste konsensfall per (profil/event/minutt), men
@@ -188,3 +196,10 @@ export const TEMA_EVENT = 'temaEndret' as const
 // hjemme i bildearkivet. Alle ligger under et /sticker-<id>-filnavn.
 // Brukes som PostgREST-mønster: .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
 export const CHAT_STICKER_MONSTER = '%/sticker-%'
+
+// Hvor lenge dra-ned-for-oppdater venter på /api/ping før den gir opp og viser
+// «Oppdatering feilet» (#572). Sjenerøs med vilje: på ustabilt mobilnett er en
+// treg forbindelse ikke det samme som ingen forbindelse, og en falsk «feilet»
+// er verre enn å vente et sekund til. Endepunktet gjør null arbeid, så alt
+// over dette er reelt tapt kontakt.
+export const DRA_NED_PING_TIMEOUT_MS = 6000

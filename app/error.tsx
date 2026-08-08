@@ -1,6 +1,12 @@
 'use client'
 
 import { useEffect } from 'react'
+import {
+  sendFeilBeacon,
+  feilNavn,
+  erChunkFeil,
+  proevChunkReload,
+} from '@/lib/klient-logg'
 
 // Fast norsk brødtekst — vi rendrer ALDRI error.message til brukeren.
 // Next 15 maskerer meldinger som stammer fra server components i prod og
@@ -20,26 +26,22 @@ export default function Error({
 }) {
   useEffect(() => {
     // Beacon til /api/logg-feil — scrubbes og lagres i feil_logg. Se #366.
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      navigator.sendBeacon(
-        '/api/logg-feil',
-        new Blob(
-          [
-            JSON.stringify({
-              event: 'klient.render.feilet',
-              nivaa: 'error',
-              kontekst: {
-                message: error.message,
-                stack: error.stack?.slice(0, 2000),
-                digest: error.digest,
-                url: typeof window !== 'undefined' ? window.location.href : '',
-              },
-            }),
-          ],
-          { type: 'application/json' },
-        ),
-      )
-    }
+    // Transporten og diagnosefeltene bor i lib/klient-logg.ts (#575), slik at
+    // denne boundaryen, global-error og FeilFangst rapporterer likt. Da er
+    // radene faktisk sammenlignbare når man leter etter et mønster.
+    sendFeilBeacon('klient.render.feilet', error.message, error.stack, {
+      name: feilNavn(error),
+      digest: error.digest,
+      // `cause` bærer ofte den ekte underliggende feilen når en wrapper har
+      // kastet på nytt — uten den ser vi bare ytterste lag.
+      cause: error.cause ? String(error.cause) : undefined,
+    })
+
+    // Mangler nettleseren en kodebit fordi klienten kjører en gammel bundle,
+    // er riktig svar å hente fersk HTML — ikke å vise «Noe gikk galt» for noe
+    // én reload fikser. proevChunkReload() krever at enheten er online og
+    // bremser gjentatte forsøk; returnerer den false, står feilsiden igjen.
+    if (erChunkFeil(error)) proevChunkReload()
   }, [error])
 
   return (
