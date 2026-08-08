@@ -107,6 +107,26 @@ export default function OmAppen() {
         </Avsnitt>
       </section>
 
+      {/* Bli med og utvikle */}
+      <section style={{ marginBottom: 30 }}>
+        <SectionLabel>Bli med og utvikle</SectionLabel>
+        <Avsnitt overskrift="Appen er vår egen">
+          Hele appen er skrevet fra bunnen for klubbens behov, og koden
+          ligger i et eget GitHub-repo. Det betyr at alt som mangler, kan
+          bygges — det er ingen leverandør som må spørres først.
+        </Avsnitt>
+        <Avsnitt overskrift="Sånn bidrar du">
+          Endringer går inn som pull request på GitHub: du lager en egen
+          branch, gjør endringen der, og sender den inn. Da blir den lest
+          gjennom før den merges og går live for gutta.
+        </Avsnitt>
+        <Avsnitt overskrift="Få tilgang til repoet" siste>
+          Repoet er privat, så du må inviteres inn. Ta kontakt med en av
+          admin-ene i klubben, så ordner vi tilgang. Har du aldri kodet før
+          men vil prøve — si fra likevel, terskelen er lav.
+        </Avsnitt>
+      </section>
+
       {/* Funn / spørsmål */}
       <section style={{ marginBottom: 30 }}>
         <SectionLabel>Spørsmål eller forslag?</SectionLabel>
