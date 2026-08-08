@@ -141,6 +141,27 @@ Det styres av bryteren **«Feilvarsler»** i medlemsredigering, som admin setter
 
 `varsel_logg` er altså ikke en feillogg. Den brukes som bevis på at et varsel faktisk gikk ut, og en opprydding der ville ødelagt muligheten til å prøve på nytt.
 
+### Hver feil skal kunne diagnostiseres alene
+
+En feilrad som ikke lar seg tolke er nesten like ille som ingen rad. Den typiske varianten er en tekst som `"Load failed"` uten stakkspor og uten feilkode: den kan like gjerne være et tapt nettverksøyeblikk som en app som mangler en kodebit, og det er ingen måte å avgjøre hvilken i etterkant.
+
+Derfor følger disse opplysningene med på hver eneste feil fra nettleseren, uten at kallstedet må huske noe:
+
+| Felt | Hva det svarer på |
+|---|---|
+| `name` | Hvilken *type* feil det var — ofte det eneste som skiller feiltypene når stakksporet mangler |
+| `appversjon` | Hvilken utgave av appen nettleseren faktisk kjørte. En gammel verdi mot en ny server betyr at brukeren satt på utdatert kode |
+| `online` | Om enheten hadde nett i det hele tatt. Skiller nettverksfeil fra kodefeil |
+| `standalone` | Om det skjedde i den installerte appen eller i en vanlig nettleserfane |
+| `nettverk` | Forbindelsens type (4g, 3g …) der nettleseren oppgir det |
+| `ressurs` | Adressen til en fil som ikke lot seg laste |
+
+Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `app/api/logg-feil/route.ts` — et felt som ikke står der, forsvinner stille.
+
+**Filer som ikke lastes, fanges særskilt.** Når en kodefil ikke lar seg hente, meldes det fra på selve HTML-elementet og ikke på siden som helhet. En vanlig feillytter ser det derfor aldri. `FeilFangst` lytter i tillegg i den fasen hvor slike meldinger passerer, slik at filnavnet havner i loggen.
+
+**Manglende kodebit retter seg selv.** Skjer det fordi appen kjører en utdatert utgave, henter den fersk versjon i stedet for å vise feilsiden — én gang, og bare når enheten har nett. Begge sperrene er der med vilje: uten dem ville vi enten sendt folk uten dekning inn i en omlasting som ikke kan lykkes, eller inn i en løkke som aldri stopper.
+
 ### Sentry er sekundærkanalen
 
 Sentry viser stakksporet og grupperer like feil, og er derfor nyttig når noe skal feilsøkes. Men den forutsetter at noen leser e-post. Døgnalarmen er primærkanalen, siden den kommer som varsel på telefonen.
