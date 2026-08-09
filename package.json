@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "stamp-versjon": "node scripts/stamp-versjon.mjs",
+    "verifiser-deploy": "node --env-file-if-exists=.env.local scripts/verifiser-deploy.mjs",
     "sjekk-miljo": "node --env-file=.env.local scripts/sjekk-miljo.mjs"
   },
   "dependencies": {

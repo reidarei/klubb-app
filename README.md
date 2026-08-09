@@ -299,6 +299,13 @@ I CI trenger du ikke sette opp noe: `.github/workflows/pr-check.yml` starter sin
 
 **Versjon:** `lib/versjon.json` stampes automatisk via `npm run stamp-versjon` før hver commit — oppdaterer også `public/sw.js` for å invalidere service-worker-cache.
 
+**Verifiser deploy:** `npm run verifiser-deploy` poller prod-URL-en og venter til `CACHE_VERSION` i `/sw.js` matcher `lib/versjon.json`, sånn at du vet at Vercel-deployen faktisk nådde ut. Nyttig etter en merge for å fange stille deploy-feil:
+```bash
+npm run verifiser-deploy                      # leser NEXT_PUBLIC_BASE_URL fra .env.local
+npm run verifiser-deploy https://min-klubb.no # eller som argument
+```
+Exit 0 = vellykket, exit 1 = timeout eller feil versjon.
+
 **Cron:** GitHub Actions kjører daglig påminnelser og error-monitoring:
 - `.github/workflows/paaminne.yml` → `/api/cron/paaminne` kl 06:00 UTC. Sender påminnelse-varsler for kommende arrangementer.
 - `.github/workflows/sjekk-klientfeil.yml` → `/api/cron/sjekk-klientfeil` kl 05:00 UTC. Sjekker om det er > 5 ubehandlede feil i `feil_logg` siste døgn; varsler admins hvis ja.
