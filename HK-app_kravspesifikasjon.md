@@ -4,7 +4,7 @@
 
 ## Kontekst
 
-Klubben er en gruppe på ca. 17 venner som bruker Facebook til å
+Klubben er en gruppe på ca. 15–20 venner som bruker Facebook til å
 koordinere aktivitetene.
 
 Det er hovedsakelig tre typer arrangementer:
@@ -39,7 +39,7 @@ Appen har to roller:
 - Kan redigere og slette **alle** arrangementer (ikke bare egne)
 - Er også medlemmer og kan gjøre alt en medlem kan
 
-### Medlem (alle ~17)
+### Medlem (alle ~15–20)
 - Oppretter egne arrangementer (møte/tur)
 - Redigerer og sletter **egne** arrangementer
 - Melder seg på (Ja/Nei/Kanskje) arrangementer
@@ -50,7 +50,7 @@ selvregistrering.
 
 ## Brukere
 
-17 medlemmer, 2 av dem admins. Antatte karakteristika:
+15–20 medlemmer, 2 av dem admins. Antatte karakteristika:
 - Voksne menn, variert teknisk kompetanse → UI må være enkelt og tilgivende
 - Bruker appen **mest på mobil, når de er bedt om å svare på et arrangement, eller skal sjekke informasjon om et arrangement**
 - Lav frekvens — sannsynligvis noen ganger per måned, ikke daglig

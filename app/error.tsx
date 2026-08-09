@@ -12,7 +12,7 @@ import {
 // Next 15 maskerer meldinger som stammer fra server components i prod og
 // erstatter dem med en engelsk boilerplate («An error occurred in the Server
 // Components render… omitted in production builds…»). Den strengen sa
-// ingenting til de ~17 som bruker appen. Selve meldingen er uansett ikke tapt:
+// ingenting til de 15–20 som bruker appen. Selve meldingen er uansett ikke tapt:
 // useEffect-beaconen under sender message + stack + digest til feil_logg.
 export const FEIL_BRODTEKST =
   'Vi klarte ikke hente dataene. Prøv igjen — hjelper det ikke, si fra til Reidar.'

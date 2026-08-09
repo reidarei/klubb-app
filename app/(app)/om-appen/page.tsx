@@ -76,8 +76,8 @@ export default function OmAppen() {
         </Avsnitt>
         <Avsnitt overskrift="Hvorfor det ikke er mer enn dette" siste>
           End-to-end-kryptering (à la Signal/WhatsApp) og tofaktor er
-          vurdert. Gevinsten er liten for en lukket gruppe på 17 venner
-          som kjenner hverandre — de fleste reelle truslene fikses uansett
+          vurdert. Gevinsten er liten for en lukket gruppe på 15–20
+          venner som kjenner hverandre — de fleste reelle truslene fikses uansett
           ikke av disse tiltakene, og kostnaden i daglig bruk er
           merkbar. Holdes derfor på dagens nivå.
         </Avsnitt>

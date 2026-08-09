@@ -50,7 +50,7 @@ export default async function FondSide() {
       .select('*, profiles(navn, visningsnavn, bilde_url, rolle)')
       .order('dato', { ascending: false }),
     supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
-    // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: ~17 personer
+    // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: 15–20 personer
     // × ~12 bevegelser er neglisjerbart i payload, og alternativet ville lagt en
     // nettverksrunde inn i en interaksjon som skal føles umiddelbar.
     supabase

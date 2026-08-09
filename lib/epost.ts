@@ -31,11 +31,11 @@ export async function sendEpost({ til, emne, html }: { til: string; emne: string
 const RESEND_BATCH_MAKS = 100
 
 // Batch-sending mot Resend. Valgt fordi enkelt-sending per mottaker (N kall til
-// /emails) traff Resends rate-limit på 10 req/s når sendVarsel sendte til alle ~16
+// /emails) traff Resends rate-limit på 10 req/s når sendVarsel sendte til alle 15–20
 // medlemmer parallelt (se #478) — batch-endepunktet lar N e-poster telle som ett
 // request. Merk: attachments og scheduled_at støttes ikke i batch (ikke i bruk hos
 // oss i dag), og Resend kan avvise HELE batchen hvis ett element er ugyldig — det
-// øker blast-radius sammenlignet med enkelt-sending, men akseptert for våre ~16
+// øker blast-radius sammenlignet med enkelt-sending, men akseptert for våre 15–20
 // admin-opprettede adresser.
 export async function sendEpostBatch(eposter: { til: string; emne: string; html: string }[]) {
   if (eposter.length === 0) return

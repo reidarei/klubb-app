@@ -44,7 +44,7 @@ Ruta tar imot Web Vitals-målinger (LCP, INP, CLS, FCP, TTFB) fra klientene. Den
 
 ## 3. Bevisst eksponering: profil-data
 
-Alle innloggede medlemmer kan lese alle profiler — navn, e-post, rolle, profilbilde. Dette er et bevisst valg for en lukket single-tenant-klubb med ~17 brukere som kjenner hverandre. Det finnes ingen offentlige flater: `anon`-rollen har ikke SELECT-policy på `profiles`.
+Alle innloggede medlemmer kan lese alle profiler — navn, e-post, rolle, profilbilde. Dette er et bevisst valg for en lukket single-tenant-klubb med ~15–20 brukere som kjenner hverandre. Det finnes ingen offentlige flater: `anon`-rollen har ikke SELECT-policy på `profiles`.
 
 ---
 
@@ -52,7 +52,7 @@ Alle innloggede medlemmer kan lese alle profiler — navn, e-post, rolle, profil
 
 Supabase Auth har innebygd rate-limiting på innlogging og passordtilbakestilling (konfigurerbart i Supabase Dashboard). Ingen egne rate-limiting-tiltak er innført utover det.
 
-**Vurdering:** Appen har ~17 brukere og ingen selvregistrering. Alle API-ruter som kan gjøre ekte arbeid er beskyttet enten av middleware-auth (Supabase session) eller dedikerte secrets (se §2). Risikoen for misbruk fra ikke-innloggede aktører er svært lav. Ekstra rate-limiting er ikke innført og anses som unødvendig på dette brukervolumet.
+**Vurdering:** Appen har ~15–20 brukere og ingen selvregistrering. Alle API-ruter som kan gjøre ekte arbeid er beskyttet enten av middleware-auth (Supabase session) eller dedikerte secrets (se §2). Risikoen for misbruk fra ikke-innloggede aktører er svært lav. Ekstra rate-limiting er ikke innført og anses som unødvendig på dette brukervolumet.
 
 ---
 

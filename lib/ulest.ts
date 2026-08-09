@@ -9,7 +9,7 @@ import { logg } from '@/lib/logg'
  * spare en ekstra runde mot `profiles` — kallstedet har allerede lest raden.
  *
  * Bruker eksisterende indeks på `klubb_chat (opprettet desc)` (migrasjon 038).
- * Ingen ny indeks lagt til — ~17 brukere og lav volum gjør det unødvendig.
+ * Ingen ny indeks lagt til — 15–20 brukere og lav volum gjør det unødvendig.
  *
  * `select('id').limit(1)` i stedet for `count: 'exact', head: true` (#504):
  * vi returnerer uansett bare `count > 0`, men `count: 'exact'` tvinger

@@ -13,9 +13,9 @@
 |---|----------|-----------|-------------|
 | T1 | Rollemodell i database | `profiles.rolle` enum (`admin` / `medlem`) | Enklest. RLS-policyer sjekker `rolle` direkte. Ingen ekstra tabell. |
 | T2 | Versjonshistorikk vedtekter | Full historikk via `vedtekter_versjoner`-tabell | UC-7.2 krever vedtaksdato og endringsnotat per versjon. |
-| T3 | E-post-tjeneste | **Resend** | 100 gratis e-post/dag, moderne API, god Next.js-integrasjon. Mer enn nok for 17 brukere. |
+| T3 | E-post-tjeneste | **Resend** | 100 gratis e-post/dag, moderne API, god Next.js-integrasjon. Mer enn nok for 15–20 brukere. |
 | T4 | Triggering av påminnelser | Vercel Cron → `/api/cron/paaminne` | Daglig cron kl. 06:00 UTC. Datobasert sjekk mot norsk tid via `norskDatoNaa()`. |
-| T5 | Datamodell for turer | Én `arrangementer`-tabell med `type`-discriminator + nullable tur-felter | 17 brukere, enkel modell. Unngår JOIN for de vanligste spørringene. |
+| T5 | Datamodell for turer | Én `arrangementer`-tabell med `type`-discriminator + nullable tur-felter | 15–20 brukere, enkel modell. Unngår JOIN for de vanligste spørringene. |
 | T6 | Datamodell for kåringer | `kaaringer` + `kaaring_vinnere` (junction). Vinner er enten profil eller arrangement. | V1 er manuell registrering. `kaaring_stemmer` legges til i V2. |
 | T7 | Editor for vedtekter | Markdown med preview | Balanse mellom formatering og enkelhet. Rendres med `react-markdown`. |
 | T8 | Web Push-oppsett | VAPID-nøkler i env, `push_subscriptions`-tabell, service worker i `public/` | Standard Web Push-arkitektur. Service worker håndterer push-events og klikk. |

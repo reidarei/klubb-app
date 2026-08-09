@@ -96,8 +96,8 @@ describe('responstid – bursdagsberegning', () => {
     })
   }
 
-  it('beregner bursdager for 17 brukere x 48 måneder under 5ms', () => {
-    const profiler = Array.from({ length: 17 }, (_, i) => ({
+  it('beregner bursdager for 18 brukere x 48 måneder under 5ms', () => {
+    const profiler = Array.from({ length: 18 }, (_, i) => ({
       id: `p${i}`,
       visningsnavn: `Bruker ${i}`,
       fodselsdato: `199${i % 10}-${String((i % 12) + 1).padStart(2, '0')}-15`,
