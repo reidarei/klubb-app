@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
+import Icon from '@/components/ui/Icon'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_NAVN } from '@/lib/klubb-config'
 
@@ -107,26 +108,6 @@ export default function OmAppen() {
         </Avsnitt>
       </section>
 
-      {/* Bli med og utvikle */}
-      <section style={{ marginBottom: 30 }}>
-        <SectionLabel>Bli med og utvikle</SectionLabel>
-        <Avsnitt overskrift="Appen er vår egen">
-          Hele appen er skrevet fra bunnen for klubbens behov, og koden
-          ligger i et eget GitHub-repo. Det betyr at alt som mangler, kan
-          bygges — det er ingen leverandør som må spørres først.
-        </Avsnitt>
-        <Avsnitt overskrift="Sånn bidrar du">
-          Endringer går inn som pull request på GitHub: du lager en egen
-          branch, gjør endringen der, og sender den inn. Da blir den lest
-          gjennom før den merges og går live for gutta.
-        </Avsnitt>
-        <Avsnitt overskrift="Få tilgang til repoet" siste>
-          Repoet er privat, så du må inviteres inn. Ta kontakt med en av
-          admin-ene i klubben, så ordner vi tilgang. Har du aldri kodet før
-          men vil prøve — si fra likevel, terskelen er lav.
-        </Avsnitt>
-      </section>
-
       {/* Funn / spørsmål */}
       <section style={{ marginBottom: 30 }}>
         <SectionLabel>Spørsmål eller forslag?</SectionLabel>
@@ -162,6 +143,78 @@ export default function OmAppen() {
           Send innspill
         </Link>
       </section>
+
+      {/* Apropos — bevisst brutt ut av «Om»-stilen (SectionLabel + Avsnitt-liste)
+       * og gitt eget kort: dette er en oppfordring til gutta, ikke informasjon
+       * om appen. Se #573. */}
+      <aside
+        style={{
+          marginTop: 34,
+          padding: '24px 22px 26px',
+          background:
+            'radial-gradient(ellipse at top left, var(--accent-soft), transparent 62%), var(--bg-elevated)',
+          border: '0.5px solid var(--border-strong)',
+          borderRadius: 'var(--radius)',
+          backdropFilter: 'var(--blur-card)',
+          WebkitBackdropFilter: 'var(--blur-card)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--accent)',
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            marginBottom: 12,
+          }}
+        >
+          <Icon name="sparkle" size={13} color="var(--accent)" strokeWidth={1.8} />
+          Apropos
+        </div>
+        <h2
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 26,
+            fontWeight: 500,
+            letterSpacing: '-0.4px',
+            lineHeight: 1.15,
+            margin: 0,
+            marginBottom: 12,
+            color: 'var(--text-primary)',
+          }}
+        >
+          Vil du være med og bygge?
+        </h2>
+        <div
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 14,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.6,
+          }}
+        >
+          <p style={{ margin: 0, marginBottom: 12 }}>
+            Appen er skrevet fra bunnen for klubbens behov, og koden ligger i
+            et eget GitHub-repo. Mangler det noe, er det ingen leverandør som
+            må spørres først — det er bare å bygge det.
+          </p>
+          <p style={{ margin: 0, marginBottom: 12 }}>
+            Bidrag går inn som pull request: du lager en egen branch, gjør
+            endringen der, og sender den inn til gjennomlesing før den merges
+            og går live for gutta.
+          </p>
+          <p style={{ margin: 0 }}>
+            Repoet er privat, så du må inviteres inn. Ta kontakt med en av
+            admin-ene, så ordner vi tilgang. Har du aldri kodet før, men vil
+            prøve — si fra likevel. Terskelen er lav.
+          </p>
+        </div>
+      </aside>
     </div>
   )
 }
