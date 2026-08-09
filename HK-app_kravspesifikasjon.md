@@ -290,7 +290,7 @@ gruppe om gangen.
   (f.eks. `rolle: 'medlem' | 'admin'`) eller gjennom en egen tabell/claim.
 - **Persistent innlogging** — brukere skal sjelden måtte logge inn på nytt
 - **Lav drift** — klubben skal selv kunne vedlikeholde dette med minimal innsats
-- **Liten belastning** — 17 brukere, ved enkelte anledninger vil alle være aktive samtidig (avstemminger) ellers lite bruk, ingen skaleringskrav
+- **Liten belastning** — 15–20 brukere, ved enkelte anledninger vil alle være aktive samtidig (avstemminger) ellers lite bruk, ingen skaleringskrav
   utover gratis-tier Supabase
 - **Reaksjonstid** — appen skal oppleves rask. Endringer skal ikke øke responstiden for brukeren.
 - **E-post-leveranse** — må være pålitelig siden e-post er primærvarsel-fallback
@@ -307,7 +307,7 @@ gruppe om gangen.
 | 6 | Påmeldingsvalg | **Ja / Nei / Kanskje** |
 | 7 | Påmeldingsfrist | **Nei, alltid åpen** frem til arrangementets start |
 | 8 | Påminnelser | **Ja, 7 dager før og dagen før til alle** medlemmer |
-| 9 | Roller | **2 admins + ~15 medlemmer.** RLS håndhever tilgang. |
+| 9 | Roller | **2 med admin-rettigheter + resten medlemmer.** RLS håndhever tilgang. |
 | 10 | Vedtekter | **Kun admins** kan redigere. Alle kan lese. |
 | 11 | Redigere arrangement | **Oppretter + admins** kan redigere/slette. |
 | 12 | Medlemsopprettelse | **Via appen.** Admin oppretter og administrerer medlemmer fra en admin-side i appen. |
