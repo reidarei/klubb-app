@@ -24,20 +24,28 @@ export type Rettigheter = {
   harGulGloed: boolean
   /** Løser tiebreak når en kåringspoll ender uavgjort */
   loeserTiebreak: boolean
+  /** Godkjenner/avslår forespørsler om dagstilgang til passinformasjon */
+  godkjennerPassTilgang: boolean
 }
 
+// Forskjellen mellom admin og generalsekretær er nøyaktig tre rettigheter:
+// harGulGloed, loeserTiebreak og godkjennerPassTilgang (pluss tittelen). Alt
+// annet — hele CRUD-flaten, innstillinger, fond, medlemsadministrasjon — er
+// identisk. Pinnet i __tests__/roller.test.ts.
 export const ROLLER: Record<Rolle, Rettigheter> = {
   medlem: {
     tittel: 'Medlem',
     kanAdministrere: false,
     harGulGloed: false,
     loeserTiebreak: false,
+    godkjennerPassTilgang: false,
   },
   admin: {
     tittel: 'Admin',
     kanAdministrere: true,
     harGulGloed: false,
     loeserTiebreak: false,
+    godkjennerPassTilgang: false,
   },
   generalsekretaer: {
     // Tittel hentes fra klubb-config slik at den kan overstyres via env-var
@@ -46,6 +54,7 @@ export const ROLLER: Record<Rolle, Rettigheter> = {
     kanAdministrere: true,
     harGulGloed: true,
     loeserTiebreak: true,
+    godkjennerPassTilgang: true,
   },
 }
 
@@ -75,6 +84,9 @@ export const harGulGloed = (rolle: string | null | undefined): boolean =>
 
 export const loeserTiebreak = (rolle: string | null | undefined): boolean =>
   rettigheterFor(rolle).loeserTiebreak
+
+export const godkjennerPassTilgang = (rolle: string | null | undefined): boolean =>
+  rettigheterFor(rolle).godkjennerPassTilgang
 
 export const tittelFor = (rolle: string | null | undefined): string =>
   rettigheterFor(rolle).tittel

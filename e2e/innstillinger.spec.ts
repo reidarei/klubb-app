@@ -13,6 +13,14 @@ import { harTestCreds, loggInn, SEED_PASSORD } from './helpers/auth'
 test.describe('/innstillinger — admin-only dashboard (#485)', () => {
   test.skip(!harTestCreds(), 'TEST_EPOST/TEST_PASSORD mangler — se e2e/README.md og docs/test-instans.md')
 
+  // Motstykket til kort-sjekken under: en vanlig admin skal ikke bare mangle
+  // inngangen, men også bli sendt bort om han skriver URL-en direkte (#582).
+  test('pass-godkjenninger sender vanlig admin tilbake til /innstillinger', async ({ page }) => {
+    await page.goto('/innstillinger/pass-godkjenninger')
+    await expect(page).toHaveURL(/\/innstillinger$/)
+    await expect(page.getByRole('heading', { name: 'Innstillinger' })).toBeVisible()
+  })
+
   test('laster for admin og viser nøkkeltall-kortene', async ({ page }) => {
     await page.goto('/innstillinger')
 
@@ -21,7 +29,10 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
     await expect(page.getByText('Varsler — kontrollpanel')).toBeVisible()
     await expect(page.getByText('Faste arrangementer')).toBeVisible()
     await expect(page.getByText('Kåringer')).toBeVisible()
-    await expect(page.getByText('Pass-godkjenninger')).toBeVisible()
+    // Pass-godkjenninger er generalsekretær-only (#582), og testbrukeren er
+    // vanlig admin. Kortet skal derfor være borte — pinner tilgangsregelen
+    // fra UI-siden, ikke bare i RLS.
+    await expect(page.getByText('Pass-godkjenninger')).toHaveCount(0)
     await expect(page.getByText('Varselhistorikk')).toBeVisible()
     // «Bruk» og «Ytelse» — begge kjører aktivitet_dag/aktivitet_uke/
     // vitals_logg-spørringer (#484). Skal rendre uten å kaste selv når

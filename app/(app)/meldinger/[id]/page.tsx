@@ -269,7 +269,6 @@ export default async function MeldingDetalj({
         <Chat
           scope={{ type: 'melding', meldingId: melding.id }}
           brukerId={user!.id}
-          erAdmin={erAdmin}
           initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
           profiler={chatProfiler ?? []}
         />

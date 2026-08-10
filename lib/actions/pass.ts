@@ -5,7 +5,7 @@ import { sendVarsel } from '@/lib/varsler'
 import { BASE_URL } from '@/lib/config'
 import { naa } from '@/lib/dato'
 import { PASS_TILGANG_TIMER } from '@/lib/konstanter'
-import { ensureInnlogget } from '@/lib/auth'
+import { ensureInnlogget, ensureGodkjennerPassTilgang } from '@/lib/auth'
 import { logg } from '@/lib/logg'
 
 /**
@@ -112,7 +112,8 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
  * gyldig_til til nå + 24 timer. Sender varsel til søkeren.
  */
 export async function godkjennPassTilgang(forespørselId: string) {
-  const { supabase, user } = await ensureInnlogget()
+  // Kun generalsekretær — ikke enhver admin. Se ensureGodkjennerPassTilgang().
+  const { supabase, user } = await ensureGodkjennerPassTilgang()
 
   const naDate = new Date()
   const utloper = new Date(naDate.getTime() + PASS_TILGANG_TIMER * 60 * 60 * 1000)
@@ -178,7 +179,8 @@ export async function godkjennPassTilgang(forespørselId: string) {
 }
 
 export async function avslaaPassTilgang(forespørselId: string) {
-  const { supabase, user } = await ensureInnlogget()
+  // Kun generalsekretær — avslagsteksten under sier det, og nå stemmer det.
+  const { supabase, user } = await ensureGodkjennerPassTilgang()
 
   const { data: oppdatert, error } = await supabase
     .from('pass_tilgang_forespørsel')

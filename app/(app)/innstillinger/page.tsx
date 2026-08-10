@@ -13,7 +13,7 @@ import KaaringMalAdmin from '@/components/KaaringMalAdmin'
 import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
 import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
-import { kanAdministrere, rollerMed } from '@/lib/roller'
+import { kanAdministrere, rollerMed, godkjennerPassTilgang } from '@/lib/roller'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
 import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { osloUkestart } from '@/lib/dato'
@@ -395,7 +395,9 @@ export default async function Innstillinger() {
         <KaaringMalAdmin maler={kaaringmaler ?? []} />
       </InnstillingsKort>
 
-      {/* Pass-godkjenninger */}
+      {/* Pass-godkjenninger — kun generalsekretær (#582). Vanlige admins ser
+          ikke kortet i det hele tatt, siden de heller ikke kan avgjøre. */}
+      {godkjennerPassTilgang(profil?.rolle) && (
       <InnstillingsKort
         tittel="Pass-godkjenninger"
         oppsummering={
@@ -458,6 +460,7 @@ export default async function Innstillinger() {
           Åpne forespørsel-side →
         </Link>
       </InnstillingsKort>
+      )}
 
       {/* Ønsker fra brukerne */}
       {(() => {

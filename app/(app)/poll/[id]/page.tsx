@@ -254,7 +254,6 @@ export default async function PollDetalj({
         <Chat
           scope={{ type: 'poll', pollId: poll.id }}
           brukerId={user!.id}
-          erAdmin={erAdmin}
           initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
           profiler={chatProfiler ?? []}
         />
@@ -526,7 +525,6 @@ function KaaringVisning({
         <Chat
           scope={{ type: 'poll', pollId: poll.id }}
           brukerId={userId}
-          erAdmin={erAdmin}
           initialMeldinger={[...chatMeldinger].reverse()}
           profiler={chatProfiler}
         />

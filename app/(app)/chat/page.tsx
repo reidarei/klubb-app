@@ -51,7 +51,6 @@ export default async function KlubbChatSide() {
     logg.feil('ulest.marker_chat_sett.feilet', err).catch(() => {}),
   )
 
-  const erAdmin = kanAdministrere(profil?.rolle)
   const initialMeldinger = [...(siste ?? [])].reverse()
 
   return (
@@ -93,7 +92,6 @@ export default async function KlubbChatSide() {
       <Chat
         scope={{ type: 'klubb' }}
         brukerId={user!.id}
-        erAdmin={erAdmin}
         initialMeldinger={initialMeldinger}
         profiler={profiler ?? []}
         visSeksjonsLabel={false}

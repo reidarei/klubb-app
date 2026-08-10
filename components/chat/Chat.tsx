@@ -49,7 +49,6 @@ export type ChatMelding = {
 type Props = {
   scope: ChatScope
   brukerId: string
-  erAdmin: boolean
   initialMeldinger: ChatMelding[]
   profiler: ChatProfil[]
   /** Hvis true: sett en overskrift ("Samtale") over chat-området */
@@ -63,7 +62,6 @@ type Props = {
 export default function Chat({
   scope,
   brukerId,
-  erAdmin,
   initialMeldinger,
   profiler,
   visSeksjonsLabel = true,
@@ -434,9 +432,9 @@ export default function Chat({
           // alltid grupperingen så første melding på ny dag alltid viser header.
           const erFortsettelse = !visDatoSkille && forrige?.profil_id === m.profil_id
           const erEgen = m.profil_id === brukerId
-          // Slett-knapp: kun egen-eier. Admin har ingen UI-snarvei for å
-          // slette andres meldinger — om noe må fjernes må admin gjøre det
-          // direkte i DB. Gjelder også FB-importerte: sendte du meldingen
+          // Slett-knapp: kun egen-eier. Admin har verken knapp eller
+          // RLS-rett til å slette andres chat (migrasjon 069, gjenopprettet
+          // i 132) — må det bort, gjøres det i Supabase-dashbordet. Gjelder også FB-importerte: sendte du meldingen
           // (i appen eller i Messenger som senere ble importert), kan du
           // slette den her.
           const kanSlette = erEgen

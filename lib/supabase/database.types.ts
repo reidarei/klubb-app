@@ -628,6 +628,42 @@ export type Database = {
         }
         Relationships: []
       }
+      fond_navn_alias: {
+        Row: {
+          api_navn: string
+          opprettet: string
+          opprettet_av: string
+          profil_id: string
+        }
+        Insert: {
+          api_navn: string
+          opprettet?: string
+          opprettet_av: string
+          profil_id: string
+        }
+        Update: {
+          api_navn?: string
+          opprettet?: string
+          opprettet_av?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_navn_alias_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fond_navn_alias_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fond_verdi_historikk: {
         Row: {
           endret_av: string | null

@@ -1,5 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
-import { kanAdministrere, loeserTiebreak } from '@/lib/roller'
+import { kanAdministrere, loeserTiebreak, godkjennerPassTilgang } from '@/lib/roller'
 
 // Sentral autorisasjons-helper for server actions og route handlers.
 // Bruk denne i stedet for å duplisere "hent user → hent profil → sjekk
@@ -54,6 +54,33 @@ export async function ensureLoeserTiebreak() {
   // Fail closed — se begrunnelse i ensureAdmin() over.
   if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
   if (!loeserTiebreak(profil?.rolle)) throw new Error('Kun generalsekretær kan løse tiebreak')
+
+  return { supabase, user, profil }
+}
+
+// Variant for pass-tilgang: kun generalsekretær kan godkjenne eller avslå
+// forespørsler om dagstilgang til et medlems passinformasjon. Bevisst
+// smalere enn ensureAdmin(): /om-appen lover medlemmene at det er
+// generalsekretæren som avgjør, og passnummer er det mest sensitive vi
+// lagrer. Frem til #582 lå autorisasjonen kun i RLS med er_admin(), slik at
+// enhver admin kunne godkjenne stikk i strid med løftet i appen.
+export async function ensureGodkjennerPassTilgang() {
+  const supabase = await createServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Ikke innlogget')
+
+  const { data: profil, error: profilFeil } = await supabase
+    .from('profiles')
+    .select('rolle')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  // Fail closed — se begrunnelse i ensureAdmin() over.
+  if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
+  if (!godkjennerPassTilgang(profil?.rolle))
+    throw new Error('Kun generalsekretær kan avgjøre pass-tilgang')
 
   return { supabase, user, profil }
 }

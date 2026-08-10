@@ -5,6 +5,7 @@ import {
   kanAdministrere,
   harGulGloed,
   loeserTiebreak,
+  godkjennerPassTilgang,
   tittelFor,
   rollerMed,
   rettigheterFor,
@@ -61,6 +62,34 @@ describe('roller – rettighetsmatrise', () => {
     })
   })
 
+  describe('godkjennerPassTilgang', () => {
+    it('kun generalsekretær avgjør pass-tilgang', () => {
+      expect(godkjennerPassTilgang('generalsekretaer')).toBe(true)
+      expect(godkjennerPassTilgang('admin')).toBe(false)
+      expect(godkjennerPassTilgang('medlem')).toBe(false)
+    })
+
+    it('ukjente/null-roller avgjør ikke pass-tilgang', () => {
+      expect(godkjennerPassTilgang(null)).toBe(false)
+      expect(godkjennerPassTilgang(undefined)).toBe(false)
+      expect(godkjennerPassTilgang('tull')).toBe(false)
+    })
+  })
+
+  // Pinner forskjellen mellom admin og generalsekretær til nøyaktig tre
+  // rettigheter. Legges en fjerde til uten at dette oppdateres, feiler testen
+  // — som er poenget: forskjellen skal stå skrevet ett sted, ikke oppdages.
+  describe('generalsekretær vs. admin', () => {
+    it('GS har alt admin har, pluss gul glød, tiebreak og pass-godkjenning', () => {
+      const kunGS = (Object.keys(ROLLER.admin) as (keyof typeof ROLLER.admin)[]).filter(
+        k => ROLLER.generalsekretaer[k] !== ROLLER.admin[k],
+      )
+      expect(kunGS.sort()).toEqual(
+        ['godkjennerPassTilgang', 'harGulGloed', 'loeserTiebreak', 'tittel'].sort(),
+      )
+    })
+  })
+
   describe('tittelFor', () => {
     it('gir norsk tittel for hver rolle', () => {
       expect(tittelFor('medlem')).toBe('Medlem')
@@ -98,6 +127,7 @@ describe('roller – rettighetsmatrise', () => {
         kanAdministrere: true,
         harGulGloed: true,
         loeserTiebreak: true,
+        godkjennerPassTilgang: true,
       })
     })
   })

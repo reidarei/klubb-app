@@ -31,6 +31,8 @@
 //   pass.varsler.feilet         — varsel etter pass-tilgang-hendelse feiler i lib/actions/pass.ts (#503)
 //   pass.stempel.feilet         — stemple_pass_varslet()-RPC feiler etter vellykket varsel (#504)
 //   cron.klientfeil.varsel.feilet — alarm-varsel i sjekk-klientfeil-cronet feiler, retention kjører videre (#503)
+//   cron.klientfeil.mottakere.tomme — warn: ingen har faar_feilvarsler, døgnalarmen fyrer aldri (#582)
+//   github.webhook.mottakere.tomme  — warn: ingen har faar_issue_varsler, innspill når bare innsenderen (#582)
 //   cron.paaminne.hentForDag.feilet          — arrangementer-oppslag for en påminnelsesdag feiler (#504)
 //   cron.paaminne.hentArrangorPurringer.feilet — arrangoransvar-oppslag for dagens purringer feiler (#504)
 //   cron.paaminne.kaaring.fersk.feilet   — «åpne kåringspoller»-spørringen feiler (#495/#504)

@@ -696,7 +696,6 @@ export default async function ArrangementDetaljer({
           <Chat
             scope={{ type: 'arrangement', arrangementId: id }}
             brukerId={user!.id}
-            erAdmin={erAdmin}
             initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
             profiler={chatProfiler ?? []}
           />

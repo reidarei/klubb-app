@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
-import { kanAdministrere } from '@/lib/roller'
+import { godkjennerPassTilgang } from '@/lib/roller'
 import GodkjenningRad from './GodkjenningRad'
 
 type ForespørselRad = {
@@ -16,10 +16,10 @@ type ForespørselRad = {
 export default async function PassGodkjenningerSide() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
 
-  // Tilgang: bare admin/generalsekretær. RLS på pass_tilgang_forespørsel
+  // Tilgang: kun generalsekretær (#582). RLS på pass_tilgang_forespørsel
   // sørger for at andre uansett ikke får UPDATE-tilgang, men vi skjuler
   // hele siden også for å unngå tomme lister i UI.
-  if (!kanAdministrere(profil?.rolle)) {
+  if (!godkjennerPassTilgang(profil?.rolle)) {
     redirect('/innstillinger')
   }
 

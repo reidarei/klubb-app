@@ -27,6 +27,11 @@ vi.mock('@/lib/auth', () => ({
     supabase: { from: mockSupabaseFrom },
     user: { id: 'gensek-1' },
   }),
+  // godkjenn/avslå gates på generalsekretær, ikke bare innlogging (#582).
+  ensureGodkjennerPassTilgang: vi.fn().mockResolvedValue({
+    supabase: { from: mockSupabaseFrom },
+    user: { id: 'gensek-1' },
+  }),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({

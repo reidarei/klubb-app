@@ -75,6 +75,10 @@ export async function POST(request: Request) {
     }
 
     const adminIder = (admins ?? []).map(a => a.id)
+    // Ingen har faar_issue_varsler = true: innspillet når bare innsenderen
+    // selv (via oppretterId under). Spørringen lyktes, så feil-grenen over
+    // fanger det ikke — uten denne linjen forsvinner det stille.
+    if (adminIder.length === 0) logg.warn('github.webhook.mottakere.tomme', {})
     const oppretterId = issue.body?.match(/<!-- profil_id:([a-f0-9-]+) -->/)?.[1]
     const mottakere = oppretterId ? [...adminIder, oppretterId] : adminIder
 

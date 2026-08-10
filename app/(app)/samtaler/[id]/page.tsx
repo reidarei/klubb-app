@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
-import { kanAdministrere } from '@/lib/roller'
 import Avatar from '@/components/ui/Avatar'
 import Chat from '@/components/chat/Chat'
 import ChatAutoScrollScript from '@/components/chat/ChatAutoScrollScript'
@@ -75,7 +74,6 @@ export default async function SamtaleDetalj({
   )
 
   const navn = motpart?.visningsnavn || motpart?.navn || 'Ukjent'
-  const erAdmin = kanAdministrere(profil?.rolle)
 
   // Profiler-listen for Chat.tsx — bare meg + motparten siden samtalen
   // har eksakt to deltakere. Mention-systemet får da kun motparten å
@@ -145,7 +143,6 @@ export default async function SamtaleDetalj({
       <Chat
         scope={{ type: 'privat', samtaleId: id }}
         brukerId={user.id}
-        erAdmin={erAdmin}
         initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
         profiler={chatProfiler}
         visSeksjonsLabel={false}
