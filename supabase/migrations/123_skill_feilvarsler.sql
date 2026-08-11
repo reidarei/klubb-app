@@ -4,7 +4,7 @@
 -- varsel om nye innspill (dialog admin↔medlem, GitHub-issues) og døgnalarmen
 -- om at appen har feil. Kolonnenavnet stammer fra innspill-formålet, som var
 -- det opprinnelige — men å blande dem gjør at et medlem som bare skal følge
--- opp innspill også vekkes av feilalarmer, og omvendt. Reidars beslutning:
+-- opp innspill også vekkes av feilalarmer, og omvendt. Admins beslutning:
 -- to uavhengige brytere, samme admin-styrte mønster.
 --
 -- faar_issue_varsler beholdes uendret (innspill). Ny kolonne faar_feilvarsler

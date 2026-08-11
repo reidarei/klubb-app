@@ -115,7 +115,7 @@ export default function InnskyterRad({
         </div>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-tertiary)' }}>
           {/* «Per»-formulering (ikke «Innskudd») — beløpet er et øyeblikksbilde av
-              innskyterens andel, ikke et enkeltinnskudd. Reidars eksakte tekst. */}
+              innskyterens andel, ikke et enkeltinnskudd. Admins eksakte tekst. */}
           Per {formaterDato(dato, 'd. MMMM')}
         </div>
       </div>
@@ -190,7 +190,7 @@ export default function InnskyterRad({
           }}
         >
           <Linje etikett={`Oppspart t.o.m. ${aar - 1}`} belop={oppspartAkkumulert} />
-          {/* Kun ordet «andel» er lenken, etter Reidars presisering: forklaringen
+          {/* Kun ordet «andel» er lenken, etter admins presisering: forklaringen
               skal bare være synlig for den som har klikket seg inn hit. Knappen
               ligger i panelet, som er SØSKEN til accordion-knappen og ikke inni
               den — en interaktiv node inni en <button> ville vært ugyldig. */}

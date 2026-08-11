@@ -45,7 +45,7 @@ const MIN_OFFSET = -AGENDA_VINDU_MND
 
 // Prikke-geometri — 12 px prikker: månedslabelen bor til høyre (midtstilt i
 // høyden) i stedet for over grid-et, så prikkene kan bruke all høyden headeren
-// gir (Reidar-feedback på #429). Velgerne flankerer grid-et horisontalt.
+// gir (admin-feedback på #429). Velgerne flankerer grid-et horisontalt.
 const PRIKK = 12
 const GAP = 2
 
@@ -101,7 +101,7 @@ export default function MiniKalender({ arrangementDatoer, turDatoer, bursdagMMDD
         flexShrink: 0,
       }}
     >
-      {/* Venstre velger — flankerer kalenderen (Reidar-feedback på #429) */}
+      {/* Venstre velger — flankerer kalenderen (admin-feedback på #429) */}
       <button
         type="button"
         style={{

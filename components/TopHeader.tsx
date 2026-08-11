@@ -22,7 +22,7 @@ const TABS: Tab[] = [
   // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
   { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
   { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
-  // Fond ligger bevisst lengst til høyre (Reidars ønske). Alltid synlig for admin;
+  // Fond ligger bevisst lengst til høyre (admins ønske). Alltid synlig for admin;
   // for vanlige medlemmer styres synligheten av bryteren i /innstillinger (#447).
   { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
 ]
@@ -321,7 +321,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             <>
               {/* Visuell prikk — større og mer "stikker ut" enn chat-tab-prikken
                   fordi avataren er rundt og prikken må konkurrere mot bilde-innholdet.
-                  Se #205 — bevisst gjort mer tydelig etter brukertilbakemelding. */}
+                  Se #205 — admin ba om mer tydelig versjon. */}
               <span
                 aria-hidden="true"
                 style={{

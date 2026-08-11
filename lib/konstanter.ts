@@ -17,8 +17,8 @@ export const PAAMINNELSE_DAGER = {
   PURRING: 3,
 } as const
 
-// Tilgangsvinduet etter en pass-godkjenning. Bevisst satt til 1 dag —
-// kort vindu reduserer eksponering hvis godkjenneren glemmer å
+// Tilgangsvinduet etter en pass-godkjenning. Admin har eksplisitt sagt
+// 1 dag — kort vindu reduserer eksponering hvis godkjenneren glemmer å
 // trekke tilbake.
 export const PASS_TILGANG_TIMER = 24
 
@@ -171,7 +171,7 @@ export const DATO_FORSLAG_MIN_TEGN = 10
 
 // Ett treff telles maks én gang per enhet per 30 minutter — hindrer at en
 // bruker som blar mellom flere sider på kort tid blåser opp treff-tallet.
-// Reidars beslutning, se #484.
+// Admins beslutning, se #484.
 export const AKTIVITET_TREFF_THROTTLE_MIN = 30
 
 // Antall uker som vises i uke-grafen på /innstillinger/bruk.

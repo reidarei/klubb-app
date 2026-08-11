@@ -262,7 +262,7 @@ export default function BildeKommentarSheet({
           ingen (som når pillen lå som fixed søsken og body har
           overflow:hidden i lightboxen), panorerer Safari visual viewport i
           stedet, og WebKit tegner da tekstmarkøren uten pan-kompensasjon →
-          markøren «løsner» og havner over/under feltet (Reidars funn 19.
+          markøren «løsner» og havner over/under feltet (admins funn 19.
           juli, samme bug-klasse som #147/#151). Med pillen inne i
           scroll-containeren får Safari en forelder å scrolle, og markøren
           følger feltet. Speiler sticky-varianten fra Chat på detaljsider. */}

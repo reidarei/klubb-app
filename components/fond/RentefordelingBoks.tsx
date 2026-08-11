@@ -7,7 +7,7 @@ import { FOND_KONTOEIER } from '@/lib/klubb-config'
 
 // Forklaring av hvordan renter fordeles mellom innskyterne.
 //
-// Teksten er levert ferdig og godkjent av Reidar (docs/rentefordeling-tekst.md,
+// Teksten er levert ferdig og godkjent av admin (docs/rentefordeling-tekst.md,
 // fra fond-agenten 2026-08-04) og skal stå som den er. Kun overskriftsnivåer og
 // markup er tilpasset appens komponenter, slik instruksjonen i fila åpner for.
 // Ikke omskriv innholdet — formuleringene er kontrollert mot hvordan

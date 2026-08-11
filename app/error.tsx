@@ -15,7 +15,7 @@ import {
 // ingenting til de 15–20 som bruker appen. Selve meldingen er uansett ikke tapt:
 // useEffect-beaconen under sender message + stack + digest til feil_logg.
 export const FEIL_BRODTEKST =
-  'Vi klarte ikke hente dataene. Prøv igjen — hjelper det ikke, si fra til Reidar.'
+  'Vi klarte ikke hente dataene. Prøv igjen — hjelper det ikke, si fra til en admin.'
 
 export default function Error({
   error,

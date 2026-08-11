@@ -362,7 +362,7 @@ export default function AlbumLightbox({
 
       {/* Handlinger (kun synlig for admin/eier) — kompakt pill øverst til
           venstre (X-en bor øverst til høyre, telleren i midten). Flyttet fra
-          bunnen og krympet etter Reidars tilbakemelding 20. juli: «Omslag»
+          bunnen og krympet etter admins tilbakemelding 20. juli: «Omslag»
           med accent-stil når bildet ER omslaget, ellers nøytral knapp som
           setter det. Kort label + fontSize 11 så pillen ikke kolliderer med
           den sentrerte telleren på smale skjermer. */}

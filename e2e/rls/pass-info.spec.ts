@@ -4,7 +4,7 @@ import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers
 // pass_info (mig. 056) inneholder passnummer og utløpsdato — høyest
 // konsekvens av alt vi verifiserer i #533. Migrasjon 056 skilte dataene ut
 // fra profiles NETTOPP for at RLS her kan være strengere enn «alle aktive
-// kan lese profiler»-policyen. Reidars avklaring: admin har INGEN generell
+// kan lese profiler»-policyen. Admins avklaring: admin har INGEN generell
 // lesetilgang til andres pass — kun en godkjent, ikke-utløpt forespørsel
 // (har_pass_tilgang()) åpner raden, uansett rolle.
 //

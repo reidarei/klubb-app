@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url'
 export const KVOTE_MIN = 2000 // Free-plan, privat repo, kontobred kvote/mnd.
 
 export const DRIFTSRESERVE_MIN = 700
-// Reidars føring: drift kuttes aldri. Reserven dekker TO ting, fordi kvoten er
+// Admins føring: drift kuttes aldri. Reserven dekker TO ting, fordi kvoten er
 // KONTOBRED mens skriptet bare ser dette repoet:
 //   1. Dette repoets egen drift — målt juli 2026: 184 min (påminnelse 127 +
 //      klientfeil 26 + backup 25 + keepalive 4 + drill 2).

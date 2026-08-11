@@ -55,7 +55,7 @@ export default async function FondRediger() {
 
       {/* Med oppgjørs-henting konfigurert er den PRIMÆRVEIEN for innskudd og
           saldo — den står øverst, og de manuelle editorene for de samme
-          tallene flyttes nederst under «Overstyre manuelt» (Reidars bestilling:
+          tallene flyttes nederst under «Overstyre manuelt» (admins bestilling:
           det som oppdateres automatisk skal ikke friste til enkeltredigering).
           Uten konfigurasjonen (klubb-app/test) er manuell redigering eneste
           vei, og seksjonene vises i vanlig rekkefølge uten overstyrings-ramme. */}

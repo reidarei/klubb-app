@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
 
 // Privatmeldinger (mig. 055, #91) — et medlem skal ikke kunne se en samtale
-// han ikke er part i. Reidars avklaring: admin kan slette en enkeltmelding
+// han ikke er part i. Admins avklaring: admin kan slette en enkeltmelding
 // (moderering, dekket av «Slette egne samtale_chat eller admin»), men kan
 // IKKE lese samtalen — det finnes ingen «admin leser alt»-policy her, i
 // motsetning til f.eks. varsel_logg.

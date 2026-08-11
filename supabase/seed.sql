@@ -152,7 +152,7 @@ values
 -- ANT_ALLE) — endres ett tall her må speccen oppdateres i samme commit.
 -- 80 > TIDLIGERE_SIDESTOERRELSE (30) med vilje: paginering («Last mer»)
 -- testes ikke ordentlig med bare et par rader (issuet foreslo opprinnelig
--- «et par», men det dekker ikke paginering — se Reidars avklaring i #489).
+-- «et par», men det dekker ikke paginering — se admins avklaring i #489).
 --
 -- Deterministiske UUID-er: '00000000-0000-4000-<type>-<løpenummer>', der
 -- <type> er 9100=møter, 9200=turer, 9300=meldinger, 9400=poller,

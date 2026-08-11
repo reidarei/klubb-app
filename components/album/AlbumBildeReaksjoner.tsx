@@ -15,7 +15,7 @@ type Props = {
  * Reaksjonsrad for det aktive bildet i album-lightboxen (#480). Følger
  * MeldingKort-mønsteret fra #468: synlig tommel opp-knapp (trykk = 👍,
  * hold = emoji-velger) + badge-rad for eksisterende reaksjoner — ikke en
- * anonym «+»-knapp (Reidars tilbakemelding 19. juli). Hook-staten eies her
+ * anonym «+»-knapp (admins tilbakemelding 19. juli). Hook-staten eies her
  * og deles mellom tommelen og badgene så begge oppdateres i samme frame.
  * Forelderen (AlbumLightbox) MÅ sette `key={bildeId}` — se kommentar der.
  */
@@ -24,7 +24,7 @@ export default function AlbumBildeReaksjoner({ bildeId, brukerId, initial }: Pro
 
   // Din egen reaksjon representeres av tommelen (den «blir» emojien din) —
   // badgene viser kun de ANDRES reaksjoner, ellers ville din egen dukket opp
-  // som en ekstra pille ved siden av tommelen (Reidars funn 19. juli).
+  // som en ekstra pille ved siden av tommelen (admins funn 19. juli).
   // Antallet i en badge teller derfor bare de andre; totalen leses som
   // tommel + badges.
   const andresGrupper = reaksjoner
