@@ -7,8 +7,9 @@
 --
 -- Denne tabellen er oversettelseslaget. Når et navn i oppgjøret ikke finnes
 -- som visningsnavn, kan admin peke ut riktig person én gang, og valget står.
--- Den håndterer også historiske navn — et medlem som het «Reka» i fjorårets
--- ark og «Øyvind» i år matcher fortsatt, uten at noen må redigere regnearket.
+-- Den håndterer også historiske navn — et medlem som sto med kallenavn i
+-- fjorårets ark og fullt navn i år matcher fortsatt, uten at noen må
+-- redigere regnearket.
 --
 -- api_navn er primærnøkkel: ett navn i oppgjøret kan bare peke på én person.
 -- Motsatt vei er åpen — samme person kan ha flere gamle navn.

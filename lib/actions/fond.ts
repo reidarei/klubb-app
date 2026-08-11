@@ -341,7 +341,8 @@ export type OppgjorDiff = {
 //
 // Alias sjekkes FØRST, så en manuell kobling alltid vinner over et tilfeldig
 // navnesammenfall. Det er også det som gjør historiske navn brukbare: et
-// medlem som het «Reka» i fjorårets ark og «Øyvind» i år matcher fortsatt.
+// medlem som sto med kallenavn i fjorårets ark og fullt navn i år matcher
+// fortsatt.
 //
 // Returnerer null ved ukjent eller tvetydig navn i stedet for å kaste.
 // Kalleren samler alle uavklarte navn og lar admin koble dem — å kaste på det
