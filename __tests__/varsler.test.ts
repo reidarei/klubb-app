@@ -349,6 +349,108 @@ describe('formaterHilsenMelding', () => {
   })
 })
 
+describe('sendChatMentionVarsler – @ gir varsel', () => {
+  // Kontrakten gutta faktisk merker: skriver noen @Navn i en chat, skal den
+  // som nevnes få et varsel. Fram til nå fantes bare feilstien i test (kaster
+  // når profil-oppslaget feiler), så en regresjon som stille sluttet å varsle
+  // ville passert grønt.
+  const ALLE_PROFILER = [
+    { id: 'avsender1', navn: 'Nils Nordmann', visningsnavn: 'Nils', epost: 'nils@test.no' },
+    { id: 'user1', navn: 'Ola Nordmann', visningsnavn: 'Ola', epost: 'ola@test.no' },
+    { id: 'user2', navn: 'Per Hansen', visningsnavn: 'Per', epost: 'per@test.no' },
+  ]
+
+  // Egen profiles-chain fordi lagChain ignorerer filtrene: profiles spørres TO
+  // ganger her — først av sendChatMentionVarsler (alle aktive, for å matche
+  // @-navnet), så av sendVarsel med .in('id', mottakere). Respekterer ikke den
+  // andre .in(), får alle e-post, og testen kan ikke skille «Ola ble varslet»
+  // fra «alle ble varslet» — altså nøyaktig det den skal måle.
+  function profilChain() {
+    let idFilter: string[] | null = null
+    const chain: Record<string, unknown> = {}
+    for (const m of ['select', 'eq', 'gt', 'gte', 'lt', 'is', 'not', 'limit', 'order', 'neq']) {
+      chain[m] = vi.fn().mockReturnValue(chain)
+    }
+    chain.in = vi.fn((_kol: string, verdier: string[]) => {
+      idFilter = verdier
+      return chain
+    })
+    const resultat = () => ({
+      data: idFilter ? ALLE_PROFILER.filter(p => idFilter!.includes(p.id)) : ALLE_PROFILER,
+      error: null,
+    })
+    chain.then = (resolve: (v: unknown) => void) => Promise.resolve(resultat()).then(resolve)
+    chain.maybeSingle = vi.fn(async () => ({ data: resultat().data[0] ?? null, error: null }))
+    return chain
+  }
+
+  function mentionOppsett() {
+    const rest = lagFromMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      varsel_preferanser: [
+        { profil_id: 'user1', push_aktiv: true, epost_aktiv: true },
+        { profil_id: 'user2', push_aktiv: true, epost_aktiv: true },
+      ],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+        { profil_id: 'user2', endpoint: 'https://push.example.com/2', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+    mockFrom.mockImplementation((tabell: string) =>
+      tabell === 'profiles' ? profilChain() : rest(tabell),
+    )
+  }
+
+  it('varsler den som nevnes med @', async () => {
+    mentionOppsett()
+
+    await sendChatMentionVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1')
+
+    expect(mockSendPush).toHaveBeenCalled()
+    // Kun Ola — Per var ikke nevnt.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'ola@test.no' }),
+    ])
+  })
+
+  it('setter avsenderens navn i meldinga', async () => {
+    mentionOppsett()
+
+    await sendChatMentionVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1')
+
+    // Push-argumentene bærer teksten mottakeren ser på låseskjermen.
+    const push = mockSendPush.mock.calls[0]
+    expect(JSON.stringify(push)).toContain('Nils: Hei @Ola')
+  })
+
+  it('varsler ikke avsenderen selv når han nevner seg selv', async () => {
+    mentionOppsett()
+
+    await sendChatMentionVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1')
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+  })
+
+  it('@alle varsler alle andre enn avsenderen', async () => {
+    mentionOppsett()
+
+    await sendChatMentionVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1')
+
+    const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
+    expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
+  })
+
+  it('sender ingenting når teksten ikke har noen @', async () => {
+    mentionOppsett()
+
+    await sendChatMentionVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1')
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+})
+
 describe('sendVarsel – URL-normalisering', () => {
   it('gjør relativ URL absolutt før den sendes til e-post-malen (#507)', async () => {
     setupMock({
@@ -1097,7 +1199,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
-      fraNavn: 'Reidar',
+      fraNavn: 'Nils',
       hilsen: 'Kom igjen, gutta',
       manuell: true,
     })

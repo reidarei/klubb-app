@@ -239,8 +239,8 @@ export async function kjorBursdagsgratulasjon(
       try {
         await sendVarsel({
           mottakere: [barn.id],
-          tittel: 'Gratulerer med dagen!',
-          melding: `${hilsenForVarsel} med dagen ${fornavn}`,
+          tittel: 'Gratulerer med dagen! 🎉',
+          melding: `${hilsenForVarsel} med dagen ${fornavn}! 🥳🥂`,
           type: 'bursdagsgratulasjon',
           url: `${BASE_URL}/chat`,
           dedupNoekkel: `bursdag:${barn.id}:${aarStr}`,
