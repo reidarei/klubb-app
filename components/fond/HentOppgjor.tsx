@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { hentPublisertOppgjor, skrivPublisertOppgjor, type OppgjorDiff } from '@/lib/actions/fond'
 import { byggOppgjorPayload } from '@/lib/fond-oppgjor-payload'
+import KoblNavn from '@/components/fond/KoblNavn'
 import { formaterDato } from '@/lib/dato'
 
 // Formaterer et beløp som kr med to desimaler
@@ -36,6 +37,9 @@ export default function HentOppgjor() {
 
   // Sjekk om noen rad har flere innskudd-rader — blokkerer skriving
   const harFlereRader = diff?.rader.some((r) => r.antallRader > 1) ?? false
+  // Navn i oppgjøret som ikke matcher et medlem. Blokkerer skriving på samme
+  // måte som duplikat-rader: uten koblingen ville de andelene falt stille ut.
+  const uavklarte = diff?.uavklarteNavn ?? []
 
   function handleHent() {
     setFeil(null)
@@ -92,6 +96,13 @@ export default function HentOppgjor() {
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
             Oppgjør per {diff.snapshot_dato}, generert {formaterDato(diff.generert, 'd. MMM yyyy HH:mm')}
           </div>
+
+          {/* Navn som mangler kobling — blokkerer skriving til de er avklart.
+              Står før tabellen fordi den ellers ser komplett ut mens andeler
+              mangler. */}
+          {uavklarte.length > 0 && (
+            <KoblNavn navn={uavklarte} onKoblet={handleHent} />
+          )}
 
           {/* Blokkerende advarsel ved duplikat-rader */}
           {harFlereRader && (
@@ -154,7 +165,7 @@ export default function HentOppgjor() {
           <Button
             variant="primary"
             onClick={handleSkriv}
-            disabled={harFlereRader || skriverPending || henterPending}
+            disabled={harFlereRader || uavklarte.length > 0 || skriverPending || henterPending}
           >
             {skriverPending ? 'Skriver…' : 'Skriv til appen'}
           </Button>

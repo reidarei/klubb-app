@@ -309,6 +309,10 @@ export type OppgjorDiff = {
   snapshot_dato: string
   generert: string
   saldo: { app: number; hentet: number }
+  // Navn i oppgjøret som ikke kunne kobles til et medlem — ukjent kallenavn,
+  // eller to medlemmer med samme. Blokkerer skriving til admin har koblet dem
+  // i UI-et (#571). Tom liste = alt matcher.
+  uavklarteNavn: string[]
   rader: {
     profil_id: string
     visningsnavn: string
@@ -330,25 +334,37 @@ export type OppgjorDiff = {
   }[]
 }
 
-// Finner nøyaktig én aktiv profil for et visningsnavn (trimmet).
-// profiles.visningsnavn har ingen unik constraint i DB, så to aktive profiler kan
-// dele kallenavn. Da er matchingen tvetydig og vi kaster i stedet for å velge
-// stille førstetreff — feil profil ville fått innskuddet skrevet (#453).
+// Finner profilen et navn fra oppgjøret hører til, i to trinn:
+//
+//   1. et lagret alias (fond_navn_alias) — admin har pekt ut personen én gang
+//   2. eksakt treff på visningsnavn
+//
+// Alias sjekkes FØRST, så en manuell kobling alltid vinner over et tilfeldig
+// navnesammenfall. Det er også det som gjør historiske navn brukbare: et
+// medlem som het «Reka» i fjorårets ark og «Øyvind» i år matcher fortsatt.
+//
+// Returnerer null ved ukjent eller tvetydig navn i stedet for å kaste.
+// Kalleren samler alle uavklarte navn og lar admin koble dem — å kaste på det
+// første ville skjult at fem andre også manglet (#571). Tvetydighet regnes
+// som uavklart av samme grunn som før: to profiler med samme kallenavn kan
+// ikke skilles maskinelt, og feil valg sender andelen til feil person (#453).
 function matchProfil(
   profilListe: { id: string; visningsnavn: string | null }[],
+  alias: Map<string, string>,
   visningsnavn: string,
-): { id: string; visningsnavn: string | null } {
+): { id: string; visningsnavn: string | null } | null {
   const trimmet = visningsnavn.trim()
+
+  const aliasProfilId = alias.get(trimmet)
+  if (aliasProfilId) {
+    const viaAlias = profilListe.find((p) => p.id === aliasProfilId)
+    // Aliaset kan peke på en profil som siden er deaktivert. Da er koblingen
+    // ikke lenger gyldig, og navnet skal opp til ny vurdering.
+    if (viaAlias) return viaAlias
+  }
+
   const treff = profilListe.filter((p) => p.visningsnavn?.trim() === trimmet)
-  if (treff.length === 0)
-    throw new Error(
-      `Ukjent visningsnavn i oppgjøret: «${visningsnavn}» — ingen aktiv profil matcher`,
-    )
-  if (treff.length > 1)
-    throw new Error(
-      `Flere medlemmer heter «${trimmet}» — rydd i visningsnavn før oppgjøret kan hentes`,
-    )
-  return treff[0]
+  return treff.length === 1 ? treff[0] : null
 }
 
 export async function hentPublisertOppgjor(): Promise<
@@ -383,7 +399,20 @@ export async function hentPublisertOppgjor(): Promise<
 
     const profilListe = profiler ?? []
 
-    // Bygg opp én rad per andel; ukjent navn → kast umiddelbart
+    // Aliaser: navn i oppgjøret som admin har koblet til en person manuelt.
+    // Fail-closed som profil-oppslaget over: uten aliasene ville kjente navn
+    // sett ut som ukjente, og admin ville blitt bedt om å koble på nytt.
+    const { data: aliasRader, error: aliasFeil } = await supabase
+      .from('fond_navn_alias')
+      .select('api_navn, profil_id')
+    if (aliasFeil) {
+      await logg.feil('fond.oppgjor.alias.feilet', aliasFeil)
+      throw new Error(`Kunne ikke hente navnekoblinger: ${aliasFeil.message}`)
+    }
+    const aliasMap = new Map((aliasRader ?? []).map((a) => [a.api_navn, a.profil_id]))
+
+    // Bygg opp én rad per andel. Navn vi ikke kan avgjøre samles i
+    // uavklarteNavn i stedet for å stoppe på det første.
     const raderUtenAppVerdi: {
       profil_id: string
       visningsnavn: string
@@ -393,8 +422,14 @@ export async function hentPublisertOppgjor(): Promise<
 
     const { harDetaljer } = await import('@/lib/fond-oppgjor')
 
+    const uavklarteNavn: string[] = []
+
     for (const andel of oppgjor.andeler) {
-      const match = matchProfil(profilListe, andel.visningsnavn)
+      const match = matchProfil(profilListe, aliasMap, andel.visningsnavn)
+      if (!match) {
+        uavklarteNavn.push(andel.visningsnavn)
+        continue
+      }
       raderUtenAppVerdi.push({
         profil_id: match.id,
         visningsnavn: andel.visningsnavn,
@@ -463,6 +498,7 @@ export async function hentPublisertOppgjor(): Promise<
           app: Number(kontant?.saldo ?? 0),
           hentet: oppgjor.saldo,
         },
+        uavklarteNavn,
         rader,
       },
     }
@@ -504,6 +540,17 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
 
     const profilListe = profiler ?? []
 
+    // Samme aliaser som ved henting — ellers ville en kobling admin nettopp
+    // gjorde blitt ignorert i det han trykker «Skriv til appen».
+    const { data: aliasRader, error: aliasFeil } = await supabase
+      .from('fond_navn_alias')
+      .select('api_navn, profil_id')
+    if (aliasFeil) {
+      await logg.feil('fond.oppgjor.alias.feilet', aliasFeil)
+      throw new Error(`Kunne ikke hente navnekoblinger: ${aliasFeil.message}`)
+    }
+    const aliasMap = new Map((aliasRader ?? []).map((a) => [a.api_navn, a.profil_id]))
+
     // Match alle andeler til profiler — kast hvis ukjent eller tvetydig navn
     const { harDetaljer } = await import('@/lib/fond-oppgjor')
     const matchede: {
@@ -517,7 +564,14 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       } | null
     }[] = []
     for (const andel of oppgjor.andeler) {
-      const match = matchProfil(profilListe, andel.visningsnavn)
+      const match = matchProfil(profilListe, aliasMap, andel.visningsnavn)
+      // Ved SKRIVING kaster vi fortsatt: kommer vi hit med et ukjent navn, har
+      // noe endret seg mellom hent og skriv (profil deaktivert, alias slettet),
+      // og da skal ingenting skrives før admin har sett på det på nytt.
+      if (!match)
+        throw new Error(
+          `Ukjent navn i oppgjøret: «${andel.visningsnavn}» — koble det til et medlem før du skriver`,
+        )
       matchede.push({
         profil_id: match.id,
         visningsnavn: andel.visningsnavn,
@@ -676,4 +730,53 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
 
   await skrivHistorikk(supabase, user.id, 'kontant', null, gammel?.saldo ?? 0, nySaldo)
   revalider()
+}
+
+// Kobler et navn fra oppgjøret til et medlem. Koblingen står til den slettes,
+// så neste oppgjør med samme navn matcher automatisk (#571).
+//
+// Upsert på api_navn: å koble et navn på nytt skal overskrive, ikke feile.
+// Admin som oppdager at han pekte på feil person må kunne rette det uten å
+// gå veien om en slette-knapp.
+export async function koblNavnTilMedlem(apiNavn: string, profilId: string) {
+  const { supabase, user } = await ensureAdmin()
+
+  const navn = apiNavn.trim()
+  if (!navn) throw new Error('Navnet fra oppgjøret mangler')
+
+  // Vakt mot å koble til en deaktivert profil — koblingen ville sett riktig ut
+  // i UI-et, men matchProfil() hopper over inaktive og navnet ville dukket opp
+  // som uavklart igjen ved neste henting.
+  const { data: profil, error: profilFeil } = await supabase
+    .from('profiles')
+    .select('id, aktiv')
+    .eq('id', profilId)
+    .maybeSingle()
+  if (profilFeil) throw new Error(`Kunne ikke slå opp medlemmet: ${profilFeil.message}`)
+  if (!profil) throw new Error('Medlemmet finnes ikke')
+  if (!profil.aktiv) throw new Error('Medlemmet er ikke aktivt — velg et aktivt medlem')
+
+  const { error } = await supabase
+    .from('fond_navn_alias')
+    .upsert(
+      { api_navn: navn, profil_id: profilId, opprettet_av: user.id },
+      { onConflict: 'api_navn' },
+    )
+  if (error) throw new Error(`Kunne ikke lagre navnekoblingen: ${error.message}`)
+
+  revalidatePath('/fond/rediger')
+}
+
+// Alle aktive medlemmer, for nedtrekket i koblings-UI-et.
+export async function hentAktiveMedlemmer(): Promise<
+  { id: string; navn: string; visningsnavn: string | null }[]
+> {
+  const { supabase } = await ensureAdmin()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, navn, visningsnavn')
+    .eq('aktiv', true)
+    .order('navn')
+  if (error) throw new Error(`Kunne ikke hente medlemmer: ${error.message}`)
+  return data ?? []
 }

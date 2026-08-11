@@ -11,6 +11,7 @@ import type { OppgjorDiff } from '@/lib/actions/fond'
 const DIFF: OppgjorDiff = {
   snapshot_dato: '2026-07-26',
   generert: '2026-07-30T08:00:00Z',
+  uavklarteNavn: [],
   saldo: { app: 0, hentet: 12997.21 },
   rader: [
     {
@@ -66,6 +67,7 @@ describe('byggOppgjorPayload', () => {
   it('utelater detaljfeltene helt når raden ikke har dem (eldre svar)', () => {
     const utenDetaljer: OppgjorDiff = {
       ...DIFF,
+      uavklarteNavn: [],
       saldo: { app: 0, hentet: 12950 },
       rader: [{ ...DIFF.rader[0], detaljer: null }],
     }
