@@ -188,12 +188,14 @@ export default async function Profil() {
         </Link>
       </header>
 
-      {/* Profil-hero */}
+      {/* Profil-hero — kompakt rad (#589). Identiteten lå tidligere som et
+          loddrett tårn (avatar 78 + navn + rolle + to stat-kolonner + fond-rad
+          = 360 px), og spiste en tredjedel av mobilskjermen før noe handlingsbart
+          innhold kom til syne. Samme data, lagt på tvers: ~118 px. */}
       <div
         style={{
-          padding: 24,
+          padding: '14px 16px',
           marginBottom: 20,
-          textAlign: 'center',
           background:
             'radial-gradient(ellipse at top, var(--accent-soft), transparent 70%), var(--bg-elevated)',
           border: '0.5px solid var(--border-strong)',
@@ -202,118 +204,126 @@ export default async function Profil() {
           WebkitBackdropFilter: 'var(--blur-card)',
         }}
       >
-        <div style={{ display: 'inline-block' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
           <Avatar
             name={navn}
-            size={78}
+            size={48}
             src={profil?.bilde_url ?? null}
             rolle={profil?.rolle}
           />
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 22,
-            fontWeight: 500,
-            color: 'var(--text-primary)',
-            marginTop: 14,
-            letterSpacing: '-0.3px',
-          }}
-        >
-          {navn}
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--accent)',
-            letterSpacing: '2px',
-            textTransform: 'uppercase',
-            marginTop: 4,
-            fontWeight: 600,
-          }}
-        >
-          {rolle}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 20,
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.3px',
+                lineHeight: 1.1,
+                // Lange navn kappes heller enn å presse fond-tallet ned på en
+                // ny linje — hele poenget med raden er at den holder én høyde.
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {navn}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: 'var(--accent)',
+                letterSpacing: '1.8px',
+                textTransform: 'uppercase',
+                marginTop: 3,
+                fontWeight: 600,
+              }}
+            >
+              {rolle}
+            </div>
+          </div>
+
+          {/* Min andel av fondet — høyrestilt på navnelinja. Etiketten er kortet
+              ned fra «Min andel av fondet»; konteksten gir resten. */}
+          {visFondAndel && (
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 18,
+                  fontWeight: 500,
+                  color: 'var(--accent)',
+                  fontVariantNumeric: 'tabular-nums',
+                  lineHeight: 1.1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {formaterKr(minAndel)}
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 8,
+                  color: 'var(--text-tertiary)',
+                  letterSpacing: '1.3px',
+                  textTransform: 'uppercase',
+                  marginTop: 3,
+                  fontWeight: 600,
+                }}
+              >
+                Min andel
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Stats */}
+        {/* Stats — tall og etikett side om side på én linje i stedet for to
+            kolonner med hver sin høyde. */}
         <div
           style={{
             display: 'flex',
-            justifyContent: 'center',
-            gap: 28,
-            marginTop: 20,
-            paddingTop: 20,
+            alignItems: 'baseline',
+            gap: 14,
+            marginTop: 12,
+            paddingTop: 11,
             borderTop: '0.5px solid var(--border-subtle)',
           }}
         >
           {[
             { val: oppmoeter ?? 0, lbl: 'Oppmøter' },
             { val: kaaringer ?? 0, lbl: 'Kåringer' },
-          ].map(s => (
-            <div key={s.lbl}>
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 24,
-                  fontWeight: 500,
-                  color: 'var(--accent)',
-                }}
-              >
-                {s.val}
-              </div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 9,
-                  color: 'var(--text-tertiary)',
-                  letterSpacing: '1.5px',
-                  textTransform: 'uppercase',
-                  marginTop: 2,
-                  fontWeight: 600,
-                }}
-              >
-                {s.lbl}
-              </div>
+          ].map((s, i) => (
+            <div key={s.lbl} style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+              {i > 0 && <span style={{ color: 'var(--border)', fontSize: 10 }}>•</span>}
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 16,
+                    fontWeight: 500,
+                    color: 'var(--accent)',
+                    lineHeight: 1,
+                  }}
+                >
+                  {s.val}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--text-tertiary)',
+                    letterSpacing: '1.4px',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                  }}
+                >
+                  {s.lbl}
+                </span>
+              </span>
             </div>
           ))}
         </div>
-
-        {/* Min andel av fondet — egen rad (etiketten er for lang som tredje stat-kolonne) */}
-        {visFondAndel && (
-          <div
-            style={{
-              marginTop: 20,
-              paddingTop: 20,
-              borderTop: '0.5px solid var(--border-subtle)',
-            }}
-          >
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 24,
-                fontWeight: 500,
-                color: 'var(--accent)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {formaterKr(minAndel)}
-            </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                color: 'var(--text-tertiary)',
-                letterSpacing: '1.5px',
-                textTransform: 'uppercase',
-                marginTop: 2,
-                fontWeight: 600,
-              }}
-            >
-              Min andel av fondet
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Privatmeldinger — flyttes hit fra /chat (#256) slik at lenken
