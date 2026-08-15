@@ -19,7 +19,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
 type Admin = SupabaseClient<Database>
-type Arrangement = { id: string; tittel: string; start_tidspunkt: string }
 
 function dagStreng(dato: Date): string {
   return dato.toISOString().slice(0, 10)
@@ -28,10 +27,15 @@ function dagStreng(dato: Date): string {
 // Fail closed (#504): en svelget feil her ga tidligere `[]`, bit-identisk med
 // «ingen arrangementer denne dagen» — cronen ville stille hoppet over en hel
 // dags påminnelser i stedet for å synliggjøre en DB-feil.
+// paameldinger (status) hentes i samme spørring som arrangementet (#591) — for
+// å telle «N påmeldt» i 7-dagers-teksten uten en egen spørring per arrangement
+// (N+1) og uten en ny feilsti: tellingen arver fail-closed-vakten under.
+// 1- og 3-dagers-kallene drar med seg embeddet ubrukt. Bevisst: ~18 enum-felt
+// per arrangement er billigere enn en `medPaameldinger`-bryter i denne funksjonen.
 async function hentForDag(admin: Admin, dag: string) {
   const { data, error } = await admin
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt')
+    .select('id, tittel, start_tidspunkt, oppmoetested, paameldinger (status)')
     .gte('start_tidspunkt', `${dag}T00:00:00`)
     .lt('start_tidspunkt', `${dag}T23:59:59`)
   if (error) {
@@ -71,19 +75,27 @@ export async function kjorPaaminnelser(admin: Admin) {
 
   const oppgaver: Promise<{ id: string; type: string }>[] = []
 
-  for (const a of arr_7 as Arrangement[]) {
+  for (const a of arr_7) {
+    const antallPaameldt = a.paameldinger.filter(p => p.status === 'ja').length
     oppgaver.push(
-      sendPaaminneVarsler({ arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt, type: 'paaminne_7' })
+      sendPaaminneVarsler({
+        arrangementId: a.id,
+        tittel: a.tittel,
+        startTidspunkt: a.start_tidspunkt,
+        type: 'paaminne_7',
+        oppmoetested: a.oppmoetested,
+        antallPaameldt,
+      })
         .then(() => ({ id: a.id, type: 'paaminne_7' }))
     )
   }
-  for (const a of arr_1 as Arrangement[]) {
+  for (const a of arr_1) {
     oppgaver.push(
       sendPaaminneVarsler({ arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt, type: 'paaminne_1' })
         .then(() => ({ id: a.id, type: 'paaminne_1' }))
     )
   }
-  for (const a of arr_3 as Arrangement[]) {
+  for (const a of arr_3) {
     oppgaver.push(
       sendPurringVarsler({ arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt })
         .then(() => ({ id: a.id, type: 'purring' }))

@@ -588,22 +588,65 @@ export async function sendOppdatertVarsler({
   })
 }
 
-export async function sendPaaminneVarsler({
-  arrangementId,
+/**
+ * Bygger 7-dagers-påminnelsesteksten (#591). Ren funksjon — eksportert for
+ * testing, samme presedens som formaterHilsenMelding. «syv» i første setning
+ * er hardkodet tekst, ikke avledet fra PAAMINNELSE_DAGER.LANG (=== 7) — endres
+ * konstanten må denne teksten endres i samme håndgrep.
+ */
+export function byggPaaminne7Melding({
   tittel,
   startTidspunkt,
-  type,
+  oppmoetested,
+  antallPaameldt,
 }: {
-  arrangementId: string
   tittel: string
   startTidspunkt: string
-  type: 'paaminne_7' | 'paaminne_1'
-}) {
-  const dato = formaterDatoKlokke(startTidspunkt)
-  const dager = type === 'paaminne_7' ? 7 : 1
+  oppmoetested: string | null
+  antallPaameldt: number
+}): string {
+  const sted = oppmoetested?.trim()
+  const setninger = [
+    `Det er syv dager til ${tittel}.`,
+    sted
+      ? `Vi starter ${formaterDatoKlokke(startTidspunkt)}, oppmøte på ${sted}.`
+      : `Vi starter ${formaterDatoKlokke(startTidspunkt)}.`,
+    antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`,
+    'Vel møtt!',
+  ]
+  return setninger.join(' ')
+}
+
+export async function sendPaaminneVarsler(
+  params:
+    | {
+        type: 'paaminne_7'
+        arrangementId: string
+        tittel: string
+        startTidspunkt: string
+        oppmoetested: string | null
+        antallPaameldt: number
+      }
+    | {
+        type: 'paaminne_1'
+        arrangementId: string
+        tittel: string
+        startTidspunkt: string
+      },
+) {
+  const { arrangementId, tittel, startTidspunkt, type } = params
+  const melding =
+    type === 'paaminne_7'
+      ? byggPaaminne7Melding({
+          tittel,
+          startTidspunkt,
+          oppmoetested: params.oppmoetested,
+          antallPaameldt: params.antallPaameldt,
+        })
+      : `${tittel} er i morgen — ${formaterDatoKlokke(startTidspunkt)}`
   await sendVarsel({
     tittel: `Påminnelse: ${tittel}`,
-    melding: dager === 7 ? `${tittel} er om 7 dager — ${dato}` : `${tittel} er i morgen — ${dato}`,
+    melding,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
     type,
     arrangementId,

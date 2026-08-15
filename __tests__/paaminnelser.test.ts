@@ -25,7 +25,21 @@ function dagStreng(dato: Date): string {
   return dato.toISOString().slice(0, 10)
 }
 
-function lagMockAdmin(arrangementer: Record<string, unknown[]>, arrangorPurringer: unknown[] = []) {
+// Speiler select-en i hentForDag eksakt. Alle tre dagene henter samme kolonner,
+// så en fixture som glemmer paameldinger skal feile i typecheck — ikke i runtime
+// inne i kjorPaaminnelser, som teller «ja» før feilisolasjonen slår inn (#591).
+type ArrangementFixture = {
+  id: string
+  tittel: string
+  start_tidspunkt: string
+  oppmoetested: string | null
+  paameldinger: { status: string }[]
+}
+
+function lagMockAdmin(
+  arrangementer: Record<string, ArrangementFixture[]>,
+  arrangorPurringer: unknown[] = [],
+) {
   return {
     from: vi.fn((tabell: string) => {
       if (tabell === 'arrangementer') {
@@ -57,12 +71,32 @@ describe('kjorPaaminnelser', () => {
     const om7 = dagStreng(addDays(idag, 7))
 
     const admin = lagMockAdmin({
-      [om7]: [{ id: 'arr1', tittel: 'Vårfest', start_tidspunkt: `${om7}T18:00:00Z` }],
+      [om7]: [{ id: 'arr1', tittel: 'Vårfest', start_tidspunkt: `${om7}T18:00:00Z`, oppmoetested: 'Klubbhuset', paameldinger: [] }],
     })
 
     await kjorPaaminnelser(admin)
     expect(mockSendPaaminne).toHaveBeenCalledWith(
-      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7' })
+      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', oppmoetested: 'Klubbhuset', antallPaameldt: 0 })
+    )
+  })
+
+  it('teller kun "ja"-påmeldinger, ikke "kanskje" eller "nei"', async () => {
+    const idag = new Date(2026, 5, 10)
+    const om7 = dagStreng(addDays(idag, 7))
+
+    const admin = lagMockAdmin({
+      [om7]: [{
+        id: 'arr1',
+        tittel: 'Vårfest',
+        start_tidspunkt: `${om7}T18:00:00Z`,
+        oppmoetested: 'Klubbhuset',
+        paameldinger: [{ status: 'ja' }, { status: 'ja' }, { status: 'kanskje' }, { status: 'nei' }],
+      }],
+    })
+
+    await kjorPaaminnelser(admin)
+    expect(mockSendPaaminne).toHaveBeenCalledWith(
+      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', antallPaameldt: 2 })
     )
   })
 
@@ -71,7 +105,7 @@ describe('kjorPaaminnelser', () => {
     const imorgen = dagStreng(addDays(idag, 1))
 
     const admin = lagMockAdmin({
-      [imorgen]: [{ id: 'arr2', tittel: 'Grillkveld', start_tidspunkt: `${imorgen}T18:00:00Z` }],
+      [imorgen]: [{ id: 'arr2', tittel: 'Grillkveld', start_tidspunkt: `${imorgen}T18:00:00Z`, oppmoetested: null, paameldinger: [] }],
     })
 
     await kjorPaaminnelser(admin)
@@ -85,7 +119,7 @@ describe('kjorPaaminnelser', () => {
     const om3 = dagStreng(addDays(idag, 3))
 
     const admin = lagMockAdmin({
-      [om3]: [{ id: 'arr3', tittel: 'Bowling', start_tidspunkt: `${om3}T19:00:00Z` }],
+      [om3]: [{ id: 'arr3', tittel: 'Bowling', start_tidspunkt: `${om3}T19:00:00Z`, oppmoetested: null, paameldinger: [] }],
     })
 
     await kjorPaaminnelser(admin)
@@ -119,8 +153,8 @@ describe('kjorPaaminnelser', () => {
       .mockResolvedValueOnce(undefined)
 
     const admin = lagMockAdmin({
-      [om7]: [{ id: 'arr-fail', tittel: 'Feil', start_tidspunkt: `${om7}T18:00:00Z` }],
-      [imorgen]: [{ id: 'arr-ok', tittel: 'OK', start_tidspunkt: `${imorgen}T18:00:00Z` }],
+      [om7]: [{ id: 'arr-fail', tittel: 'Feil', start_tidspunkt: `${om7}T18:00:00Z`, oppmoetested: null, paameldinger: [] }],
+      [imorgen]: [{ id: 'arr-ok', tittel: 'OK', start_tidspunkt: `${imorgen}T18:00:00Z`, oppmoetested: null, paameldinger: [] }],
     })
 
     const resultat = await kjorPaaminnelser(admin)

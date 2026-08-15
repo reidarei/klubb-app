@@ -50,6 +50,7 @@ import {
   sendPurringVarsler,
   sendChatMentionVarsler,
   formaterHilsenMelding,
+  byggPaaminne7Melding,
 } from '@/lib/varsler'
 
 beforeEach(() => {
@@ -230,6 +231,8 @@ describe('wrapper-funksjoner', () => {
       tittel: 'Test',
       startTidspunkt: '2026-06-15T16:00:00Z',
       type: 'paaminne_7',
+      oppmoetested: null,
+      antallPaameldt: 0,
     })
     expect(eqCalls).toContain('paaminnelse_7d')
 
@@ -346,6 +349,125 @@ describe('formaterHilsenMelding', () => {
         maksLengde: 0,
       })
     ).toThrow('Hilsen kan ikke være lengre enn 0 tegn')
+  })
+})
+
+describe('byggPaaminne7Melding', () => {
+  // Alle asserts pinner EKSAKT streng (Reidars godkjente ordlyd, #591) — en
+  // omformulering skal feile testen, ikke bare et innholdssjekk.
+  it('med oppmøtested og flere påmeldte', () => {
+    const melding = byggPaaminne7Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: 'Klubbhuset',
+      antallPaameldt: 5,
+    })
+    expect(melding).toBe(
+      'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00, oppmøte på Klubbhuset. 5 påmeldt så langt. Vel møtt!'
+    )
+  })
+
+  it('uten oppmøtested (null)', () => {
+    const melding = byggPaaminne7Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: null,
+      antallPaameldt: 5,
+    })
+    expect(melding).toBe(
+      'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00. 5 påmeldt så langt. Vel møtt!'
+    )
+  })
+
+  it('ingen påmeldte ennå', () => {
+    const melding = byggPaaminne7Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: 'Klubbhuset',
+      antallPaameldt: 0,
+    })
+    expect(melding).toBe(
+      'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00, oppmøte på Klubbhuset. Ingen har meldt seg på ennå. Vel møtt!'
+    )
+  })
+
+  it('entall når nøyaktig én er påmeldt', () => {
+    const melding = byggPaaminne7Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: 'Klubbhuset',
+      antallPaameldt: 1,
+    })
+    expect(melding).toBe(
+      'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00, oppmøte på Klubbhuset. 1 påmeldt så langt. Vel møtt!'
+    )
+  })
+
+  it('whitespace-only oppmøtested behandles som fraværende', () => {
+    const melding = byggPaaminne7Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: '   ',
+      antallPaameldt: 5,
+    })
+    expect(melding).toBe(
+      'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00. 5 påmeldt så langt. Vel møtt!'
+    )
+  })
+})
+
+describe('sendPaaminneVarsler – riktig tekst per type', () => {
+  // Begge grenene av type-ternæren i sendPaaminneVarsler pinnes e2e mot
+  // arrangementEpostHtml. Kun 1-dagers-testen fantes før: snudde man ternæren
+  // feil vei, fanget suiten det asymmetrisk, og byggPaaminne7Melding kunne
+  // være aldri koblet til utsendingen uten at noen test merket det.
+  const KANAL_EPOST = {
+    varsel_logg: [],
+    varsel_innstillinger: { aktiv: true, beskrivelse: null },
+    profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+    varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+    push_subscriptions: [],
+  }
+
+  it('bruker 7-dagers-teksten for paaminne_7', async () => {
+    setupMock(KANAL_EPOST)
+
+    await sendPaaminneVarsler({
+      arrangementId: 'arr1',
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      type: 'paaminne_7',
+      oppmoetested: 'Klubbhuset',
+      antallPaameldt: 5,
+    })
+
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tekst:
+          'Det er syv dager til Vårfest. Vi starter 15. juni kl. 18:00, oppmøte på Klubbhuset. 5 påmeldt så langt. Vel møtt!',
+      }),
+    )
+  })
+
+  it('bruker "er i morgen"-teksten for paaminne_1', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+
+    await sendPaaminneVarsler({
+      arrangementId: 'arr1',
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      type: 'paaminne_1',
+    })
+
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ tekst: 'Vårfest er i morgen — 15. juni kl. 18:00' }),
+    )
   })
 })
 
@@ -1157,7 +1279,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
     ['sendNyttArrangementVarsler', 'nytt_arrangement', () =>
       sendNyttArrangementVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z' })],
     ['sendPaaminneVarsler', 'paaminnelse_7d', () =>
-      sendPaaminneVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', type: 'paaminne_7' })],
+      sendPaaminneVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', type: 'paaminne_7', oppmoetested: null, antallPaameldt: 0 })],
     ['sendArrangorPurringVarsler', 'arrangor_purring', () =>
       sendArrangorPurringVarsler({ ansvarligId: 'p1', arrangementNavn: 'Tur', aar: 2026 })],
     ['sendNyPollVarsler', 'ny_poll', () =>
