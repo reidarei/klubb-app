@@ -32,12 +32,18 @@ Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten
 - **Meldinger** — Facebook-status-aktige innlegg med kommentarer og emoji-reaksjoner. Valgfri «aktuell dato» fester et innlegg øverst på agendaen til datoen er passert — med AI-forslag fra innleggsteksten (valgfritt, krever Anthropic-nøkkel).
 - **Klubbchat** — én felles tråd for hele klubben. Egen Chat-tab i topp-headeren.
 - **Privatmeldinger** — én-til-én-samtaler.
-- **Album** — bildedelinger knyttet til arrangementer eller stå-alone. Cover-velger, lightbox med swipe og pil-navigering.
-- **Roller og ansvar** — arrangøransvar per år, kåringer (årets vinnere innen ulike kategorier).
+- **Album** — bildedelinger knyttet til arrangementer eller stå-alone. Cover-velger, lightbox med swipe og pil-navigering. Bildene fra klubbchatten vises som et eget, levende album.
+- **Roller og ansvar** — arrangøransvar per år.
+- **Kåringer** — kategorier og årets vinnere, med avstemning blant medlemmene.
+- **Fond** — klubbkassen som en enkel portefølje: eiendom, verdipapirer, kontanter og medlemsinnskudd, med verdihistorikk og avkastning. Admin redigerer.
+- **Stedene** — alle turene plottet på et Europakart, med reiserute per år og kobling til album.
+- **Pass-tilgang** — medlemmer kan lagre passnummer og utløpsdato for felles reisebooking. Andre må be om dagstilgang, som generalsekretær-rollen godkjenner; tilgangen varer 24 timer.
+- **Innspill** — medlemmer kan ønske seg funksjoner; går rett inn som GitHub Issues.
 - **Klubbinfo** — vedtekter, medlemsliste, statistikk, historikk.
 - **Bursdager og klubbjubileum** dukker opp automatisk på agendaen.
 - **Push-varsler** og **e-post-påminnelser** for nye arrangementer, kommentarer, mentions og påminnelser om RSVP.
 - **Mørk/lys modus** — brukervalgt tema (System/Mørk/Lys) fra profilsiden. «System» følger enhetens preferanse, valget huskes per enhet.
+- **Funksjonsbrytere** — admin kan skru fond- og chat-fanen av eller på for medlemmene (`app_innstillinger`). Admin ser dem uansett.
 - **PWA** — installerbar på mobil (Safari/Chrome), service worker for offline-fallback.
 
 ---
@@ -75,7 +81,7 @@ Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
 | Domene | Valgfritt — konfigureres via env-vars |
 | Testing | Vitest (enhetstester) + Playwright (e2e og RLS-tester, CI-port på hver PR) |
 
-~400 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~125 nummererte SQL-migrasjoner.
+~400 kildefiler (`.ts`, `.tsx`, `.sql`, `.css`, `.mjs`), ~130 nummererte SQL-migrasjoner.
 
 ---
 
@@ -204,7 +210,7 @@ Alle disse er kodifisert som «policies» i [`CLAUDE.md`](./CLAUDE.md) — refer
 
 ### Chat-arkitektur
 
-Fem chat-scopes (arrangement, klubb, poll, melding, privat) deler tabell-mønster men er fysisk separate tabeller (RLS er enklere per-tabell enn polymorf med `scope_type`-kolonne). All scope-spesifikk logikk samles i `lib/chat-konfig.ts` (CHAT_KONFIG) og tre generiske server actions i `lib/actions/chat.ts` (`sendChatMelding`, `oppdaterChatMelding`, `slettChatMelding`).
+Seks chat-scopes (arrangement, klubb, poll, melding, privat, albumbilde) deler tabell-mønster men er fysisk separate tabeller (RLS er enklere per-tabell enn polymorf med `scope_type`-kolonne). All scope-spesifikk logikk samles i `lib/chat-konfig.ts` (CHAT_KONFIG) og tre generiske server actions i `lib/actions/chat.ts` (`sendChatMelding`, `oppdaterChatMelding`, `slettChatMelding`).
 
 ### Hva som er bevisst utelatt
 
@@ -219,24 +225,30 @@ Fem chat-scopes (arrangement, klubb, poll, melding, privat) deler tabell-mønste
 
 ```
 app/
-  (auth)/login/                    # Offentlig login-side
+  (auth)/login/, /oppdater-passord # Offentlige auth-sider
   (app)/                           # Auth-beskyttede sider med sticky TopHeader
     page.tsx                       # Forsiden = agenda
     arrangementer/[id]/            # Arrangement-detalj + edit
+    tidligere/                     # Passerte arrangementer
     poll/[id]/, /ny/
     meldinger/[id]/, /ny/
     chat/                          # Klubbchat (egen Chat-tab i topp-headeren)
     samtaler/, samtaler/[id]/      # Privat-meldinger
-    album/, album/[id]/            # Bildealbum
+    album/, album/[id]/            # Bildealbum (+ album/chatten)
     klubbinfo/                     # Vedtekter, medlemmer, statistikk
     arrangoransvar/                # Hvem ansvarer for hva (årsvis)
-    kaaringer/                     # Vinnere per kategori og år
+    kaaringer/, kaaringspoll/      # Vinnere per kategori og år + avstemning
+    fond/, fond/rediger/           # Klubbkassen som portefølje
+    stedene/                       # Europakart over turene
     profil/, profil/rediger/
-    innstillinger/                 # Admin: medlemmer, varsler, pass-godkjenning
+    innstillinger/                 # Admin: medlemmer, varsler, pass-godkjenning,
+                                   #        bruksstatistikk, web vitals
     varsler/[id]/                  # Stand-alone varsel-side (lenker fra epost)
     innspill/                      # GitHub Issues-bro: medlemmer kan ønske ting
-  api/
-    cron/paaminne/                 # GitHub Actions ringer hit kl 06:00 UTC
+    om-appen/, bli-utvikler/       # Sikkerhet/personvern + bidra-skjema
+  api/                             # Route handlers: cron (paaminne,
+                                   # sjekk-klientfeil), ICS, push, vitals,
+                                   # feillogging, GitHub-webhook, admin
 
 components/
   agenda/, arrangement/, album/, chat/, poll/   # Per-domene-komponenter
@@ -257,7 +269,7 @@ lib/
   r2.ts            # Cloudflare R2 upload/slett
   bilde-utils.ts   # Klient-side komprimering, kategorisering
 
-supabase/migrations/  # ~110 nummererte SQL-filer
+supabase/migrations/  # ~130 nummererte SQL-filer
 
 scripts/         # Engangs-importer (FB-arrangementer, album), versjon-stamping
                  # NB: scripts/-mappen må auditeres individuelt før open source-kopiering
