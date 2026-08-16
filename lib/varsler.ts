@@ -16,7 +16,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
-import { formaterDato, FORMAT_DATO_KLOKKE } from '@/lib/dato'
+import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE } from '@/lib/dato'
 import { BASE_URL, absoluttUrl } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
@@ -27,6 +27,7 @@ import { logg } from '@/lib/logg'
 import { typeTilNoekkel } from '@/lib/varsel-typer'
 
 const formaterDatoKlokke = (iso: string) => formaterDato(iso, FORMAT_DATO_KLOKKE)
+const formaterKlokke = (iso: string) => formaterDato(iso, FORMAT_KLOKKE)
 
 // Sikkerhetsvakt: hvis BASE_URL peker til localhost, betyr det at vi kjører
 // i dev og sannsynligvis mot prod-databasen. Push-varsler med lokal URL
@@ -617,33 +618,52 @@ export function byggPaaminne7Melding({
   return setninger.join(' ')
 }
 
-export async function sendPaaminneVarsler(
-  params:
-    | {
-        type: 'paaminne_7'
-        arrangementId: string
-        tittel: string
-        startTidspunkt: string
-        oppmoetested: string | null
-        antallPaameldt: number
-      }
-    | {
-        type: 'paaminne_1'
-        arrangementId: string
-        tittel: string
-        startTidspunkt: string
-      },
-) {
-  const { arrangementId, tittel, startTidspunkt, type } = params
-  const melding =
-    type === 'paaminne_7'
-      ? byggPaaminne7Melding({
-          tittel,
-          startTidspunkt,
-          oppmoetested: params.oppmoetested,
-          antallPaameldt: params.antallPaameldt,
-        })
-      : `${tittel} er i morgen — ${formaterDatoKlokke(startTidspunkt)}`
+/**
+ * Meldingsteksten i 1-dagers-påminnelsen. Egen ren funksjon, eksportert for
+ * testing — samme presedens som byggPaaminne7Melding. Datoen utelates bevisst:
+ * «I morgen» gir den allerede, så bare klokkeslettet er ny informasjon.
+ */
+export function byggPaaminne1Melding({
+  tittel,
+  startTidspunkt,
+  oppmoetested,
+  antallPaameldt,
+}: {
+  tittel: string
+  startTidspunkt: string
+  oppmoetested: string | null
+  antallPaameldt: number
+}): string {
+  const sted = oppmoetested?.trim()
+  // Kommalisten bygges opp av delene som faktisk finnes, så et manglende
+  // oppmøtested ikke etterlater en tom «oppmøte på»-hale (samme regel som 7-dagers).
+  const ledd = [tittel, formaterKlokke(startTidspunkt)]
+  if (sted) ledd.push(`oppmøte på ${sted}`)
+  const setninger = [
+    `I morgen er det ${ledd.join(', ')}.`,
+    antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`,
+    'Vel møtt!',
+  ]
+  return setninger.join(' ')
+}
+
+export async function sendPaaminneVarsler({
+  arrangementId,
+  tittel,
+  startTidspunkt,
+  oppmoetested,
+  antallPaameldt,
+  type,
+}: {
+  arrangementId: string
+  tittel: string
+  startTidspunkt: string
+  oppmoetested: string | null
+  antallPaameldt: number
+  type: 'paaminne_7' | 'paaminne_1'
+}) {
+  const bygg = type === 'paaminne_7' ? byggPaaminne7Melding : byggPaaminne1Melding
+  const melding = bygg({ tittel, startTidspunkt, oppmoetested, antallPaameldt })
   await sendVarsel({
     tittel: `Påminnelse: ${tittel}`,
     melding,

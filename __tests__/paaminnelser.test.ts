@@ -105,12 +105,24 @@ describe('kjorPaaminnelser', () => {
     const imorgen = dagStreng(addDays(idag, 1))
 
     const admin = lagMockAdmin({
-      [imorgen]: [{ id: 'arr2', tittel: 'Grillkveld', start_tidspunkt: `${imorgen}T18:00:00Z`, oppmoetested: null, paameldinger: [] }],
+      // Samme fixture-form som 7-dagers: 1-dagers-teksten teller også kun `ja`.
+      [imorgen]: [{
+        id: 'arr2',
+        tittel: 'Grillkveld',
+        start_tidspunkt: `${imorgen}T18:00:00Z`,
+        oppmoetested: 'Klubbhuset',
+        paameldinger: [{ status: 'ja' }, { status: 'ja' }, { status: 'kanskje' }, { status: 'nei' }],
+      }],
     })
 
     await kjorPaaminnelser(admin)
     expect(mockSendPaaminne).toHaveBeenCalledWith(
-      expect.objectContaining({ arrangementId: 'arr2', type: 'paaminne_1' })
+      expect.objectContaining({
+        arrangementId: 'arr2',
+        type: 'paaminne_1',
+        oppmoetested: 'Klubbhuset',
+        antallPaameldt: 2,
+      })
     )
   })
 

@@ -51,6 +51,7 @@ import {
   sendChatMentionVarsler,
   formaterHilsenMelding,
   byggPaaminne7Melding,
+  byggPaaminne1Melding,
 } from '@/lib/varsler'
 
 beforeEach(() => {
@@ -242,6 +243,8 @@ describe('wrapper-funksjoner', () => {
       tittel: 'Test',
       startTidspunkt: '2026-06-15T16:00:00Z',
       type: 'paaminne_1',
+      oppmoetested: null,
+      antallPaameldt: 0,
     })
     expect(eqCalls).toContain('paaminnelse_1d')
   })
@@ -449,7 +452,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
     )
   })
 
-  it('bruker "er i morgen"-teksten for paaminne_1', async () => {
+  it('bruker "I morgen er det"-teksten for paaminne_1', async () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
@@ -463,11 +466,84 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
       type: 'paaminne_1',
+      oppmoetested: 'Klubbhuset',
+      antallPaameldt: 5,
     })
 
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
-      expect.objectContaining({ tekst: 'Vårfest er i morgen — 15. juni kl. 18:00' }),
+      expect.objectContaining({
+        tekst: 'I morgen er det Vårfest, kl. 18:00, oppmøte på Klubbhuset. 5 påmeldt så langt. Vel møtt!',
+      }),
     )
+  })
+})
+
+describe('byggPaaminne1Melding', () => {
+  it('med oppmøtested og flere påmeldte', () => {
+    expect(
+      byggPaaminne1Melding({
+        tittel: 'Vårfest',
+        startTidspunkt: '2026-06-15T16:00:00Z',
+        oppmoetested: 'Klubbhuset',
+        antallPaameldt: 5,
+      }),
+    ).toBe('I morgen er det Vårfest, kl. 18:00, oppmøte på Klubbhuset. 5 påmeldt så langt. Vel møtt!')
+  })
+
+  it('uten oppmøtested (null) — ingen tom hale i kommalisten', () => {
+    expect(
+      byggPaaminne1Melding({
+        tittel: 'Vårfest',
+        startTidspunkt: '2026-06-15T16:00:00Z',
+        oppmoetested: null,
+        antallPaameldt: 5,
+      }),
+    ).toBe('I morgen er det Vårfest, kl. 18:00. 5 påmeldt så langt. Vel møtt!')
+  })
+
+  it('whitespace-only oppmøtested behandles som fraværende', () => {
+    expect(
+      byggPaaminne1Melding({
+        tittel: 'Vårfest',
+        startTidspunkt: '2026-06-15T16:00:00Z',
+        oppmoetested: '   ',
+        antallPaameldt: 5,
+      }),
+    ).toBe('I morgen er det Vårfest, kl. 18:00. 5 påmeldt så langt. Vel møtt!')
+  })
+
+  it('ingen påmeldte ennå', () => {
+    expect(
+      byggPaaminne1Melding({
+        tittel: 'Vårfest',
+        startTidspunkt: '2026-06-15T16:00:00Z',
+        oppmoetested: 'Klubbhuset',
+        antallPaameldt: 0,
+      }),
+    ).toBe('I morgen er det Vårfest, kl. 18:00, oppmøte på Klubbhuset. Ingen har meldt seg på ennå. Vel møtt!')
+  })
+
+  it('entall når nøyaktig én er påmeldt', () => {
+    expect(
+      byggPaaminne1Melding({
+        tittel: 'Vårfest',
+        startTidspunkt: '2026-06-15T16:00:00Z',
+        oppmoetested: 'Klubbhuset',
+        antallPaameldt: 1,
+      }),
+    ).toBe('I morgen er det Vårfest, kl. 18:00, oppmøte på Klubbhuset. 1 påmeldt så langt. Vel møtt!')
+  })
+
+  // Datoen skal IKKE stå i teksten — «I morgen» gir den allerede. Pinnes fordi
+  // en fremtidig refaktor lett kan gjenbruke formaterDatoKlokke ved et uhell.
+  it('utelater datoen', () => {
+    const melding = byggPaaminne1Melding({
+      tittel: 'Vårfest',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      oppmoetested: null,
+      antallPaameldt: 5,
+    })
+    expect(melding).not.toContain('juni')
   })
 })
 

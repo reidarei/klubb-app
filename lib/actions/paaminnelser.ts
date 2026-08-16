@@ -28,10 +28,10 @@ function dagStreng(dato: Date): string {
 // «ingen arrangementer denne dagen» — cronen ville stille hoppet over en hel
 // dags påminnelser i stedet for å synliggjøre en DB-feil.
 // paameldinger (status) hentes i samme spørring som arrangementet (#591) — for
-// å telle «N påmeldt» i 7-dagers-teksten uten en egen spørring per arrangement
+// å telle «N påmeldt» i påminnelsestekstene uten en egen spørring per arrangement
 // (N+1) og uten en ny feilsti: tellingen arver fail-closed-vakten under.
-// 1- og 3-dagers-kallene drar med seg embeddet ubrukt. Bevisst: ~18 enum-felt
-// per arrangement er billigere enn en `medPaameldinger`-bryter i denne funksjonen.
+// Både 7- og 1-dagers bruker embeddet; kun 3-dagers-purringen drar det med ubrukt,
+// og den gjør uansett sitt eget påmeldings-oppslag for å finne hvem som ikke har svart.
 async function hentForDag(admin: Admin, dag: string) {
   const { data, error } = await admin
     .from('arrangementer')
@@ -90,8 +90,16 @@ export async function kjorPaaminnelser(admin: Admin) {
     )
   }
   for (const a of arr_1) {
+    const antallPaameldt = a.paameldinger.filter(p => p.status === 'ja').length
     oppgaver.push(
-      sendPaaminneVarsler({ arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt, type: 'paaminne_1' })
+      sendPaaminneVarsler({
+        arrangementId: a.id,
+        tittel: a.tittel,
+        startTidspunkt: a.start_tidspunkt,
+        type: 'paaminne_1',
+        oppmoetested: a.oppmoetested,
+        antallPaameldt,
+      })
         .then(() => ({ id: a.id, type: 'paaminne_1' }))
     )
   }
