@@ -8,6 +8,9 @@ export const FORMAT_DATO_KLOKKE = "d. MMMM 'kl.' HH:mm"
 // Kun klokkeslett — brukes der datoen allerede er gitt av konteksten, f.eks.
 // 1-dagers-påminnelsen som innledes med «I morgen».
 export const FORMAT_KLOKKE = "'kl.' HH:mm"
+// Kun dato — brukes der klokkeslettet står i en egen setning, f.eks.
+// påminnelsenes «Oppmøte {sted} kl. {tid}».
+export const FORMAT_DATO_KORT = 'd. MMMM'
 
 /**
  * Formater en ISO-dato i norsk tidssone (Europe/Oslo).

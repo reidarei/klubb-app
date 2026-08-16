@@ -16,7 +16,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
-import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE } from '@/lib/dato'
+import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE, FORMAT_DATO_KORT } from '@/lib/dato'
 import { BASE_URL, absoluttUrl } from '@/lib/config'
 import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
@@ -28,6 +28,7 @@ import { typeTilNoekkel } from '@/lib/varsel-typer'
 
 const formaterDatoKlokke = (iso: string) => formaterDato(iso, FORMAT_DATO_KLOKKE)
 const formaterKlokke = (iso: string) => formaterDato(iso, FORMAT_KLOKKE)
+const formaterDatoKort = (iso: string) => formaterDato(iso, FORMAT_DATO_KORT)
 
 // Sikkerhetsvakt: hvis BASE_URL peker til localhost, betyr det at vi kjører
 // i dev og sannsynligvis mot prod-databasen. Push-varsler med lokal URL
@@ -590,6 +591,22 @@ export async function sendOppdatertVarsler({
 }
 
 /**
+ * «Oppmøte {sted} kl. {tid}.» — delt av begge påminnelsene, så de to aldri
+ * kan drifte fra hverandre. Uten oppmøtested faller den tilbake til
+ * «Vi starter kl. {tid}.»; «Oppmøte kl. 18:00» ville lest som en skrivefeil.
+ */
+function oppmoteSetning(startTidspunkt: string, oppmoetested: string | null): string {
+  const sted = oppmoetested?.trim()
+  const tid = formaterKlokke(startTidspunkt)
+  return sted ? `Oppmøte ${sted} ${tid}.` : `Vi starter ${tid}.`
+}
+
+/** Felles hale i begge påminnelsene: påmeldingstall + hilsen. */
+function paameldtSetning(antallPaameldt: number): string {
+  return antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`
+}
+
+/**
  * Bygger 7-dagers-påminnelsesteksten (#591). Ren funksjon — eksportert for
  * testing, samme presedens som formaterHilsenMelding. «syv» i første setning
  * er hardkodet tekst, ikke avledet fra PAAMINNELSE_DAGER.LANG (=== 7) — endres
@@ -606,13 +623,12 @@ export function byggPaaminne7Melding({
   oppmoetested: string | null
   antallPaameldt: number
 }): string {
-  const sted = oppmoetested?.trim()
+  // Datoen står her, ikke i oppmøte-setningen — klokkeslettet hører sammen med
+  // stedet, og syv dager unna trenger man selve datoen for å planlegge.
   const setninger = [
-    `Det er syv dager til ${tittel}.`,
-    sted
-      ? `Vi starter ${formaterDatoKlokke(startTidspunkt)}, oppmøte på ${sted}.`
-      : `Vi starter ${formaterDatoKlokke(startTidspunkt)}.`,
-    antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`,
+    `Det er syv dager til ${tittel}, ${formaterDatoKort(startTidspunkt)}.`,
+    oppmoteSetning(startTidspunkt, oppmoetested),
+    paameldtSetning(antallPaameldt),
     'Vel møtt!',
   ]
   return setninger.join(' ')
@@ -634,14 +650,10 @@ export function byggPaaminne1Melding({
   oppmoetested: string | null
   antallPaameldt: number
 }): string {
-  const sted = oppmoetested?.trim()
-  // Kommalisten bygges opp av delene som faktisk finnes, så et manglende
-  // oppmøtested ikke etterlater en tom «oppmøte på»-hale (samme regel som 7-dagers).
-  const ledd = [tittel, formaterKlokke(startTidspunkt)]
-  if (sted) ledd.push(`oppmøte på ${sted}`)
   const setninger = [
-    `I morgen er det ${ledd.join(', ')}.`,
-    antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`,
+    `I morgen er det ${tittel}.`,
+    oppmoteSetning(startTidspunkt, oppmoetested),
+    paameldtSetning(antallPaameldt),
     'Vel møtt!',
   ]
   return setninger.join(' ')
