@@ -197,6 +197,10 @@ export const TEMA_EVENT = 'temaEndret' as const
 // Brukes som PostgREST-mønster: .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
 export const CHAT_STICKER_MONSTER = '%/sticker-%'
 
+// Antall rader vist i «Hva er nytt»-endringsloggen (/om-appen) før «Vis
+// eldre» trengs. Se #595.
+export const ENDRINGSLOGG_SYNLIGE = 10
+
 // Hvor lenge dra-ned-for-oppdater venter på /api/ping før den gir opp og viser
 // «Oppdatering feilet» (#572). Sjenerøs med vilje: på ustabilt mobilnett er en
 // treg forbindelse ikke det samme som ingen forbindelse, og en falsk «feilet»

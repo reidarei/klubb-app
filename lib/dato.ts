@@ -11,6 +11,9 @@ export const FORMAT_KLOKKE = "'kl.' HH:mm"
 // Kun dato — brukes der klokkeslettet står i en egen setning, f.eks.
 // påminnelsenes «Oppmøte {sted} kl. {tid}».
 export const FORMAT_DATO_KORT = 'd. MMMM'
+// Dato med årstall — brukes der visningen lever over årsskifter og «5. mai»
+// alene ville vært tvetydig, f.eks. endringsloggen på /om-appen (#595).
+export const FORMAT_DATO_AAR = 'd. MMMM yyyy'
 
 /**
  * Formater en ISO-dato i norsk tidssone (Europe/Oslo).

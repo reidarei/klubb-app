@@ -1,10 +1,15 @@
 import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Icon from '@/components/ui/Icon'
+import Endringslogg from '@/components/Endringslogg'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_NAVN } from '@/lib/klubb-config'
+import { byggEndringslogg } from '@/lib/endringslogg'
+import { ENDRINGER } from '@/lib/endringslogg-data'
 
 export default function OmAppen() {
+  const endringsRader = byggEndringslogg(ENDRINGER, versjon.versjon)
+
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 26 }}>
@@ -107,6 +112,15 @@ export default function OmAppen() {
           nevnt over) forblir innen EU.
         </Avsnitt>
       </section>
+
+      {/* Hva er nytt — «mindre»-rader er utledet fra versjonsnummeret, ikke
+       * lagret. Se lib/endringslogg.ts og #595. */}
+      {endringsRader.length > 0 && (
+        <section style={{ marginBottom: 30 }}>
+          <SectionLabel>Hva er nytt</SectionLabel>
+          <Endringslogg rader={endringsRader} />
+        </section>
+      )}
 
       {/* Funn / spørsmål */}
       <section style={{ marginBottom: 30 }}>
