@@ -80,3 +80,11 @@ export const KLUBB_FARGE_PRIMAER_HOT =
   process.env.NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_HOT ?? '#f5e8c8'
 export const KLUBB_FARGE_BAKGRUNN =
   process.env.NEXT_PUBLIC_KLUBB_FARGE_BAKGRUNN ?? '#0e0f13'
+
+// Personvern-avsnittet «Hvor data ligger» på /om-appen. Sett NEXT_PUBLIC_DATA_LOKASJON
+// til en beskrivelse av hvor din instans faktisk ligger. Dette er klubb-spesifikt
+// fordi Supabase, Cloudflare R2 og Vercel kan alle velges til ulike regioner —
+// kun du vet hvor DIN data befinner seg. Se docs/klubb-tilpasning.md § Miljøvariabler.
+export const DATA_LOKASJON =
+  process.env.NEXT_PUBLIC_DATA_LOKASJON ??
+  'Sett NEXT_PUBLIC_DATA_LOKASJON i dine miljøvariabler for å fortelle medlemmene hvor klubbens data er lagret (hvilke leverandører og regioner du valgte).'

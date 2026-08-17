@@ -3,7 +3,7 @@ import SectionLabel from '@/components/ui/SectionLabel'
 import Icon from '@/components/ui/Icon'
 import Endringslogg from '@/components/Endringslogg'
 import versjon from '@/lib/versjon.json'
-import { KLUBB_NAVN } from '@/lib/klubb-config'
+import { KLUBB_NAVN, DATA_LOKASJON } from '@/lib/klubb-config'
 import { byggEndringslogg } from '@/lib/endringslogg'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 
@@ -106,10 +106,22 @@ export default function OmAppen() {
           øverst frem til den datoen. Dette skjer automatisk mens du skriver, og
           bare på nye innlegg — ingen annen tekst i appen sendes ut.
         </Avsnitt>
+        <Avsnitt overskrift="E-postvarsler">
+          Varsler du får på e-post sendes via Resend (e-postleverandør i USA).
+          Innholdet i varselet — for eksempel en chatmelding eller navnet på
+          et arrangement — passerer dermed deres servere. Push-varsler går
+          ikke denne veien — de leveres kryptert via Apple/Google sine
+          varslingstjenester, som ikke kan lese innholdet.
+        </Avsnitt>
+        <Avsnitt overskrift="Innspill og feilrapportering">
+          Sender du inn et innspill, blir det en sak i et privat GitHub-repo
+          (USA) med navnet ditt og teksten du skrev. Tekniske feil rapporteres
+          til Sentry for feilsøking, og der følger profil-id-en din med.
+        </Avsnitt>
+        {/* Teksten hentes fra klubb-config, ikke hardkodes her — se
+         * kommentaren ved DATA_LOKASJON i lib/klubb-config.ts (#579). */}
         <Avsnitt overskrift="Hvor data ligger" siste>
-          Database og fillagring hos Supabase i Dublin (EU). Hosting hos
-          Vercel, også Dublin-region. All annen data (utenom AI-funksjoner
-          nevnt over) forblir innen EU.
+          {DATA_LOKASJON}
         </Avsnitt>
       </section>
 
