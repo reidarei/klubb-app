@@ -22,6 +22,7 @@ Alle klubb-spesifikke tekstverdier samles i `lib/klubb-config.ts`. Verdiene lese
 | `NEXT_PUBLIC_KLUBB_STED` | `Oslo` | Stiftelsessted, vises på klubbinfo-siden | `Frogner` |
 | `NEXT_PUBLIC_KLUBB_OM` | generisk plassholder | «Om klubben»-avsnittene på klubbinfo-siden. Flere avsnitt separeres med `\|` | `Stiftet over en pils.\|Vi møtes hver måned.` |
 | `NEXT_PUBLIC_KLUBB_MEDLEMMER_TITTEL` | `Medlemmene` | Overskrift på medlemslisten | `Gutta` |
+| `NEXT_PUBLIC_DATA_LOKASJON` | *(instruktiv tekst om å sette variabelen)* | Personvern-teksten på `/om-appen` som forklarer medlemmene hvor deres data lagres. Sett denne til en beskrivelse av hvilke leverandører og regioner DIN instans bruker (Supabase-region, Cloudflare R2 bucket, Vercel-region osv.). | `Database hos Supabase i Stockholm. Bilder lagres i Cloudflare R2, EU-bucket. Hosting hos Vercel i Frankfurt-region.` |
 | `NEXT_PUBLIC_ROLLE_TITTEL_GENERALSEKRETAER` | `Generalsekretær` | Visningsnavn for den særegne rollen med gul glød. Rolle-koden i DB (`generalsekretaer`) endres ikke. | `Æresmedlem` |
 
 Sett disse i `.env.local` lokalt og som Vercel Environment Variables i produksjon.
