@@ -1330,6 +1330,14 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
   function mockMedTeller(aktivPerNoekkel: Record<string, boolean>) {
     const spurteNoekler: string[] = []
     mockFrom.mockImplementation((tabell: string) => {
+      // sendPurringVarsler (kanskje-raden under) beregner mottakere FØR sendVarsel
+      // kalles, så den trenger en ekte kanskje-svarer for i det hele tatt å nå
+      // porten som teller opp mot varsel_innstillinger. De andre wrapperne i
+      // denne testen bryr seg ikke om profiles/paameldinger — de blokkeres av
+      // sin egen (aktiv=false) nøkkel inne i sendVarsel før noen mottakere
+      // hentes, så disse fallback-radene er harmløse for dem.
+      if (tabell === 'paameldinger') return lagChain([{ profil_id: 'p1', status: 'kanskje' }])
+      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
       if (tabell !== 'varsel_innstillinger') return lagChain([])
       // Nøkkelen er ikke kjent når chainen lages — .eq('noekkel', x) kommer
       // etterpå — så maybeSingle leser den fra en lukket variabel.
@@ -1360,11 +1368,18 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
       sendArrangorPurringVarsler({ ansvarligId: 'p1', arrangementNavn: 'Tur', aar: 2026 })],
     ['sendNyPollVarsler', 'ny_poll', () =>
       sendNyPollVarsler({ pollId: 'p1', spoersmaal: 'Hva?', svarfrist: '2026-06-15T16:00:00Z' })],
+    ['sendPurringVarsler (kanskje)', 'purring_kanskje', () =>
+      sendPurringVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', variant: 'kanskje' })],
   ])('%s slår opp %s nøyaktig én gang', async (_navn, forventetNoekkel, kall) => {
     const spurte = mockMedTeller({ [forventetNoekkel]: false })
     await kall()
-    // Nøyaktig én — to betyr at wrapperen har fått tilbake sin egen sjekk.
-    expect(spurte).toEqual([forventetNoekkel])
+    // Eksakt liste, ikke bare «forventetNoekkel forekommer én gang»: vakten skal
+    // også fange at wrapperen slår opp en ANNEN bryter enn sin egen — det var
+    // nøyaktig feilmodusen i #547. 'test_modus' filtreres bort fordi det ikke er
+    // en bryter for noen varseltype, men en uavhengig sperre hentTestModus()
+    // slår opp for alle typer på vei til mottakerlista (kun de wrapperne som
+    // kommer forbi sin egen aktiv-sjekk rekker dit).
+    expect(spurte.filter(n => n !== 'test_modus')).toEqual([forventetNoekkel])
   })
 
   it('manuell purring går ut selv når den automatiske purringen er skrudd av', async () => {
@@ -1399,11 +1414,50 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
       startTidspunkt: '2026-06-15T16:00:00Z',
       fraNavn: 'Nils',
       hilsen: 'Kom igjen, gutta',
-      manuell: true,
+      variant: 'manuell',
     })
 
     expect(mockSendEpostBatch).toHaveBeenCalledWith([
       expect.objectContaining({ til: 'ola@test.no', emne: 'Husk å svare!' }),
+    ])
+  })
+
+  it('kanskje-purring går ut selv når purring_aktiv og purring_manuell er AV (speiler #547)', async () => {
+    // Samme feilmodus som testen over, men for den tredje varianten: en
+    // regresjon som lot kanskje-purring lese purring_aktiv- eller
+    // purring_manuell-bryteren ville stanset «Bestem dere» stille.
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_innstillinger') {
+        let noekkel = ''
+        const chain = lagChain([]) as Record<string, unknown>
+        chain.eq = vi.fn((col: string, val: string) => {
+          if (col === 'noekkel') noekkel = val
+          return chain
+        })
+        chain.maybeSingle = vi.fn(async () => ({
+          // purring_aktiv og purring_manuell er AV, purring_kanskje er PÅ.
+          data: { aktiv: noekkel === 'purring_kanskje', beskrivelse: null },
+          error: null,
+        }))
+        return chain
+      }
+      if (tabell === 'paameldinger') return lagChain([{ profil_id: 'p1', status: 'kanskje' }])
+      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
+      if (tabell === 'push_subscriptions') return lagChain([])
+      if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
+      return lagChain([])
+    })
+
+    await sendPurringVarsler({
+      arrangementId: 'a1',
+      tittel: 'Vårtur',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      variant: 'kanskje',
+    })
+
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ til: 'ola@test.no', emne: 'Bestem deg!' }),
     ])
   })
 
@@ -1439,5 +1493,89 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
     })
 
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () => {
+  // Delt fixture for begge tester under: p1 svarte ja, p2 kanskje, p3 nei,
+  // p4 har ikke svart i det hele tatt, p5 svarte kanskje men er ikke en aktiv
+  // profil (se paameldinger-fixturen). Kanskje-varianten skal treffe KUN p2.
+  // Manuell (uten svar) skal treffe KUN p4 — speilvendt, og verifiserer at
+  // utvidelsen av select til 'profil_id, status' ikke har endret uten_svar-
+  // grenen, som fortsatt kun ser på HVEM som har svart, ikke MED HVA.
+  //
+  // Mocken (lagChain) filtrerer ikke faktisk på .in()/.eq() — den returnerer
+  // hele tabellen uansett filter, i motsetning til ekte PostgREST. Derfor kan
+  // vi ikke lese av sendEpostBatch-mottakerne direkte (de ville inkludert
+  // alle fire uansett). Testen spionerer i stedet på .in('id', …)-kallet
+  // sendVarsel gjør mot 'profiles' med den mottakerlisten sendPurringVarsler
+  // regnet ut — det er nøyaktig linjen der filtreringslogikken lever.
+  function mockMedInSpion() {
+    const idKall: string[][] = []
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'paameldinger') {
+        return lagChain([
+          { profil_id: 'p1', status: 'ja' },
+          { profil_id: 'p2', status: 'kanskje' },
+          { profil_id: 'p3', status: 'nei' },
+          // p5 svarte kanskje, men finnes IKKE i profiles-fixturen under — han
+          // står for en som siden er deaktivert (eller filtrert bort av
+          // testmodus). Uten denne raden er snittet med hentProfiler en no-op,
+          // og en regresjon som purret rått over påmeldingsradene ville
+          // passert testen.
+          { profil_id: 'p5', status: 'kanskje' },
+        ])
+      }
+      if (tabell === 'profiles') {
+        const chain = lagChain([
+          { id: 'p1', navn: 'Ola', epost: 'ola@test.no' },
+          { id: 'p2', navn: 'Kari', epost: 'kari@test.no' },
+          { id: 'p3', navn: 'Per', epost: 'per@test.no' },
+          { id: 'p4', navn: 'Nils', epost: 'nils@test.no' },
+        ]) as Record<string, unknown>
+        chain.in = vi.fn((col: string, ids: string[]) => {
+          if (col === 'id') idKall.push(ids)
+          return chain
+        })
+        return chain
+      }
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([
+          { profil_id: 'p2', push_aktiv: false, epost_aktiv: true },
+          { profil_id: 'p4', push_aktiv: false, epost_aktiv: true },
+        ])
+      }
+      if (tabell === 'push_subscriptions') return lagChain([])
+      if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
+      // varsel_innstillinger uten data → default aktiv (se erVarselAktiv)
+      return lagChain([])
+    })
+    return idKall
+  }
+
+  it('variant kanskje sender kun til p2', async () => {
+    const idKall = mockMedInSpion()
+
+    await sendPurringVarsler({
+      arrangementId: 'a1',
+      tittel: 'Vårtur',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      variant: 'kanskje',
+    })
+
+    expect(idKall).toEqual([['p2']])
+  })
+
+  it('variant manuell sender kun til p4 (uendret uten_svar-oppførsel)', async () => {
+    const idKall = mockMedInSpion()
+
+    await sendPurringVarsler({
+      arrangementId: 'a1',
+      tittel: 'Vårtur',
+      startTidspunkt: '2026-06-15T16:00:00Z',
+      variant: 'manuell',
+    })
+
+    expect(idKall).toEqual([['p4']])
   })
 })

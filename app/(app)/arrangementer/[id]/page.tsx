@@ -588,7 +588,9 @@ export default async function ArrangementDetaljer({
                 <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
               </div>
               {/* Avatar-rad (ja-folk) + modal (alle svar gruppert etter status, #285).
-                  kanPurre=kanRedigere slik at kun admin/oppretter ser «Purre disse». (#287) */}
+                  kanPurre=kanRedigere slik at kun admin/oppretter ser purre-pillene:
+                  «Purre disse» i uten-svar-gruppa (#287) og «Bestem dere» i
+                  kanskje-gruppa (#596). */}
               <PaameldteListe
                 jaListe={jaListeMedNavn}
                 alleSvar={alleSvar}

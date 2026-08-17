@@ -3,7 +3,12 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { sendNyttArrangementVarsler, sendOppdatertVarsler, sendPurringVarsler } from '@/lib/varsler'
+import {
+  sendNyttArrangementVarsler,
+  sendOppdatertVarsler,
+  sendPurringVarsler,
+  type PurreVariant,
+} from '@/lib/varsler'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { naa } from '@/lib/dato'
@@ -263,10 +268,13 @@ export async function varslOmArrangement(arrangementId: string, hilsen?: string)
   revalidatePath(`/arrangementer/${arrangementId}`)
 }
 
-// Manuell purring til alle som ikke har svart — trigges av admin/oppretter fra
-// «Vis liste»-modalen via «Purre disse»-knappen. Ignorerer purring_aktiv-bryteren
-// siden dette er en bevisst admin-handling, ikke en cron-jobb. Se #287.
-export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
+// Delt kropp for de to manuelle purre-handlingene — «Purre disse» (uten svar)
+// og «Bestem dere» (kanskje). Trekt ut fra det som opprinnelig var
+// purreUtenSvar alene: de to varslene deler ALT unntatt hvilken variant de
+// sender videre til sendPurringVarsler, og risikoen ved to nesten-like
+// kropper er drift — en fiks (f.eks. i tilgangssjekken) som lander i den ene
+// men glemmes i den andre. Se #596.
+async function purreArrangement(arrangementId: string, variant: PurreVariant, hilsen?: string) {
   const { supabase, user } = await ensureInnlogget()
 
   const trimmetHilsen = hilsen?.trim()
@@ -287,6 +295,7 @@ export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
   if (!arrangement) throw new Error('Arrangement ikke funnet')
 
   // Kun admin eller oppretter kan purre — samme mønster som varslOmArrangement.
+  // Samme tilgangsregel for begge varianter: ingen ny rolle-logikk for kanskje.
   const profil = await getProfil()
   const erAdmin = kanAdministrere(profil?.rolle)
   const erOpprettet = arrangement.opprettet_av === user.id
@@ -306,20 +315,33 @@ export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
   }
 
   // Vi sender IKKE en pre-beregnet mottakerliste — sendPurringVarsler beregner
-  // utenSvar selv så tett opp mot utsendingen som mulig. Det lukker et TOCTOU-vindu
+  // mottakerne selv så tett opp mot utsendingen som mulig. Det lukker et TOCTOU-vindu
   // hvor noen rekker å svare mellom beregning her og utsending der. Vi signaliserer
-  // bare at dette er en manuell admin-handling, som får sin egen varseltype og
-  // dermed sin egen bryter i kontrollpanelet. (#287, #547)
+  // bare hvilken variant dette er, som får sin egen varseltype og dermed sin
+  // egen bryter i kontrollpanelet. (#287, #547, #596)
   await sendPurringVarsler({
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,
     fraNavn,
     hilsen: trimmetHilsen,
-    manuell: true,
+    variant,
   })
 
-  // Refresh siden så «Ikke svart»-listen oppdateres hvis noen svarte
+  // Refresh siden så listen oppdateres hvis noen svarte
   // i mellomtiden (eller cron har kjørt mellom åpning og sending).
   revalidatePath(`/arrangementer/${arrangementId}`)
+}
+
+// Manuell purring til alle som ikke har svart — trigges av admin/oppretter fra
+// «Vis liste»-modalen via «Purre disse»-knappen. Ignorerer purring_aktiv-bryteren
+// siden dette er en bevisst admin-handling, ikke en cron-jobb. Se #287.
+export async function purreUtenSvar(arrangementId: string, hilsen?: string) {
+  return purreArrangement(arrangementId, 'manuell', hilsen)
+}
+
+// Manuell purring til de som har svart kanskje — trigges av admin/oppretter fra
+// «Vis liste»-modalen via «Bestem dere»-knappen. Se #596.
+export async function purreKanskje(arrangementId: string, hilsen?: string) {
+  return purreArrangement(arrangementId, 'kanskje', hilsen)
 }

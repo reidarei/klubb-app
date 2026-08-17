@@ -4,13 +4,15 @@
 // som åpner modal med ALLE aktive medlemmer gruppert etter RSVP-status (#285).
 // Avatar-raden er uendret — den viser kun ja-folk via jaListe-prop.
 // Modal-innholdet drives av alleSvar-prop som inkluderer ikke-svart.
-// «Purre disse»-pill i «Ikke svart»-gruppe-headeren for admin/oppretter (#287).
+// To purre-piller i gruppe-headerne for admin/oppretter: «Purre disse» i
+// «Ikke svart» (#287) og «Bestem dere» i «Kanskje» (#596). Samme modal,
+// parametrisert på hvilket mål som ble trykket — se PurreMaal under.
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import RsvpGlyph from '@/components/arrangement/RsvpGlyph'
-import { purreUtenSvar } from '@/lib/actions/arrangementer'
+import { purreUtenSvar, purreKanskje } from '@/lib/actions/arrangementer'
 import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
 
 export type RsvpStatus = 'ja' | 'kanskje' | 'nei' | 'ikke_svart'
@@ -49,6 +51,33 @@ const GRUPPE_META: Record<RsvpStatus, { label: string; farge: string }> = {
 }
 const GRUPPE_REKKEFØLGE: RsvpStatus[] = ['ja', 'kanskje', 'nei', 'ikke_svart']
 
+// Hvilken gruppe purre-modalen ble åpnet for. Styrer tekst og hvilken
+// server action send-knappen dispatcher til. (#596)
+type PurreMaal = 'ikke_svart' | 'kanskje'
+
+// Tekst per mål — én modal, to sett tekster, i stedet for to nesten-like
+// modaler. Send-knappen har bevisst samme tekst («Send purring») for begge —
+// det er handlingen (send), ikke målet, som er relevant der.
+const PURRE_TEKST: Record<
+  PurreMaal,
+  { pill: string; tittel: string; broedtekst: (arrangementTittel: string) => string; ariaLabel: (arrangementTittel: string) => string }
+> = {
+  ikke_svart: {
+    pill: 'Purre disse',
+    tittel: 'Purre disse',
+    broedtekst: arrangementTittel =>
+      `Skriv en valgfri hilsen til de som ikke har svart på ${arrangementTittel}, eller bare send.`,
+    ariaLabel: arrangementTittel => `Purre de som ikke har svart på ${arrangementTittel}`,
+  },
+  kanskje: {
+    pill: 'Bestem dere',
+    tittel: 'Bestem dere',
+    broedtekst: arrangementTittel =>
+      `Skriv en valgfri hilsen til de som har svart kanskje på ${arrangementTittel}, eller bare send.`,
+    ariaLabel: arrangementTittel => `Be de som har svart kanskje om å bestemme seg for ${arrangementTittel}`,
+  },
+}
+
 // Glyph som korresponderer til hver RSVP-status — vist i raden ved siden av navn.
 const STATUS_GLYPH: Record<RsvpStatus, React.ComponentProps<typeof RsvpGlyph>['name']> = {
   ja: 'check',
@@ -63,11 +92,17 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
   const triggerRef = useRef<HTMLElement | null>(null)
 
   // Purre-modal state — søsken til hovedmodalen slik at de aldri er åpne
-  // samtidig. Lukk hoved → åpne purre ved klikk på «Purre disse». (#287)
-  const [purreModalAapen, setPurreModalAapen] = useState(false)
+  // samtidig. Lukk hoved → åpne purre ved klikk på pillen. (#287, #596)
+  // purreMaal er null når modalen er lukket, ellers hvilken gruppe den ble
+  // åpnet for — purreModalAapen er avledet av den, ikke en egen boolean, så
+  // det er umulig for modalen å være åpen uten å vite hvilket mål den gjelder.
+  const [purreMaal, setPurreMaal] = useState<PurreMaal | null>(null)
+  const purreModalAapen = purreMaal !== null
   const [purreMelding, setPurreMelding] = useState('')
   const [purrePending, startPurreTransition] = useTransition()
-  const [purreSendt, setPurreSendt] = useState(false)
+  // purretMaal husker hvilket mål som sist ble purret, slik at «Purret»-teksten
+  // vises på riktig pill — ikke begge — etter en sending.
+  const [purretMaal, setPurretMaal] = useState<PurreMaal | null>(null)
   const [purreFeil, setPurreFeil] = useState('')
   // Synkron guard mot dobbelklikk — settes før useTransition rekker å markere pending.
   const purreSendingRef = useRef(false)
@@ -129,7 +164,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
   useEffect(() => {
     if (!purreModalAapen) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !purreSendingRef.current) setPurreModalAapen(false)
+      if (e.key === 'Escape' && !purreSendingRef.current) setPurreMaal(null)
     }
     document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
@@ -152,31 +187,33 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
     }
   }, [purreModalAapen])
 
-  function aapnePurreModal() {
-    // Lukk hoved-modalen først, åpne purre-modalen direkte. (#287)
+  function aapnePurreModal(maal: PurreMaal) {
+    // Lukk hoved-modalen først, åpne purre-modalen direkte. (#287, #596)
     purreTriggerRef.current = document.activeElement as HTMLElement | null
     setModalAapen(false)
     setPurreFeil('')
     setPurreMelding('')
     // Reset «Purret»-tilstanden så admin kan purre igjen senere i økten —
     // folk svarer over tid, og det er legitimt å purre flere ganger. (#287)
-    setPurreSendt(false)
-    setPurreModalAapen(true)
+    setPurretMaal(null)
+    setPurreMaal(maal)
   }
 
   function lukkPurreModal() {
     if (purrePending) return
-    setPurreModalAapen(false)
+    setPurreMaal(null)
   }
 
   function handlePurreSend() {
-    if (purreSendingRef.current) return
+    if (purreSendingRef.current || purreMaal === null) return
+    const maal = purreMaal
     purreSendingRef.current = true
     startPurreTransition(async () => {
       try {
-        await purreUtenSvar(arrangementId, purreMelding.trim() || undefined)
-        setPurreSendt(true)
-        setPurreModalAapen(false)
+        const send = maal === 'kanskje' ? purreKanskje : purreUtenSvar
+        await send(arrangementId, purreMelding.trim() || undefined)
+        setPurretMaal(maal)
+        setPurreMaal(null)
       } catch (err) {
         setPurreFeil(err instanceof Error ? err.message : 'Kunne ikke sende purring')
       } finally {
@@ -386,28 +423,31 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                       }}
                     >
                       <span style={{ flex: 1 }}>{meta.label} ({personer.length})</span>
-                      {/* «Purre disse»-pill: kun synlig for admin/oppretter når gruppen ikke er tom.
+                      {/* Purre-pill: kun synlig for admin/oppretter når gruppen ikke er tom.
                           personer.length>0 er strengt tatt overflødig (tomme grupper filtreres bort
                           over), men eksplisitt sjekk leser tydeligere enn implisitt avhengighet. (#287)
-                          Manuell purring ignorerer cron-bryteren purring_aktiv — admin vet hva han gjør. */}
-                      {status === 'ikke_svart' && kanPurre && personer.length > 0 && (
+                          Vist for «ikke_svart» («Purre disse») og «kanskje» («Bestem dere», #596).
+                          Begge er manuelle handlinger og styres derfor ikke av cron-bryteren
+                          purring_aktiv, men av hver sin egen bryter (purring_manuell / purring_kanskje).
+                          Kanskje-varianten har ingen cron-motpart i det hele tatt. Se #547. */}
+                      {(status === 'ikke_svart' || status === 'kanskje') && kanPurre && personer.length > 0 && (
                         // Pillen disables KUN under aktiv sending (purrePending).
                         // Etter sending viser vi «Purret» som tekst-state i en kort
                         // periode, men pillen er klikkbar igjen — admin kan åpne
                         // modalen og purre på nytt (aapnePurreModal nullstiller
-                        // purreSendt). Tidligere ble pillen permanent disabled
+                        // purretMaal). Tidligere ble pillen permanent disabled
                         // etter første sending, så admin var låst ute fra å sende
                         // ny purring uten å laste siden på nytt.
                         <button
                           type="button"
-                          onClick={aapnePurreModal}
+                          onClick={() => aapnePurreModal(status)}
                           disabled={purrePending}
                           style={{
                             fontFamily: 'var(--font-mono)',
                             fontSize: 10,
                             letterSpacing: '1.2px',
                             textTransform: 'uppercase',
-                            color: purreSendt ? 'var(--success)' : 'var(--accent)',
+                            color: purretMaal === status ? 'var(--success)' : 'var(--accent)',
                             background: 'var(--accent-soft)',
                             border: '0.5px solid var(--accent)',
                             borderRadius: 999,
@@ -416,7 +456,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                             flexShrink: 0,
                           }}
                         >
-                          {purreSendt ? 'Purret' : 'Purre disse'}
+                          {purretMaal === status ? 'Purret' : PURRE_TEKST[status].pill}
                         </button>
                       )}
                     </div>
@@ -492,8 +532,10 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
       )}
 
       {/* Purre-modal — søsken til hoved-modalen, aldri åpne samtidig. (#287)
-          Samme overlay- og dialog-mønster som VarsleNuKnapp og PurreKnapp. */}
-      {purreModalAapen && (
+          Samme overlay- og dialog-mønster som VarsleNuKnapp og PurreKnapp.
+          Tekstene parametriseres på purreMaal — én modal for begge varianter
+          i stedet for to nesten-like modaler. (#596) */}
+      {purreMaal && (
         <div
           onClick={lukkPurreModal}
           style={{
@@ -510,7 +552,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={`Purre de som ikke har svart på ${arrangementTittel}`}
+            aria-label={PURRE_TEKST[purreMaal].ariaLabel(arrangementTittel)}
             onClick={e => e.stopPropagation()}
             style={{
               width: '100%',
@@ -533,7 +575,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                 color: 'var(--text-primary)',
               }}
             >
-              Purre disse
+              {PURRE_TEKST[purreMaal].tittel}
             </div>
 
             <p
@@ -545,7 +587,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                 lineHeight: 1.5,
               }}
             >
-              Skriv en valgfri hilsen til de som ikke har svart på {arrangementTittel}, eller bare send.
+              {PURRE_TEKST[purreMaal].broedtekst(arrangementTittel)}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

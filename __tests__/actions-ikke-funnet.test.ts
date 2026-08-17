@@ -65,7 +65,7 @@ vi.mock('@/lib/logg', () => ({ logg: { warn: vi.fn(), feil: vi.fn() } }))
 vi.mock('@/lib/r2', () => ({ r2StiFraUrl: vi.fn(), slettR2: vi.fn() }))
 
 import { oppdaterVedtekt } from '@/lib/actions/vedtekter'
-import { varslOmArrangement, purreUtenSvar } from '@/lib/actions/arrangementer'
+import { varslOmArrangement, purreUtenSvar, purreKanskje } from '@/lib/actions/arrangementer'
 import { velgTiebreakVinner } from '@/lib/actions/kaaringspoll'
 
 beforeEach(() => {
@@ -102,6 +102,11 @@ describe('varslOmArrangement / purreUtenSvar', () => {
   it('purreUtenSvar gir «Arrangement ikke funnet» for ukjent id', async () => {
     tomDb()
     await expect(purreUtenSvar('arr-finnes-ikke')).rejects.toThrow('Arrangement ikke funnet')
+  })
+
+  it('purreKanskje gir «Arrangement ikke funnet» for ukjent id', async () => {
+    tomDb()
+    await expect(purreKanskje('arr-finnes-ikke')).rejects.toThrow('Arrangement ikke funnet')
   })
 
   it('skiller ekte DB-feil fra «ikke funnet»', async () => {

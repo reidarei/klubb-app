@@ -70,6 +70,14 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
     panel: 'Purring til de som ikke har svart (fra «Purre disse»-knappen)',
     kort: 'Purring uten svar (manuell)',
   },
+  // Egen type, ikke et alias for purring_manuell: mottakergruppen er motsatt
+  // (de som HAR svart kanskje, ikke de uten svar) og oppfordringen er en
+  // annen («bestem deg», ikke «svar»). En som har svart kanskje skal ikke se
+  // «Purring uten svar» i innboksen sin. Se #596.
+  purring_kanskje: {
+    panel: 'Purring til de som har svart kanskje (fra «Bestem dere»-knappen)',
+    kort: 'Purring til kanskje-gruppa (manuell)',
+  },
 
   // ── Arrangøransvar ───────────────────────────────────────────────────────
   arrangor_purring: {

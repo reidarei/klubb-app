@@ -811,13 +811,74 @@ export async function sendKaaringspollIngenStemmerVarsel({
   })
 }
 
+// De tre variantene av «purr folk om å svare». 'auto' er cron (3 dager før),
+// 'manuell' er «Purre disse» (uten svar), 'kanskje' er «Bestem dere» (#596).
+// ÉN diskriminant, ikke to booleanske flagg (manuell + kanskje): en
+// kombinasjon som «cron-jobb, men til kanskje-gruppa» finnes ikke i
+// produktet og skal derfor være umulig å representere i typen, ikke bare
+// utilsiktet i praksis.
+export type PurreVariant = 'auto' | 'manuell' | 'kanskje'
+
+// Varseltypene de tre variantene sender som. Union, ikke `string`: en skrivefeil
+// her ville gitt en type uten etikett i historikken og uten bryter-rad i
+// varsel_innstillinger — stille. `keyof typeof VARSEL_TEKSTER` duger ikke som
+// kilde: tabellen er nøklet på NØKKEL, ikke type, og 'purring' er ingen nøkkel
+// der (den mappes til 'purring_aktiv' av typeTilNoekkel). Den er dessuten
+// annotert `Record<string, …>`, så keyof gir bare `string` tilbake.
+type PurreVarselType = 'purring' | 'purring_manuell' | 'purring_kanskje'
+
+const PURRE_VARIANTER: Record<
+  PurreVariant,
+  {
+    type: PurreVarselType
+    maalgruppe: 'uten_svar' | 'kanskje'
+    tittel: string
+    verb: string
+    fallback: (tittel: string, dato: string) => string
+    knappTekst: string
+    tillatDuplikat: boolean
+  }
+> = {
+  auto: {
+    type: 'purring',
+    maalgruppe: 'uten_svar',
+    tittel: 'Husk å svare!',
+    verb: 'purrer deg på',
+    fallback: (tittel, dato) => `${tittel} — ${dato}. Du har ikke svart enda.`,
+    knappTekst: 'Svar nå',
+    tillatDuplikat: false,
+  },
+  manuell: {
+    type: 'purring_manuell',
+    maalgruppe: 'uten_svar',
+    tittel: 'Husk å svare!',
+    verb: 'purrer deg på',
+    fallback: (tittel, dato) => `${tittel} — ${dato}. Du har ikke svart enda.`,
+    knappTekst: 'Svar nå',
+    // Manuell purring fra admin er en bevisst handling — alltid send uavhengig av
+    // om de allerede har mottatt en cron-purring for dette arrangementet. (#287)
+    tillatDuplikat: true,
+  },
+  kanskje: {
+    type: 'purring_kanskje',
+    maalgruppe: 'kanskje',
+    tittel: 'Bestem deg!',
+    verb: 'ber deg bestemme deg for',
+    fallback: (tittel, dato) => `${tittel} — ${dato}. Du har svart kanskje. Blir det noe på deg?`,
+    knappTekst: 'Bestem deg',
+    // Samme resonnement som manuell over — «Bestem dere» er også en bevisst
+    // admin/oppretter-handling, ikke en cron-jobb.
+    tillatDuplikat: true,
+  },
+}
+
 export async function sendPurringVarsler({
   arrangementId,
   tittel,
   startTidspunkt,
   fraNavn,
   hilsen,
-  manuell = false,
+  variant = 'auto',
 }: {
   arrangementId: string
   tittel: string
@@ -826,16 +887,17 @@ export async function sendPurringVarsler({
   // Når disse er oppgitt brukes personlig meldingstekst i stedet for cron-meldingen.
   fraNavn?: string
   hilsen?: string
-  // Manuell purring fra «Purre disse» skal ikke stanses av cron-bryteren — det er
-  // en bevisst handling, ikke en cron-jobb (#287). Løsningen er EGEN VARSELTYPE,
-  // ikke et «hopp over sjekken»-flagg: flagget het tidligere ignorerAktivBryter og
-  // hoppet kun over en sjekk her i wrapperen, mens porten i sendVarsel slo opp
-  // samme nøkkel på nytt og stoppet purringen likevel — stille, med grønn
-  // kvittering til admin. Se #547. Nå bærer manuell purring typen
-  // 'purring_manuell' med sin egen bryter, så porten kan skille de to uten at
-  // noen trenger å overstyre den. Default false (cron-sti).
-  manuell?: boolean
+  // Manuell purring fra «Purre disse»/«Bestem dere» skal ikke stanses av
+  // cron-bryteren — det er en bevisst handling, ikke en cron-jobb (#287). Løsningen
+  // er EGEN VARSELTYPE per variant, ikke et «hopp over sjekken»-flagg: flagget het
+  // tidligere ignorerAktivBryter og hoppet kun over en sjekk her i wrapperen, mens
+  // porten i sendVarsel slo opp samme nøkkel på nytt og stoppet purringen likevel —
+  // stille, med grønn kvittering til admin. Se #547. Default 'auto' (cron-sti).
+  variant?: PurreVariant
 }) {
+  const { type, maalgruppe, tittel: varselTittel, verb, fallback, knappTekst, tillatDuplikat } =
+    PURRE_VARIANTER[variant]
+
   // Ingen bryter-sjekk her — porten i sendVarsel slår opp riktig nøkkel for
   // typen vi sender. Wrapperen skal ikke ha sin egen mening om det.
 
@@ -845,20 +907,35 @@ export async function sendPurringVarsler({
   const supabase = createAdminClient()
   const { data: paameldinger, error: paameldingerFeil } = await supabase
     .from('paameldinger')
-    .select('profil_id')
+    .select('profil_id, status')
     .eq('arrangement_id', arrangementId)
 
-  // Fail closed: hvis spørringen feiler er harSvart tomt, og uten denne
-  // sjekken ville purringen gått til ALLE aktive medlemmer — også de som
-  // for lengst har svart. Manuell purring skal aldri eksplodere til hele
-  // klubben pga en transient DB-feil. (#287)
+  // Fail closed, men feilmodusen avhenger av målgruppen: for uten_svar ville
+  // et tomt resultat (paameldinger = []) sendt purringen til ALLE aktive
+  // medlemmer — også de som for lengst har svart. For kanskje er det motsatt:
+  // et tomt resultat gir INGEN treff i kanskje-settet, og purringen ville gått
+  // ut til null mottakere med en grønn kvittering til admin (samme
+  // feilmodus som #547, bare stille i stedet for feil retning). Begge er
+  // uakseptable, så vi kaster i stedet for å late som spørringen ga et
+  // meningsfullt tomt svar.
   if (paameldingerFeil) {
     throw new Error(`Kunne ikke hente påmeldinger for purring: ${paameldingerFeil.message}`)
   }
 
-  const harSvart = new Set((paameldinger ?? []).map(p => p.profil_id))
+  // Filtreres alltid gjennom hentProfiler — aldri direkte over påmeldingsradene.
+  // hentProfiler bevarer testmodus og aktiv=true, slik at en som svarte kanskje
+  // og siden ble deaktivert ikke purres.
   const profiler = await hentProfiler(await hentTestModus())
-  const sendTil = profiler.filter(p => !harSvart.has(p.id)).map(p => p.id)
+  let sendTil: string[]
+  if (maalgruppe === 'uten_svar') {
+    const harSvart = new Set((paameldinger ?? []).map(p => p.profil_id))
+    sendTil = profiler.filter(p => !harSvart.has(p.id)).map(p => p.id)
+  } else {
+    const harSvartKanskje = new Set(
+      (paameldinger ?? []).filter(p => p.status === 'kanskje').map(p => p.profil_id),
+    )
+    sendTil = profiler.filter(p => harSvartKanskje.has(p.id)).map(p => p.id)
+  }
 
   if (sendTil.length === 0) return
 
@@ -867,23 +944,21 @@ export async function sendPurringVarsler({
   const melding = formaterHilsenMelding({
     fraNavn,
     hilsen,
-    verb: 'purrer deg på',
+    verb,
     basis: `${tittel} (${dato})`,
-    fallback: `${tittel} — ${dato}. Du har ikke svart enda.`,
+    fallback: fallback(tittel, dato),
     maksLengde: PURRING_MAKS_LENGDE,
   })
 
   await sendVarsel({
     mottakere: sendTil,
-    tittel: 'Husk å svare!',
+    tittel: varselTittel,
     melding,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
-    knappTekst: 'Svar nå',
-    type: manuell ? 'purring_manuell' : 'purring',
+    knappTekst,
+    type,
     arrangementId,
-    // Manuell purring fra admin er en bevisst handling — alltid send uavhengig av
-    // om de allerede har mottatt en cron-purring for dette arrangementet. (#287)
-    tillatDuplikat: manuell,
+    tillatDuplikat,
   })
 }
 
