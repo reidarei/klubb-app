@@ -126,3 +126,42 @@ Utover klubbidentiteten i seksjon 1 har `lib/config.ts` flere verdier med hardko
 | `NEXT_PUBLIC_R2_PUBLIC_URL` (eller `R2_PUBLIC_URL`) | `''` (tom) | Public CDN-URL hvor bilder hentes fra (`https://<din-pub-id>.r2.dev` eller custom domain) | **Må settes** — bilder vises ikke uten. |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Ingen | R2-credentials og bucket-navn (server-side; ALDRI med `NEXT_PUBLIC_`-prefiks) | **Må settes** for bildelagring. Marker som «Sensitive» i Vercel. |
 
+---
+
+## 7. Endringslogg («Hva er nytt»)
+
+Under «Om appen» vises en valgfri endringslogg som dokumenterer hva som er nytt i appen — både manuellt skrevne oppføringer (fra deg som eier) og automatisk utledede «mindre»-rader som reflekterer versjonsspreng.
+
+Endringsene lagres i `lib/endringslogg-data.ts`. Filen starter tom og produserer en tom liste — seksjonen «Hva er nytt» skjules da fra medlemmene.
+
+For å fylle inn dine egne oppføringer:
+
+```ts
+// lib/endringslogg-data.ts
+import type { Endring } from '@/lib/endringslogg'
+
+export const ENDRINGER: Endring[] = [
+  {
+    versjon: '1.2.0',
+    dato: '2026-03-15',
+    tittel: 'Nytt medlemskort med QR-kode',
+    beskrivelse: 'Medlemmene kan nå vise sitt medlemskort som QR-kode på Steder-kartet.'
+  },
+  {
+    versjon: '1.1.0',
+    dato: '2026-02-01',
+    tittel: 'Albumer er her',
+    beskrivelse: 'Bilder fra arrangementene samles nå i separate album med lightbox-visning.'
+  },
+  // … flere oppføringer, nyeste først
+]
+```
+
+**Retningslinjer:**
+- Legg til oppføringer **nyeste først**
+- Terskelen er: **«Merker et medlem dette?»** — rene refaktorer og test-dekning hører ikke hjemme
+- Versjonnummeret skal matche det i `lib/versjon.json` (stampes automatisk før hver deploy via `npm run stamp-versjon`)
+- Dato brukes kun i endringsloggen selv (ikke til versjonsstyring) — formatet er ISO (`YYYY-MM-DD`)
+
+Hvis `ENDRINGER`-listen er tom, skjules hele seksjonen fra medlemmene.
+
