@@ -240,7 +240,20 @@ export async function sendVarsel({
 }: {
   mottakere?: string[]
   tittel: string
-  melding: string
+  // Enten én felles tekst, eller en funksjon som bygger teksten per mottaker.
+  // Funksjonsformen finnes for varsler som må si noe om MOTTAKEREN — i dag kun
+  // 7-dagers-påminnelsen, som forteller hver mann hva han selv har svart.
+  //
+  // Hvorfor her og ikke som N kall fra wrapperen: gaten (varsel_innstillinger),
+  // fortids-sperren, dedup-sjekken og e-post-batchen hører til SENDINGEN, ikke
+  // til teksten. Fire kall ville kjørt alle fire fire ganger — fire oppslag mot
+  // samme bryter, og fire samtidige Resend-batcher, som er rate limit-en #478
+  // løste. Verre: dedup-sjekken på (type, arrangement_id) er global, så kall 1
+  // ville skrevet radene som ga kall 2–4 'dedup' — tre firedeler av klubben
+  // ville stille mistet påminnelsen. Én sending med variabel tekst har ingen av
+  // de problemene, og lar wrapperen slippe å ha en egen mening om bryteren
+  // (#547).
+  melding: string | ((profilId: string) => string)
   url?: string
   knappTekst?: string
   type: string
@@ -467,12 +480,16 @@ export async function sendVarsel({
       // kanPush/kanEpost under, så utsendingen hoppes bare over av seg selv.
       const kanal = kanPush && kanEpost ? 'begge' : kanPush ? 'push' : kanEpost ? 'epost' : 'kun_app'
 
+      // Resolves per mottaker — se melding-parameteren. Bygges før logg-inserten
+      // så raden i innboksen og teksten i push/e-post garantert er den samme.
+      const profilMelding = typeof melding === 'function' ? melding(profil.id) : melding
+
       const { data: loggRad, error: loggFeil } = await supabase
         .from('varsel_logg')
         .insert({
           profil_id: profil.id,
           tittel,
-          melding,
+          melding: profilMelding,
           type,
           kanal,
           url: normalisertUrl ?? null,
@@ -516,12 +533,12 @@ export async function sendVarsel({
 
       if (kanPush) {
         await Promise.all(
-          profilSubs.map(s => sendPush(s, { tittel, melding, url: varselUrl })),
+          profilSubs.map(s => sendPush(s, { tittel, melding: profilMelding, url: varselUrl })),
         )
       }
 
       if (kanEpost) {
-        const html = arrangementEpostHtml({ tittel, tekst: melding, url: varselUrl, knappTekst })
+        const html = arrangementEpostHtml({ tittel, tekst: profilMelding, url: varselUrl, knappTekst })
         epostBatch.push({ til: profil.epost!, emne: tittel, html })
       }
     }),
@@ -607,29 +624,68 @@ function paameldtSetning(antallPaameldt: number): string {
 }
 
 /**
+ * Hva mottakeren har svart på arrangementet. 'ikke_svart' er ikke en status i
+ * paameldinger-tabellen (der finnes bare raden eller ikke) — den utledes av at
+ * profilen mangler en rad, og finnes her fordi 7-dagers-varselet må si noe til
+ * den gruppa også. Speiler RsvpStatus i PaameldteListe.tsx bevisst uten å
+ * importere den: den fila er 'use client' og hører til UI-laget.
+ */
+export type RsvpStatus = 'ja' | 'kanskje' | 'nei' | 'ikke_svart'
+
+/**
+ * Halen i 7-dagers-påminnelsen, per RSVP-status. Tabell i stedet for en
+ * if-kjede av samme grunn som PURRE_VARIANTER lenger nede: hver variant er
+ * data, og en ny status skal ikke kreve at man finner alle stedene teksten
+ * forgrener seg.
+ *
+ * `visDetaljer: false` for 'nei' er ikke en detalj — den som har meldt avbud
+ * skal ikke få oppmøtested og påmeldingstall han ikke har bruk for. Han får
+ * datoen (så han vet hva det gjelder hvis han vil snu) og ingenting mer.
+ */
+const PAAMINNE_7_HALER: Record<RsvpStatus, { visDetaljer: boolean; hale: string }> = {
+  ja: { visDetaljer: true, hale: 'Du har svart ja — vel møtt!' },
+  kanskje: {
+    visDetaljer: true,
+    hale: 'Du har svart kanskje — bestem deg, så arrangøren vet hvor mange han skal planlegge for.',
+  },
+  nei: { visDetaljer: false, hale: 'Du har meldt avbud.' },
+  ikke_svart: {
+    visDetaljer: true,
+    // «enda», ikke «ennå» — samme ordvalg som purringens fallback-tekst.
+    hale: 'Du har ikke svart enda — gi beskjed, så arrangøren vet hvor mange han skal planlegge for.',
+  },
+}
+
+/**
  * Bygger 7-dagers-påminnelsesteksten (#591). Ren funksjon — eksportert for
  * testing, samme presedens som formaterHilsenMelding. «syv» i første setning
  * er hardkodet tekst, ikke avledet fra PAAMINNELSE_DAGER.LANG (=== 7) — endres
  * konstanten må denne teksten endres i samme håndgrep.
+ *
+ * Halen er personlig: mottakeren får vite hva han selv har svart, og hva som
+ * eventuelt forventes av ham. Det er derfor 7-dagers-varselet sendes som fire
+ * grupperte kall og ikke som én broadcast — se sendPaaminneVarsler.
  */
 export function byggPaaminne7Melding({
   tittel,
   startTidspunkt,
   oppmoetested,
   antallPaameldt,
+  rsvp,
 }: {
   tittel: string
   startTidspunkt: string
   oppmoetested: string | null
   antallPaameldt: number
+  rsvp: RsvpStatus
 }): string {
+  const { visDetaljer, hale } = PAAMINNE_7_HALER[rsvp]
   // Datoen står her, ikke i oppmøte-setningen — klokkeslettet hører sammen med
   // stedet, og syv dager unna trenger man selve datoen for å planlegge.
   const setninger = [
     `Det er syv dager til ${tittel}, ${formaterDatoKort(startTidspunkt)}.`,
-    oppmoteSetning(startTidspunkt, oppmoetested),
-    paameldtSetning(antallPaameldt),
-    'Vel møtt!',
+    ...(visDetaljer ? [oppmoteSetning(startTidspunkt, oppmoetested), paameldtSetning(antallPaameldt)] : []),
+    hale,
   ]
   return setninger.join(' ')
 }
@@ -664,18 +720,43 @@ export async function sendPaaminneVarsler({
   tittel,
   startTidspunkt,
   oppmoetested,
-  antallPaameldt,
+  paameldinger,
   type,
 }: {
   arrangementId: string
   tittel: string
   startTidspunkt: string
   oppmoetested: string | null
-  antallPaameldt: number
+  // Alle påmeldingsrader for arrangementet. Erstatter den tidligere
+  // `antallPaameldt`-parameteren: tallet utledes her i stedet for hos kalleren,
+  // så «N påmeldt»-teksten og gruppe-inndelingen under aldri kan bygge på to
+  // ulike øyeblikksbilder av samme liste.
+  paameldinger: { profil_id: string; status: string }[]
   type: 'paaminne_7' | 'paaminne_1'
 }) {
-  const bygg = type === 'paaminne_7' ? byggPaaminne7Melding : byggPaaminne1Melding
-  const melding = bygg({ tittel, startTidspunkt, oppmoetested, antallPaameldt })
+  const antallPaameldt = paameldinger.filter(p => p.status === 'ja').length
+
+  // 1-dagers er upersonlig: én felles tekst til alle. Dagen før er det for sent
+  // å be noen bestemme seg, og «du har meldt avbud» til en som allerede vet det
+  // er bare støy.
+  //
+  // 7-dagers forteller derimot hver mann hva HAN har svart, og bygges derfor per
+  // mottaker. Fortsatt ÉN sending (broadcast) — se melding-parameteren i
+  // sendVarsel for hvorfor det ikke er fire grupperte kall.
+  const statusPerProfil = new Map(paameldinger.map(p => [p.profil_id, p.status]))
+  const melding =
+    type === 'paaminne_1'
+      ? byggPaaminne1Melding({ tittel, startTidspunkt, oppmoetested, antallPaameldt })
+      : (profilId: string) => {
+          const svar = statusPerProfil.get(profilId)
+          // Ukjent status fra DB (skal ikke forekomme) behandles som «ikke
+          // svart» — en generisk oppfordring er tryggere enn en tekst som
+          // påstår feil om hva mannen har svart.
+          const rsvp: RsvpStatus =
+            svar === 'ja' || svar === 'nei' || svar === 'kanskje' ? svar : 'ikke_svart'
+          return byggPaaminne7Melding({ tittel, startTidspunkt, oppmoetested, antallPaameldt, rsvp })
+        }
+
   await sendVarsel({
     tittel: `Påminnelse: ${tittel}`,
     melding,

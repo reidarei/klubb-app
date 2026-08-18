@@ -26,14 +26,17 @@ function dagStreng(dato: Date): string {
 }
 
 // Speiler select-en i hentForDag eksakt. Alle tre dagene henter samme kolonner,
-// så en fixture som glemmer paameldinger skal feile i typecheck — ikke i runtime
-// inne i kjorPaaminnelser, som teller «ja» før feilisolasjonen slår inn (#591).
+// så en fixture som glemmer paameldinger skal feile i typecheck — ikke i runtime.
+// profil_id er med fordi 7-dagers-teksten er personlig: den trenger å vite HVEM
+// som svarte hva, ikke bare hvor mange. Selve tellingen og gruppe-inndelingen
+// skjer i sendPaaminneVarsler (lib/varsler.ts) — cronen videresender listen rå,
+// og det er nettopp det testene under vokter.
 type ArrangementFixture = {
   id: string
   tittel: string
   start_tidspunkt: string
   oppmoetested: string | null
-  paameldinger: { status: string }[]
+  paameldinger: { profil_id: string; status: string }[]
 }
 
 function lagMockAdmin(
@@ -76,13 +79,22 @@ describe('kjorPaaminnelser', () => {
 
     await kjorPaaminnelser(admin)
     expect(mockSendPaaminne).toHaveBeenCalledWith(
-      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', oppmoetested: 'Klubbhuset', antallPaameldt: 0 })
+      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', oppmoetested: 'Klubbhuset', paameldinger: [] })
     )
   })
 
-  it('teller kun "ja"-påmeldinger, ikke "kanskje" eller "nei"', async () => {
+  it('videresender påmeldingene rått, med profil_id i behold', async () => {
+    // 7-dagers-teksten er personlig, så cronen må gi fra seg HVEM som svarte
+    // hva — ikke en ferdig telling. Et select som mister profil_id ville gjort
+    // alle til «ikke svart» uten at noe annet feilet.
     const idag = new Date(2026, 5, 10)
     const om7 = dagStreng(addDays(idag, 7))
+    const paameldinger = [
+      { profil_id: 'p1', status: 'ja' },
+      { profil_id: 'p2', status: 'ja' },
+      { profil_id: 'p3', status: 'kanskje' },
+      { profil_id: 'p4', status: 'nei' },
+    ]
 
     const admin = lagMockAdmin({
       [om7]: [{
@@ -90,19 +102,25 @@ describe('kjorPaaminnelser', () => {
         tittel: 'Vårfest',
         start_tidspunkt: `${om7}T18:00:00Z`,
         oppmoetested: 'Klubbhuset',
-        paameldinger: [{ status: 'ja' }, { status: 'ja' }, { status: 'kanskje' }, { status: 'nei' }],
+        paameldinger,
       }],
     })
 
     await kjorPaaminnelser(admin)
     expect(mockSendPaaminne).toHaveBeenCalledWith(
-      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', antallPaameldt: 2 })
+      expect.objectContaining({ arrangementId: 'arr1', type: 'paaminne_7', paameldinger })
     )
   })
 
   it('sender 1-dags påminnelse for arrangement i morgen', async () => {
     const idag = new Date(2026, 5, 10)
     const imorgen = dagStreng(addDays(idag, 1))
+    const paameldinger = [
+      { profil_id: 'p1', status: 'ja' },
+      { profil_id: 'p2', status: 'ja' },
+      { profil_id: 'p3', status: 'kanskje' },
+      { profil_id: 'p4', status: 'nei' },
+    ]
 
     const admin = lagMockAdmin({
       // Samme fixture-form som 7-dagers: 1-dagers-teksten teller også kun `ja`.
@@ -111,7 +129,7 @@ describe('kjorPaaminnelser', () => {
         tittel: 'Grillkveld',
         start_tidspunkt: `${imorgen}T18:00:00Z`,
         oppmoetested: 'Klubbhuset',
-        paameldinger: [{ status: 'ja' }, { status: 'ja' }, { status: 'kanskje' }, { status: 'nei' }],
+        paameldinger,
       }],
     })
 
@@ -121,7 +139,7 @@ describe('kjorPaaminnelser', () => {
         arrangementId: 'arr2',
         type: 'paaminne_1',
         oppmoetested: 'Klubbhuset',
-        antallPaameldt: 2,
+        paameldinger,
       })
     )
   })

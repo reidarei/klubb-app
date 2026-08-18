@@ -27,15 +27,17 @@ function dagStreng(dato: Date): string {
 // Fail closed (#504): en svelget feil her ga tidligere `[]`, bit-identisk med
 // «ingen arrangementer denne dagen» — cronen ville stille hoppet over en hel
 // dags påminnelser i stedet for å synliggjøre en DB-feil.
-// paameldinger (status) hentes i samme spørring som arrangementet (#591) — for
-// å telle «N påmeldt» i påminnelsestekstene uten en egen spørring per arrangement
-// (N+1) og uten en ny feilsti: tellingen arver fail-closed-vakten under.
+// paameldinger (profil_id, status) hentes i samme spørring som arrangementet
+// (#591) — for å telle «N påmeldt» i påminnelsestekstene uten en egen spørring
+// per arrangement (N+1) og uten en ny feilsti: tellingen arver fail-closed-vakten
+// under. profil_id kom til da 7-dagers-varselet ble personlig: det trenger å vite
+// HVEM som har svart hva, ikke bare hvor mange.
 // Både 7- og 1-dagers bruker embeddet; kun 3-dagers-purringen drar det med ubrukt,
 // og den gjør uansett sitt eget påmeldings-oppslag for å finne hvem som ikke har svart.
 async function hentForDag(admin: Admin, dag: string) {
   const { data, error } = await admin
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt, oppmoetested, paameldinger (status)')
+    .select('id, tittel, start_tidspunkt, oppmoetested, paameldinger (profil_id, status)')
     .gte('start_tidspunkt', `${dag}T00:00:00`)
     .lt('start_tidspunkt', `${dag}T23:59:59`)
   if (error) {
@@ -76,7 +78,6 @@ export async function kjorPaaminnelser(admin: Admin) {
   const oppgaver: Promise<{ id: string; type: string }>[] = []
 
   for (const a of arr_7) {
-    const antallPaameldt = a.paameldinger.filter(p => p.status === 'ja').length
     oppgaver.push(
       sendPaaminneVarsler({
         arrangementId: a.id,
@@ -84,13 +85,12 @@ export async function kjorPaaminnelser(admin: Admin) {
         startTidspunkt: a.start_tidspunkt,
         type: 'paaminne_7',
         oppmoetested: a.oppmoetested,
-        antallPaameldt,
+        paameldinger: a.paameldinger,
       })
         .then(() => ({ id: a.id, type: 'paaminne_7' }))
     )
   }
   for (const a of arr_1) {
-    const antallPaameldt = a.paameldinger.filter(p => p.status === 'ja').length
     oppgaver.push(
       sendPaaminneVarsler({
         arrangementId: a.id,
@@ -98,7 +98,7 @@ export async function kjorPaaminnelser(admin: Admin) {
         startTidspunkt: a.start_tidspunkt,
         type: 'paaminne_1',
         oppmoetested: a.oppmoetested,
-        antallPaameldt,
+        paameldinger: a.paameldinger,
       })
         .then(() => ({ id: a.id, type: 'paaminne_1' }))
     )
