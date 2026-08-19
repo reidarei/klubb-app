@@ -11,5 +11,11 @@ import { ensureInnlogget } from '@/lib/auth'
  */
 export async function markerChatSett() {
   const { supabase } = await ensureInnlogget()
-  await supabase.rpc('marker_chat_sett')
+  const { error } = await supabase.rpc('marker_chat_sett')
+  // Feilen ble tidligere aldri hentet ut: feilet RPC-en, ble ulest-prikken
+  // hengende uten et eneste spor. ESLint-regelen hk/supabase-feil-maa-hentes
+  // fanget det ikke, fordi den sporer bruk av `data` — og her ble verken `data`
+  // eller `error` rørt. Kallstedet i app/(app)/chat/page.tsx er fire-and-forget
+  // med .catch(logg.feil), så et kast her blir synlig uten å velte siden.
+  if (error) throw new Error(`marker_chat_sett feilet: ${error.message}`)
 }

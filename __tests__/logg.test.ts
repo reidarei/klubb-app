@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 import { logg } from '@/lib/logg'
+import { IkkeInnloggetFeil } from '@/lib/auth'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -175,6 +176,71 @@ describe('logg.feil() – PGRST301 er død sesjon, ikke tilgangsfeil (#498-revie
     await logg.feil('test.event', pgFeil('42501', 'permission denied for table "profiles"'))
 
     expect(mockFrom).toHaveBeenCalledWith('feil_logg')
+  })
+
+  it('IkkeInnloggetFeil → warn, ingen feil_logg-rad, ingen alarm', async () => {
+    // Samme rotårsak som PGRST301 (utløpt/manglende sesjon), men den kom aldri
+    // hit som PostgREST-feil — en naken Error uten kode falt til error og fyrte
+    // Sentry + morgenalarm på noe som er rutine når iOS spiser cookies.
+    const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await logg.feil('ulest.marker_chat_sett.feilet', new IkkeInnloggetFeil())
+
+    const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
+    expect(linjer).toHaveLength(1)
+    expect(linjer[0].nivaa).toBe('warn')
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it('IkkeInnloggetFeil beholder meldings-kontrakten «Ikke innlogget»', async () => {
+    // Route handlers streng-matcher denne teksten for å velge 401 vs 403.
+    // Klassen skal legge på en kode, ikke bytte ut meldingen.
+    expect(new IkkeInnloggetFeil().message).toBe('Ikke innlogget')
+    expect(new IkkeInnloggetFeil()).toBeInstanceOf(Error)
+  })
+})
+
+describe('logg.feil() – feilklassens navn persisteres (tom kontekst-fella)', () => {
+  function fangInsert() {
+    const spion = vi.fn()
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.insert = vi.fn((rad: unknown) => {
+        spion(rad)
+        return chain
+      })
+      chain.abortSignal = vi.fn().mockReturnValue(chain)
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+    return spion
+  }
+
+  it('en vanlig Error gir ikke lenger kontekst {}', async () => {
+    // Bugen som gjorde feil #13 udiagnostiserbar: code og tabell er begge
+    // undefined for en vanlig Error, så raden ble skrevet som `{}` og kunne
+    // ikke fortelle om feilen var en programfeil eller en vi selv kastet.
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', new TypeError('x is not a function'))
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect((rad.kontekst as Record<string, unknown>).navn).toBe('TypeError')
+  })
+
+  it('navnet er en kodekonstant, aldri en radverdi', async () => {
+    // Vokter personvern-grensen: melding persisteres bevisst aldri fordi den
+    // kan bære radverdier. `navn` må ikke bli en bakvei rundt det.
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', new Error('Key (epost)=(hemmelig@test.no) already exists'))
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(JSON.stringify(rad)).not.toContain('hemmelig@test.no')
+    expect((rad.kontekst as Record<string, unknown>).navn).toBe('Error')
   })
 })
 

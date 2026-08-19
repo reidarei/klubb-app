@@ -1,6 +1,27 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { kanAdministrere, loeserTiebreak, godkjennerPassTilgang } from '@/lib/roller'
 
+/**
+ * Kastes når det ikke finnes en gyldig sesjon. Egen klasse med `code` fordi en
+ * naken `new Error('Ikke innlogget')` var usynlig for begge sidene av
+ * feilhåndteringen: `normaliserFeil()` i lib/logg.ts plukker kun opp `code` og
+ * `message`, så `feil_logg`-raden ble skrevet med `kontekst: {}` — umulig å se
+ * hva som faktisk feilet — og `klassifiserTilgangsfeil()` hadde ingenting å
+ * kjenne den igjen på, så en død sesjon (rutine i en iOS-PWA, jf. #498) havnet
+ * som `error` med Sentry-event og en plass i morgenalarmen.
+ *
+ * Meldingsteksten er UENDRET og fortsatt en kontrakt — route handlers
+ * streng-matcher 'Ikke innlogget' for å velge 401 vs 403. Klassen legger kun
+ * `code` oppå; `instanceof Error` og `.message` er som før.
+ */
+export class IkkeInnloggetFeil extends Error {
+  readonly code = 'AUTH_INGEN_SESJON'
+  constructor() {
+    super('Ikke innlogget')
+    this.name = 'IkkeInnloggetFeil'
+  }
+}
+
 // Sentral autorisasjons-helper for server actions og route handlers.
 // Bruk denne i stedet for å duplisere "hent user → hent profil → sjekk
 // rolle"-flyten i hver action. Kaster ved manglende auth eller rolle.
@@ -17,7 +38,7 @@ export async function ensureAdmin() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Ikke innlogget')
+  if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
@@ -43,7 +64,7 @@ export async function ensureLoeserTiebreak() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Ikke innlogget')
+  if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
@@ -69,7 +90,7 @@ export async function ensureGodkjennerPassTilgang() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Ikke innlogget')
+  if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
@@ -92,6 +113,6 @@ export async function ensureInnlogget() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Ikke innlogget')
+  if (!user) throw new IkkeInnloggetFeil()
   return { supabase, user }
 }

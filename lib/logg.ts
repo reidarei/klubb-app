@@ -114,9 +114,20 @@ function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
 // Supabase-klienten pakker DB-feil inn som { code, message, details, hint }.
 // For Sentry er det nyttigere å gruppere etter feil-kode (f.eks. «23505»)
 // enn etter den lange meldingsstrengen. Normalisering gir bedre fingerprinting.
-function normaliserFeil(err: unknown): { code?: string; tabell?: string; melding: string } {
+function normaliserFeil(err: unknown): {
+  code?: string
+  tabell?: string
+  melding: string
+  // Feilklassens navn («TypeError», «IkkeInnloggetFeil», …). Persisteres i
+  // feil_logg fordi meldingen bevisst ikke er det: uten dette ble raden for en
+  // vanlig Error skrevet med kontekst `{}`, og det var umulig å se om feilen var
+  // en programfeil eller en vi selv hadde kastet. Navnet er en konstant fra
+  // koden, aldri en radverdi, så det er trygt å lagre.
+  navn?: string
+} {
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
+    const navn = err instanceof Error ? err.name : undefined
     if (typeof e.code === 'string' && typeof e.message === 'string') {
       // Forsøk å ekstrahere en identifikator (tabell eller constraint) fra
       // PostgREST-meldingen. Typisk format:
@@ -129,8 +140,12 @@ function normaliserFeil(err: unknown): { code?: string; tabell?: string; melding
         code: e.code,
         tabell: identMatch?.[1],
         melding: e.message,
+        navn,
       }
     }
+    // Ikke-PostgREST-feil: meldingsformen holdes uendret (String(err) gir
+    // «Error: …»), kun navnet kommer i tillegg.
+    return { melding: String(err), navn }
   }
   return { melding: String(err) }
 }
@@ -167,7 +182,17 @@ function klassifiserTilgangsfeil(melding: string, code?: string): 'error' | 'war
   // Død/ugyldig sesjon → warn. Både på kode og på meldingstekst: PostgREST
   // svarer PGRST301, mens GoTrue-/PostgREST-varianter kan komme uten kode i
   // det hele tatt, og da er teksten det eneste signalet vi har.
-  if (code === 'PGRST301' || /JWT (expired|invalid)|JWSError/i.test(melding)) {
+  //
+  // AUTH_INGEN_SESJON er vår egen kode (IkkeInnloggetFeil i lib/auth.ts) for
+  // «getUser() ga ingen bruker». Samme rotårsak som PGRST301 — utløpt eller
+  // manglende sesjon — men den kom aldri hit som PostgREST-feil, så #498-
+  // nedgraderingen traff den ikke. Den falt derfor til error og fyrte Sentry
+  // + morgenalarm på noe som er rutine når iOS spiser cookies.
+  if (
+    code === 'PGRST301' ||
+    code === 'AUTH_INGEN_SESJON' ||
+    /JWT (expired|invalid)|JWSError/i.test(melding)
+  ) {
     return 'warn'
   }
   if (code !== '42501') return null
@@ -191,6 +216,7 @@ async function persisterFeilLogg(
   event: string,
   code: string | undefined,
   tabell: string | undefined,
+  navn: string | undefined,
   ctx?: Record<string, unknown>,
 ): Promise<void> {
   try {
@@ -216,7 +242,9 @@ async function persisterFeilLogg(
         // Skriv nivået eksplisitt likevel fremfor å anta, i tilfelle en
         // egen fatal-vei legges til senere.
         nivaa: 'error',
-        kontekst: { code, tabell } as Json,
+        // navn (feilklassen) er med fordi code/tabell begge er undefined for en
+        // vanlig Error — raden ble da skrevet som `{}` og var verdiløs å lese.
+        kontekst: { code, tabell, navn } as Json,
         profil_id: profilId,
       })
       // Hard cap: under pool-utmattelse skal ikke en logge-skriving legge
@@ -285,7 +313,7 @@ export const logg = {
       ctx?: Record<string, unknown>
     },
   ) {
-    const { code, tabell, melding } = normaliserFeil(error)
+    const { code, tabell, melding, navn } = normaliserFeil(error)
 
     const tilgangsklasse = klassifiserTilgangsfeil(melding, code)
     if (tilgangsklasse === 'warn') {
@@ -314,7 +342,7 @@ export const logg = {
     // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
     // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
     // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
-    await persisterFeilLogg(event, code, tabell, opts?.ctx)
+    await persisterFeilLogg(event, code, tabell, navn, opts?.ctx)
 
     const Sentry = await getSentry()
     if (!Sentry) return
