@@ -4,6 +4,7 @@ import Icon from '@/components/ui/Icon'
 import Endringslogg from '@/components/Endringslogg'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_NAVN, DATA_LOKASJON } from '@/lib/klubb-config'
+import { AI_PAA } from '@/lib/config'
 import { byggEndringslogg } from '@/lib/endringslogg'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 
@@ -100,12 +101,19 @@ export default function OmAppen() {
           piksler, ingen «cookies» som følger deg på tvers av nettsteder.
           Ytelsesmålinger (anonyme, uten brukerdata) går til Vercel.
         </Avsnitt>
-        <Avsnitt overskrift="AI-funksjoner">
-          Når du skriver et innlegg, sendes teksten til Anthropic (AI-leverandør
-          i USA) for å tolke en eventuell dato, slik at innlegget kan festes
-          øverst frem til den datoen. Dette skjer automatisk mens du skriver, og
-          bare på nye innlegg — ingen annen tekst i appen sendes ut.
-        </Avsnitt>
+        {/* Betinget på at nøkkelen faktisk er satt: en instans uten
+         * ANTHROPIC_API_KEY sender ingen tekst ut, og skal da ikke fortelle
+         * medlemmene at den gjør det. Informasjonsplikten i AI Act art. 50(5)
+         * krever korrekt informasjon — se docs/ai-act-vurdering.md § G3. */}
+        {AI_PAA && (
+          <Avsnitt overskrift="AI-funksjoner">
+            Når du skriver et innlegg, sendes teksten til Anthropic
+            (AI-leverandør i USA) for å tolke en eventuell dato, slik at
+            innlegget kan festes øverst frem til den datoen. Dette skjer
+            automatisk mens du skriver, og bare på nye innlegg — ingen annen
+            tekst i appen sendes ut.
+          </Avsnitt>
+        )}
         <Avsnitt overskrift="E-postvarsler">
           Varsler du får på e-post sendes via Resend (e-postleverandør i USA).
           Innholdet i varselet — for eksempel en chatmelding eller navnet på

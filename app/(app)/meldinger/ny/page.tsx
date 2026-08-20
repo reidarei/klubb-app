@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
+import { AI_PAA } from '@/lib/config'
 import NyMeldingSkjema, { type AlbumValg } from './NyMeldingSkjema'
 
 // Henter en lett oversikt over album så brukeren kan koble innlegget til et
@@ -35,5 +36,9 @@ export default async function NyMelding() {
     }
   })
 
-  return <NyMeldingSkjema albumer={albumValg} />
+  // AI_PAA sendes inn som prop fordi ANTHROPIC_API_KEY er server-only —
+  // skjemaet er en klientkomponent og kan ikke lese den selv. Boolen styrer
+  // både mikroteksten ved datofeltet og om vi i det hele tatt kaller
+  // dato-uttrekket. Se docs/ai-act-vurdering.md § G2.
+  return <NyMeldingSkjema albumer={albumValg} aiPaa={AI_PAA} />
 }

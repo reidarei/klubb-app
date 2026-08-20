@@ -139,6 +139,11 @@ const variabler = [
   { navn: 'NEXT_PUBLIC_GITHUB_REPO',   nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'GitHub-repo for innspill (default: reidarei/klubb-app)' },
   { navn: 'NEXT_PUBLIC_GITHUB_ONSKE_LABEL', nivaa: 'valgfri', type: 'streng', beskrivelse: 'GitHub Issues-label for ønsker (default: ønske)' },
 
+  // Anthropic — KI-funksjoner. Uten nøkkel er de av, og ingen tekst forlater
+  // instansen. Se docs/ai-act-vurdering.md før du skrur dem på.
+  { navn: 'ANTHROPIC_API_KEY',         nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Anthropic API-nøkkel — KI-dato-uttrekk er av uten den' },
+  { navn: 'ANTHROPIC_MODEL',           nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell for KI-kall (default: claude-haiku-4-5)' },
+
   // Base-URL
   { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL override (trengs normalt ikke — utledes fra KLUBB_DOMENE/VERCEL_URL)' },
 

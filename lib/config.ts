@@ -73,6 +73,15 @@ export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
 // Modell brukt av dato-forslag og andre LLM-kall. Kan overstyres per instans.
 export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
 
+// Er KI-funksjonene i det hele tatt på? Avledet av nøkkelen, ikke en egen
+// bryter — da kan de to ikke komme i utakt. Boolsk, så den er trygg å sende
+// videre til en klientkomponent; selve nøkkelen skal aldri dit.
+// Brukes til å (1) betinge AI-avsnittet på /om-appen og mikroteksten ved
+// datofeltet, slik at en instans uten nøkkel ikke forteller medlemmene om en
+// utsending som ikke skjer, og (2) spare et nytteløst server-kall.
+// Se docs/ai-act-vurdering.md og «Policy: AI-funksjoner» i CLAUDE.md.
+export const AI_PAA = ANTHROPIC_API_KEY !== ''
+
 // Base-URL for RESTful oppgjørs-API (f.eks. https://oppgjor.example.com).
 // Tom streng = hent-oppgjør-funksjonen er av (feature-flag-mønster fra #420).
 // Server-only — ALDRI NEXT_PUBLIC_-prefiks.

@@ -311,6 +311,26 @@ Alle profil-avatarer (medlemsansikter) skal rendres via `components/ui/Avatar.ts
 
 **Når du legger til nye steder som viser profilbilder:** Bruk `<Avatar name={...} src={bilde_url} rolle={rolle} />`. Gul glød for generalsekretær faller da inn av seg selv — sjekker for dette skal ikke duplikeres utenfor komponenten.
 
+## Policy: AI-funksjoner
+
+Appen har **én** KI-flate: dato-uttrekket i `lib/actions/dato-forslag.ts`, som sender et innleggsutkast til Anthropic via `lib/anthropic.ts`. Den er **av som standard** — uten `ANTHROPIC_API_KEY` forlater ingen tekst instansen. Alt annet automatisk i appen (agenda-sortering, feil-alarm, geokoding, kåringer) er regelbasert og er ikke KI-systemer i forordningens forstand.
+
+Hele risikovurderingen i [docs/ai-act-vurdering.md](docs/ai-act-vurdering.md) hviler på at det forblir én, snever flate. Konklusjonen der — minimal risiko, ingen forbudt praksis, ikke høyrisiko — er **ikke** en egenskap ved appen, men ved den ene funksjonen. Legger du på en ny KI-flate, er vurderingen utdatert til noen har skrevet den om.
+
+**Alle KI-kall går gjennom `kallClaude()` i `lib/anthropic.ts`.** Aldri `fetch` mot en modell-leverandør direkte fra en action eller komponent — da mister du timeout, feilnormalisering og den PII-frie logge-garantien.
+
+**`AI_PAA` (fra `lib/config.ts`) er sannheten om hvorvidt funksjonene er på.** Den er avledet av `ANTHROPIC_API_KEY`, ikke en egen bryter, så de to kan ikke komme i utakt. Enhver UI-tekst som forteller medlemmene at noe sendes ut, skal være betinget av den — ellers lyver en instans uten nøkkel til brukerne sine. Nøkkelen selv skal aldri til klienten; send `AI_PAA` som bool.
+
+**Sjekkliste før du lander en ny KI-funksjon:**
+
+1. **Utløser den AI Act art. 50?** En samtaleflate (chatbot, «spør appen») utløser art. 50(1) — plikt til å informere om at man snakker med en maskin. Genererer den tekst, bilde, lyd eller video som publiseres i appen, utløser den art. 50(2) — plikt til maskinlesbar merking av output. Begge er reelle plikter, ikke formaliteter.
+2. **Endrer den klassifiseringen?** Automatisk moderering, rangering eller vurdering *av medlemmer* er en annen samtale enn å lese en dato ut av en tekst — den nærmer seg profilering og må vurderes særskilt før den bygges.
+3. **Er `/om-appen` oppdatert?** Personvern-seksjonen skal beskrive hva som faktisk sendes ut, til hvem, og i hvilket land. Teksten skal være betinget av `AI_PAA`.
+4. **Er nye env-variabler dokumentert?** `.env.example` *og* `scripts/sjekk-miljo.mjs` — begge, ellers er funksjonen usynlig for den som setter opp instansen.
+5. **Oppdater `docs/ai-act-vurdering.md`.** Ny rad i funksjonsoversikten, ny vurdering mot art. 50. Vurderingen er en levende fil, ikke et engangsstempel.
+
+**Modellbytte teller også.** `ANTHROPIC_MODEL` er env-styrt, og et bytte av leverandør kan flytte databehandlingen til en annen jurisdiksjon — da er teksten på `/om-appen` blitt feil uten at noen kodeendring fanget det.
+
 ## Policy: Navigasjon
 
 App-navigasjon består av sticky TopHeader med tre alltid-synlige tekst-tabs (Agenda/Chat/Klubb) og en animert pill-bakgrunn som glir til aktiv tab; profil-avatar høyre som snarvei til /profil. I tillegg kontekstuelle FAB-er (NyFAB på agenda for å opprette innhold). **Ingen bottom-nav.** Dette eliminerer hele bug-klassen vi traff i #99, #104, #147, #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Hvis du finner deg selv i å legge til en `position: fixed; bottom: 0` UI-flate som ikke er en modal eller toast — løft det til diskusjon først.

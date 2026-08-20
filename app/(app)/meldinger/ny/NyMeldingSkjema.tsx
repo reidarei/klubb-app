@@ -45,9 +45,14 @@ export type AlbumValg = {
 
 type Props = {
   albumer: AlbumValg[]
+  // Er KI-dato-uttrekket på? Avledet av ANTHROPIC_API_KEY server-side og sendt
+  // inn som bool — nøkkelen selv skal aldri til klienten. Er den false, kaller
+  // vi aldri actionen, og mikroteksten under datofeltet lover ikke automatikk
+  // som ikke finnes.
+  aiPaa: boolean
 }
 
-export default function NyMeldingSkjema({ albumer }: Props) {
+export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
   const [innhold, setInnhold] = useState('')
   const [aktuellDato, setAktuellDato] = useState('')
   const [bilder, setBilder] = useState<BildeItem[]>([])
@@ -104,6 +109,9 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   // endring. Overstyrer aldri en dato brukeren selv har satt (datoManueltSatt).
   // forslagGenRef dropper svar som lander etter at teksten er endret på nytt.
   useEffect(() => {
+    // Uten nøkkel svarer actionen alltid { grunn: 'feil' } — hopp over
+    // rundturen til serveren i stedet for å brenne den på hvert innlegg.
+    if (!aiPaa) return
     if (datoManueltSatt) return
     if (innhold.trim().length < DATO_FORSLAG_MIN_TEGN) return
     const gen = ++forslagGenRef.current
@@ -126,7 +134,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
       }
     }, 1000)
     return () => clearTimeout(timer)
-  }, [innhold, datoManueltSatt])
+  }, [innhold, datoManueltSatt, aiPaa])
 
   // Beregn festedato idet vi publiserer. Normalt har bakgrunns-effekten over
   // allerede fylt aktuellDato, så dette er en ren retur uten AI-kall. Har
@@ -135,6 +143,7 @@ export default function NyMeldingSkjema({ albumer }: Props) {
   // bevisst rørt/tømt datofeltet, respekterer vi det og hopper over uttrekk.
   async function beregnAktuellDato(): Promise<string | null> {
     if (aktuellDato) return aktuellDato
+    if (!aiPaa) return null
     if (datoManueltSatt) return null
     if (innhold.trim().length < DATO_FORSLAG_MIN_TEGN) return null
     try {
@@ -521,7 +530,13 @@ export default function NyMeldingSkjema({ albumer }: Props) {
               marginTop: 6,
             }}
           >
-            Fylles ut fra teksten — holder innlegget festet øverst til datoen er passert
+            {/* Sier eksplisitt at det er en maskin som leser teksten, og at
+             * brukeren kan overstyre. «Fylles ut fra teksten» sa hverken det
+             * ene eller det andre. Konservativ lesning av AI Act art. 50(1) —
+             * se docs/ai-act-vurdering.md § G2. */}
+            {aiPaa
+              ? 'Foreslås automatisk av KI ut fra teksten — du kan endre den. Holder innlegget festet øverst til datoen er passert'
+              : 'Holder innlegget festet øverst til datoen er passert'}
           </div>
         </div>
       </SkjemaSeksjon>
