@@ -7,7 +7,7 @@
 import { useEffect } from 'react'
 // Beacon-transporten bor i lib/klient-logg.ts, slik at håndterte klientfeil
 // (f.eks. i chat-hookene) kan bruke samme vei til feil_logg som de ufangede.
-import { sendFeilBeacon, feilNavn } from '@/lib/klient-logg'
+import { sendFeilBeacon, feilNavn, bildeKilde, klassifiserRessursfeil } from '@/lib/klient-logg'
 
 export default function FeilFangst() {
   useEffect(() => {
@@ -36,11 +36,18 @@ export default function FeilFangst() {
       if (!maal || maal === (window as unknown as HTMLElement)) return
       const kilde = maal.src ?? maal.href
       if (!kilde) return
+
+      const tag = maal.tagName.toLowerCase()
+      // Klassifiseringen (hvilket event, hvilket nivå) bor i klient-logg.ts —
+      // se klassifiserRessursfeil for hvorfor bilder og kodefiler skilles.
+      const { event, nivaa } = klassifiserRessursfeil(tag)
+
       sendFeilBeacon(
-        'klient.ressurs.feilet',
-        `${maal.tagName.toLowerCase()} lastet ikke`,
+        event,
+        `${tag} lastet ikke`,
         undefined,
-        { ressurs: kilde },
+        { ressurs: bildeKilde(kilde) },
+        nivaa,
       )
     }
 

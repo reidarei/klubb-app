@@ -106,7 +106,30 @@ Når koden skriver til loggen, velger den ett av to nivåer:
 | `warn` | Noe forventet skjedde, og det er allerede håndtert | Serverloggen. Utløser ingen alarm |
 | `feil` | Noe uventet skjedde | Serverloggen, Sentry og tabellen `feil_logg`, som utløser døgnalarmen |
 
-Er du i tvil, bruk `feil`. En alarm for mye koster mindre enn en tapt beskjed.
+Er du i tvil om noe er *håndtert*, bruk `feil`. En alarm for mye koster mindre enn en tapt beskjed. Men tvil er ikke det eneste spørsmålet — se neste avsnitt.
+
+### Er det noe en admin kan gjøre med det?
+
+Regelen over sier hva du skal gjøre når du er usikker. Den sier ingenting om saker der vi er helt sikre — og det er der det erfaringsmessig går galt. Typiske eksempler som ble meldt som `feil` og vekket admin på e-post:
+
+1. En innlogging som var gått ut
+2. Samme sak gjennom en annen inngang i koden
+3. Et bilde som ikke lastet på en mobil
+
+Ingen av dem var en programfeil. De skjer fordi verden er upålitelig: iOS sletter innloggings-cookies, mobilnettet faller ut i en tunnel, brukeren blar videre før bildet er ferdig. Ingen kan gjøre noe med det, og ingenting er ødelagt.
+
+Så still ett spørsmål til når du velger nivå:
+
+> **Krever dette at et menneske gjør noe?**
+
+- **Ja** → `feil`. Ødelagt utrulling, manglende databaserettighet, et varsel som ikke kom fram, en spørring som svikter.
+- **Nei, verden er bare upålitelig** → `warn`. Utløpt innlogging, avbrutt nedlasting, forbigående nettverksglipp.
+
+Raden skrives til loggen i begge tilfeller, så ingenting går tapt for den som senere vil undersøke. Forskjellen er kun om det ringer.
+
+Dette gjelder når eventet **innføres**, ikke først når alarmen har begynt å mase. Et nytt event-navn uten et bevisst valg av nivå arver `feil` som standard, og da er det bare et spørsmål om tid før det ringer på noe rutinemessig.
+
+Grunnen til at dette har fått et eget avsnitt: en alarm som går på bagateller, slutter man å lese. Da fanger den ikke den ekte feilen når den kommer — og alarmen har gjort skade i stedet for nytte.
 
 Sentry er en ekstern tjeneste som samler feil og viser hvor i koden de oppsto, og `feil_logg` er en tabell i vår egen database. Begge beskrives nærmere nedenfor.
 

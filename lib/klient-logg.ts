@@ -135,6 +135,60 @@ export function proevChunkReload(): boolean {
   return true
 }
 
+/**
+ * Avgjør om en ressurs som ikke lastet skal vekke noen.
+ *
+ * Et manglende `<script>`/`<link>` betyr at appen mangler kode og er ødelagt —
+ * det var hele formålet med #575, og skal alarmere. Et manglende `<img>` er
+ * kosmetisk, og på mobil som regel transient: dekningshull, bruker som blar
+ * videre før bildet er ferdig, iOS som suspenderer PWA-en i bakgrunnen. Fram
+ * til #603 delte de event og nivå, så én bildeglipp på én telefon utløste
+ * morgenalarmen på e-post.
+ *
+ * Warn-raden skrives fortsatt til feil_logg — alarmen filtrerer på nivå
+ * (`.neq('nivaa','warn')`), så vi mister ingen data, bare ringingen. Bevisst
+ * valgt framfor å legge event-navnet i ALARM_IGNORERTE_EVENTS, som ville gjort
+ * oss blinde også for en ekte bildesvikt der alt er borte.
+ *
+ * Egen funksjon, ikke inline i FeilFangst: klassifiseringen ER oppførselen, og
+ * den skal kunne pinnes i test uten å montere en React-komponent.
+ */
+export function klassifiserRessursfeil(tagName: string): {
+  event: string
+  nivaa: 'warn' | 'error'
+} {
+  return tagName.toLowerCase() === 'img'
+    ? { event: 'klient.bilde.feilet', nivaa: 'warn' }
+    : { event: 'klient.ressurs.feilet', nivaa: 'error' }
+}
+
+/**
+ * Gjør en bilde-URL diagnostiserbar før den sendes.
+ *
+ * `/api/logg-feil` stripper query fra `ressurs` fordi signerte URL-er kan bære
+ * token — riktig som default, men det gjør Next sin bildeoptimalisering ubrukelig
+ * å feilsøke: alle bilder på nettstedet blir til den samme strengen
+ * «/_next/image», og raden sier bare at ETT bilde feilet, ikke hvilket (#603).
+ *
+ * Her pakkes den ut på klienten i stedet: `?url=`-parameteren peker på selve
+ * kildebildet (en offentlig R2-URL), og når vi sender DEN, overlever origin og
+ * pathname saneringen. Ingen ny lekkasjeflate — vi utvider ikke hva serveren
+ * beholder, vi sender bare en mer presis verdi inn i den samme saneringen.
+ */
+export function bildeKilde(url: string): string {
+  try {
+    const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://x.invalid')
+    if (!u.pathname.startsWith('/_next/image')) return url
+    const indre = u.searchParams.get('url')
+    if (!indre) return url
+    // Kan selv være relativ (lokalt bilde under /public) — gjør den absolutt så
+    // saneringen får en origin å beholde.
+    return new URL(indre, u.origin).toString()
+  } catch {
+    return url
+  }
+}
+
 export function sendFeilBeacon(
   event: string,
   message: string,
@@ -143,7 +197,12 @@ export function sendFeilBeacon(
   // 'fatal' er forbeholdt root-boundaryen (global-error) — der har hele
   // layoutet knekt, ikke bare en side. Default holder alle andre kallsteder
   // uendret.
-  nivaa: 'error' | 'fatal' = 'error',
+  //
+  // 'warn' er for det brukerutløste og transiente: raden skrives fortsatt til
+  // feil_logg (i motsetning til server-siden, der logg.feil() returnerer før
+  // persistering), men alarmen filtrerer den bort. Vi beholder altså dataene
+  // uten å vekke noen. Se § Policy: Alvorsgrad i feilrapportering.
+  nivaa: 'warn' | 'error' | 'fatal' = 'error',
 ): void {
   if (typeof navigator === 'undefined' || !navigator.sendBeacon) return
   try {

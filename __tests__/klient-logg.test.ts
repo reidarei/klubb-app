@@ -4,7 +4,7 @@
 // får en automatisk reload eller en feilside.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { feilNavn, erChunkFeil, proevChunkReload } from '@/lib/klient-logg'
+import { feilNavn, erChunkFeil, proevChunkReload, bildeKilde } from '@/lib/klient-logg'
 import { CHUNK_RELOAD_SPERRE_MS } from '@/lib/konstanter'
 
 describe('feilNavn', () => {
@@ -99,5 +99,42 @@ describe('proevChunkReload', () => {
     })
     expect(proevChunkReload()).toBe(false)
     expect(reload).not.toHaveBeenCalled()
+  })
+})
+
+describe('bildeKilde', () => {
+  // Pinner sidefunnet i #603: /api/logg-feil stripper query fra `ressurs`
+  // (signerte URL-er kan bære token), og da kollapser ALLE bilder på nettstedet
+  // til strengen «/_next/image». Loggraden sa dermed at ett bilde feilet, men
+  // ikke hvilket. Vi pakker ut kilde-URL-en før sending i stedet — samme
+  // sanering, mer presis verdi.
+  it('pakker ut kildebildet fra Next sin bildeoptimalisering', () => {
+    const r2 = 'https://pub-abc.r2.dev/arrangementer/1780405885074-hea3na4yg1w.jpg'
+    const optimalisert = `https://www.eksempel.no/_next/image?url=${encodeURIComponent(r2)}&w=640&q=75`
+
+    expect(bildeKilde(optimalisert)).toBe(r2)
+  })
+
+  it('gjør relative kildebilder absolutte så origin overlever saneringen', () => {
+    const optimalisert = 'https://www.eksempel.no/_next/image?url=%2Fikon.png&w=64&q=75'
+
+    expect(bildeKilde(optimalisert)).toBe('https://www.eksempel.no/ikon.png')
+  })
+
+  it('lar vanlige bilde-URL-er passere urørt', () => {
+    const rett = 'https://pub-abc.r2.dev/arrangementer/bilde.jpg'
+
+    expect(bildeKilde(rett)).toBe(rett)
+  })
+
+  it('lar /_next/image uten url-parameter passere urørt', () => {
+    const rart = 'https://www.eksempel.no/_next/image?w=64'
+
+    expect(bildeKilde(rart)).toBe(rart)
+  })
+
+  it('kaster aldri på søppel-input — en logger skal ikke velte kallstedet', () => {
+    expect(bildeKilde('::ikke en url::')).toBe('::ikke en url::')
+    expect(bildeKilde('')).toBe('')
   })
 })

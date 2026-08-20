@@ -73,7 +73,8 @@
 //   samtaler.marker_lest.oppdatering.feilet — samtale_chat-oppdateringen til lest = true feiler ved sidelast, siden rendres videre (#539)
 //   samtaler.marker_lest.feilet — markerSamtaleLest() kastet uventet fra /samtaler/[id] (#539)
 //   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat, fire-and-forget under render (#539-review)
-//   klient.ressurs.feilet       — en <script>/<link>/<img> lastet ikke i nettleseren; ressurs-URL i konteksten (#575)
+//   klient.ressurs.feilet       — en <script>/<link> lastet ikke i nettleseren: appen mangler kode (#575)
+//   klient.bilde.feilet         — warn: et <img> lastet ikke. Kosmetisk og oftest transient på mobil (#603)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
