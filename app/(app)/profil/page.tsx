@@ -246,8 +246,19 @@ export default async function Profil() {
 
           {/* Min andel av fondet — høyrestilt på navnelinja. Etiketten er kortet
               ned fra «Min andel av fondet»; konteksten gir resten. */}
+          {/* Lenker til /fond (#607). Trygt uten egen tilgangssjekk: gaten på
+              fond-siden er nøyaktig samme uttrykk som visFondAndel over, så
+              blokka er kun synlig for den som også slipper inn der. */}
           {visFondAndel && (
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <Link
+              href="/fond"
+              style={{
+                textAlign: 'right',
+                flexShrink: 0,
+                textDecoration: 'none',
+                display: 'block',
+              }}
+            >
               <div
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -274,7 +285,7 @@ export default async function Profil() {
               >
                 Min andel
               </div>
-            </div>
+            </Link>
           )}
         </div>
 
