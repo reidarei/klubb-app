@@ -618,9 +618,22 @@ function oppmoteSetning(startTidspunkt: string, oppmoetested: string | null): st
   return sted ? `Oppmøte ${sted} ${tid}.` : `Vi starter ${tid}.`
 }
 
-/** Felles hale i begge påminnelsene: påmeldingstall + hilsen. */
+/**
+ * Påmeldingstallet i 7-dagers-påminnelsen. «så langt» er poenget syv dager ut:
+ * tallet er ikke endelig, og flere kan fortsatt melde seg på.
+ */
 function paameldtSetning(antallPaameldt: number): string {
   return antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} påmeldt så langt.`
+}
+
+/**
+ * Samme tall i 1-dagers-påminnelsen, men annen ordlyd: dagen før er tallet i
+ * praksis endelig, og «5 kommer» er det man faktisk lurer på. Bevisst IKKE
+ * delt med paameldtSetning over — de to sier ulike ting på ulikt tidspunkt.
+ * Null-tilfellet er likt fordi «ingen kommer» leses som en avlysning.
+ */
+function kommerSetning(antallPaameldt: number): string {
+  return antallPaameldt === 0 ? 'Ingen har meldt seg på ennå.' : `${antallPaameldt} kommer.`
 }
 
 /**
@@ -709,7 +722,7 @@ export function byggPaaminne1Melding({
   const setninger = [
     `I morgen er det ${tittel}.`,
     oppmoteSetning(startTidspunkt, oppmoetested),
-    paameldtSetning(antallPaameldt),
+    kommerSetning(antallPaameldt),
     'Vel møtt!',
   ]
   return setninger.join(' ')

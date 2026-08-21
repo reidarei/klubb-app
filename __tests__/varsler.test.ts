@@ -481,7 +481,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
 
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
       expect.objectContaining({
-        tekst: 'I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 5 påmeldt så langt. Vel møtt!',
+        tekst: 'I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 5 kommer. Vel møtt!',
       }),
     )
   })
@@ -617,7 +617,7 @@ describe('byggPaaminne1Melding', () => {
         oppmoetested: 'Klubbhuset',
         antallPaameldt: 5,
       }),
-    ).toBe('I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 5 påmeldt så langt. Vel møtt!')
+    ).toBe('I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 5 kommer. Vel møtt!')
   })
 
   it('uten oppmøtested (null) — faller tilbake til «Vi starter»', () => {
@@ -628,7 +628,7 @@ describe('byggPaaminne1Melding', () => {
         oppmoetested: null,
         antallPaameldt: 5,
       }),
-    ).toBe('I morgen er det Vårfest. Vi starter kl. 18:00. 5 påmeldt så langt. Vel møtt!')
+    ).toBe('I morgen er det Vårfest. Vi starter kl. 18:00. 5 kommer. Vel møtt!')
   })
 
   it('whitespace-only oppmøtested behandles som fraværende', () => {
@@ -639,7 +639,7 @@ describe('byggPaaminne1Melding', () => {
         oppmoetested: '   ',
         antallPaameldt: 5,
       }),
-    ).toBe('I morgen er det Vårfest. Vi starter kl. 18:00. 5 påmeldt så langt. Vel møtt!')
+    ).toBe('I morgen er det Vårfest. Vi starter kl. 18:00. 5 kommer. Vel møtt!')
   })
 
   it('ingen påmeldte ennå', () => {
@@ -661,7 +661,7 @@ describe('byggPaaminne1Melding', () => {
         oppmoetested: 'Klubbhuset',
         antallPaameldt: 1,
       }),
-    ).toBe('I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 1 påmeldt så langt. Vel møtt!')
+    ).toBe('I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 1 kommer. Vel møtt!')
   })
 
   // Datoen skal IKKE stå i teksten — «I morgen» gir den allerede. Pinnes fordi
