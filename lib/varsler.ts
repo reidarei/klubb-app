@@ -18,7 +18,13 @@ import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE, FORMAT_DATO_KORT } from '@/lib/dato'
 import { BASE_URL, absoluttUrl } from '@/lib/config'
-import { PURRING_MAKS_LENGDE, VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
+import {
+  PURRING_MAKS_LENGDE,
+  VARSLE_MAKS_LENGDE,
+  CHAT_FANOUT_TREG_MS,
+  EPOST_DOEGNBUDSJETT_CHAT,
+  EPOST_BUDSJETT_VINDU_TIMER,
+} from '@/lib/konstanter'
 import { mentionExtractRegex } from '@/lib/mention'
 import { logg } from '@/lib/logg'
 // Mapping type → noekkel bor i lib/varsel-typer.ts sammen med de norske
@@ -157,6 +163,60 @@ async function hentPushSubscriptions(profilIder: string[]) {
   return data ?? []
 }
 
+/**
+ * Døgnbudsjett-vakt for e-post fra chat (#612-review).
+ *
+ * Resend free tier har et hardt tak på 100 e-poster per døgn. Chat varsler nå
+ * alle aktive medlemmer, og `epost_aktiv` defaulter til true — ~15 e-poster per
+ * melding betyr at syv meldinger tømmer døgnkvoten. Kvoten deles med
+ * 06:00-cronen, så uten denne vakten kan en kveld med gutteprat gjøre at
+ * 7-dagers-påminnelsen for en tur aldri når innboksen til noen.
+ *
+ * Vakten hopper derfor over E-POSTKANALEN for chat_*-typene når forbruket
+ * siste døgn er over EPOST_DOEGNBUDSJETT_CHAT. Push og in-app-raden går som
+ * normalt — mannen mister ikke varselet, bare den ene kanalen. Ikke-chat-
+ * varsler passerer alltid (returnerer false på første linje): hele poenget er
+ * at påminnelsene har forrang.
+ *
+ * FAIL ÅPENT (bevisst unntak fra fail-closed-regelen i filhodet): klarer vi
+ * ikke å telle, sender vi som normalt. Å feile lukket her ville gjort en
+ * transient DB-feil til et tapt varsel — verre enn å risikere at vi bikker
+ * Resends tak. Feilen logges likevel med logg.feil (fail-open ≠ stille).
+ *
+ * Merk at telleren er en TILNÆRMING: den teller varsel_logg-rader med e-post
+ * som kanal, ikke kvitteringer fra Resend. En rad kan være skrevet uten at
+ * e-posten kom fram (sendEpostBatch svelger sine egne feil), og den teller
+ * likevel. Det gjør vakten litt for streng, som er riktig retning å bomme i.
+ */
+async function chatEpostBudsjettBrukt(
+  supabase: ReturnType<typeof createAdminClient>,
+  type: string,
+): Promise<boolean> {
+  if (!CHAT_BROADCAST_TYPER.has(type)) return false
+
+  const vinduStart = new Date(
+    Date.now() - EPOST_BUDSJETT_VINDU_TIMER * 60 * 60 * 1000,
+  ).toISOString()
+  const { count, error } = await supabase
+    .from('varsel_logg')
+    .select('id', { count: 'exact', head: true })
+    // 'begge' = push + epost. 'kun_app'/'push' kostet ingen e-post.
+    .in('kanal', ['epost', 'begge'])
+    .gte('opprettet', vinduStart)
+
+  if (error) {
+    await logg.feil('varsel.epost.budsjett.feilet', error, { ctx: { sample: type } })
+    return false
+  }
+
+  const brukt = count ?? 0
+  if (brukt >= EPOST_DOEGNBUDSJETT_CHAT) {
+    logg.warn('varsel.epost.budsjett.chat_hoppet', { sample: type, count: brukt })
+    return true
+  }
+  return false
+}
+
 // ─── HJELPEFUNKSJON FOR HILSENFORMATERING ───────────────────────────────────
 
 /**
@@ -206,6 +266,17 @@ export function formaterHilsenMelding({
 // og type_deaktivert — fordi returverdien i seg selv betyr at rørledningen
 // kjørte til ende for denne tilstandsendringen. Additiv endring: alle
 // eksisterende ~30 kallsteder ignorerer returverdien uten å brekke.
+//
+// INVARIANT: «sendVarsel kaster kun FØR utsendingsløkka» (#612-review).
+// Alle throw-punktene i sendVarsel ligger foran `Promise.all(profiler.map(…))`
+// — innstillinger, testmodus, mottakere, preferanser, push-subscriptions,
+// fortids-sperre. Inne i løkka er alt fail-open (varsel_logg-insert svelges,
+// sendPush/sendEpostBatch svelger sine egne feil). Konsekvensen kallere kan
+// stole på: KASTER ⇒ ingen mottaker fikk noe, det er trygt å prøve dem på nytt
+// et annet sted. RETURNERER ⇒ terminalt avgjort. sendChatVarsler bygger direkte
+// på dette når den legger de @-nevnte tilbake i broadcasten etter et kast.
+// Legger du et nytt throw inne i løkka, brytes den kontrakten stille.
+// Pinnet i __tests__/chat-varsler.test.ts § «mention-benet kaster».
 export type VarselUtfall = {
   utfall:
     | 'sendt'
@@ -237,6 +308,8 @@ export async function sendVarsel({
   pollId,
   tillatDuplikat = false,
   dedupNoekkel,
+  tellerUlest = true,
+  pushTag,
 }: {
   mottakere?: string[]
   tittel: string
@@ -262,7 +335,34 @@ export async function sendVarsel({
   tillatDuplikat?: boolean
   // Navnerom-prefikset per-mottaker-guard (f.eks. «pass-godkjent:{id}»,
   // «bursdag:{barnId}:{aar}») — se varsel_logg_dedup_noekkel_uniq (mig. 121).
+  //
+  // Retensjonsinvarianten (#612, grunnlaget en fremtidig pruning-jobb i PR 2
+  // vil stole blindt på): en varsel_logg-rad bærer en kvittering HVISS
+  // dedup_noekkel er non-null. En rad uten dedup_noekkel kan trygt slettes
+  // uten å ta med seg en kvittering en annen del av systemet er avhengig av.
   dedupNoekkel?: string
+  // Default true (dagens oppførsel for alle eksisterende ~30 kallsteder).
+  // Settes eksplisitt til false av chat-broadcastene (sendChatVarsler) —
+  // de er lavsignal nok til at de ikke skal telle mot "Viktig"-fanen/
+  // ulest-prikken på /profil, men skal fortsatt stå i "Alt"-historikken.
+  // Eksplisitt parameter, ikke utledet fra `type` her: en utledning ville
+  // krevd en hardkodet liste over chat-typer inne i kjernen, og neste
+  // lavsignal-type (som ikke er chat) ville glemt å stå i den listen.
+  tellerUlest?: boolean
+  // Notifikasjons-gruppe for push (#612): to varsler med samme tag kollapser
+  // til ÉN rad på låseskjermen (renotify: false i sw.js) i stedet for å stable
+  // seg opp gjennom en burst. Settes av kallstedet, ikke utledet av `type` her
+  // — kjernen kjenner bare typen, mens tråd-identiteten sitter i kallstedets
+  // scope (hvilket album-bilde, hvilket innlegg). En utledning på `type` alene
+  // ga tag til tre av fem chat-flater og undefined til de to burst-tyngste
+  // (kommentarer på innlegg og bilde) — halvveis kollapsing er vanskeligere å
+  // oppdage som mangel enn ingen kollapsing (#612-review).
+  //
+  // Default undefined = dagens oppførsel: én rad per varsel. Ingen påminnelse
+  // eller kåringsvarsel setter tag, og de kan derfor ALDRI kollapses bort av
+  // et senere varsel — tom tag betyr «ingen gruppe» i Notifications-specen,
+  // ikke «gruppe med tomt navn».
+  pushTag?: string
 }): Promise<VarselUtfall> {
   // Dev-guard: Blokker utsending fra lokal dev-server mot prod-DB.
   // Vi returnerer tidlig uten å skrive varsel_logg — det er bedre å ikke
@@ -464,6 +564,12 @@ export async function sendVarsel({
   let kunApp = 0
   let dedupHoppet = 0
 
+  // E-post-budsjettvakt for chat — se chatEpostBudsjettBrukt() over. Slås opp
+  // ÉN gang per sending (ikke per mottaker), og er en no-op for alt som ikke
+  // er en chat_*-type. Sperren slår kun ut e-postkanalen; push og in-app-raden
+  // under er upåvirket.
+  const epostSperretAvBudsjett = await chatEpostBudsjettBrukt(supabase, type)
+
   await Promise.all(
     profiler.map(async profil => {
       const pref = prefs.get(profil.id)
@@ -472,7 +578,7 @@ export async function sendVarsel({
       const profilSubs = subsByProfil.get(profil.id) ?? []
 
       const kanPush = pushAktiv && profilSubs.length > 0
-      const kanEpost = epostAktiv && !!profil.epost
+      const kanEpost = epostAktiv && !!profil.epost && !epostSperretAvBudsjett
       // 'kun_app' (i stedet for tidligere `if (!kanal) return`, #504): en
       // mottaker uten push eller epost aktiv skal likevel få en in-app-rad —
       // varsel_logg ER innboksen på /profil, og ingen rad skal noensinne
@@ -496,6 +602,7 @@ export async function sendVarsel({
           arrangement_id: arrangementId ?? null,
           poll_id: pollId ?? null,
           dedup_noekkel: dedupNoekkel ?? null,
+          teller_ulest: tellerUlest,
         })
         .select('id')
         .single()
@@ -533,7 +640,9 @@ export async function sendVarsel({
 
       if (kanPush) {
         await Promise.all(
-          profilSubs.map(s => sendPush(s, { tittel, melding: profilMelding, url: varselUrl })),
+          profilSubs.map(s =>
+            sendPush(s, { tittel, melding: profilMelding, url: varselUrl, tag: pushTag }),
+          ),
         )
       }
 
@@ -1056,13 +1165,18 @@ export async function sendPurringVarsler({
   })
 }
 
-// ─── @-MENTION I CHAT ───────────────────────────────────────────────────────
-// Sentralisert mention-handler for alle chat-scopes. Tidligere lå det
-// fire nesten-identiske kopier i lib/actions/chat.ts; en regex-bug
-// (28. april 2026) traff alle fire steder fordi de var kopiert. Holdes
-// her sammen med øvrig varsling for å forhindre repetisjon.
+// ─── CHAT-VARSLER (BROADCAST + @-MENTION) ───────────────────────────────────
+// Sentralisert handler for alle chat-scopes. Tidligere lå mention-matchingen
+// som fire nesten-identiske kopier i lib/actions/chat.ts; en regex-bug
+// (28. april 2026) traff alle fire steder fordi de var kopiert. Holdes her
+// sammen med øvrig varsling for å forhindre repetisjon.
+//
+// #612: chat varsler nå ALLE aktive medlemmer minus avsender (ikke bare den
+// som nevnes med @). sendChatVarsler() erstatter den tidligere mention-only-
+// funksjonen med samme navnemønster — én inngangsport, ikke to, for samme
+// grunn som #547 (to stier til samme sti drifter fra hverandre stille).
 
-export type MentionScope =
+export type ChatVarselScope =
   | { type: 'arrangement'; id: string }
   | { type: 'klubb' }
   | { type: 'poll'; id: string }
@@ -1076,17 +1190,51 @@ export type MentionScope =
 // `@Ola` treffer «Ola Petter Nordmann», og `@Ola Nordmann` treffer
 // også (etternavnet blir bare vanlig tekst i meldingen).
 
+// Minimal profilform finnNevnte trenger — generisk over T slik at både
+// sendChatVarsler (profiler med epost i tillegg) og en fremtidig kaller med
+// en smalere projeksjon kan bruke den uendret.
+type MentionKandidat = { id: string; navn: string | null; visningsnavn: string | null }
+
+/**
+ * Ren funksjon (ingen IO) som finner hvilke profiler en tekst @-nevner.
+ * Trukket ut fra den tidligere mention-only-varslingen slik at selve
+ * matchingen (inkl. `@alle` og flerords-navn) er testbar uten DB-mocking.
+ * `avsenderId` ekskluderes alltid — man kan ikke nevne seg selv.
+ */
+export function finnNevnte<T extends MentionKandidat>(
+  tekst: string,
+  profiler: T[],
+  avsenderId: string,
+): T[] {
+  const mentions = [...tekst.matchAll(mentionExtractRegex())].map(m =>
+    m[1].trim().toLowerCase(),
+  )
+  if (mentions.length === 0) return []
+
+  const erAlle = mentions.includes('alle')
+  return erAlle
+    ? profiler.filter(p => p.id !== avsenderId)
+    : profiler.filter(p => {
+        if (p.id === avsenderId) return false
+        return mentions.some(
+          m =>
+            p.navn?.toLowerCase().includes(m) ||
+            p.visningsnavn?.toLowerCase().includes(m),
+        )
+      })
+}
+
 function utdrag(tekst: string, maks = 80): string {
   return tekst.length > maks ? tekst.slice(0, maks - 3) + '...' : tekst
 }
 
 async function hentScopeInnhold(
-  scope: MentionScope,
+  scope: ChatVarselScope,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<{ tittel: string; url: string; knappTekst: string }> {
   // Exhaustive switch med never-default (i stedet for if/else-kjede med
   // ubetinget melding-fallthrough) — lukker klassen av bugs der en ny
-  // MentionScope-variant stille ruter til feil URL. Se #481.
+  // ChatVarselScope-variant stille ruter til feil URL. Se #481.
   switch (scope.type) {
     case 'klubb':
       return {
@@ -1097,14 +1245,20 @@ async function hentScopeInnhold(
     case 'arrangement': {
       // Fail ÅPENT (bevisst): en feil her rammer kun tittel-teksten i varselet
       // (fallback under), ikke hvem som mottar det. Ikke verdt å kaste for. (#503)
+      // maybeSingle, ikke single: med en feil-vakt foran ville .single()s
+      // PGRST116 på et slettet arrangement blitt logget som en ekte feil, selv
+      // om koden allerede HAR en fallback-tittel for nettopp det tilfellet
+      // (CLAUDE.md § Policy: Databasespørringer). Stien gikk før kun ved
+      // @-mention; etter #612 går den ved hver arrangement-melding, så
+      // støy-radiusen er en helt annen (#612-review).
       const { data, error } = await admin
         .from('arrangementer')
         .select('tittel')
         .eq('id', scope.id)
-        .single()
+        .maybeSingle()
       // Fail-open, men ikke stille: feilobjektet skal videre til Sentry selv
       // om vi fortsetter med fallback-tittel. (#503-review)
-      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'mention.arrangement' } })
+      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'chat.arrangement' } })
       return {
         tittel: `Chat: ${data?.tittel ?? 'et arrangement'}`,
         // #kommentarer-ankeret scroller direkte til chat-seksjonen på
@@ -1114,13 +1268,14 @@ async function hentScopeInnhold(
       }
     }
     case 'poll': {
-      // Samme resonnement som arrangement over — feiler kun tittel-teksten.
+      // Samme resonnement som arrangement over — feiler kun tittel-teksten,
+      // og maybeSingle av samme grunn (slettet poll ⇒ fallback, ikke feil).
       const { data, error } = await admin
         .from('poll')
         .select('spoersmaal')
         .eq('id', scope.id)
-        .single()
-      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'mention.poll' } })
+        .maybeSingle()
+      if (error) await logg.feil('varsel.scope.feilet', error, { ctx: { sample: 'chat.poll' } })
       return {
         tittel: `Kommentar: ${data?.spoersmaal ?? 'en avstemming'}`,
         url: `${BASE_URL}/poll/${scope.id}`,
@@ -1141,63 +1296,193 @@ async function hentScopeInnhold(
       }
     default: {
       const ukjent: never = scope
-      throw new Error(`Ukjent mention-scope: ${JSON.stringify(ukjent)}`)
+      throw new Error(`Ukjent chat-varsel-scope: ${JSON.stringify(ukjent)}`)
     }
   }
 }
 
-export async function sendChatMentionVarsler(
-  scope: MentionScope,
-  tekst: string,
-  avsenderId: string,
-) {
-  const mentions = [...tekst.matchAll(mentionExtractRegex())].map(m =>
-    m[1].trim().toLowerCase(),
-  )
-  if (mentions.length === 0) return
+// Mapping scope-type → broadcast-varseltype. `Record` over hele unionen (ikke
+// `Partial`/`string`-keyed) gir en KOMPILERINGSFEIL hvis en sjette ChatVarselScope-
+// variant legges til uten en tilhørende rad her — samme vakt som never-defaulten
+// i hentScopeInnhold over (#481), brukt på mapping-siden i stedet for switchen.
+// Se migrasjon 134 for seed-radene i varsel_innstillinger disse nøklene styres av.
+const CHAT_BROADCAST_TYPE: Record<ChatVarselScope['type'], string> = {
+  klubb: 'chat_klubb',
+  arrangement: 'chat_arrangement',
+  poll: 'chat_poll',
+  melding: 'chat_melding',
+  albumbilde: 'chat_albumbilde',
+}
 
+// Settet av de samme fem typene, UTLEDET av mappingen over så de to aldri kan
+// drifte fra hverandre. Brukes av e-post-budsjettvakten (chatEpostBudsjettBrukt)
+// som står lenger OPP i fila — lovlig forover-referanse: konstanten leses først
+// når vakten kalles, altså etter at modulen er ferdig evaluert.
+const CHAT_BROADCAST_TYPER: ReadonlySet<string> = new Set(Object.values(CHAT_BROADCAST_TYPE))
+
+/**
+ * Push-tag per chat-TRÅD (#612-review). Alle fem flatene får en tag, ikke bare
+ * de tre som tilfeldigvis har en arrangementId/pollId å henge seg på — det er
+ * nettopp kommentarfeltene under et innlegg og et albumbilde som går i burst.
+ * Utledes her fordi det bare er her tråd-identiteten finnes (bildeId/albumId
+ * når scopet er albumbilde); sendVarsel tar den imot som parameter.
+ *
+ * Samme never-default som hentScopeInnhold over: en sjette scope-variant skal
+ * gi kompileringsfeil, ikke stille falle tilbake til «ingen tag».
+ */
+function chatPushTag(scope: ChatVarselScope): string {
+  switch (scope.type) {
+    case 'klubb':
+      return 'chat:klubb'
+    case 'arrangement':
+      return `chat:arrangement:${scope.id}`
+    case 'poll':
+      return `chat:poll:${scope.id}`
+    case 'melding':
+      return `chat:melding:${scope.id}`
+    case 'albumbilde':
+      // bildeId, ikke albumId: tråden er kommentarfeltet under ETT bilde.
+      return `chat:albumbilde:${scope.bildeId}`
+    default: {
+      const ukjent: never = scope
+      throw new Error(`Ukjent chat-varsel-scope: ${JSON.stringify(ukjent)}`)
+    }
+  }
+}
+
+/**
+ * Orkestrator for all chat-varsling (#612) — kalt fra sendVarslerEtterPost i
+ * lib/actions/chat.ts for alle scopes utenom 'privat' (som har sin egen
+ * sendPrivatMeldingVarsel). Erstatter den tidligere mention-only-funksjonen:
+ * ÉN inngangsport i stedet for to, slik at det aldri finnes to stier inn til
+ * samme sending som kan drifte fra hverandre (#547).
+ *
+ * `harBilde` inngår ikke i noen forgrening her i dag — `tekst`s nullity
+ * (validerInnhold i lib/actions/chat.ts garanterer at minst én av de to er
+ * satt) er allerede nok til å velge riktig fallback-tekst under. Parameteren
+ * beholdes fordi kalleren uansett kjenner den, og en fremtidig variant som
+ * skiller «tekst + bilde» fra «bare bilde» skal kunne legges til uten å endre
+ * signaturen på nytt.
+ *
+ * To sendVarsel()-kall er BEVISST, ikke policybrudd (jf. CLAUDE.md § Policy:
+ * Varsler): de har ULIK `type` (og dermed ulik bryter i varsel_innstillinger
+ * — hele poenget med separate chat_*-nøkler), `tillatDuplikat: true` på begge
+ * (dedup er dermed ute av bildet), og DISJUNKTE mottakerlister (nevnte er
+ * eksplisitt trukket ut av broadcast-lista under). Policyen forbyr å splitte
+ * ÉN sending (samme type, samme mottakere) i N kall — dette er to distinkte
+ * sendinger som deler ett mottaker-oppslag for effektivitet.
+ */
+export async function sendChatVarsler(
+  scope: ChatVarselScope,
+  tekst: string | null,
+  avsenderId: string,
+  harBilde: boolean,
+): Promise<void> {
+  const start = Date.now()
   const admin = createAdminClient()
 
-  // Fail closed — samme klasse feil som mottaker-oppslaget i sendVarsel:
-  // en feilet spørring skal ikke tolkes som «ingen mentions å varsle». (#503)
+  // Ett felles profiles-oppslag for BEGGE sendingene under — garanterer at
+  // mention-benet og broadcast-benet regner på nøyaktig samme snapshot av
+  // aktive medlemmer. Fail closed, samme klasse som mottaker-oppslaget i
+  // sendVarsel selv (#503): en feilet spørring her skal ALDRI tolkes som
+  // «ingen å varsle» — det ville stille droppet både mention og broadcast.
   const { data, error } = await admin
     .from('profiles')
     .select('id, navn, visningsnavn, epost')
     .eq('aktiv', true)
   if (error) {
-    await logg.feil('varsel.mottakere.feilet', error, { ctx: { sample: 'mention' } })
-    throw new Error(`Kunne ikke hente profiler for @-mention: ${error.message}`)
+    await logg.feil('varsel.mottakere.feilet', error, { ctx: { sample: 'chat' } })
+    throw new Error(`Kunne ikke hente profiler for chat-varsel: ${error.message}`)
   }
   // `data` er typet «| null», men throw-en over har allerede fanget det eneste
-  // tilfellet som gir null — `?? []` er ren TS-narrowing, ikke en skjult
-  // stille-retur. (#503-review)
+  // tilfellet som gir null — `?? []` er ren TS-narrowing. (#503-review)
   const profiler = data ?? []
-
-  const erAlle = mentions.includes('alle')
-  const nevnte = erAlle
-    ? profiler.filter(p => p.id !== avsenderId)
-    : profiler.filter(p => {
-        if (p.id === avsenderId) return false
-        return mentions.some(
-          m =>
-            p.navn?.toLowerCase().includes(m) ||
-            p.visningsnavn?.toLowerCase().includes(m),
-        )
-      })
-  if (nevnte.length === 0) return
-
-  const avsender = profiler.find(p => p.id === avsenderId)
-  const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
 
   const innhold = await hentScopeInnhold(scope, admin)
 
-  await sendVarsel({
-    mottakere: nevnte.map(p => p.id),
-    tittel: innhold.tittel,
-    melding: `${avsenderNavn}: ${utdrag(tekst)}`,
-    url: innhold.url,
-    knappTekst: innhold.knappTekst,
-    type: 'mention',
-    tillatDuplikat: true,
-  })
+  const avsender = profiler.find(p => p.id === avsenderId)
+  const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
+  // Bilde-fallback er EGEN tekst («la ut et bilde»), ikke privat-meldingens
+  // «Sendte deg et bilde» — den er skrevet for én-til-én, og «deg» er feil i
+  // en broadcast alle 16 andre ser samme tekst i.
+  const meldingTekst = tekst ? `${avsenderNavn}: ${utdrag(tekst)}` : `${avsenderNavn} la ut et bilde`
+
+  const nevnte = tekst ? finnNevnte(tekst, profiler, avsenderId) : []
+
+  // Mention FØRST. Kun mottakere som DENNE sendingen faktisk fikk noe fra
+  // («sendt») ekskluderes fra broadcast-lista under — kaster mention-benet,
+  // eller returnerer det type_deaktivert/ingen_mottakere/hendelse_passert/dedup,
+  // legges de nevnte TILBAKE i broadcast automatisk (ekskludert forblir tom).
+  // Ellers ville en avskrudd mention-bryter gjort de nevnte usynlige i BEGGE
+  // sendingene — nøyaktig #504-kontrakten («kaster = ukjent utfall, returnerer
+  // = terminalt avgjort») brukt til det den er til for.
+  //
+  // At det er TRYGT å legge dem tilbake ved et kast hviler på invarianten
+  // «sendVarsel kaster kun FØR utsendingsløkka» (se VarselUtfall-kommentaren):
+  // uten den kunne et kast midt i løkka gitt noen mention-varselet OG deretter
+  // broadcast-varselet om samme melding.
+  let ekskludert = new Set<string>()
+  if (nevnte.length > 0) {
+    let mentionUtfall: VarselUtfall | null = null
+    try {
+      mentionUtfall = await sendVarsel({
+        mottakere: nevnte.map(p => p.id),
+        tittel: innhold.tittel,
+        melding: meldingTekst,
+        url: innhold.url,
+        knappTekst: innhold.knappTekst,
+        type: 'mention',
+        tillatDuplikat: true,
+      })
+    } catch (err) {
+      // Eget event, distinkt fra broadcast-benet under — ellers vet vi ikke
+      // hvilket av de to benene som ryker når alarmen fyrer.
+      await logg.feil('chat.varsler.mention.feilet', err)
+    }
+    if (mentionUtfall?.utfall === 'sendt') {
+      ekskludert = new Set(nevnte.map(p => p.id))
+    }
+  }
+
+  const rest = profiler.filter(p => p.id !== avsenderId && !ekskludert.has(p.id))
+
+  // Tom rest er normalt for `@alle` (alle andre er alt dekket av mention-
+  // benet) — ikke kall sendVarsel i det hele tatt, det ville bare vært en
+  // ekstra "ingen_mottakere"-logglinje for en helt forventet tilstand.
+  if (rest.length > 0) {
+    try {
+      await sendVarsel({
+        mottakere: rest.map(p => p.id),
+        tittel: innhold.tittel,
+        melding: meldingTekst,
+        url: innhold.url,
+        knappTekst: innhold.knappTekst,
+        type: CHAT_BROADCAST_TYPE[scope.type],
+        tillatDuplikat: true,
+        // Chat er lavsignal sammenlignet med resten av innboksen (opptil 17
+        // varsler per melding) — skal stå i "Alt", ikke telle mot "Viktig"-
+        // fanen eller ulest-prikken. Se migrasjon 134 § teller_ulest.
+        tellerUlest: false,
+        // Kollapser burst-en til én rad på låseskjermen per tråd. Settes KUN
+        // på broadcasten — mention-sendingen over er bevisst utagget, ellers
+        // kunne en helt vanlig chat-melding rett etterpå erstattet «Ola nevnte
+        // deg» på låseskjermen med noe lavere signal.
+        pushTag: chatPushTag(scope),
+        arrangementId: scope.type === 'arrangement' ? scope.id : undefined,
+        pollId: scope.type === 'poll' ? scope.id : undefined,
+      })
+    } catch (err) {
+      await logg.feil('chat.varsler.broadcast.feilet', err)
+    }
+  }
+
+  // Fanout-måling (#612): chat gikk fra 0 varsler til opptil 17 push+epost per
+  // melding — en treg fanout bør synes i loggen før noen merker den som en
+  // treg "Send"-knapp. harBilde inngår ikke i selve fanouten (kun i
+  // meldingTekst over), men holdes i `sample` for å skille bilde- fra
+  // tekstmeldinger i loggen uten å måtte grave i kontekst.
+  const ms = Date.now() - start
+  if (ms > CHAT_FANOUT_TREG_MS) {
+    logg.warn('varsel.chat.fanout.treg', { sample: `${scope.type}${harBilde ? ':bilde' : ''}`, count: profiler.length, ms })
+  }
 }

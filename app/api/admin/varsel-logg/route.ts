@@ -15,9 +15,13 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '10')
 
   const admin = createAdminClient()
+  // MÅ ha samme teller_ulest-filter som førstesiden i app/(app)/innstillinger/page.tsx
+  // (#612): «Vis flere» pagineres på offset, så et annet filter her ville både
+  // dratt chat inn i lista og forskjøvet radene mot totalen siden ble rendret med.
   const { data, count, error } = await admin
     .from('varsel_logg')
     .select('id, tittel, type, kanal, opprettet, profil_id, profiles (visningsnavn)', { count: 'exact' })
+    .eq('teller_ulest', true)
     .order('opprettet', { ascending: false })
     .range(offset, offset + limit - 1)
 

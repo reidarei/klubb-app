@@ -170,15 +170,28 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
-  const { tittel, melding, url } = data
+  const { tittel, melding, url, tag } = data
 
   event.waitUntil(
     // SW kan ikke importere TS-moduler; serveren setter alltid tittel i praksis.
+    // tag + renotify: false (#612): uten tag ble hver melding i en chat-burst
+    // sin egen rad på låseskjermen (20 meldinger = 20 rader). Med samme tag
+    // (utledet server-side i sendVarsel, f.eks. «chat:klubb») erstatter siste
+    // melding forrige i stedet — én rad per tråd.
+    //
+    // Feltene SPREDES kun når tag er en ikke-tom streng, i stedet for å sende
+    // `tag: undefined`. Per WebIDL er en undefined dictionary-member det samme
+    // som fraværende, så de to er ekvivalente i en spec-tro nettleser — men vi
+    // sender ikke feltet i det hele tatt til de varseltypene som ikke skal
+    // kollapse (påminnelser, mention), så oppførselen deres ikke avhenger av at
+    // hver nettleser tolker undefined riktig. Gjelder også eldre payloads
+    // rullet ut før #612.
     self.registration.showNotification(tittel ?? 'Varsel', {
       body: melding,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       data: { url: url ?? '/' },
+      ...(typeof tag === 'string' && tag ? { tag, renotify: false } : {}),
     })
   )
 })

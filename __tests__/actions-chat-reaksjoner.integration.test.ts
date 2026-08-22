@@ -37,7 +37,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/varsler', () => ({
   sendVarsel: vi.fn().mockResolvedValue(undefined),
-  sendChatMentionVarsler: vi.fn().mockResolvedValue(undefined),
+  sendChatVarsler: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/config', () => ({

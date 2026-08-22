@@ -30,8 +30,10 @@ export default async function Profil() {
     { count: kaaringer, error: kaaringerFeil },
     { data: ansvar, error: ansvarFeil },
     { data: varselPref, error: varselPrefFeil },
-    { data: varsler, error: varslerFeil },
-    { count: antallUlesteVarsler, error: antallUlesteVarslerFeil },
+    { data: varslerViktig, error: varslerViktigFeil },
+    { data: varslerAlt, error: varslerAltFeil },
+    { count: antallUlesteViktig, error: antallUlesteViktigFeil },
+    { count: antallUlesteAlt, error: antallUlesteAltFeil },
     { data: passInfo, error: passInfoFeil },
     { count: ulestPrivat, error: ulestPrivatFeil },
     { data: fondInnskudd, error: fondInnskuddFeil },
@@ -62,15 +64,39 @@ export default async function Profil() {
       .select('push_aktiv, epost_aktiv')
       .eq('profil_id', user!.id)
       .maybeSingle(),
+    // «Viktig» — default-fanen. teller_ulest = true dekker alt utenom de fem
+    // chat_*-broadcastene (#612, migrasjon 134); en pass-godkjenning skal
+    // ikke kunne drukne i en klubbchat-burst.
+    supabase
+      .from('varsel_logg')
+      .select('id, tittel, melding, lest, opprettet, url')
+      .eq('profil_id', user!.id)
+      .eq('teller_ulest', true)
+      .order('opprettet', { ascending: false })
+      .limit(10),
+    // «Alt» — hele historikken, chat inkludert.
     supabase
       .from('varsel_logg')
       .select('id, tittel, melding, lest, opprettet, url')
       .eq('profil_id', user!.id)
       .order('opprettet', { ascending: false })
       .limit(10),
-    // Total ulest-count på tvers av hele historikken — listen viser kun
-    // top 10, men "Marker alle som lest"-knappen og tellingen i tittelen
-    // må kjenne til alle uleste, også de eldre enn topp 10. Se #207.
+    // Total ulest-count for «Viktig» på tvers av hele historikken — listen
+    // viser kun top 10, men "Marker alle som lest"-knappen og tellingen i
+    // tittelen må kjenne til alle uleste, også de eldre enn topp 10 (#207).
+    // MÅ filtreres likt som prikken (harUlestVarsler() i lib/ulest.ts) —
+    // ellers lyver tittelen og avatar-prikken mot hverandre (#612).
+    supabase
+      .from('varsel_logg')
+      .select('id', { count: 'exact', head: true })
+      .eq('profil_id', user!.id)
+      .eq('teller_ulest', true)
+      .eq('lest', false),
+    // Uleste i «Alt» — ALLE uleste, ikke bare chat-radene (#612-review).
+    // Badgen står på en fane som viser hele historikken, så den må telle det
+    // fanen faktisk inneholder: med 3 uleste viktige + 12 uleste chat sto det
+    // før «Alt · 12» på en fane med 15 uleste. Filteret på teller_ulest = false
+    // hørte til den forrige varianten der badgen skulle bety «chat».
     supabase
       .from('varsel_logg')
       .select('id', { count: 'exact', head: true })
@@ -111,8 +137,10 @@ export default async function Profil() {
   if (kaaringerFeil) throw new Error(`Kunne ikke telle kåringer: ${kaaringerFeil.message}`)
   if (ansvarFeil) throw new Error(`Kunne ikke hente arrangøransvar: ${ansvarFeil.message}`)
   if (varselPrefFeil) throw new Error(`Kunne ikke hente varselpreferanser: ${varselPrefFeil.message}`)
-  if (varslerFeil) throw new Error(`Kunne ikke hente varsler: ${varslerFeil.message}`)
-  if (antallUlesteVarslerFeil) throw new Error(`Kunne ikke telle uleste varsler: ${antallUlesteVarslerFeil.message}`)
+  if (varslerViktigFeil) throw new Error(`Kunne ikke hente varsler («Viktig»): ${varslerViktigFeil.message}`)
+  if (varslerAltFeil) throw new Error(`Kunne ikke hente varsler («Alt»): ${varslerAltFeil.message}`)
+  if (antallUlesteViktigFeil) throw new Error(`Kunne ikke telle uleste varsler («Viktig»): ${antallUlesteViktigFeil.message}`)
+  if (antallUlesteAltFeil) throw new Error(`Kunne ikke telle uleste varsler («Alt»): ${antallUlesteAltFeil.message}`)
   if (passInfoFeil) throw new Error(`Kunne ikke hente pass-info: ${passInfoFeil.message}`)
   if (ulestPrivatFeil) throw new Error(`Kunne ikke telle uleste privatmeldinger: ${ulestPrivatFeil.message}`)
   if (fondInnskuddFeil) throw new Error(`Kunne ikke hente fondinnskudd: ${fondInnskuddFeil.message}`)
@@ -493,13 +521,19 @@ export default async function Profil() {
       {/* Utseende-innstillinger — alle kan velge tema */}
       <UtseendeValg initial={valgtTema} />
 
-      {/* Personlige varsler — interaktiv klient-komponent med filter, kollaps
-          og marker-alle-lest. Vis seksjonen hvis det enten finnes varsler i
-          top 10 ELLER hvis det finnes uleste eldre enn top 10 (se #207). */}
-      {((varsler && varsler.length > 0) || (antallUlesteVarsler ?? 0) > 0) && (
+      {/* Personlige varsler — interaktiv klient-komponent med «Viktig»/«Alt»-
+          segment, filter, kollaps og marker-alle-lest. Vis seksjonen hvis det
+          finnes noe i EN av de to listene, ELLER uleste eldre enn topp 10 i
+          en av dem (se #207, utvidet med «Alt» i #612). */}
+      {((varslerViktig && varslerViktig.length > 0) ||
+        (varslerAlt && varslerAlt.length > 0) ||
+        (antallUlesteViktig ?? 0) > 0 ||
+        (antallUlesteAlt ?? 0) > 0) && (
         <VarslerListe
-          varsler={varsler ?? []}
-          antallUlesteTotal={antallUlesteVarsler ?? 0}
+          varslerViktig={varslerViktig ?? []}
+          varslerAlt={varslerAlt ?? []}
+          antallUlesteViktigTotal={antallUlesteViktig ?? 0}
+          antallUlesteAltTotal={antallUlesteAlt ?? 0}
         />
       )}
 

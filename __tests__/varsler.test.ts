@@ -48,7 +48,7 @@ import {
   sendArrangorPurringVarsler,
   sendNyPollVarsler,
   sendPurringVarsler,
-  sendChatMentionVarsler,
+  sendChatVarsler,
   formaterHilsenMelding,
   byggPaaminne7Melding,
   byggPaaminne1Melding,
@@ -677,11 +677,14 @@ describe('byggPaaminne1Melding', () => {
   })
 })
 
-describe('sendChatMentionVarsler – @ gir varsel', () => {
-  // Kontrakten gutta faktisk merker: skriver noen @Navn i en chat, skal den
-  // som nevnes få et varsel. Fram til nå fantes bare feilstien i test (kaster
-  // når profil-oppslaget feiler), så en regresjon som stille sluttet å varsle
-  // ville passert grønt.
+describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
+  // Kontrakten gutta faktisk merker: enhver chat-melding varsler alle aktive
+  // minus avsender, og den som nevnes med @Navn får i tillegg (og FØRST) et
+  // eget mention-varsel. Fire av de fem testene under endret forventet
+  // resultat da broadcasten ble lagt til (#612) — det ER atferdsendringen,
+  // ikke en regresjon. Flere, mer detaljerte scenarier (type per mottaker,
+  // avskrudde brytere, VarselUtfall-semantikken) ligger i
+  // __tests__/chat-varsler.test.ts.
   const ALLE_PROFILER = [
     { id: 'avsender1', navn: 'Nils Nordmann', visningsnavn: 'Nils', epost: 'nils@test.no' },
     { id: 'user1', navn: 'Ola Nordmann', visningsnavn: 'Ola', epost: 'ola@test.no' },
@@ -689,10 +692,11 @@ describe('sendChatMentionVarsler – @ gir varsel', () => {
   ]
 
   // Egen profiles-chain fordi lagChain ignorerer filtrene: profiles spørres TO
-  // ganger her — først av sendChatMentionVarsler (alle aktive, for å matche
-  // @-navnet), så av sendVarsel med .in('id', mottakere). Respekterer ikke den
-  // andre .in(), får alle e-post, og testen kan ikke skille «Ola ble varslet»
-  // fra «alle ble varslet» — altså nøyaktig det den skal måle.
+  // ganger her — først av sendChatVarsler (alle aktive, for å matche
+  // @-navnet OG for broadcast-lista), så av sendVarsel med .in('id', mottakere)
+  // per sending. Respekterer ikke den andre .in(), får alle e-post, og testen
+  // kan ikke skille «Ola ble varslet» fra «alle ble varslet» — altså nøyaktig
+  // det den skal måle.
   function profilChain() {
     let idFilter: string[] | null = null
     const chain: Record<string, unknown> = {}
@@ -730,52 +734,67 @@ describe('sendChatMentionVarsler – @ gir varsel', () => {
     )
   }
 
-  it('varsler den som nevnes med @', async () => {
+  it('varsler den som nevnes med @ — OG broadcaster til resten (#612)', async () => {
     mentionOppsett()
 
-    await sendChatMentionVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1')
+    await sendChatVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1', false)
 
     expect(mockSendPush).toHaveBeenCalled()
-    // Kun Ola — Per var ikke nevnt.
-    expect(mockSendEpostBatch).toHaveBeenCalledWith([
+    // Mention-benet (Ola) sendes FØR broadcast-benet (Per) — to separate
+    // sendEpostBatch-kall, ett per sendVarsel-sending.
+    expect(mockSendEpostBatch).toHaveBeenNthCalledWith(1, [
       expect.objectContaining({ til: 'ola@test.no' }),
+    ])
+    expect(mockSendEpostBatch).toHaveBeenNthCalledWith(2, [
+      expect.objectContaining({ til: 'per@test.no' }),
     ])
   })
 
   it('setter avsenderens navn i meldinga', async () => {
     mentionOppsett()
 
-    await sendChatMentionVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1')
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1', false)
 
-    // Push-argumentene bærer teksten mottakeren ser på låseskjermen.
+    // Push-argumentene bærer teksten mottakeren ser på låseskjermen — mention-
+    // benet (Ola) sendes først, så dette er hans push.
     const push = mockSendPush.mock.calls[0]
     expect(JSON.stringify(push)).toContain('Nils: Hei @Ola')
   })
 
-  it('varsler ikke avsenderen selv når han nevner seg selv', async () => {
+  it('varsler ikke avsenderen selv, men broadcaster fortsatt til de andre (#612)', async () => {
     mentionOppsett()
 
-    await sendChatMentionVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1')
+    await sendChatVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1', false)
 
-    expect(mockSendPush).not.toHaveBeenCalled()
-  })
-
-  it('@alle varsler alle andre enn avsenderen', async () => {
-    mentionOppsett()
-
-    await sendChatMentionVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1')
-
+    // Ingen mention-treff (Nils er avsenderen selv) — men broadcasten går
+    // uansett til Ola og Per. Før #612 var dette «sender ingenting».
+    expect(mockSendPush).toHaveBeenCalledTimes(2)
     const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
     expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
   })
 
-  it('sender ingenting når teksten ikke har noen @', async () => {
+  it('@alle varsler alle andre enn avsenderen — kun mention, ingen egen broadcast', async () => {
     mentionOppsett()
 
-    await sendChatMentionVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1')
+    await sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false)
 
-    expect(mockSendPush).not.toHaveBeenCalled()
-    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+    // @alle dekker alle andre allerede — broadcast-benet har ingen igjen å
+    // sende til (rest.length === 0) og skal derfor ALDRI kalles.
+    expect(mockSendEpostBatch).toHaveBeenCalledTimes(1)
+    const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
+    expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
+  })
+
+  it('broadcaster til alle når teksten ikke har noen @ (#612 — kjerneatferden)', async () => {
+    mentionOppsett()
+
+    await sendChatVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1', false)
+
+    // Før #612 sendte dette ingenting. Nå: broadcast til alle andre.
+    expect(mockSendPush).toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledTimes(1)
+    const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
+    expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
   })
 })
 
@@ -1136,14 +1155,15 @@ describe('sendVarsel – feilhåndtering', () => {
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
   })
 
-  it('sendChatMentionVarsler kaster når profil-oppslaget feiler', async () => {
-    // Samme klasse som mottaker-oppslaget: en feilet spørring skal ikke tolkes
-    // som «ingen mentions å varsle».
+  it('sendChatVarsler kaster når profil-oppslaget feiler', async () => {
+    // Samme klasse som mottaker-oppslaget i sendVarsel: en feilet spørring
+    // skal ikke tolkes som «ingen å varsle» — verken for mention eller
+    // broadcast (#612).
     mockFrom.mockImplementation(lagFromMock({}, { profiles: new Error('DB nede') }))
 
     await expect(
-      sendChatMentionVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1'),
-    ).rejects.toThrow(/@-mention/)
+      sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false),
+    ).rejects.toThrow(/chat-varsel/)
 
     expect(mockSendPush).not.toHaveBeenCalled()
     expect(mockSendEpostBatch).not.toHaveBeenCalled()

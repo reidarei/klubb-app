@@ -40,15 +40,23 @@ export async function harUlestChat(
 }
 
 /**
- * Returnerer true hvis brukeren har minst én ulest rad i `varsel_logg`.
- * Brukes til ulest-prikken på profil-avataren i TopHeader. Vi trenger ingen
- * `sist_sett`-kolonne her fordi `varsel_logg.lest` bærer per-rad-statusen —
- * markering skjer automatisk når man åpner et varsel eller bruker "Marker
- * alle som lest"-knappen på profilsiden.
+ * Returnerer true hvis brukeren har minst én ulest OG VIKTIG rad i
+ * `varsel_logg`. Brukes til ulest-prikken på profil-avataren i TopHeader. Vi
+ * trenger ingen `sist_sett`-kolonne her fordi `varsel_logg.lest` bærer
+ * per-rad-statusen — markering skjer automatisk når man åpner et varsel
+ * eller bruker "Marker alle som lest"-knappen på profilsiden.
+ *
+ * `teller_ulest`-filteret (#612) er bevisst: chat-broadcastene (opptil 17
+ * per melding) skrives med `teller_ulest = false` nettopp for at de IKKE
+ * skal tenne denne prikken — samme filter som "Viktig"-fanen på /profil
+ * (VarslerListe) og tellingen i tittelen der bruker. De to skal aldri lyve
+ * mot hverandre (jf. #207-lærdommen: en prikk og en telling som ikke er
+ * enige er verre enn ingen av delene).
  *
  * Samme `limit(1)`-optimalisering som harUlestChat over (#504) — nå også
  * understøttet av den partial-indeksen `varsel_logg_profil_ulest_idx`
- * (mig. 121) som dekker nettopp `(profil_id) where lest = false`.
+ * (mig. 121, omlagt i mig. 134) som dekker nettopp
+ * `(profil_id) where lest = false and teller_ulest`.
  */
 export async function harUlestVarsler(
   supabase: SupabaseClient<Database>,
@@ -59,6 +67,7 @@ export async function harUlestVarsler(
     .select('id')
     .eq('profil_id', brukerId)
     .eq('lest', false)
+    .eq('teller_ulest', true)
     .limit(1)
 
   // Fail-open, MED logging — samme begrunnelse som harUlestChat over.

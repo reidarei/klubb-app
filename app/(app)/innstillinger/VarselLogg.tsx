@@ -41,7 +41,10 @@ export default function VarselLogg({
 
   return (
     <div>
-      <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--accent)' }}>Siste varsler</h2>
+      {/* «utenom chat» i tittelen fordi lista filtreres på teller_ulest = true
+          (#612) — uten den opplysningen ville admin lure på hvor chat-varslene
+          ble av når døgntelleren over viser et mye høyere tall. */}
+      <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--accent)' }}>Siste varsler (utenom chat)</h2>
       {rader.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Ingen varsler sendt ennå.</p>
       ) : (

@@ -107,6 +107,15 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
 
   // ── Chat ─────────────────────────────────────────────────────────────────
   mention: { panel: '@-mention i chat (til den som nevnes)', kort: '@-mention i chat' },
+  // Fem broadcast-typer, én per chat-flate (#612) — egen nøkkel per flate,
+  // ikke én felles «chat_ny», slik at admin kan dempe f.eks. den varme
+  // klubbchatten uten å samtidig kutte varsler om arrangement-kommentarer.
+  // beskrivelse i migrasjon 134 er ordrett lik panel-teksten under.
+  chat_klubb: { panel: 'Ny melding i klubbchatten', kort: 'Melding i klubbchat' },
+  chat_arrangement: { panel: 'Ny melding i en arrangement-chat', kort: 'Melding i arrangement-chat' },
+  chat_poll: { panel: 'Ny kommentar på en avstemming', kort: 'Kommentar på avstemming' },
+  chat_melding: { panel: 'Ny kommentar på et innlegg', kort: 'Kommentar på innlegg' },
+  chat_albumbilde: { panel: 'Ny kommentar på et bilde', kort: 'Kommentar på bilde' },
   'privat-melding': { panel: 'Ny privatmelding (til mottakeren)', kort: 'Ny privatmelding' },
   // Ingen bryter i varsel_innstillinger — styres per admin under
   // «Automatisering» (profiles.bursdagsgratulasjon_aktiv, migrasjon 100).

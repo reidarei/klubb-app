@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@/lib/supabase/server'
-import { sendChatMentionVarsler, sendVarsel } from '@/lib/varsler'
+import { sendChatVarsler, sendVarsel, type ChatVarselScope } from '@/lib/varsler'
 import { BASE_URL } from '@/lib/config'
 import { CHAT_MIN_LENGDE, INNLEGG_MIN_LENGDE } from '@/lib/konstanter'
 import { konfigFor, revalideringsPaths, type ChatScope } from '@/lib/chat-konfig'
@@ -31,9 +31,10 @@ function validerInnhold(
   return { tekst }
 }
 
-// Etter vellykket insert: send mention- eller privat-melding-varsel.
-// For arrangement/klubb/poll/melding: skanner teksten etter @-mentions og
-// varsler bare de mottakerne. For privat: én varsel til motparten.
+// Etter vellykket insert: send chat-broadcast+mention- eller privat-melding-
+// varsel. For arrangement/klubb/poll/melding/albumbilde: varsler ALLE aktive
+// medlemmer minus avsender (#612), med @-mention-benet prioritert foran
+// broadcast-benet inne i sendChatVarsler. For privat: én varsel til motparten.
 async function sendVarslerEtterPost(
   scope: ChatScope,
   tekst: string | null,
@@ -48,41 +49,42 @@ async function sendVarslerEtterPost(
     await sendPrivatMeldingVarsel(scope.samtaleId, varselTekst, avsenderId)
     return
   }
-  if (!tekst) return
-  // @-mention-varsler MÅ awaites — fire-and-forget kuttes av Vercel
-  // når server action returnerer (CLAUDE.md: «Bruk aldri after()…
-  // Bruk await direkte»). Promise.all internt gjør utsendingen
-  // parallell, så latency er kort selv med mange mottakere.
+  // Chat-varsler MÅ awaites — fire-and-forget kuttes av Vercel når server
+  // action returnerer (CLAUDE.md: «Bruk aldri after()… Bruk await direkte»).
+  // Promise.all internt i sendVarsel gjør utsendingen parallell, så latency
+  // er kort selv med mange mottakere.
   //
   // Exhaustive switch med never-default (i stedet for if/else-kjede) — lukker
   // klassen av bugs der en ny ChatScope-variant stille faller gjennom uten
   // varsel. 'privat' er allerede early-returnert over, så TS narrower scope
   // korrekt til de resterende variantene her. Se #481.
+  //
+  // Bygger KUN scopet her (ikke selve sendVarsel-kallet) — én sending, ikke
+  // fem kopier av utsendingslogikken. Se #612 for hvorfor if (!tekst) return
+  // er borte: en ren bilde-melding skal varsle på lik linje med tekst.
+  let varselScope: ChatVarselScope
   switch (scope.type) {
     case 'arrangement':
-      await sendChatMentionVarsler({ type: 'arrangement', id: scope.arrangementId }, tekst, avsenderId)
-      return
+      varselScope = { type: 'arrangement', id: scope.arrangementId }
+      break
     case 'klubb':
-      await sendChatMentionVarsler({ type: 'klubb' }, tekst, avsenderId)
-      return
+      varselScope = { type: 'klubb' }
+      break
     case 'poll':
-      await sendChatMentionVarsler({ type: 'poll', id: scope.pollId }, tekst, avsenderId)
-      return
+      varselScope = { type: 'poll', id: scope.pollId }
+      break
     case 'melding':
-      await sendChatMentionVarsler({ type: 'melding', id: scope.meldingId }, tekst, avsenderId)
-      return
+      varselScope = { type: 'melding', id: scope.meldingId }
+      break
     case 'albumbilde':
-      await sendChatMentionVarsler(
-        { type: 'albumbilde', bildeId: scope.bildeId, albumId: scope.albumId },
-        tekst,
-        avsenderId,
-      )
-      return
+      varselScope = { type: 'albumbilde', bildeId: scope.bildeId, albumId: scope.albumId }
+      break
     default: {
       const ukjent: never = scope
       throw new Error(`Ukjent chat-scope: ${JSON.stringify(ukjent)}`)
     }
   }
+  await sendChatVarsler(varselScope, tekst, avsenderId, !!bildeUrl)
 }
 
 async function sendPrivatMeldingVarsel(

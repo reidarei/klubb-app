@@ -15,43 +15,72 @@ export type VarselRad = {
   url: string | null
 }
 
+type Segment = 'viktig' | 'alt'
+
 type Props = {
-  varsler: VarselRad[]
+  /** Topp 10 med teller_ulest = true — alt utenom de fem chat-broadcastene. */
+  varslerViktig: VarselRad[]
+  /** Topp 10 uansett type — hele historikken, chat inkludert. */
+  varslerAlt: VarselRad[]
   /**
-   * Totalt antall uleste varsler i DB (også eldre enn de 10 vi henter til
-   * listen). Tellingen i tittelen og "Marker alle som lest"-knappen bruker
-   * denne — uten den ville en admin med 116 uleste eldre + 0 uleste i top 10
-   * sett "Varsler (0 uleste)" og en disabled knapp, men prikken på avataren
-   * fortsatt aktiv. Se #207.
+   * Totalt antall uleste VIKTIGE varsler i DB (også eldre enn de 10 vi
+   * henter til listen). Tellingen i tittelen, prikken på profil-avataren
+   * (harUlestVarsler() i lib/ulest.ts) og "Marker alle som lest"-knappen
+   * bruker denne — de tre skal ALDRI kunne lyve mot hverandre (#207, #612).
    */
-  antallUlesteTotal: number
+  antallUlesteViktigTotal: number
+  /**
+   * ALLE uleste i DB (viktige + chat) — altså nøyaktig det «Alt»-fanen viser.
+   * Vises som en liten teller på Alt-segmentet («Alt · 15») slik at en
+   * app-only-mann ikke mister en chat-melding stille bak et segment han aldri
+   * trykker på i utgangspunktet (#504-feilmodusen flyttet til UI, se #612).
+   *
+   * Er et OVERSETT av antallUlesteViktigTotal, ikke et disjunkt tall: badgen
+   * står på fanen som viser hele historikken, og skal telle det fanen faktisk
+   * inneholder (#612-review).
+   */
+  antallUlesteAltTotal: number
 }
 
-// Klient-komponent fordi vi vil ha lokal state for kollaps og filter uten
-// å re-fetche fra serveren. Marker-alle-lest kaller server action og lar
+// Klient-komponent fordi vi vil ha lokal state for kollaps, segment og filter
+// uten å re-fetche fra serveren. Marker-alle-lest kaller server action og lar
 // revalidatePath sørge for at neste render reflekterer endringen — vi
 // oppdaterer også lokal state med en gang for momentan UI-feedback.
+//
+// «Viktig»/«Alt» er BEVISST lokal useState, ikke URL-state (#612) — dette er
+// en personlig innboks, ikke noe man deler som lenke.
 export default function VarslerListe({
-  varsler: initialVarsler,
-  antallUlesteTotal: initialAntallUlesteTotal,
+  varslerViktig: initialVarslerViktig,
+  varslerAlt: initialVarslerAlt,
+  antallUlesteViktigTotal: initialAntallUlesteViktig,
+  antallUlesteAltTotal: initialAntallUlesteAlt,
 }: Props) {
   const router = useRouter()
-  const [varsler, setVarsler] = useState(initialVarsler)
-  // Total ulest-count som lokal state så optimistisk marker-alle-lest kan
-  // nulle den umiddelbart uten å vente på revalidatePath.
-  const [antallUlesteTotal, setAntallUlesteTotal] = useState(initialAntallUlesteTotal)
+  const [varslerViktig, setVarslerViktig] = useState(initialVarslerViktig)
+  const [varslerAlt, setVarslerAlt] = useState(initialVarslerAlt)
+  const [antallUlesteViktig, setAntallUlesteViktig] = useState(initialAntallUlesteViktig)
+  const [antallUlesteAlt, setAntallUlesteAlt] = useState(initialAntallUlesteAlt)
+  const [segment, setSegment] = useState<Segment>('viktig')
   const [kollapset, setKollapset] = useState(false)
   const [kunUleste, setKunUleste] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const visning = kunUleste ? varsler.filter(v => !v.lest) : varsler
+  const aktivListe = segment === 'viktig' ? varslerViktig : varslerAlt
+  const visning = kunUleste ? aktivListe.filter(v => !v.lest) : aktivListe
+  // "Marker alle som lest" gjelder BEGGE lister — knappen skal nulle hele
+  // innboksen, ikke bare den aktive fanen. antallUlesteAlt ER hele innboksen
+  // (viktige inkludert), så ingen summering her: å legge til antallUlesteViktig
+  // ville telt de viktige to ganger (#612-review).
+  const totalUlest = antallUlesteAlt
 
   function markerAlleLest() {
-    if (antallUlesteTotal === 0) return
+    if (totalUlest === 0) return
     startTransition(async () => {
       // Optimistisk oppdatering — server action får siste ord via revalidatePath.
-      setVarsler(varsler.map(v => ({ ...v, lest: true })))
-      setAntallUlesteTotal(0)
+      setVarslerViktig(v => v.map(rad => ({ ...rad, lest: true })))
+      setVarslerAlt(v => v.map(rad => ({ ...rad, lest: true })))
+      setAntallUlesteViktig(0)
+      setAntallUlesteAlt(0)
       try {
         await markerAlleVarslerLest()
         // router.refresh() tvinger klientens Router Cache til å re-fetche
@@ -61,8 +90,10 @@ export default function VarslerListe({
         router.refresh()
       } catch {
         // Ved feil: rull tilbake lokal state.
-        setVarsler(initialVarsler)
-        setAntallUlesteTotal(initialAntallUlesteTotal)
+        setVarslerViktig(initialVarslerViktig)
+        setVarslerAlt(initialVarslerAlt)
+        setAntallUlesteViktig(initialAntallUlesteViktig)
+        setAntallUlesteAlt(initialAntallUlesteAlt)
       }
     })
   }
@@ -115,8 +146,12 @@ export default function VarslerListe({
           >
             ▼
           </span>
+          {/* Tellingen her MÅ filtreres likt som ulest-prikken på profil-
+              avataren (harUlestVarsler() i lib/ulest.ts, teller_ulest = true)
+              — ellers står det «Varsler (147 uleste)» mens prikken er slukket,
+              og de to lyver mot hverandre (#612). */}
           <span>
-            Varsler ({antallUlesteTotal} uleste)
+            Varsler ({antallUlesteViktig} uleste)
           </span>
         </button>
         <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
@@ -124,6 +159,46 @@ export default function VarslerListe({
 
       {!kollapset && (
         <div id="varsler-innhold">
+          {/* Segment: Viktig / Alt */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 6,
+              marginBottom: 12,
+              padding: '0 4px',
+            }}
+          >
+            {(
+              [
+                { key: 'viktig' as const, label: 'Viktig' },
+                // Alt · N teller ALLE uleste i innboksen, ikke bare chat-delen
+                // — fanen viser alt, så tellingen må gjøre det samme (#612-review).
+                { key: 'alt' as const, label: antallUlesteAlt > 0 ? `Alt · ${antallUlesteAlt}` : 'Alt' },
+              ]
+            ).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSegment(key)}
+                aria-pressed={segment === key}
+                style={{
+                  background: segment === key ? 'var(--accent-soft)' : 'transparent',
+                  border: '0.5px solid var(--border-subtle)',
+                  borderRadius: 999,
+                  padding: '6px 14px',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: segment === key ? 'var(--accent)' : 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  letterSpacing: '-0.1px',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* Filter + marker-alle-lest */}
           <div
             style={{
@@ -158,7 +233,7 @@ export default function VarslerListe({
             <button
               type="button"
               onClick={markerAlleLest}
-              disabled={antallUlesteTotal === 0 || isPending}
+              disabled={totalUlest === 0 || isPending}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -166,9 +241,9 @@ export default function VarslerListe({
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 fontWeight: 500,
-                color: antallUlesteTotal === 0 ? 'var(--text-tertiary)' : 'var(--accent)',
-                opacity: antallUlesteTotal === 0 || isPending ? 0.5 : 1,
-                cursor: antallUlesteTotal === 0 ? 'default' : 'pointer',
+                color: totalUlest === 0 ? 'var(--text-tertiary)' : 'var(--accent)',
+                opacity: totalUlest === 0 || isPending ? 0.5 : 1,
+                cursor: totalUlest === 0 ? 'default' : 'pointer',
                 letterSpacing: '-0.1px',
               }}
             >

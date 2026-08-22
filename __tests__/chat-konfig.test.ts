@@ -26,7 +26,7 @@ vi.mock('@/lib/epost', () => ({
   arrangementEpostHtml: (...args: unknown[]) => mockArrangementEpostHtml(...args),
 }))
 
-import { sendChatMentionVarsler } from '@/lib/varsler'
+import { sendChatVarsler } from '@/lib/varsler'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,8 +40,8 @@ describe('revalideringsPaths', () => {
 })
 
 // hentScopeInnhold er ikke eksportert fra lib/varsler.ts — testes indirekte
-// via sendChatMentionVarsler, som er eneste kalleren av den.
-describe('mention-varsel for albumbilde-scope', () => {
+// via sendChatVarsler, som er eneste kalleren av den.
+describe('chat-varsel for albumbilde-scope', () => {
   it('bygger URL på formen /album/{albumId}?bilde={bildeId}', async () => {
     mockFrom.mockImplementation(
       lagFromMock({
@@ -55,10 +55,11 @@ describe('mention-varsel for albumbilde-scope', () => {
       }),
     )
 
-    await sendChatMentionVarsler(
+    await sendChatVarsler(
       { type: 'albumbilde', bildeId: 'bilde1', albumId: 'album1' },
       '@Ola kikk på dette bildet',
       'avsender1',
+      false,
     )
 
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(

@@ -49,9 +49,16 @@ export default async function Innstillinger() {
     { data: aktivitetDagerRaw, error: aktivitetDagerFeil },
     { data: aktivitetUkerRaw, error: aktivitetUkerFeil },
   ] = await Promise.all([
+    // teller_ulest = true filtrerer bort de fem chat_*-broadcastene (#612):
+    // uten filteret er denne lista ren chat innen minutter, og admin mister
+    // det den finnes for — å se at påminnelser, pass-tilgang og kåringer
+    // faktisk går ut. Samme skille som «Viktig»-fanen på /profil.
+    // NB: samme filter må stå i /api/admin/varsel-logg (paginering) — ellers
+    // henter «Vis flere» chat inn igjen bakveien.
     admin
       .from('varsel_logg')
       .select('id, tittel, type, kanal, opprettet, profil_id, profiles (visningsnavn)', { count: 'exact' })
+      .eq('teller_ulest', true)
       .order('opprettet', { ascending: false })
       .limit(10),
     admin.from('push_subscriptions').select('id', { count: 'exact', head: true }),
@@ -63,6 +70,10 @@ export default async function Innstillinger() {
       .from('pass_tilgang_forespørsel')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'venter'),
+    // Døgntelleren er bevisst UFILTRERT — den er et volum-mål (og eneste
+    // synlige kanarifugl for Resend-døgnkvoten, jf. EPOST_DOEGNBUDSJETT_CHAT),
+    // og da skal chat telle med. Derfor sier oppsummeringen eksplisitt hvilket
+    // av de to tallene som er hva.
     admin
       .from('varsel_logg')
       .select('id', { count: 'exact', head: true })
@@ -490,7 +501,7 @@ export default async function Innstillinger() {
       <InnstillingsKort
         tittel="Varselhistorikk"
         oppsummering={
-          `${varselTotal ?? 0} totalt · ${varselSisteDogn ?? 0} siste døgn`
+          `${varselTotal ?? 0} utenom chat · ${varselSisteDogn ?? 0} siste døgn (alt)`
         }
       >
         <VarselLogg initial={logg ?? []} total={varselTotal ?? 0} />

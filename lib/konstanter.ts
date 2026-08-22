@@ -120,12 +120,18 @@ export const KLIENT_FEIL_ALARM_TERSKEL = 0
 
 // Event-navn som IKKE teller mot alarmen i sjekk-klientfeil-cronet (#498-review).
 // Terskelen er bevisst 0 — ett treff i døgnet varsler alle med
-// faar_feilvarsler. Disse tre fyrer på kjent transiente forhold som ikke
+// faar_feilvarsler. Disse fyrer på kjent transiente forhold som ikke
 // krever menneskelig inngripen, og ville gjort morgenvarselet til støy:
 //   ai.datoforslag.feilet     — 429/529/timeout fra Anthropic, i bakgrunnen
 //                               mens brukeren skriver
 //   varsel.push.feilet        — web-push mot en enhet som er offline/treg
 //                               (410 Gone håndteres separat: abonnementet slettes)
+//   varsel.push.timeout       — samme klasse som over, bare navngitt separat
+//                               (#612): PUSH_TIMEOUT_MS-deadlinen ER tilfellet
+//                               «treg enhet». Uten denne raden ville #612 gjort
+//                               en bevisst ignorert klasse alarmerende igjen —
+//                               i samme slengen som push-volumet ble ganget
+//                               med 17. Se #612-review.
 //   varsel.logg.insert.feilet — én varsel_logg-rad feilet, varselet gikk ut
 //
 // Radene skrives fortsatt til feil_logg og er søkbare der — de utløser bare
@@ -136,6 +142,7 @@ export const KLIENT_FEIL_ALARM_TERSKEL = 0
 export const ALARM_IGNORERTE_EVENTS = [
   'ai.datoforslag.feilet',
   'varsel.push.feilet',
+  'varsel.push.timeout',
   'varsel.logg.insert.feilet',
 ] as const
 
@@ -200,6 +207,38 @@ export const CHAT_STICKER_MONSTER = '%/sticker-%'
 // Antall rader vist i «Hva er nytt»-endringsloggen (/om-appen) før «Vis
 // eldre» trengs. Se #595.
 export const ENDRINGSLOGG_SYNLIGE = 10
+
+// Hard deadline på et enkelt web-push-forsøk (lib/push.ts). Uten en frist kan
+// én hengende APNs/FCM-socket holde hele sendVarsel-Promise.all-en til Vercels
+// 10 s-funksjonsvegg — funksjonen drepes, klienten får 500 på en melding som
+// ER lagret, og mannen sender den samme meldingen på nytt (#612). 3 s er godt
+// over normal push-latency (typisk < 500 ms) og godt under 10 s-veggen selv
+// med andre mottakere i samme Promise.all.
+export const PUSH_TIMEOUT_MS = 3000
+
+// Terskel (ms) for fanout-varigheten i sendChatVarsler før vi logger
+// varsel.chat.fanout.treg — chat går fra 0 til opptil 17 mottakere per
+// melding (#612), og en treg fanout bør synes før den oppleves som en treg
+// «Send»-knapp av avsenderen.
+export const CHAT_FANOUT_TREG_MS = 1500
+
+// E-post-døgnbudsjett for chat (#612-review). Resend free tier har et hardt
+// tak på 100 e-poster per DØGN — en helt annen grense enn RESEND_BATCH_MAKS
+// (100 per kall) i lib/epost.ts, som ikke beskytter mot noe her. Chat kan med
+// ~15 e-postaktive mottakere brenne hele døgnkvoten på syv meldinger, og
+// kvoten deles med 06:00-cronen: uten en vakt kan gutteprat spise
+// 7-dagers-påminnelsen for en tur.
+//
+// Vakten gjelder KUN e-postkanalen for chat_*-typene. Push og in-app-raden går
+// alltid, og ikke-chat-varsler (påminnelser, pass-tilgang, kåringer) rammes
+// aldri — hele poenget er at de har forrang. 70 gir ~30 e-posters margin til
+// resten av døgnet, som holder til en full påminnelsesrunde til alle 18.
+export const EPOST_DOEGNBUDSJETT_CHAT = 70
+
+// Vinduet (timer) budsjettet telles over. Rullerende 24 t, ikke kalenderdøgn:
+// Resend nullstiller på UTC-midnatt, men et rullerende vindu er strengere enn
+// leverandørens og kan aldri la oss bruke opp kvoten rett før nullstilling.
+export const EPOST_BUDSJETT_VINDU_TIMER = 24
 
 // Hvor lenge dra-ned-for-oppdater venter på /api/ping før den gir opp og viser
 // «Oppdatering feilet» (#572). Sjenerøs med vilje: på ustabilt mobilnett er en

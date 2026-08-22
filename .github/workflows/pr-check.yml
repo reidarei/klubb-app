@@ -1,7 +1,11 @@
-# CI-sjekk for endringer mot main. To omfang, styrt av «Avgjør e2e-omfang»:
+# CI-sjekk for endringer mot main. Tre omfang:
 #
-#   pull_request  → FULL   (~14,5 min): kjerneport + Playwright-e2e
-#   push til main → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
+#   pull_request           → FULL   (~14,5 min): kjerneport + Playwright-e2e
+#   push, direkte til main → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
+#   push, merget PR        → INGEN  (~15 sek):   alt portet på PR-en alt
+#
+# De to første styres av «Avgjør e2e-omfang», den tredje av «Avgjør om commiten
+# alt er portet».
 #
 # Kjerneporten er ubetinget i begge tilfeller og skal aldri ofres. E2e ligger i
 # SAMME job som resten (ikke et eget) fordi et eget job ville vært usynlig for
@@ -29,15 +33,25 @@ on:
   # en ny full kjøring per merge ville doblet forbruket (~290 min/mnd) og spist
   # mesteparten av driftsreserven på 700. Kjerneporten koster ~5,5 min mot
   # ~14,5 for full — vi kjøper mesteparten av verdien for en tredjedel.
+  #
+  # …men på en MERGE-commit kjøper vi ingenting: den koden ble nettopp testet på
+  # PR-en. Augusts tall: 56 push-kjøringer, 242 min, 0 funn — 19 % av
+  # månedskvoten brukt på å re-teste kode som var grønn minutter før, mens
+  # budsjettvakten samtidig kuttet e2e på PR-ene (#609). Kjerneporten hoppes
+  # derfor over når commiten har en merget PR; direkte pushes — hullet denne
+  # triggeren finnes for — får den fortsatt. Se «Avgjør omfang» under.
   push:
     branches: [main]
   workflow_dispatch:
 
 # actions:read kreves av budsjettvakten (leser egne workflow-runs for å måle
 # forbrukte CI-minutter denne måneden), samme mønster som db-restore-drill.yml.
+# pull-requests:read lar «Avgjør omfang» slå opp om en push-commit kom fra en
+# merget PR.
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 # Avbryt pågående run for samme branch ved nytt push — sparer CI-tid.
 # Gruppen inkluderer workflow-navn slik at fremtidige workflows ikke
@@ -69,7 +83,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Er denne main-commiten allerede portet? En squash-merge er bit-identisk
+      # med koden PR-en nettopp kjørte lint/typecheck/vitest/bygg på, så en ny
+      # runde kjøper ingenting. Vi slår opp mot API-et i stedet for å lete etter
+      # «(#123)» i commit-meldingen — meldingsformatet er en konvensjon, ikke en
+      # garanti, og en direkte push med den formen i teksten ville sluppet unna
+      # porten stille. Det er nøyaktig feilretningen vi ikke tåler her.
+      #
+      # Fail-open er med vilje: svarer API-et ikke, kjører vi kjerneporten. Å
+      # betale 5,5 min unødvendig er mildere enn å slippe en utestet commit
+      # gjennom på en nettverksfeil.
+      - name: Avgjør om commiten alt er portet
+        id: portet
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          antall=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '[.[] | select(.merged_at != null)] | length' 2>/dev/null) || antall=""
+
+          if [ -z "$antall" ]; then
+            echo "::warning::Kunne ikke slå opp PR for commiten — kjører kjerneporten for sikkerhets skyld."
+            echo "hopp=false" >> "$GITHUB_OUTPUT"
+          elif [ "$antall" -gt 0 ]; then
+            echo "::notice::Commiten kom fra en merget PR og ble portet der — kjerneporten hoppes over."
+            echo "hopp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Direkte push til main uten PR — kjerneporten kjøres."
+            echo "hopp=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.portet.outputs.hopp != 'true'
         with:
           node-version: 22
           cache: 'npm'
@@ -80,6 +125,7 @@ jobs:
       # og docs/ci-minuttbudsjett.md.
       - name: CI-minuttbudsjett
         id: budsjett
+        if: steps.portet.outputs.hopp != 'true'
         env:
           REPO_PRIVAT: ${{ github.event.repository.private }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -91,6 +137,7 @@ jobs:
       # bruker — eller verre, kjører e2e vi trodde var av).
       - name: Avgjør e2e-omfang
         id: omfang
+        if: steps.portet.outputs.hopp != 'true'
         env:
           HENDELSE: ${{ github.event_name }}
           BUDSJETT_OK: ${{ steps.budsjett.outputs.kjor_e2e }}
@@ -106,6 +153,7 @@ jobs:
           fi
 
       - name: Installer avhengigheter
+        if: steps.portet.outputs.hopp != 'true'
         run: npm ci
 
       # Bakgrunnsstart: supabase start tar 1-2 min (docker-pull + containere).
@@ -125,18 +173,24 @@ jobs:
           nohup bash -c 'npx supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,supavisor > supabase-start.log 2>&1; echo $? > supabase-start.exit' > /dev/null 2>&1 &
           echo "supabase start kjører i bakgrunnen (pid $!)."
 
-      # Kjerneporten — uendret og ubetinget uansett budsjettvaktens verdikt.
-      # Billig, og skal aldri ofres.
+      # Kjerneporten — ubetinget uansett budsjettvaktens verdikt. Billig, og
+      # skal aldri ofres. Den ENE betingelsen er en main-commit som allerede ble
+      # portet på PR-en sin (se «Avgjør om commiten alt er portet»); der er det
+      # ikke en ofring, men samme sjekk to ganger på samme kode.
       - name: Lint
+        if: steps.portet.outputs.hopp != 'true'
         run: npm run lint
 
       - name: Typesjekk
+        if: steps.portet.outputs.hopp != 'true'
         run: npm run typecheck
 
       - name: Test
+        if: steps.portet.outputs.hopp != 'true'
         run: npm test
 
       - name: Bygg
+        if: steps.portet.outputs.hopp != 'true'
         env:
           # Supabase-klienten (lib/supabase/server.ts + client.ts) og push-modulen
           # leser disse ved modulinnlasting. Vi bruker dummy-verdier siden bygget

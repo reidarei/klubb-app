@@ -1611,6 +1611,7 @@ export type Database = {
           opprettet: string | null
           poll_id: string | null
           profil_id: string
+          teller_ulest: boolean
           tittel: string
           type: string | null
           url: string | null
@@ -1625,6 +1626,7 @@ export type Database = {
           opprettet?: string | null
           poll_id?: string | null
           profil_id: string
+          teller_ulest?: boolean
           tittel: string
           type?: string | null
           url?: string | null
@@ -1639,6 +1641,7 @@ export type Database = {
           opprettet?: string | null
           poll_id?: string | null
           profil_id?: string
+          teller_ulest?: boolean
           tittel?: string
           type?: string | null
           url?: string | null

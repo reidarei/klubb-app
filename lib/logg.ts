@@ -9,7 +9,7 @@
 //   bilde.opplast.feilet        — R2-opplasting feiler
 //   video.opplast.feilet        — video-upload feiler
 //   tema.ugyldig                — ukjent tema-verdi
-//   chat.varsler.feilet         — mention-varsler etter chat-post feiler
+//   chat.varsler.feilet         — sendChatVarsler() kastet uventet fra sendVarslerEtterPost (chat.ts try/catch), meldingen er alt lagret (#612)
 //   kaaringspoll.varsler.feilet — varsler etter kåringspoll-hendelse feiler
 //   cron.paaminne.feilet        — enkelt-oppgave i påminnelses-cron feiler
 //   bursdagsgratulasjon.feilet  — insert-feil eller uventet exception
@@ -75,6 +75,12 @@
 //   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat, fire-and-forget under render (#539-review)
 //   klient.ressurs.feilet       — en <script>/<link> lastet ikke i nettleseren: appen mangler kode (#575)
 //   klient.bilde.feilet         — warn: et <img> lastet ikke. Kosmetisk og oftest transient på mobil (#603)
+//   varsel.push.timeout         — sendPush traff PUSH_TIMEOUT_MS-deadline (Promise.race), svelges som andre push-feil (#612)
+//   chat.varsler.mention.feilet   — @-mention-benet i sendChatVarsler kastet; nevnte legges tilbake i broadcast (#612)
+//   chat.varsler.broadcast.feilet — broadcast-benet i sendChatVarsler kastet, mention-benet er upåvirket (#612)
+//   varsel.chat.fanout.treg       — warn: sendChatVarsler brukte over CHAT_FANOUT_TREG_MS på mottaker-oppslag + begge sendVarsel-kall (#612)
+//   varsel.epost.budsjett.chat_hoppet — warn: e-postkanalen droppet for et chat-varsel, døgnforbruket er over EPOST_DOEGNBUDSJETT_CHAT. Push+in-app gikk (#612-review)
+//   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -96,6 +102,10 @@ const KONTEKST_WHITELIST = new Set([
   'fingerprint',
   'sample',
   'status',
+  // Rent tall (varighet i millisekunder) — ingen PII. Lagt til for
+  // varsel.chat.fanout.treg (#612), men generisk nok til gjenbruk av
+  // fremtidige latency-målinger.
+  'ms',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
