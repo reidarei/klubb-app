@@ -81,6 +81,8 @@
 //   varsel.chat.fanout.treg       — warn: sendChatVarsler brukte over CHAT_FANOUT_TREG_MS på mottaker-oppslag + begge sendVarsel-kall (#612)
 //   varsel.epost.budsjett.chat_hoppet — warn: e-postkanalen droppet for et chat-varsel, døgnforbruket er over EPOST_DOEGNBUDSJETT_CHAT. Push+in-app gikk (#612-review)
 //   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
+//   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
+//   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

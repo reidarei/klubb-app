@@ -133,15 +133,17 @@ async function hentVarselPreferanser(profilIder: string[]) {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('varsel_preferanser')
-    .select('profil_id, push_aktiv, epost_aktiv')
+    .select('profil_id, push_aktiv, epost_aktiv, varsel_nivaa')
     .in('profil_id', profilIder)
   // Fail closed: en tom Map her tolkes lenger nede som epostAktiv: true for
-  // ALLE — altså e-post til folk som bevisst har skrudd den av.
+  // ALLE — altså e-post til folk som bevisst har skrudd den av. Samme
+  // resonnement gjelder varsel_nivaa: en feilet spørring skal aldri stille
+  // gi 'viktige' til alle (som ville kuttet chat-varsling for hele klubben).
   if (error) {
     await logg.feil('varsel.preferanser.feilet', error, { ctx: { count: profilIder.length } })
     throw new Error(`Kunne ikke hente varselpreferanser: ${error.message}`)
   }
-  const map = new Map<string, { push_aktiv: boolean; epost_aktiv: boolean }>()
+  const map = new Map<string, { push_aktiv: boolean; epost_aktiv: boolean; varsel_nivaa: string }>()
   for (const p of data ?? []) map.set(p.profil_id, p)
   return map
 }
@@ -291,7 +293,12 @@ export type VarselUtfall = {
   // ned igjen. Den økes også når varsel_logg-inserten feilet med annet enn
   // 23505. Bruk den til observability, aldri som leverings-kvittering. (#504-review)
   levert: number
-  kunApp: number       // mottakere som kun fikk in-app-rad (ingen kanal aktiv)
+  // Mottakere som kun fikk in-app-rad, altså uten aktiv kanal for DETTE
+  // varselet — enten fordi push/epost er skrudd av, eller fordi mottakerens
+  // varsel_nivaa dempet et lavsignal-varsel (#614). Samme tvetydighet ligger i
+  // varsel_logg.kanal = 'kun_app': feilsøker du en manglende push må du lese
+  // varsel_nivaa i tillegg, kanal-verdien alene skiller ikke de to årsakene.
+  kunApp: number
   dedupHoppet: number  // mottakere som traff 23505 på dedup_noekkel
 }
 
@@ -575,15 +582,27 @@ export async function sendVarsel({
       const pref = prefs.get(profil.id)
       const pushAktiv = pref ? pref.push_aktiv : false
       const epostAktiv = pref ? pref.epost_aktiv : true
+      // Manglende preferanse-rad behandles som 'alle' (samme defensive linje
+      // som epostAktiv over) — en profil uten rad skal ikke stille miste chat.
+      const nivaa = pref ? pref.varsel_nivaa : 'alle'
       const profilSubs = subsByProfil.get(profil.id) ?? []
 
-      const kanPush = pushAktiv && profilSubs.length > 0
-      const kanEpost = epostAktiv && !!profil.epost && !epostSperretAvBudsjett
+      // #614: nivåvalget gjenbruker tellerUlest — det ER «viktig vs. alt»-
+      // skillet fra #612, ikke en ny typeliste. En mann på 'viktige' mister
+      // push OG epost for lavsignal-varsler (chat), uansett kanalvalg. Han
+      // mister IKKE varselet: in-app-raden skrives uansett under, og kanal
+      // blir 'kun_app' av seg selv fordi kanPush/kanEpost er false for ham.
+      const lavsignalDempet = !tellerUlest && nivaa === 'viktige'
+      const kanPush = pushAktiv && profilSubs.length > 0 && !lavsignalDempet
+      const kanEpost = epostAktiv && !!profil.epost && !epostSperretAvBudsjett && !lavsignalDempet
       // 'kun_app' (i stedet for tidligere `if (!kanal) return`, #504): en
-      // mottaker uten push eller epost aktiv skal likevel få en in-app-rad —
-      // varsel_logg ER innboksen på /profil, og ingen rad skal noensinne
-      // bety «forsøkt, ikke levert». Push/epost er allerede gated av
+      // mottaker uten aktiv kanal for dette varselet skal likevel få en
+      // in-app-rad — varsel_logg ER innboksen på /profil, og ingen rad skal
+      // noensinne bety «forsøkt, ikke levert». Push/epost er allerede gated av
       // kanPush/kanEpost under, så utsendingen hoppes bare over av seg selv.
+      // NB (#614): verdien dekker nå to årsaker — kanalene er av, ELLER
+      // nivået dempet et lavsignal-varsel. Bevisst ingen egen kanal-verdi for
+      // det siste; feilsøking må lese varsel_nivaa ved siden av.
       const kanal = kanPush && kanEpost ? 'begge' : kanPush ? 'push' : kanEpost ? 'epost' : 'kun_app'
 
       // Resolves per mottaker — se melding-parameteren. Bygges før logg-inserten

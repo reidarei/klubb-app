@@ -1676,18 +1676,21 @@ export type Database = {
           oppdatert: string | null
           profil_id: string
           push_aktiv: boolean
+          varsel_nivaa: string
         }
         Insert: {
           epost_aktiv?: boolean
           oppdatert?: string | null
           profil_id: string
           push_aktiv?: boolean
+          varsel_nivaa?: string
         }
         Update: {
           epost_aktiv?: boolean
           oppdatert?: string | null
           profil_id?: string
           push_aktiv?: boolean
+          varsel_nivaa?: string
         }
         Relationships: [
           {

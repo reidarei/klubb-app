@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { formaterDato } from '@/lib/dato'
 import { markerAlleVarslerLest } from '@/lib/actions/varsler'
+import SegmentPiller from '@/components/ui/SegmentPiller'
 
 export type VarselRad = {
   id: string
@@ -15,7 +16,7 @@ export type VarselRad = {
   url: string | null
 }
 
-type Segment = 'viktig' | 'alt'
+type SegmentNoekkel = 'viktig' | 'alt'
 
 type Props = {
   /** Topp 10 med teller_ulest = true — alt utenom de fem chat-broadcastene. */
@@ -60,7 +61,7 @@ export default function VarslerListe({
   const [varslerAlt, setVarslerAlt] = useState(initialVarslerAlt)
   const [antallUlesteViktig, setAntallUlesteViktig] = useState(initialAntallUlesteViktig)
   const [antallUlesteAlt, setAntallUlesteAlt] = useState(initialAntallUlesteAlt)
-  const [segment, setSegment] = useState<Segment>('viktig')
+  const [segment, setSegment] = useState<SegmentNoekkel>('viktig')
   const [kollapset, setKollapset] = useState(false)
   const [kunUleste, setKunUleste] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -160,43 +161,17 @@ export default function VarslerListe({
       {!kollapset && (
         <div id="varsler-innhold">
           {/* Segment: Viktig / Alt */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 6,
-              marginBottom: 12,
-              padding: '0 4px',
-            }}
-          >
-            {(
-              [
-                { key: 'viktig' as const, label: 'Viktig' },
+          <div style={{ marginBottom: 12, padding: '0 4px' }}>
+            <SegmentPiller
+              valg={[
+                { key: 'viktig', label: 'Viktig' },
                 // Alt · N teller ALLE uleste i innboksen, ikke bare chat-delen
                 // — fanen viser alt, så tellingen må gjøre det samme (#612-review).
-                { key: 'alt' as const, label: antallUlesteAlt > 0 ? `Alt · ${antallUlesteAlt}` : 'Alt' },
-              ]
-            ).map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSegment(key)}
-                aria-pressed={segment === key}
-                style={{
-                  background: segment === key ? 'var(--accent-soft)' : 'transparent',
-                  border: '0.5px solid var(--border-subtle)',
-                  borderRadius: 999,
-                  padding: '6px 14px',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: segment === key ? 'var(--accent)' : 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                  letterSpacing: '-0.1px',
-                }}
-              >
-                {label}
-              </button>
-            ))}
+                { key: 'alt', label: antallUlesteAlt > 0 ? `Alt · ${antallUlesteAlt}` : 'Alt' },
+              ]}
+              aktiv={segment}
+              onVelg={setSegment}
+            />
           </div>
 
           {/* Filter + marker-alle-lest */}

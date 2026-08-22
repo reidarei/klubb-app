@@ -146,6 +146,185 @@ describe('sendVarsel – kanalvalg', () => {
   })
 })
 
+describe('sendVarsel – nivåvalg (#614)', () => {
+  // Gaten er «viktig vs. alt»-skillet fra #612 (teller_ulest) kombinert med
+  // mottakerens varsel_nivaa — IKKE en egen typeliste. Testene dekker de fire
+  // kombinasjonene pluss manglende preferanse-rad og at valget er per mottaker,
+  // ikke globalt for hele sendingen.
+
+  it('tellerUlest: false + nivå "viktige" ⇒ ingen push/epost, men in-app-rad med kanal kun_app', async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'ny-rad' }, error: null }) }),
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([
+          { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'viktige' },
+        ])
+      }
+      if (tabell === 'push_subscriptions') {
+        return lagChain([{ profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' }])
+      }
+      return lagChain([])
+    })
+
+    const utfall = await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Ny melding i klubbchatten',
+      melding: 'Test',
+      type: 'chat_klubb',
+      tellerUlest: false,
+      tillatDuplikat: true,
+    })
+
+    expect(mockSendPush).not.toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([])
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ profil_id: 'user1', kanal: 'kun_app' }),
+    )
+    expect(utfall).toEqual({ utfall: 'sendt', levert: 0, kunApp: 1, dedupHoppet: 0 })
+  })
+
+  it('tellerUlest: false + nivå "alle" ⇒ leveres normalt på begge kanaler', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [
+        { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'alle' },
+      ],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Ny melding i klubbchatten',
+      melding: 'Test',
+      type: 'chat_klubb',
+      tellerUlest: false,
+      tillatDuplikat: true,
+    })
+
+    expect(mockSendPush).toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
+  })
+
+  it('tellerUlest: true + nivå "viktige" ⇒ leveres normalt — nivået rammer bare lavsignal', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [
+        { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'viktige' },
+      ],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Nytt arrangement',
+      melding: 'Test',
+      type: 'nytt_arrangement',
+      arrangementId: 'arr1',
+    })
+
+    expect(mockSendPush).toHaveBeenCalled()
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
+  })
+
+  it('blandet broadcast: kun mottakeren på "viktige" mister push/epost, den andre er upåvirket', async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'ny-rad' }, error: null }) }),
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') {
+        return lagChain([
+          { id: 'user1', navn: 'Ola', epost: 'ola@test.no' },
+          { id: 'user2', navn: 'Per', epost: 'per@test.no' },
+        ])
+      }
+      if (tabell === 'varsel_preferanser') {
+        return lagChain([
+          { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'viktige' },
+          { profil_id: 'user2', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'alle' },
+        ])
+      }
+      if (tabell === 'push_subscriptions') {
+        return lagChain([
+          { profil_id: 'user1', endpoint: 'https://push.example.com/1', p256dh: 'key', auth: 'auth' },
+          { profil_id: 'user2', endpoint: 'https://push.example.com/2', p256dh: 'key', auth: 'auth' },
+        ])
+      }
+      return lagChain([])
+    })
+
+    await sendVarsel({
+      mottakere: ['user1', 'user2'],
+      tittel: 'Ny melding i klubbchatten',
+      melding: 'Test',
+      type: 'chat_klubb',
+      tellerUlest: false,
+      tillatDuplikat: true,
+    })
+
+    // user1 (viktige): ingen push, in-app kun_app. user2 (alle): push som normalt.
+    // Antallet alene ville også passert om gaten dempet FEIL mann, så vi
+    // pinner endepunktet — det er retningen, ikke bare mengden, som er kravet.
+    expect(mockSendPush).toHaveBeenCalledTimes(1)
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example.com/2' }),
+      expect.anything(),
+    )
+    const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
+    expect(batch.map(e => e.til)).toEqual(['per@test.no'])
+    const radKanal = new Map(
+      insertSpy.mock.calls.map(([rad]) => [(rad as { profil_id: string }).profil_id, (rad as { kanal: string }).kanal]),
+    )
+    expect(radKanal.get('user1')).toBe('kun_app')
+    expect(radKanal.get('user2')).toBe('begge')
+  })
+
+  it('manglende preferanse-rad behandles som "alle" — lavsignal leveres uendret', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [], // ingen rad for user1
+      push_subscriptions: [],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Ny melding i klubbchatten',
+      melding: 'Test',
+      type: 'chat_klubb',
+      tellerUlest: false,
+      tillatDuplikat: true,
+    })
+
+    // Manglende rad ⇒ epostAktiv defaulter til true (eksisterende oppførsel)
+    // og nivå defaulter til 'alle' ⇒ e-posten skal ut.
+    expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
+  })
+})
+
 describe('sendVarsel – dedup', () => {
   it('blokkerer duplikat-varsler med samme type + arrangementId', async () => {
     setupMock({

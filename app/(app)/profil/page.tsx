@@ -61,7 +61,7 @@ export default async function Profil() {
       .order('aar'),
     supabase
       .from('varsel_preferanser')
-      .select('push_aktiv, epost_aktiv')
+      .select('push_aktiv, epost_aktiv, varsel_nivaa')
       .eq('profil_id', user!.id)
       .maybeSingle(),
     // «Viktig» — default-fanen. teller_ulest = true dekker alt utenom de fem
@@ -516,6 +516,7 @@ export default async function Profil() {
       <VarslerInnstillinger
         pushAktiv={varselPref?.push_aktiv ?? false}
         epostAktiv={varselPref?.epost_aktiv ?? true}
+        varselNivaa={varselPref?.varsel_nivaa === 'viktige' ? 'viktige' : 'alle'}
       />
 
       {/* Utseende-innstillinger — alle kan velge tema */}
