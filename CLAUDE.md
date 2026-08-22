@@ -113,8 +113,10 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 - `type` — kategorisering for logging og dedup
 - `arrangementId?` — referanse for dedup
 - `tillatDuplikat?` — true = send alltid (default: false)
+- `tellerUlest?` — om varselet skal telle mot ulest-badge (default: true). Sett til false for informative varsler som er gjeldende uten at brukeren *må* lese dem (f.eks. oppdaterte arrangementer).
+- `pushTag?` — tag for push-gruppering på operativsystem-nivå (f.eks. `'chat-arrangement-123'`). Brukes til å kollapse/gruppere relaterte push-notifikasjoner. Hvis utelatt, kollapses ikke.
 
-**Tabell:** `varsel_logg` (tidligere `personlige_varsler` + `varsler_logg` slått sammen). Kolonner: profil_id, tittel, melding, type, kanal, url, arrangement_id, lest, opprettet.
+**Tabell:** `varsel_logg` (tidligere `personlige_varsler` + `varsler_logg` slått sammen). Kolonner: profil_id, tittel, melding, type, kanal, url, arrangement_id, lest, teller_ulest, opprettet. Kolonnen `teller_ulest` (default true) kontrollerer om varselet bidrar til ulest-badge på `/profil` — sett til false for informative varsler som ikke krever aksjon.
 
 **Cron:** GitHub Actions (`.github/workflows/paaminne.yml`) kaller `/api/cron/paaminne` via POST kl 06:00 UTC (08:00 norsk sommertid) med `CRON_SECRET`-auth. Valgt foran Vercel cron for bedre logging og synlig feilrapportering. Datobasert sjekk — arrangementets dato sammenlignes med norsk dato, ikke tidspunkt.
 
