@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { bildeSti, videoSti, albumSti, nyttR2Filnavn } from '@/lib/bilde-utils'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { bildeSti, videoSti, albumSti, nyttR2Filnavn, bildeSrc } from '@/lib/bilde-utils'
 
 describe('bildeSti – filnavn-sanitering', () => {
   it('kaster ved path-traversal (../)', () => {
@@ -75,6 +77,62 @@ describe('albumSti – albumId og filnavn-sanitering', () => {
     expect(albumSti(gyldigUuid, 'thumb_1720-abc.jpg')).toBe(
       `album/${gyldigUuid}/thumb_1720-abc.jpg`,
     )
+  })
+})
+
+describe('bildeSrc – trakt for lagrede bilde-URL-er (#609)', () => {
+  it('R2-URL returneres uendret', () => {
+    const url = 'https://pub-abc123.r2.dev/arrangementer/1720123456789-abc123.jpg'
+    expect(bildeSrc(url)).toBe(url)
+  })
+
+  it('Supabase Storage-URL returneres uendret', () => {
+    const url = 'https://tdlfswmxezjdnxcbbiwn.supabase.co/storage/v1/object/public/profilbilder/x.jpg'
+    expect(bildeSrc(url)).toBe(url)
+  })
+
+  it('blob:-URL returneres uendret — regresjonsvakt for optimistisk chat-forhåndsvisning', () => {
+    // ChatMeldingRad mottar blob:-URL-er gjennom samme prop som lagrede
+    // bilde_url-er mens et bilde er under opplasting (se Chat.tsx). Slipper
+    // ikke bildeSrc() denne uendret gjennom, forsvinner forhåndsvisningen.
+    const url = 'blob:http://localhost:3000/12345678-1234-1234-1234-123456789abc'
+    expect(bildeSrc(url)).toBe(url)
+  })
+
+  it('lokal sti returneres uendret', () => {
+    expect(bildeSrc('/bakgrunn.jpg')).toBe('/bakgrunn.jpg')
+  })
+
+  it('null gir null', () => {
+    expect(bildeSrc(null)).toBeNull()
+  })
+
+  it('undefined gir null', () => {
+    expect(bildeSrc(undefined)).toBeNull()
+  })
+
+  it('tom streng gir null', () => {
+    expect(bildeSrc('')).toBeNull()
+  })
+
+  it('ytelseskontrakt: ren synkron funksjon, ikke async', () => {
+    // Funksjonen skal ALDRI bli async eller gjøre I/O — se kommentar i
+    // lib/bilde-utils.ts. En async-versjon ville brutt server component-
+    // rendring på tvers av kodebasen uten en varslende type-endring.
+    // AsyncFunction.constructor.name er 'AsyncFunction', så denne fanger det.
+    expect(bildeSrc.constructor.name).toBe('Function')
+  })
+
+  it('ytelseskontrakt: bilde-utils importerer ingenting (heller ikke lib/r2.ts)', () => {
+    // Andre halvdel av samme kontrakt: ingen I/O betyr ingen avhengigheter.
+    // Modulen bundles også på klienten (komprimer/lagThumbnail), så et
+    // server-only import som lib/r2.ts ville både brutt klient-bygget og
+    // gjort bildeSrc() til noe annet enn en ren strengoperasjon. Vi leser
+    // kilden fremfor å inspisere runtime, fordi et ubrukt import er usynlig
+    // etter transpilering.
+    const kilde = readFileSync(join(process.cwd(), 'lib', 'bilde-utils.ts'), 'utf8')
+    const importLinjer = kilde.split('\n').filter(l => /^\s*import\s/.test(l))
+    expect(importLinjer).toEqual([])
   })
 })
 

@@ -10,6 +10,7 @@ import Chat from '@/components/chat/Chat'
 import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
 import MeldingRediger from './MeldingRediger'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
+import { bildeSrc } from '@/lib/bilde-utils'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
@@ -128,6 +129,7 @@ export default async function MeldingDetalj({
   // stedet for vanlig bilde-grid. Egne bilder er ikke mulig på
   // albumkoblede innlegg, så vi trenger ikke å vise begge.
   const albumKort = tilAlbumKort(melding.album)
+  const albumKortBilde = albumKort ? bildeSrc(albumKort.bildeUrl) : null
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -195,7 +197,7 @@ export default async function MeldingDetalj({
             album. */}
         {albumKort && (
           <div style={{ marginBottom: 16 }}>
-            {albumKort.bildeUrl && (
+            {albumKortBilde && (
               <div
                 style={{
                   position: 'relative',
@@ -207,7 +209,7 @@ export default async function MeldingDetalj({
                 }}
               >
                 <Image
-                  src={albumKort.bildeUrl}
+                  src={albumKortBilde}
                   alt=""
                   fill
                   sizes="(max-width: 512px) 100vw, 512px"

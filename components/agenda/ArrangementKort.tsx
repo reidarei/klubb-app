@@ -6,6 +6,7 @@ import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/
 import { formaterDato, aarHvisAvvik } from '@/lib/dato'
 import { KOMMENTARER_KOLLAPS_DAGER } from '@/lib/konstanter'
 import type { ChatProfil } from '@/lib/mention'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type ArrangementKortData = {
   id: string
@@ -78,6 +79,7 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
   const tid = formaterDato(iso, 'HH:mm')
   const aar = aarHvisAvvik(iso)
   const scene = sceneFor(arr.type)
+  const bilde = bildeSrc(arr.bilde_url)
 
   // Beregn kun kollaps-flagg når blokken faktisk skal vises (sparer Date-arbeid på hver render i ubesvart-seksjonen).
   const visKommentarBlokk = !tidligere && visKommentarer
@@ -233,13 +235,15 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
             flexShrink: 0,
             position: 'relative',
             borderLeft: '0.5px solid var(--border-subtle)',
-            background: arr.bilde_url ? undefined : sceneBackground(scene),
+            // Leser `bilde` (trakten), ikke råverdien: scene-fargen er fallback for
+            // at SVG-mønsteret vises, og den beslutningen tas av samme variabel.
+            background: bilde ? undefined : sceneBackground(scene),
             overflow: 'hidden',
           }}
         >
-          {arr.bilde_url ? (
+          {bilde ? (
             <Image
-              src={arr.bilde_url}
+              src={bilde}
               alt=""
               fill
               style={{ objectFit: 'cover' }}

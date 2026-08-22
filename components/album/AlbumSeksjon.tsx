@@ -8,6 +8,7 @@ import Icon from '@/components/ui/Icon'
 import AlbumLightbox from '@/components/album/AlbumLightbox'
 import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import { opprettAlbum } from '@/lib/actions/album'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type AlbumBildeForGrid = {
   id: string
@@ -147,31 +148,35 @@ export default function AlbumSeksjon({
                 marginBottom: 10,
               }}
             >
-              {album.bilder.slice(0, MAKS_FORHANDSVISNING).map((b, i) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => setLightbox(i)}
-                  style={{
-                    position: 'relative',
-                    aspectRatio: '1 / 1',
-                    border: 'none',
-                    padding: 0,
-                    overflow: 'hidden',
-                    borderRadius: 6,
-                    cursor: 'zoom-in',
-                    background: 'var(--bg-elevated)',
-                  }}
-                >
-                  <Image
-                    src={b.thumb_url ?? b.bilde_url}
-                    alt=""
-                    fill
-                    sizes="120px"
-                    style={{ objectFit: 'cover' }}
-                  />
-                </button>
-              ))}
+              {album.bilder.slice(0, MAKS_FORHANDSVISNING).map((b, i) => {
+                const bilde = bildeSrc(b.thumb_url ?? b.bilde_url)
+                if (!bilde) return null
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setLightbox(i)}
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '1 / 1',
+                      border: 'none',
+                      padding: 0,
+                      overflow: 'hidden',
+                      borderRadius: 6,
+                      cursor: 'zoom-in',
+                      background: 'var(--bg-elevated)',
+                    }}
+                  >
+                    <Image
+                      src={bilde}
+                      alt=""
+                      fill
+                      sizes="120px"
+                      style={{ objectFit: 'cover' }}
+                    />
+                  </button>
+                )
+              })}
             </div>
           )}
 

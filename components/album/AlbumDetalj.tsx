@@ -6,6 +6,7 @@ import Image from 'next/image'
 import AlbumLightbox from '@/components/album/AlbumLightbox'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 import type { ChatProfil } from '@/lib/mention'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type AlbumBildeDetalj = {
   id: string
@@ -91,34 +92,38 @@ export default function AlbumDetalj({
           gap: 4,
         }}
       >
-        {bilder.map((b, i) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => {
-              setAutoAapneKommentarer(false)
-              setAktiv(i)
-            }}
-            style={{
-              position: 'relative',
-              aspectRatio: '1 / 1',
-              border: 'none',
-              padding: 0,
-              overflow: 'hidden',
-              borderRadius: 6,
-              cursor: 'zoom-in',
-              background: 'var(--bg-elevated)',
-            }}
-          >
-            <Image
-              src={b.thumb_url ?? b.bilde_url}
-              alt=""
-              fill
-              sizes="(max-width: 480px) 33vw, 160px"
-              style={{ objectFit: 'cover' }}
-            />
-          </button>
-        ))}
+        {bilder.map((b, i) => {
+          const bilde = bildeSrc(b.thumb_url ?? b.bilde_url)
+          if (!bilde) return null
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => {
+                setAutoAapneKommentarer(false)
+                setAktiv(i)
+              }}
+              style={{
+                position: 'relative',
+                aspectRatio: '1 / 1',
+                border: 'none',
+                padding: 0,
+                overflow: 'hidden',
+                borderRadius: 6,
+                cursor: 'zoom-in',
+                background: 'var(--bg-elevated)',
+              }}
+            >
+              <Image
+                src={bilde}
+                alt=""
+                fill
+                sizes="(max-width: 480px) 33vw, 160px"
+                style={{ objectFit: 'cover' }}
+              />
+            </button>
+          )
+        })}
       </div>
 
       {aktiv !== null && (

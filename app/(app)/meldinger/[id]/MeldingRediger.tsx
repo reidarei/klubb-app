@@ -9,6 +9,7 @@ import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
 import SlettBildeKnapp from './SlettBildeKnapp'
 import LeggTilBildeKnapp from './LeggTilBildeKnapp'
 import SlettMeldingKnapp from './SlettMeldingKnapp'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Bilde = { id: string; bilde_url: string }
 
@@ -113,29 +114,33 @@ export default function MeldingRediger({
             marginBottom: 16,
           }}
         >
-          {bilder.map(b => (
-            <div key={b.id} style={{ position: 'relative' }}>
-              <div
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  aspectRatio: '4/3',
-                  borderRadius: 'var(--radius-card)',
-                  overflow: 'hidden',
-                }}
-              >
-                <Image
-                  src={b.bilde_url}
-                  alt=""
-                  fill
-                  sizes="(max-width: 512px) 100vw, 512px"
-                  style={{ objectFit: 'cover' }}
-                  priority
-                />
+          {bilder.map(b => {
+            const bilde = bildeSrc(b.bilde_url)
+            if (!bilde) return null
+            return (
+              <div key={b.id} style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    aspectRatio: '4/3',
+                    borderRadius: 'var(--radius-card)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Image
+                    src={bilde}
+                    alt=""
+                    fill
+                    sizes="(max-width: 512px) 100vw, 512px"
+                    style={{ objectFit: 'cover' }}
+                    priority
+                  />
+                </div>
+                {redigerer && kanRedigere && <SlettBildeKnapp bildeId={b.id} />}
               </div>
-              {redigerer && kanRedigere && <SlettBildeKnapp bildeId={b.id} />}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

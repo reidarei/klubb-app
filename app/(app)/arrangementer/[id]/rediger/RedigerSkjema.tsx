@@ -14,6 +14,7 @@ import Placeholder from '@/components/ui/Placeholder'
 import BildeBytterKnapp from '@/components/BildeBytterKnapp'
 import TypeVelger, { type MalValg } from '@/components/arrangement/TypeVelger'
 import { isoTilDatetimeLocal, datetimeLocalTilIso } from '@/lib/dato'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Arrangement = {
   id: string
@@ -113,6 +114,10 @@ export default function RedigerSkjema({
       if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
     }
   }, [previewUrl])
+  // Både blob-forhåndsvisningen og den lagrede URL-en går gjennom samme trakt —
+  // previewUrl er nettopp en variabel som kan bære begge, og bildeSrc() slipper
+  // blob: uendret gjennom (se Policy: Bildevisning). Ingen blob-vakt her.
+  const previewSrc = bildeSrc(previewUrl)
   const [tittel, setTittel] = useState(arr.tittel)
   // Hvis nåværende tittel avviker fra mal-navnet, regnes den som tilpasset.
   const [tittelBerørt, setTittelBerørt] = useState(
@@ -261,12 +266,12 @@ export default function RedigerSkjema({
           overflow: 'hidden',
         }}
       >
-        {previewUrl ? (
+        {previewSrc ? (
           <div style={{ position: 'relative', aspectRatio: '16/9' }}>
-            {previewUrl.startsWith('blob:') ? (
+            {previewSrc.startsWith('blob:') ? (
               // Lokal forhåndsvisning før upload — unoptimized fordi blob-URL-er ikke kan optimaliseres serverside
               <Image
-                src={previewUrl}
+                src={previewSrc}
                 alt=""
                 fill
                 unoptimized
@@ -275,7 +280,7 @@ export default function RedigerSkjema({
               />
             ) : (
               <Image
-                src={previewUrl}
+                src={previewSrc}
                 alt=""
                 fill
                 style={{ objectFit: 'cover' }}
@@ -289,7 +294,7 @@ export default function RedigerSkjema({
         <div style={{ position: 'absolute', bottom: 12, right: 12 }}>
           <BildeBytterKnapp
             onBildeFil={setBildeFil}
-            label={previewUrl ? 'Bytt bilde' : 'Legg til bilde'}
+            label={previewSrc ? 'Bytt bilde' : 'Legg til bilde'}
           />
         </div>
       </div>

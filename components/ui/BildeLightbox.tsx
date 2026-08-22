@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Enkel fullskjerm-visning av et bilde. Klikk hvor som helst eller Escape
 // lukker visningen. Rendres via createPortal i document.body slik at
@@ -33,7 +34,9 @@ export default function BildeLightbox({
     }
   }, [onLukk])
 
-  if (!montert) return null
+  const bilde = bildeSrc(src)
+
+  if (!montert || !bilde) return null
 
   return createPortal(
     <div
@@ -54,7 +57,7 @@ export default function BildeLightbox({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={bilde}
         alt=""
         style={{
           maxWidth: '95vw',

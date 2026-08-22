@@ -21,6 +21,7 @@ import MentionVelger from '@/components/agenda/MentionVelger'
 import { Linkified } from '@/lib/linkify'
 import KommentarReaksjoner from '@/components/agenda/KommentarReaksjoner'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type KommentarKortData = {
   id: string
@@ -81,8 +82,9 @@ function visningsInnhold(k: { innhold: string | null }): ReactNode {
 function KommentarMiniatyr({ src, href }: { src: string; href: string }) {
   const [feilet, setFeilet] = useState(false)
   const router = useRouter()
+  const bilde = bildeSrc(src)
 
-  if (feilet) {
+  if (feilet || !bilde) {
     return (
       <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)' }}>
         📷 Bilde
@@ -113,7 +115,7 @@ function KommentarMiniatyr({ src, href }: { src: string; href: string }) {
       style={{ cursor: 'pointer', display: 'block', marginTop: 4 }}
     >
       <div style={{ position: 'relative', width: 'min(140px, 100%)', height: 105, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-elevated)' }}>
-        <Image src={src} alt="" fill sizes="140px" style={{ objectFit: 'cover' }} onError={() => setFeilet(true)} />
+        <Image src={bilde} alt="" fill sizes="140px" style={{ objectFit: 'cover' }} onError={() => setFeilet(true)} />
       </div>
     </div>
   )

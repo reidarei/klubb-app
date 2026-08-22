@@ -9,6 +9,7 @@ import AlbumBildeReaksjoner from '@/components/album/AlbumBildeReaksjoner'
 import BildeKommentarSheet from '@/components/album/BildeKommentarSheet'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 import type { ChatProfil } from '@/lib/mention'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Fullskjerm-galleri for album. Pil-knapper, swipe, tastatur og X for å lukke.
 // Krysser mellom bilder uten å unmounte hele overlayet — det gir en stabil
@@ -116,7 +117,8 @@ export default function AlbumLightbox({
   }
 
   const aktiv = bilder[index]
-  if (!aktiv || !montert) return null
+  const bilde = aktiv ? bildeSrc(aktiv.bilde_url) : null
+  if (!aktiv || !montert || !bilde) return null
 
   function handleSettOmslag() {
     if (!albumId || !aktiv) return
@@ -184,7 +186,7 @@ export default function AlbumLightbox({
       {/* Bilde — klikk midt på lukker, klikk på pil-soner navigerer */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={aktiv.bilde_url}
+        src={bilde}
         alt=""
         style={{
           maxWidth: '95vw',

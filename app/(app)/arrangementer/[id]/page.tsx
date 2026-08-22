@@ -16,6 +16,7 @@ import { formaterDato } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
 import { Linkified } from '@/lib/linkify'
 import { logg } from '@/lib/logg'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Paamelding = {
   profil_id: string
@@ -206,6 +207,8 @@ export default async function ArrangementDetaljer({
         })
     : []
 
+  const heroBilde = bildeSrc(arr.bilde_url)
+
   return (
     <div style={{ padding: '0 0 140px' }}>
       {/* Varslet-banner */}
@@ -229,10 +232,10 @@ export default async function ArrangementDetaljer({
 
       {/* Hero */}
       <div style={{ position: 'relative', marginBottom: 24 }}>
-        {arr.bilde_url ? (
+        {heroBilde ? (
           <div style={{ position: 'relative', aspectRatio: '4/3' }}>
             <Image
-              src={arr.bilde_url}
+              src={heroBilde}
               alt=""
               fill
               style={{ objectFit: 'cover' }}

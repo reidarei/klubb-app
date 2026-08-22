@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { KART_BREDDE as W, KART_HOEYDE as H, LAND_BANER } from '@/lib/europa-kart-data'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Bildealbum koblet til en tur (via album.arrangement_id). Vises som lenke i
 // detaljkortet så gutta kan hoppe rett fra stedet til bildene.
@@ -304,6 +305,7 @@ const MINI_ARK = [
 ]
 
 function MiniBunke({ src }: { src: string | null }) {
+  const bilde = bildeSrc(src)
   return (
     <span
       aria-hidden="true"
@@ -328,7 +330,7 @@ function MiniBunke({ src }: { src: string | null }) {
               transform: `rotate(${ark.rotate}deg)`,
             }}
           >
-            {erOeverst && src && (
+            {erOeverst && bilde && (
               <span
                 style={{
                   position: 'absolute',
@@ -337,7 +339,7 @@ function MiniBunke({ src }: { src: string | null }) {
                   background: 'var(--bg-elevated-2)',
                 }}
               >
-                <Image src={src} alt="" fill sizes="26px" style={{ objectFit: 'cover' }} />
+                <Image src={bilde} alt="" fill sizes="26px" style={{ objectFit: 'cover' }} />
               </span>
             )}
           </span>

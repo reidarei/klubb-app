@@ -5,6 +5,7 @@ import Image from 'next/image'
 import BildeLightbox from '@/components/ui/BildeLightbox'
 import Avatar from '@/components/ui/Avatar'
 import { formaterDato } from '@/lib/dato'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Rutenett for bildene som er lagt ut i klubbchatten (#569).
 //
@@ -48,59 +49,63 @@ export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
           marginTop: 16,
         }}
       >
-        {bilder.map(b => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => setLightbox(b.bilde_url)}
-            style={{
-              padding: 0,
-              border: '0.5px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-small)',
-              overflow: 'hidden',
-              background: 'var(--bg-elevated)',
-              cursor: 'pointer',
-              display: 'block',
-              textAlign: 'left',
-            }}
-          >
-            <div style={{ position: 'relative', aspectRatio: '1', background: 'var(--bg-elevated-2)' }}>
-              <Image
-                src={b.bilde_url}
-                alt=""
-                fill
-                style={{ objectFit: 'cover' }}
-                sizes="(max-width: 480px) 50vw, 240px"
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 8px' }}>
-              <Avatar name={b.navn} src={b.bildeUrl} size={18} rolle={b.rolle} />
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 11,
-                  color: 'var(--text-secondary)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {b.navn}
-              </span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 9,
-                  color: 'var(--text-tertiary)',
-                  flexShrink: 0,
-                }}
-              >
-                {formaterDato(b.opprettet, 'd. MMM yy')}
-              </span>
-            </div>
-          </button>
-        ))}
+        {bilder.map(b => {
+          const bilde = bildeSrc(b.bilde_url)
+          if (!bilde) return null
+          return (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setLightbox(b.bilde_url)}
+              style={{
+                padding: 0,
+                border: '0.5px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-small)',
+                overflow: 'hidden',
+                background: 'var(--bg-elevated)',
+                cursor: 'pointer',
+                display: 'block',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ position: 'relative', aspectRatio: '1', background: 'var(--bg-elevated-2)' }}>
+                <Image
+                  src={bilde}
+                  alt=""
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  sizes="(max-width: 480px) 50vw, 240px"
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 8px' }}>
+                <Avatar name={b.navn} src={b.bildeUrl} size={18} rolle={b.rolle} />
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 11,
+                    color: 'var(--text-secondary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {b.navn}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--text-tertiary)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {formaterDato(b.opprettet, 'd. MMM yy')}
+                </span>
+              </div>
+            </button>
+          )
+        })}
       </div>
 
       {lightbox && <BildeLightbox src={lightbox} onLukk={() => setLightbox(null)} />}

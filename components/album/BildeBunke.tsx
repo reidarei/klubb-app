@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Icon from '@/components/ui/Icon'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Album vist som en bunke fremkalte bilder: hvit papirkant rundt motivet, med
 // ett eller to tomme ark stikkende fram bak. Arkene er bevisst TOMME — å vise
@@ -58,6 +59,7 @@ export default function BildeBunke({
 }) {
   const ark = antallArk(antall)
   const toppVinkel = vinkel(id, 0, 2)
+  const bilde = bildeSrc(src)
 
   return (
     <div style={{ position: 'relative' }}>
@@ -111,8 +113,8 @@ export default function BildeBunke({
             background: 'var(--foto-tom-bg)',
           }}
         >
-          {src ? (
-            <Image src={src} alt="" fill sizes={sizes} style={{ objectFit: 'cover' }} />
+          {bilde ? (
+            <Image src={bilde} alt="" fill sizes={sizes} style={{ objectFit: 'cover' }} />
           ) : (
             <div
               style={{

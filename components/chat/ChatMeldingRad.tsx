@@ -8,6 +8,7 @@ import { REAKSJON_EMOJIS } from '@/lib/konstanter'
 import { LinkifiedMedMentions } from './LinkifiedMedMentions'
 import type { ChatMelding } from './Chat'
 import type { Reaksjon } from './hooks/useChatReaksjoner'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 // Callbacks fra Chat.tsx samlet i ett objekt for lesbarhet. All state-eierskap
 // (edit, picker, lightbox, optimistiske meldingsoppdateringer) blir i Chat —
@@ -78,6 +79,8 @@ export default function ChatMeldingRad({
   pickerAapen,
   handlers,
 }: Props) {
+  const meldingBilde = bildeSrc(m.bilde_url)
+  const meldingVideo = bildeSrc(m.video_url)
   return (
     <>
       {visDatoSkille && (
@@ -292,7 +295,7 @@ export default function ChatMeldingRad({
               touchAction: 'manipulation',
             }}
           >
-            {m.bilde_url && (
+            {meldingBilde && (
               <button
                 type="button"
                 onClick={() => handlers.setLightboxSrc(m.bilde_url)}
@@ -309,7 +312,7 @@ export default function ChatMeldingRad({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={m.bilde_url}
+                  src={meldingBilde}
                   alt=""
                   loading="lazy"
                   style={{
@@ -322,9 +325,9 @@ export default function ChatMeldingRad({
                 />
               </button>
             )}
-            {m.video_url && (
+            {meldingVideo && (
               <video
-                src={m.video_url}
+                src={meldingVideo}
                 controls
                 preload="metadata"
                 playsInline

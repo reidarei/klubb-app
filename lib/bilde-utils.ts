@@ -110,6 +110,23 @@ export function albumSti(albumId: string, filnavn: string): string {
   return `album/${albumId}/${filnavn}`
 }
 
+// Eneste trakt for lagrede bilde-/video-URL-er på vei inn i et src-attributt
+// (se #609). R2, Supabase Storage, blob: og lokale stier passerer uendret i
+// dag — funksjonen skal forbli ren og synkron (aldri async, aldri importere
+// lib/r2.ts) slik at den dagen bildeleveransen skal legges bak innlogging,
+// er dette det ene stedet som må endres.
+//
+// null-kontrakten: null betyr INGEN URL (tom/manglende input) — ikke «nektet
+// tilgang». Kallstedene tolker null som «vis fallback / ingenting», og noen
+// filtrerer raden helt bort. Skal funksjonen en dag kunne NEKTE en URL, må det
+// bli en egen, synlig tilstand hos kallstedet — et stille `return null` ville
+// fått bildet til å forsvinne uten feilmelding (AlbumLightbox unmonterer hele
+// overlayet, MeldingKort mister +N-inngangen). Se Policy: Bildevisning.
+export function bildeSrc(url: string | null | undefined): string | null {
+  if (!url) return null
+  return url
+}
+
 // Felles helper: skalerer et bilde til maks `maks` på lang side, returnerer
 // JPEG-Blob med gitt kvalitet. Bruk i komprimer() og lagThumbnail().
 function skalerOgEksporter(

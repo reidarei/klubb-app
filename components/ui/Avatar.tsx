@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { harGulGloed } from '@/lib/roller'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Props = {
   name: string
@@ -44,14 +45,16 @@ export default function Avatar({ name, size = 32, src, rolle }: Props) {
     flexShrink: 0,
   } as const
 
-  if (src) {
+  const bilde = bildeSrc(src)
+
+  if (bilde) {
     // Bruk next/image så profilbilder leveres i riktig størrelse
     // (Vercel-optimalisering med WebP/AVIF, DPR-aware). Tidligere ble
     // full Supabase-URL lastet direkte — 100–200 KB per avatar uansett
     // om den ble rendret som 18 px eller 64 px.
     return (
       <Image
-        src={src}
+        src={bilde}
         alt={name}
         width={size}
         height={size}

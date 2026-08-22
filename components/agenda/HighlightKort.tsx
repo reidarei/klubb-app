@@ -5,6 +5,7 @@ import Pill, { IKveldChip } from '@/components/ui/Pill'
 import Placeholder from '@/components/ui/Placeholder'
 import Avatar from '@/components/ui/Avatar'
 import { formaterDato } from '@/lib/dato'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Deltaker = { navn: string; src?: string | null; rolle?: string | null }
 
@@ -42,6 +43,7 @@ function statusPill(status: HighlightKortData['minStatus']) {
 export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
   const status = statusPill(arr.minStatus)
   const datoTekst = `${formaterDato(arr.start_tidspunkt, 'd. MMM')} · kl. ${formaterDato(arr.start_tidspunkt, 'HH:mm')}`
+  const bilde = bildeSrc(arr.bilde_url)
 
   return (
     <Link
@@ -61,10 +63,10 @@ export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
       }}
     >
       {/* Hero */}
-      {arr.bilde_url ? (
+      {bilde ? (
         <div style={{ position: 'relative', aspectRatio: '16/10' }}>
           <Image
-            src={arr.bilde_url}
+            src={bilde}
             alt=""
             fill
             style={{ objectFit: 'cover' }}

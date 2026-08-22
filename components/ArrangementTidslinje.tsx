@@ -9,6 +9,7 @@ import { MapPinIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline'
 import SladdetFelt from './SladdetFelt'
 import Badge from './ui/Badge'
 import type { Json } from '@/lib/supabase/database.types'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 type Paamelding = { profil_id: string; status: string; profiles?: { visningsnavn: string | null } | null }
 
@@ -197,7 +198,7 @@ export default function ArrangementTidslinje({
         {/* Hero-bilde */}
         <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
           <Image
-            src={arr.bilde_url || '/bakgrunn.jpg'}
+            src={bildeSrc(arr.bilde_url) ?? '/bakgrunn.jpg'}
             alt=""
             fill
             className="object-cover"

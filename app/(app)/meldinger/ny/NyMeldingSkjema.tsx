@@ -8,7 +8,7 @@ import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
-import { komprimer } from '@/lib/bilde-utils'
+import { komprimer, bildeSrc } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
 import { iDagOslo } from '@/lib/dato'
 import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
@@ -589,68 +589,71 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                 gap: 10,
               }}
             >
-              {albumer.map(a => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => velgAlbum(a)}
-                  style={{
-                    padding: 0,
-                    background: 'var(--bg-elevated)',
-                    border: '0.5px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-card)',
-                    overflow: 'hidden',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div
+              {albumer.map(a => {
+                const thumb = bildeSrc(a.thumb)
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => velgAlbum(a)}
                     style={{
-                      position: 'relative',
-                      width: '100%',
-                      aspectRatio: '1/1',
-                      background: 'var(--bg-elevated-2)',
+                      padding: 0,
+                      background: 'var(--bg-elevated)',
+                      border: '0.5px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-card)',
+                      overflow: 'hidden',
+                      textAlign: 'left',
+                      cursor: 'pointer',
                     }}
                   >
-                    {a.thumb && (
-                      <Image
-                        src={a.thumb}
-                        alt=""
-                        fill
-                        sizes="50vw"
-                        style={{ objectFit: 'cover' }}
-                      />
-                    )}
-                  </div>
-                  <div style={{ padding: '8px 10px' }}>
                     <div
                       style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 14,
-                        color: 'var(--text-primary)',
-                        fontWeight: 500,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        position: 'relative',
+                        width: '100%',
+                        aspectRatio: '1/1',
+                        background: 'var(--bg-elevated-2)',
                       }}
                     >
-                      {a.tittel}
+                      {thumb && (
+                        <Image
+                          src={thumb}
+                          alt=""
+                          fill
+                          sizes="50vw"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      )}
                     </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '1.2px',
-                        textTransform: 'uppercase',
-                        marginTop: 2,
-                      }}
-                    >
-                      {a.antall} {a.antall === 1 ? 'bilde' : 'bilder'}
+                    <div style={{ padding: '8px 10px' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 14,
+                          color: 'var(--text-primary)',
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {a.tittel}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          color: 'var(--text-tertiary)',
+                          letterSpacing: '1.2px',
+                          textTransform: 'uppercase',
+                          marginTop: 2,
+                        }}
+                      >
+                        {a.antall} {a.antall === 1 ? 'bilde' : 'bilder'}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { arkiverMelding, avarkiverMelding } from '@/lib/actions/meldinger'
 import { Linkified } from '@/lib/linkify'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type MeldingKortData = {
   id: string
@@ -156,9 +157,11 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   const wrapperBunn =
     !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) ? 10 : 0
   const albumKort = melding.albumKort
+  const albumBilde = albumKort ? bildeSrc(albumKort.bildeUrl) : null
   const antallBilder = albumKort ? 0 : melding.bilder.length
   const visOverlay = antallBilder > 4
   const bildeGrid = melding.bilder.slice(0, 4) // maks 4 vises
+  const foersteBilde = bildeSrc(melding.bilder[0])
 
   // iOS sin link-preview trigges på selve <a>-tagen — touch-callout
   // settes derfor på Link. Vi unngår user-select: none på Link siden
@@ -336,7 +339,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               hele albumet. Erstatter vanlig bilde-grid. Se #214, #463. */}
           {albumKort && (
             <div style={{ marginBottom: wrapperBunn }}>
-              {albumKort.bildeUrl && (
+              {albumBilde && (
                 <div
                   style={{
                     position: 'relative',
@@ -348,7 +351,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   }}
                 >
                   <Image
-                    src={albumKort.bildeUrl}
+                    src={albumBilde}
                     alt=""
                     fill
                     sizes="(max-width: 512px) 100vw, 512px"
@@ -408,7 +411,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
 
           {/* Bilde-grid. 1 bilde: full bredde 4:3. 2-4: 2×2-grid.
               5+: 4 første i grid med «+N»-overlay på siste celle. */}
-          {antallBilder === 1 && (
+          {antallBilder === 1 && foersteBilde && (
             <div
               style={{
                 position: 'relative',
@@ -420,7 +423,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               }}
             >
               <Image
-                src={melding.bilder[0]}
+                src={foersteBilde}
                 alt=""
                 fill
                 sizes="(max-width: 512px) 100vw, 512px"
@@ -440,6 +443,8 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             >
               {bildeGrid.map((url, i) => {
                 const erSiste = i === 3
+                const bilde = bildeSrc(url)
+                if (!bilde) return null
                 return (
                   <div
                     key={i}
@@ -452,7 +457,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                     }}
                   >
                     <Image
-                      src={url}
+                      src={bilde}
                       alt=""
                       fill
                       sizes="(max-width: 512px) 50vw, 256px"
