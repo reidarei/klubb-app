@@ -50,6 +50,8 @@ Auth-guard via `middleware.ts` (`@supabase/ssr`). Bruk `createServerClient` (fra
 
 **Bildelagring:** Nye bilder lagres i Cloudflare R2 via `lib/r2.ts` + server actions i `lib/actions/bilde-opplasting.ts`. Klient-side komprimering først (1600 px / q0.85). Eldre profilbilder ligger fortsatt i Supabase Storage. Se **Policy: Bildelagring** nedenfor.
 
+**Bildevisning:** Alle lagrede bilde-/video-URL-er skal gjennom `bildeSrc()` i `lib/bilde-utils.ts` før de settes som `src`. Se **Policy: Bildevisning** nedenfor.
+
 **Migrasjoner:** Nye tabeller i `public`-schema må ha eksplisitte `GRANT`-statements til `anon`/`authenticated`/`service_role` — Supabase fjerner default-grants 30. mai 2026 for nye prosjekter og 30. oktober 2026 for eksisterende. Se **Policy: Migrasjoner** nedenfor.
 
 **Geokoding:** Stedene-kartet (`/stedene`) plotter turer via koordinater lagret på arrangementet (`lat`/`lng`). `lib/geokoding.ts` geokoder `destinasjon` via nøkkelfri Nominatim (OpenStreetMap) ved oppretting/redigering av en tur — best-effort, server-side. **Aldri** hardkod by→koordinat-tabeller; coords skal komme fra geokoding og lagres på raden. Se [docs/geokoding.md](docs/geokoding.md).
@@ -282,6 +284,27 @@ Bilder lagres i Cloudflare R2 (S3-kompatibel objektlagring). Profilbilder ligger
 **Migrering av eksisterende bilder:** Profilbilder og eldre arrangement-bilder ligger fortsatt i Supabase Storage. Migrering er bevisst ikke gjort — koden støtter begge så lenge man ikke endrer bilde-URL-en i DB.
 
 **Secrets (Vercel env vars):** `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` (eller `NEXT_PUBLIC_R2_PUBLIC_URL` om public-URL skal være tilgjengelig på klient). Secret-keyen skal ALDRI ha `NEXT_PUBLIC_`-prefiks.
+
+## Policy: Bildevisning
+
+Alle lagrede bilde- og video-URL-er skal gjennom `bildeSrc()` i `lib/bilde-utils.ts` før de settes som `src` — eneste trakt inn i et `src`-attributt. **Aldri** sett `bilde_url`/`thumb_url`/`video_url`/`bildeUrl` rått inn i `<Image>`, `<img>` eller `<video>`.
+
+**Hvorfor:** i dag returnerer `bildeSrc()` URL-en uendret — funksjonen er identitet. Verdien ligger i at det finnes ett sted å endre den dagen bildeleveransen skal legges bak innlogging (signerte lenker, tilgangssjekk, e.l.). Uten dette samlepunktet er det et redesign spredt over hele kodebasen i stedet for én funksjon. Samme grep som `sendVarsel()` for utgående kommunikasjon.
+
+**Dekker `<video src>` på lik linje** med `<Image>`/`<img>`.
+
+**Kalles i komponenten som eier `src=`, ikke hos den som sender URL-en videre som prop.** Blad-komponenter som `BildeLightbox`, `BildeBunke` og `KommentarMiniatyr` kaller `bildeSrc()` selv — kallere lenger oppe i treet sender fortsatt rå `bilde_url` videre som prop, akkurat som før.
+
+**`blob:`-URL-er passerer uendret** — de er lokale forhåndsvisninger i opplastingsflyten og treffer aldri R2. Funksjonen må aldri nekte dem. Hvorvidt kallstedet *skal* kalle `bildeSrc()` avgjøres av hva som kan komme inn på samme variabel — ikke av skjønn:
+
+- **Blob og lagret URL kommer gjennom samme prop/variabel → kall `bildeSrc()`.** Den slipper blob-en uendret gjennom, så én trakt dekker begge. Gjelder komponenter som viser både lokale opplastinger og lagrede bilder (f.eks. preview-bildet ved arrangementredigering).
+- **Kallstedet rendrer KUN en lokal blob, aldri en lagret URL → unntatt.** Komponenter som kun viser den filen brukeren nettopp valgte; det finnes ingen lagret URL å trakte, og en fremtidig tilgangssjekk ville uansett ikke gjelde dem.
+
+**`null` betyr *ingen URL*, ikke *nektet tilgang*.** Kallstedene tolker i dag null som «vis fallback / ingenting». Det er riktig så lenge null kun oppstår ved tom input. Skal `bildeSrc()` en dag kunne **nekte** en URL (utløpt signatur, manglende tilgang), er `return null` feil kanal: da forsvinner bildet uten spor. Nektelse må bli en egen, synlig tilstand i kallstedene — ikke en stille null fra en `.map()`.
+
+**Profilbilder rendres fortsatt gjennom `components/ui/Avatar.tsx`** — og Avatar kaller selv `bildeSrc()` internt. Avatar er ikke et unntak fra regelen, den er et kallsted som alle andre.
+
+**Funksjonen skal aldri bli asynkron eller importere `lib/r2.ts`.** Den er en ren, synkron strengoperasjon — ingen I/O, ingen oppslag. En async-versjon ville brutt server component-rendring på tvers av kodebasen.
 
 ## Policy: Arrangøransvar-kobling
 
