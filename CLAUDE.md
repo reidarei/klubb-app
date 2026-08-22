@@ -99,11 +99,12 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 
 **Funksjonen håndterer:**
 - Testmodus (filtrerer til kun testprofil)
-- Brukerpreferanser (`push_aktiv`, `epost_aktiv` fra `varsel_preferanser`)
+- Brukerpreferanser (`push_aktiv`, `epost_aktiv`, `varsel_nivaa` fra `varsel_preferanser`)
 - Dedup via `tillatDuplikat`-parameter (false = sjekker `varsel_logg` for eksisterende type+arrangement_id)
 - Deduplisering av mottakerliste (Set)
 - Logging til `varsel_logg`-tabellen med kanal-info (push/epost/begge)
 - URL-generering: oppgitt URL brukes (normalisert til absolutt via `absoluttUrl()` — e-postklienter kan ikke resolve relative lenker), ellers genereres `/varsler/{id}`
+- Varselnivå-gate: medlemmer velger mellom «Viktig» (utelater chat, lavsignal) og «Alt» (alle varsler)
 
 **Parametre:**
 - `mottakere?: string[]` — profil_id-er, utelat = alle aktive
@@ -113,10 +114,12 @@ All utgående kommunikasjon (push, epost) skal gå gjennom `sendVarsel()` i `lib
 - `type` — kategorisering for logging og dedup
 - `arrangementId?` — referanse for dedup
 - `tillatDuplikat?` — true = send alltid (default: false)
-- `tellerUlest?` — om varselet skal telle mot ulest-badge (default: true). Sett til false for informative varsler som er gjeldende uten at brukeren *må* lese dem (f.eks. oppdaterte arrangementer).
-- `pushTag?` — tag for push-gruppering på operativsystem-nivå (f.eks. `'chat-arrangement-123'`). Brukes til å kollapse/gruppere relaterte push-notifikasjoner. Hvis utelatt, kollapses ikke.
+- `tellerUlest?` (default true) — false = lavsignal (chat, sekundære varsler): raden teller ikke mot ulest-badge, men står fortsatt i innboksen
+- `pushTag?` (default undefined) — notifikasjons-gruppe: to push med samme tag kollapser til én på låseskjermen
 
-**Tabell:** `varsel_logg` (tidligere `personlige_varsler` + `varsler_logg` slått sammen). Kolonner: profil_id, tittel, melding, type, kanal, url, arrangement_id, lest, teller_ulest, opprettet. Kolonnen `teller_ulest` (default true) kontrollerer om varselet bidrar til ulest-badge på `/profil` — sett til false for informative varsler som ikke krever aksjon.
+**Nivå (`varsel_nivaa`) — egen akse fra kanal:** kanal (`push_aktiv`/`epost_aktiv`) styrer HVOR et varsel sendes, nivå styrer HVILKE varsler som i det hele tatt får sendes på push/epost. Medlemmet velger `'viktige'` eller `'alle'` på profil-siden (default `'alle'`). Gaten i `sendVarsel()` leser **`tellerUlest`-parameteren**, ikke en egen typeliste — `tellerUlest === false` ER definisjonen av lavsignal. En mottaker på `'viktige'` mister push OG e-post for et lavsignal-varsel, men mister ikke varselet: **in-app-raden skrives alltid**, med `kanal: 'kun_app'` når nivå dempet det. Chat-rader teller derfor fortsatt i innboksen — medlemmet valgte bort *plinget*, ikke *meldingen*.
+
+**Tabell:** `varsel_logg` (tidligere `personlige_varsler` + `varsler_logg` slått sammen). Kolonner: profil_id, tittel, melding, type, kanal, url, arrangement_id, lest, teller_ulest, opprettet. Kolonnen `teller_ulest` (default true) kontrollerer om varselet bidrar til ulest-badge på `/profil` — sett til false for informative varsler som ikke krever aksjon. `kanal` kan være `'push'`, `'epost'`, `'begge'` eller `'kun_app'` (når kanalene er av eller nivå dempet varselet).
 
 **Cron:** GitHub Actions (`.github/workflows/paaminne.yml`) kaller `/api/cron/paaminne` via POST kl 06:00 UTC (08:00 norsk sommertid) med `CRON_SECRET`-auth. Valgt foran Vercel cron for bedre logging og synlig feilrapportering. Datobasert sjekk — arrangementets dato sammenlignes med norsk dato, ikke tidspunkt.
 
