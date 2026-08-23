@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import TopHeader from '@/components/TopHeader'
+import FaneSveip from '@/components/FaneSveip'
 import PageTransition from '@/components/PageTransition'
 import ServiceWorkerRegistrering from '@/components/ServiceWorkerRegistrering'
 import AktivitetTeller from '@/components/AktivitetTeller'
@@ -39,15 +40,20 @@ async function HeaderMedProfil() {
     : [false, false, false, true]
 
   return (
-    <TopHeader
-      brukerNavn={profil?.navn}
-      bildeUrl={profil?.bilde_url ?? null}
-      rolle={profil?.rolle ?? null}
-      ulestChat={ulestChat}
-      ulestVarsler={ulestVarsler}
-      visFond={visFond}
-      visChat={visChat}
-    />
+    <>
+      <TopHeader
+        brukerNavn={profil?.navn}
+        bildeUrl={profil?.bilde_url ?? null}
+        rolle={profil?.rolle ?? null}
+        ulestChat={ulestChat}
+        ulestVarsler={ulestVarsler}
+        visFond={visFond}
+        visChat={visChat}
+      />
+      {/* Rendrer ingenting — lytter bare på sveip. Får samme flagg som headeren
+          fra samme sted, så sveipen aldri kan lande på en fane han ikke ser. */}
+      <FaneSveip rolle={profil?.rolle ?? null} visFond={visFond} visChat={visChat} />
+    </>
   )
 }
 
