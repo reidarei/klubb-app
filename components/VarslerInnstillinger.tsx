@@ -269,13 +269,9 @@ export default function VarslerInnstillinger({
             marginBottom: 12,
           }}
         >
-          {/* Siste setning er ikke pynt: uten den velger en mann «Viktig», ser
-              «Alt · N» klatre videre, og tror innstillingen ikke virket. Han
-              har valgt bort plinget, ikke meldingen (#614-review). */}
           «Alt» varsler deg om alt, chat inkludert. «Viktig» dropper
           chat-meldingene — resten (arrangementer, kåringer, pass, meldinger)
-          kommer uansett. Chatten havner i innboksen din under «Alt» uansett
-          hva du velger her, så telleren der teller videre.
+          kommer uansett.
         </div>
         <SegmentPiller
           valg={[
