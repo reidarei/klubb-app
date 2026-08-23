@@ -163,6 +163,34 @@ function normaliserFeil(err: unknown): {
   return { melding: String(err) }
 }
 
+/**
+ * Feil som bærer PostgREST-koden med seg gjennom en innpakking.
+ *
+ * Pakker du en Supabase-feil inn i `new Error(\`… ${error.message}\`)`, ser
+ * normaliserFeil() over ingen `code`-property og faller til else-grenen. Da er
+ * `melding` det eneste som er igjen — og den persisteres bevisst aldri (den kan
+ * bære radverdier). Resultatet er en rad i feil_logg som bare sier
+ * `{"navn":"Error"}`: vi vet at noe feilet, ikke hva.
+ *
+ * Det var blindsonen `ulest.marker_chat_sett.feilet` lå i — fire rader over tre
+ * dager i august 2026, alle uten en eneste ledetråd. Kast DbFeil i stedet når
+ * feilen skal bobles opp til et `.catch(logg.feil)` lenger ute; koden overlever
+ * da hele veien til raden.
+ *
+ * Kaster du derimot der du selv kan logge, er `logg.feil(event, error,
+ * { ctx: { code: error.code } })` med det rå PostgREST-objektet like bra —
+ * denne klassen er for stiene der kastet ER kanalen.
+ */
+export class DbFeil extends Error {
+  readonly code?: string
+
+  constructor(melding: string, code?: string) {
+    super(melding)
+    this.name = 'DbFeil'
+    this.code = code
+  }
+}
+
 // ─── TILGANGSFEIL-KLASSIFISERING (42501) + DØD SESJON (PGRST301) ────────────
 //
 // PGRST301 er IKKE en variant av 42501 — det var en gal premiss i #497 og i

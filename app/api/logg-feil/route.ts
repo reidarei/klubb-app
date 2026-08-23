@@ -9,9 +9,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
+import { scrubKontekst, kontekstForStor } from '@/lib/logg-sanitering'
 import {
   LOGG_FEIL_RATE_LIMIT_PER_MIN,
-  LOGG_KONTEKST_MAKS_KB,
   LOGG_EVENT_MAKS_LENGDE,
 } from '@/lib/konstanter'
 
@@ -61,100 +61,9 @@ function sjekkRateLimit(ip: string, profilId: string | null): boolean {
   return true
 }
 
-// ─── Kontekst-whitelist (speiler lib/logg.ts) ────────────────────────────────
-
-const KONTEKST_WHITELIST = new Set([
-  'profil_id',
-  'arrangement_id',
-  'event',
-  'code',
-  'nivaa',
-  'count',
-  'tabell',
-  'fingerprint',
-  'sample',
-  'status',
-  // Klient-spesifikke feltere som er OK å lagre (sanitiseres nedenfor)
-  'message',
-  'stack',
-  'digest',
-  'url',
-  // Diagnosefelter fra lib/klient-logg.ts (#575). Ingen av dem er
-  // bruker-identifiserende: de beskriver klienten og feilen, ikke personen.
-  // Legger du til et felt der, må det inn her — ellers strippes det stille.
-  'name', // Error-klassenavn: TypeError / ChunkLoadError / Error
-  'cause', // underliggende feil når en wrapper har kastet på nytt
-  'appversjon', // hvilken bundle klienten faktisk kjørte
-  'online', // navigator.onLine — skiller nettverksfeil fra kodefeil
-  'standalone', // PWA eller vanlig nettleserfane
-  'nettverk', // effectiveType (4g/3g/…), mangler i Safari
-  'ressurs', // URL-en til en <script>/<link> som ikke lastet
-])
-
-// Grenser for klient-strengfelter. Rå error-messages/stacks kan inneholde
-// PII (variabelverdier med navn, e-poster i URL-parametre osv.) — vi trunker
-// aggressivt og fjerner query-strings fra URL. Se #366 review-runde.
-const MESSAGE_MAKS_TEGN = 200
-const STACK_MAKS_BYTES = 2048
-
-function saniterVerdi(nokkel: string, verdi: unknown): unknown {
-  if (typeof verdi !== 'string') return verdi
-  // `cause` og `name` trunkeres som message: de er korte i praksis, men er
-  // fritekst fra et error-objekt og skal ikke kunne blåse opp raden (#575).
-  if (
-    nokkel === 'message' ||
-    nokkel === 'digest' ||
-    nokkel === 'cause' ||
-    nokkel === 'name'
-  ) {
-    return verdi.length > MESSAGE_MAKS_TEGN
-      ? verdi.slice(0, MESSAGE_MAKS_TEGN) + '…'
-      : verdi
-  }
-  if (nokkel === 'stack') {
-    // Trunker på reell byte-lengde (UTF-8) — .length teller kodepunkter og
-    // undervurderer størrelsen for norske tegn og emoji (opp til 4× feil).
-    const bytes = Buffer.byteLength(verdi, 'utf8')
-    if (bytes <= STACK_MAKS_BYTES) return verdi
-    // Kutt på tegn til byte-grensen holder — enkel loop dropper bakerste
-    // tegn til vi er under grensen. Sjelden hot path (kun ved storrestacks).
-    let kuttet = verdi
-    while (Buffer.byteLength(kuttet, 'utf8') > STACK_MAKS_BYTES) {
-      kuttet = kuttet.slice(0, -Math.max(1, Math.floor(kuttet.length / 20)))
-    }
-    return kuttet + '…'
-  }
-  if (nokkel === 'url') {
-    // Behold kun pathname — query-params kan inneholde e-post, token, navn.
-    try {
-      const u = new URL(verdi, 'https://x.invalid')
-      return u.pathname
-    } catch {
-      return verdi.slice(0, MESSAGE_MAKS_TEGN)
-    }
-  }
-  if (nokkel === 'ressurs') {
-    // Som url, men origin beholdes: en asset som ikke lastet kan ligge på et
-    // annet domene (R2), og «hvilken host svarte ikke» er halve svaret. Query
-    // strippes fortsatt — signerte URL-er kan bære token. (#575)
-    try {
-      const u = new URL(verdi, 'https://x.invalid')
-      return u.origin === 'https://x.invalid' ? u.pathname : u.origin + u.pathname
-    } catch {
-      return verdi.slice(0, MESSAGE_MAKS_TEGN)
-    }
-  }
-  return verdi
-}
-
-function scrubKontekst(data: unknown): Record<string, unknown> {
-  if (!data || typeof data !== 'object') return {}
-  const result: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
-    if (KONTEKST_WHITELIST.has(k)) result[k] = saniterVerdi(k, v)
-  }
-  return result
-}
+// Kontekst-whitelist og feltsanitering ligger i lib/logg-sanitering.ts —
+// flyttet ut for å kunne pinnes i test (Next begrenser hva en route-fil kan
+// eksportere).
 
 // ─── Route handler ───────────────────────────────────────────────────────────
 
@@ -197,10 +106,7 @@ export async function POST(req: NextRequest) {
   }
 
   const kontekstRenset = scrubKontekst(kontekst)
-  const kontekstStr = JSON.stringify(kontekstRenset)
-  // Buffer.byteLength for reell UTF-8-størrelse — .length undervurderer
-  // multibyte-tegn (norsk, emoji) og kan slippe gjennom for stor payload.
-  if (Buffer.byteLength(kontekstStr, 'utf8') > LOGG_KONTEKST_MAKS_KB * 1024) {
+  if (kontekstForStor(JSON.stringify(kontekstRenset))) {
     return new NextResponse(null, { status: 413 })
   }
 

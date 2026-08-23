@@ -1,6 +1,7 @@
 'use server'
 
 import { ensureInnlogget } from '@/lib/auth'
+import { DbFeil } from '@/lib/logg'
 
 /**
  * Marker at brukeren har sett klubb-chat nå. Kalles fra /chat-siden ved
@@ -17,5 +18,9 @@ export async function markerChatSett() {
   // fanget det ikke, fordi den sporer bruk av `data` — og her ble verken `data`
   // eller `error` rørt. Kallstedet i app/(app)/chat/page.tsx er fire-and-forget
   // med .catch(logg.feil), så et kast her blir synlig uten å velte siden.
-  if (error) throw new Error(`marker_chat_sett feilet: ${error.message}`)
+  //
+  // DbFeil, ikke Error: en vanlig Error taper `error.code` i innpakkingen, og
+  // raden i feil_logg ble stående som `{"navn":"Error"}` — synlig, men umulig å
+  // diagnostisere. Se DbFeil-doccen i lib/logg.ts.
+  if (error) throw new DbFeil(`marker_chat_sett feilet: ${error.message}`, error.code)
 }

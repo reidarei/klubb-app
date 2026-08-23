@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
-import { logg } from '@/lib/logg'
+import { logg, DbFeil } from '@/lib/logg'
 import { IkkeInnloggetFeil } from '@/lib/auth'
 
 beforeEach(() => {
@@ -282,5 +282,66 @@ describe('logg.feil() – 42501-klassifisering (#497)', () => {
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer.some(l => l.nivaa === 'error')).toBe(true)
     expect(mockFrom).toHaveBeenCalledWith('feil_logg')
+  })
+})
+
+describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
+  // En innpakket Supabase-feil (`new Error(`… ${error.message}`)`) taper `code`.
+  // Meldingen persisteres bevisst aldri, så raden i feil_logg ble stående som
+  // `{"navn":"Error"}` — synlig, men umulig å diagnostisere. Det var
+  // blindsonen ulest.marker_chat_sett.feilet lå i (fire rader, august 2026).
+  function fangInsert() {
+    const spion = vi.fn()
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.insert = vi.fn((rad: unknown) => {
+        spion(rad)
+        return chain
+      })
+      chain.abortSignal = vi.fn().mockReturnValue(chain)
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+    return spion
+  }
+
+  it('en vanlig Error taper koden — dette er tilstanden vi rettet bort fra', async () => {
+    const spion = fangInsert()
+    await logg.feil('test.event', new Error('marker_chat_sett feilet: noe gikk galt'))
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(rad.kontekst).toEqual({ code: undefined, tabell: undefined, navn: 'Error' })
+  })
+
+  it('DbFeil bærer koden helt fram til raden', async () => {
+    const spion = fangInsert()
+    await logg.feil(
+      'test.event',
+      new DbFeil('marker_chat_sett feilet: permission denied', '42501'),
+    )
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect((rad.kontekst as Record<string, unknown>).code).toBe('42501')
+    expect((rad.kontekst as Record<string, unknown>).navn).toBe('DbFeil')
+  })
+
+  it('persisterer fortsatt ikke meldingen, som kan bære radverdier', async () => {
+    const spion = fangInsert()
+    await logg.feil('test.event', new DbFeil('Key (epost)=(hemmelig@test.no) finnes', '23505'))
+
+    expect(JSON.stringify(spion.mock.calls[0][0])).not.toContain('hemmelig@test.no')
+  })
+
+  it('går gjennom tilgangsklassifiseringen som før — død sesjon er fortsatt warn', async () => {
+    // DbFeil skal ikke smugle en rutinefeil forbi nedgraderingen i #498:
+    // koden er nå synlig, og PGRST301 må fortsatt ende som warn uten rad.
+    const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await logg.feil('test.event', new DbFeil('JWT expired', 'PGRST301'))
+
+    const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
+    expect(linjer.every(l => l.nivaa === 'warn')).toBe(true)
+    expect(mockFrom).not.toHaveBeenCalled()
   })
 })
