@@ -4,17 +4,40 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
-import { harGulGloed } from '@/lib/roller'
+import { harGulGloed, kanAdministrere } from '@/lib/roller'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
-import { synligeFaner, erAktivFane } from '@/lib/navigasjon'
 
-// Fane-listen bor i lib/navigasjon.ts — FaneSveip trenger nøyaktig samme
-// liste og rekkefølge, og to lister som må holdes i synk manuelt ville drevet
-// fra hverandre første gang noen la til en fane.
+type Tab = {
+  href: string
+  label: string
+  nokkel: 'agenda' | 'chat' | 'fond' | 'klubb'
+  /** Path-prefikser som markerer denne tab-en som aktiv. */
+  prefikser: string[]
+  /** Kun synlig for admin-brukere (brukes i testfase-gating per #443). */
+  kunAdmin?: boolean
+}
+
+const TABS: Tab[] = [
+  { href: '/', label: 'Agenda', nokkel: 'agenda', prefikser: ['/poll', '/arrangementer', '/meldinger'] },
+  // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
+  { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
+  { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
+  // Fond ligger bevisst lengst til høyre (admins ønske). Alltid synlig for admin;
+  // for vanlige medlemmer styres synligheten av bryteren i /innstillinger (#447).
+  { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
+]
 
 // localStorage-nøkkel for «har sett Fond-fanen» — ny-prikken vises til første besøk.
 // Per enhet (som tema-valget); prikken kan dukke opp igjen på en annen enhet, det er greit.
 const FOND_SETT_KEY = 'fond_fane_sett'
+
+function erAktiv(tab: Tab, pathname: string): boolean {
+  if (tab.href === '/') {
+    if (pathname === '/') return true
+    return tab.prefikser.some(p => pathname.startsWith(p))
+  }
+  return tab.prefikser.some(p => pathname.startsWith(p))
+}
 
 type Props = {
   brukerNavn?: string | null
@@ -49,7 +72,10 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // men vis Fond-taben for alle hvis visFond-flagget er skrudd på (#447).
   // Chat-taben er motsatt: synlig som default, men kan skrus av for vanlige
   // medlemmer via chat_fane-flagget — admin ser den alltid.
-  const synligeTabs = synligeFaner(rolle, visFond, visChat)
+  const synligeTabs = TABS.filter(t => {
+    if (t.nokkel === 'chat') return visChat || kanAdministrere(rolle)
+    return !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond)
+  })
   const fondSynlig = synligeTabs.some(t => t.nokkel === 'fond')
 
   // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
@@ -91,7 +117,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     const container = tabsRef.current
     if (!container) return
     // Bruk synligeTabs — pill skal måles mot faktisk rendret tab-element
-    const aktivTab = synligeTabs.find(t => erAktivFane(t, pathname))
+    const aktivTab = synligeTabs.find(t => erAktiv(t, pathname))
     if (!aktivTab) {
       setPillRect(null)
       return
@@ -201,7 +227,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
           )}
 
           {synligeTabs.map(tab => {
-            const aktiv = erAktivFane(tab, pathname)
+            const aktiv = erAktiv(tab, pathname)
             // Prikk på Chat = uleste meldinger; prikk på Fond = ny fane brukeren
             // ikke har besøkt ennå. Aldri når taben er aktiv.
             const visPrikk =

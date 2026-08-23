@@ -363,18 +363,6 @@ Hele risikovurderingen i [docs/ai-act-vurdering.md](docs/ai-act-vurdering.md) hv
 
 App-navigasjon består av sticky TopHeader med tre alltid-synlige tekst-tabs (Agenda/Chat/Klubb) og en animert pill-bakgrunn som glir til aktiv tab; profil-avatar høyre som snarvei til /profil. I tillegg kontekstuelle FAB-er (NyFAB på agenda for å opprette innhold). **Ingen bottom-nav.** Dette eliminerer hele bug-klassen vi traff i #99, #104, #147, #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Hvis du finner deg selv i å legge til en `position: fixed; bottom: 0` UI-flate som ikke er en modal eller toast — løft det til diskusjon først.
 
-**Fane-listen bor i `lib/navigasjon.ts`, ikke i TopHeader.** `FANER` + `synligeFaner(rolle, visFond, visChat)` er én sannhet for både headeren og `FaneSveip`. Rekkefølgen i `FANER` ER sveiperekkefølgen. To lister som må holdes i synk manuelt ville drevet fra hverandre første gang noen la til en fane, og utfallet er ikke kosmetisk: en sveip til en fane brukeren ikke ser, setter ham på en side uten vei tilbake i navigasjonen.
-
-**Vannrett sveip bytter fane (`components/FaneSveip.tsx`).** Tre avgrensninger, alle bevisste:
-
-- **Kantsonen er fredet** (`KANT_SONE_PX` i `lib/sveip.ts`). iOS' tilbake/fremover-gest kjører før JS ser noe som helst og kan ikke skrus av — heller ikke med `overscroll-behavior-x`. Reagerte vi der også, ville én sveip både navigert tilbake OG byttet fane. Vi deler skjermen med systemgesten i stedet for å slåss mot den, slik iOS-apper flest gjør: kant = tilbake, midt på = fane. **Ikke prøv å «fikse» dette ved å undertrykke systemgesten** — det er ikke pålitelig i en standalone PWA, og tilbake-gesten er verdt mer på undersider enn et faneskifte er.
-- **Kun på selve fane-sidene** (`/`, `/chat`, `/klubbinfo`, `/fond`) — `toppnivaaFaneIndeks()` er strengere enn headerens `erAktivFane()` med vilje. De svarer på ulike spørsmål: headeren skal markere Agenda som aktiv på `/arrangementer/123`, men en sveip der skal ikke rive brukeren ut av detaljsiden han nettopp klikket seg inn på.
-- **Alle lyttere er passive, ingen `preventDefault`.** En non-passive touch-lytter på window gjør scrollingen hakkete på hele appen — det ville brutt ytelseskravet for å oppnå en gest.
-
-Flater med egne vannrette gester melder seg av med `data-sveip-fri`; elementer som selv kan scrolles sidelengs oppdages automatisk. Rekkefølgen wrapper ikke rundt — enden av rekka er eneste tilbakemelding brukeren har på at han er i enden.
-
-**Verifikasjon:** gest-regelen er pinnet i `__tests__/sveip.test.ts`, men selve oppførselen på iOS kan ikke automatiseres (jf. Policy: Visuell verifikasjon). Endringer her skal testes manuelt på iPhone og dokumenteres i PR-en.
-
 ## Policy: Migrasjoner
 
 Nye tabeller i `public`-schema må eksplisitt gi tilgang til Data API-rollene. Supabase fjerner de implisitte default-grants på `public`-schema: **30. mai 2026** for nye prosjekter, **30. oktober 2026** håndhevet på alle eksisterende prosjekter (inkludert vårt). Uten `GRANT` returnerer PostgREST `42501` selv om RLS-policyen tillater raden — `supabase-js` ser ikke at tabellen finnes.
