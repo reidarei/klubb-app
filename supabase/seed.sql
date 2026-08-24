@@ -431,6 +431,31 @@ values
     'Røyktest: svar fra et annet medlem.', now() - interval '1 day'
   );
 
+-- Bilder i klubb-chatten (/album/chatten, e2e/album-chatten-lightbox.spec.ts,
+-- #623). Uten disse har den seedede (fersk `supabase start` i CI) chatten
+-- ingen bilde_url-rader i det hele tatt, og speccen skipper stille i stedet
+-- for å bevise noe — nøyaktig feilmodusen #535 lukket, som
+-- e2e/sikkerhetsvakt.spec.ts vokter mot. Tre rader: nok til å bevise
+-- sveip/pil-navigasjon (krever minst 2), og innhold er bevisst NULL — et
+-- rent bildeinnlegg, ikke bilde+tekst (mig. 063 tillater begge).
+insert into public.klubb_chat (id, profil_id, innhold, bilde_url, opprettet)
+values
+  (
+    '00000000-0000-4000-9800-000000000003',
+    '00000000-0000-4000-8000-000000000001',
+    null, 'https://fixtur.r2.dev/roykttest/bilde-1.jpg', now() - interval '3 days'
+  ),
+  (
+    '00000000-0000-4000-9800-000000000004',
+    '00000000-0000-4000-8000-000000000002',
+    null, 'https://fixtur.r2.dev/roykttest/bilde-2.jpg', now() - interval '2 days'
+  ),
+  (
+    '00000000-0000-4000-9800-000000000005',
+    '00000000-0000-4000-8000-000000000003',
+    null, 'https://fixtur.r2.dev/roykttest/bilde-1.jpg', now() - interval '1 day'
+  );
+
 -- Privat samtale (/samtaler og /samtaler/[id]). Partene er e2e-admin og
 -- Petter — admin er den innloggede brukeren i suiten, så inboksen viser raden.
 -- Merk at e2e/rls/privat-samtale.spec.ts lager sine EGNE samtaler og rører
@@ -636,6 +661,14 @@ begin
   where album_id = '00000000-0000-4000-9800-000000000020';
   if antall <> 2 then
     raise exception 'Seed-verifisering: forventet 2 bilder i røyktest-albumet (9800…020), fant %.', antall;
+  end if;
+
+  -- Chat-bilder (9800…003-005): album-chatten-lightbox.spec.ts (#623) trenger
+  -- minst 2 for å bevise pil-/sveipenavigasjon — se kommentaren ved insert-en.
+  select count(*) into antall from public.klubb_chat
+  where id::text like '00000000-0000-4000-9800-%' and bilde_url is not null;
+  if antall <> 3 then
+    raise exception 'Seed-verifisering: forventet 3 klubb_chat-rader med bilde_url (prefiks 9800), fant % — album-chatten-lightbox.spec.ts (#623) ville skippet stille.', antall;
   end if;
 
   select count(*) into antall from public.varsel_logg

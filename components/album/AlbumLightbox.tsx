@@ -183,7 +183,9 @@ export default function AlbumLightbox({
         justifyContent: 'center',
       }}
     >
-      {/* Bilde — klikk midt på lukker, klikk på pil-soner navigerer */}
+      {/* Bilde — pointerEvents: none så touchene treffer sveipe-handleren på
+          containeren. Navigasjon skjer via pil-knappene, sveip og piltaster;
+          klikk på selve bildet gjør ingenting. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={bilde}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import BildeLightbox from '@/components/ui/BildeLightbox'
+import dynamic from 'next/dynamic'
 import Avatar from '@/components/ui/Avatar'
 import { formaterDato } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
@@ -17,6 +17,14 @@ import { bildeSrc } from '@/lib/bilde-utils'
 // Hvert bilde lenker tilbake til chatten via avsender og dato, så veien til
 // samtalen rundt bildet er kort.
 
+// Dynamisk import: AlbumLightbox drar med seg BildeKommentarSheet og
+// AlbumBildeReaksjoner (→ chat-hooks, mention-velger, browser-supabase-klienten).
+// Ingenting av det kan rendre her — vi sender verken albumId, brukerId eller
+// profiler — så statisk import ville lagt ~76 kB død JS i initial bundle for
+// denne ruta. Overlayet vises uansett først etter et klikk, så det er ingen
+// fossefall-kostnad ved å hente det da.
+const AlbumLightbox = dynamic(() => import('@/components/album/AlbumLightbox'), { ssr: false })
+
 export type ChatBilde = {
   id: string
   bilde_url: string
@@ -27,7 +35,14 @@ export type ChatBilde = {
 }
 
 export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
-  const [lightbox, setLightbox] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<number | null>(null)
+
+  // Filtrer én gang, og la rutenettet og lightboxen dele nøyaktig samme liste.
+  // Da er indeksen fra et miniatyr-klikk trivielt gyldig i lightboxen — ellers
+  // kunne et bilde uten src blitt sveipet inn, og AlbumLightbox' `if (!bilde)
+  // return null` ville unmontert overlayet mens `lightbox`-staten sto uendret
+  // (se CLAUDE.md § Policy: Bildevisning).
+  const synlige = bilder.filter(b => bildeSrc(b.bilde_url) !== null)
 
   if (bilder.length === 0) {
     return (
@@ -49,14 +64,14 @@ export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
           marginTop: 16,
         }}
       >
-        {bilder.map(b => {
-          const bilde = bildeSrc(b.bilde_url)
-          if (!bilde) return null
+        {synlige.map((b, i) => {
+          // Non-null: `synlige` er allerede filtrert på at bildeSrc() gir en verdi.
+          const bilde = bildeSrc(b.bilde_url)!
           return (
             <button
               key={b.id}
               type="button"
-              onClick={() => setLightbox(b.bilde_url)}
+              onClick={() => setLightbox(i)}
               style={{
                 padding: 0,
                 border: '0.5px solid var(--border-subtle)',
@@ -108,7 +123,17 @@ export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
         })}
       </div>
 
-      {lightbox && <BildeLightbox src={lightbox} onLukk={() => setLightbox(null)} />}
+      {/* lightbox !== null, ikke `lightbox &&` — indeks 0 (første bilde) er falsy. */}
+      {/* albumId/brukerId/profiler/kanRedigere utelates bevisst: chat-bilder har
+          ingen album_bilde-rad, så reaksjons- og kommentarknappene i AlbumLightbox
+          (gated bak disse valgfrie propsene) ville skrevet mot en id som ikke finnes. */}
+      {lightbox !== null && (
+        <AlbumLightbox
+          bilder={synlige.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
+          startIndex={lightbox}
+          onLukk={() => setLightbox(null)}
+        />
+      )}
     </>
   )
 }
