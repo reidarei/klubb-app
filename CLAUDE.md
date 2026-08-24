@@ -82,6 +82,27 @@ Se [HK-app_kravspesifikasjon.md](HK-app_kravspesifikasjon.md) for fullstendig sc
 
 Tre regresjoner i samme bug-klasse = arkitektonisk reversering, ikke fjerde patch. Skriv heller en CLAUDE.md-policy som lukker problemklassen enn enda en lapp. Gjelder generelt — UI-bugs, DB-bugs, varsel-bugs.
 
+### Issues beskriver problemet, ikke løsningen
+
+**Et issue skal si hva som er galt og hva som er ønsket tilstand. Diagnosen og løsningen er planleggerens jobb, ikke issue-forfatterens.**
+
+Skriver du årsaksanalysen inn i issuet, blir den ikke et utgangspunkt — den blir et *premiss*. En agent som skal planlegge arbeidet slutter å lete og begynner å implementere hypotesen din. Er hypotesen feil, jobber alt videre arbeid fra feilslutningen, og ingen har mandat til å spørre «vent, er problemet i det hele tatt her?».
+
+Issuet blir dessuten stående som dokumentasjon lenge etter at saken er lukket. En feil diagnose som ble skrevet med skråsikkerhet leses av neste mann som etablert sannhet.
+
+**Skal med:**
+- Hva som faktisk ble observert, presist, med tidspunkt og enhet der det er relevant.
+- Hvordan reprodusere — og eksplisitt hva som *ikke* er undersøkt.
+- Ønsket tilstand / akseptansekriterier: hvordan ser «ferdig» ut, sett fra et medlem.
+- Verifikasjonsrammer — f.eks. at noe kun kan testes manuelt på iPhone (jf. Policy: Visuell verifikasjon). Det er en betingelse for leveransen, ikke en løsning.
+- Hva som bevisst er utenfor scope, så arbeidet ikke drar det inn.
+
+**Skal ikke med:** årsak presentert som konklusjon, valgt teknisk løsning, filnivå-instruksjoner, eller implementasjonsdetaljer.
+
+**Gråsonen — verifiserte observasjoner:** har du allerede lest koden og vet noe konkret, er det sløsing å kaste det. Ta det med, men **merk det som observasjon, ikke konklusjon**, og inviter til å se bredere: «oppgitt for å spare tid, ikke som konklusjon — etterprøv gjerne, og se bredere hvis sporet ikke fører fram». Et peker mot en fil som *sted å begynne* er greit; «feilen ligger i denne funksjonen» er det ikke.
+
+Erfaringen bak policyen: et issue skrevet med diagnose og foreslått løsning viste seg å hvile på et for enkelt premiss — men det ble først oppdaget etter at mye arbeid var lagt ned på å rette opp rammen som var gitt. Merk også hvordan en påstand med forbehold kan bli til et hardt krav noen ledd senere, uten at noen sjekker det enkleste motbeviset: skråsikkerhet vokser ved gjentakelse, ikke ved ny kunnskap.
+
 ### Kommentarer i kode
 
 **Overstyrer global default.** I dette prosjektet er kommentarer velkomne — også når WHY-en ikke er strengt ikke-åpenbar. Jeg setter pris på at subtile betingelser, edge-cases og «hvorfor akkurat sånn»-valg står forklart i koden, ikke bare i PR-historikk eller git blame.
