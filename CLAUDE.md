@@ -384,6 +384,10 @@ Hele risikovurderingen i [docs/ai-act-vurdering.md](docs/ai-act-vurdering.md) hv
 
 App-navigasjon består av sticky TopHeader med tre alltid-synlige tekst-tabs (Agenda/Chat/Klubb) og en animert pill-bakgrunn som glir til aktiv tab; profil-avatar høyre som snarvei til /profil. I tillegg kontekstuelle FAB-er (NyFAB på agenda for å opprette innhold). **Ingen bottom-nav.** Dette eliminerer hele bug-klassen vi traff i #99, #104, #147, #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Hvis du finner deg selv i å legge til en `position: fixed; bottom: 0` UI-flate som ikke er en modal eller toast — løft det til diskusjon først.
 
+**Push-klikk-navigasjon: overleveringen ligger i Cache Storage, ikke i en SW-instans.** Service workeren kan ikke navigere appen selv, så URL-en fra et varseltrykk må overleveres til klienten. Den overleveringen skal alltid ligge i en **uversjonert** Cache Storage-entry som klienten leser **direkte** — aldri i en variabel i SW-minnet, og aldri kun via en melding fra en levende SW-instans. Grunnen er at instansen kan være terminert eller byttet ut midt i flyten; da forsvinner både minnet og svareren. `postMessage`-protokollen beholdes som fallback for gammel klient-bundle, ikke som hovedspor.
+
+Keep-listen i `activate` (`public/sw.js`) er stedet bug-klassen gjeninnføres: den sletter alle cache-navn utenfor listen, så en tredje cache som legges til uten å whitelistes river bort overleveringen ved neste deploy. Skrivingen i `notificationclick` skal være fail-open og tidsbegrenset — et hengende cache-lag må aldri kunne blokkere `focus`/`openWindow`, for da gjør trykket på varselet ingenting i det hele tatt.
+
 ## Policy: Migrasjoner
 
 Nye tabeller i `public`-schema må eksplisitt gi tilgang til Data API-rollene. Supabase fjerner de implisitte default-grants på `public`-schema: **30. mai 2026** for nye prosjekter, **30. oktober 2026** håndhevet på alle eksisterende prosjekter (inkludert vårt). Uten `GRANT` returnerer PostgREST `42501` selv om RLS-policyen tillater raden — `supabase-js` ser ikke at tabellen finnes.
