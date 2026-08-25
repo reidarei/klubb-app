@@ -83,6 +83,9 @@
 //   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
 //   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
 //   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
+//   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
+//   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
+//   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

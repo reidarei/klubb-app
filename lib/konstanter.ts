@@ -246,3 +246,9 @@ export const EPOST_BUDSJETT_VINDU_TIMER = 24
 // er verre enn å vente et sekund til. Endepunktet gjør null arbeid, så alt
 // over dette er reelt tapt kontakt.
 export const DRA_NED_PING_TIMEOUT_MS = 6000
+
+// Ferskhetsvindu for push-klikk-URL-en lagret i Cache Storage (#626).
+// public/sw.js er en statisk fil og kan ikke importere denne konstanten —
+// literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster
+// som tegnegrensene mot DB-constraints øverst i denne fila.
+export const PUSH_KLIKK_VINDU_MS = 30_000
