@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import MedlemRad from '@/components/klubbinfo/MedlemRad'
 import SectionLabel from '@/components/ui/SectionLabel'
 import { tittelFor } from '@/lib/roller'
+import { sorterMedlemmer, STANDARD_SORTERING, type MedlemSortering } from '@/lib/medlem-sortering'
 
 type Medlem = {
   id: string
@@ -23,17 +24,12 @@ export default function MedlemmerListe({
   erAdmin: boolean
 }) {
   const [soek, setSoek] = useState('')
-  const [sortering, setSortering] = useState<'alfabetisk' | 'narvaer'>('alfabetisk')
+  const [sortering, setSortering] = useState<MedlemSortering>(STANDARD_SORTERING)
 
   const filtrert = useMemo(() => {
     const q = soek.trim().toLowerCase()
-    let liste = q ? medlemmer.filter(m => m.navn.toLowerCase().includes(q)) : medlemmer
-    if (sortering === 'narvaer') {
-      liste = [...liste].sort((a, b) => (b.narv ?? -1) - (a.narv ?? -1))
-    } else {
-      liste = [...liste].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'))
-    }
-    return liste
+    const liste = q ? medlemmer.filter(m => m.navn.toLowerCase().includes(q)) : medlemmer
+    return sorterMedlemmer(liste, sortering)
   }, [medlemmer, soek, sortering])
 
   const aktive = filtrert.filter(m => m.aktiv)
