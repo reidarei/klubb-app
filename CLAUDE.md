@@ -176,6 +176,10 @@ Derimot feiler dedup-oppslag og `varsel_logg`-insert **åpent** (throw-en kastes
 
 **Kall der varselet *er* handlingen** (f.eks. en admin som klikker en knapp «Varsle alle» på `/admin`) lar throw-en boble til brukeren. `.catch()` skal ikke legges der — brukeren må se feilen.
 
+**Innspill-varsler — endringslogg-svar:**
+
+Når et medlem sender inn en forslag eller bugrapport gjennom innspill-funksjonen, og en admin lukker GitHub-issuet, mottar medlemmet et varsel med en beskjed om situasjonen. Beskjeden hentes fra `ENDRINGER`-listen og er merket med samme issue-nummer via feltet `innspill: [<nr>]`. Poenget er at et innspill er dialog med medlemmene, ikke internt arbeid — varselet skal snakke til medlemmet direkte (ikke beskrive tekniske detaljer for utvikleren), og skal stå i `lib/endringslogg-data.ts` ordrett som medlemmet skal lese det. Hvis ingen oppføring er merket med issue-nummeret, faller appen tilbake til en generisk standardtekst. Før du merker en endringslogg-oppføring med `innspill: [<nr>]`, sikrer du at tonen passer et medlem som kun vet at han sendte inn noe — uten kontekst fra GitHub-diskusjonen.
+
 ## Policy: Roller
 
 Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver rolle kan/mottar. **Aldri** sammenlign `rolle === 'admin'` direkte i kode — bruk hjelperne.
