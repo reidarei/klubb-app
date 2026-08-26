@@ -187,8 +187,15 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 - `kanAdministrere` — har admin-rettigheter
 - `harGulGloed` — særegen gul ring rundt avatar
 - `loeserTiebreak` — løser uavgjort i kåringspoll
+- `godkjennerPassTilgang` — avgjør forespørsler om dagstilgang til passinfo
+
+**Generalsekretær = admin + tre ting.** Forskjellen er nøyaktig `harGulGloed`, `loeserTiebreak` og `godkjennerPassTilgang` (pluss tittelen). Hele CRUD-flaten, innstillinger, fond og medlemsadministrasjon er identisk. Pinnet i `__tests__/roller.test.ts` med en test som feiler hvis en fjerde forskjell sniker seg inn — forskjellen skal stå skrevet ett sted, ikke oppdages.
+
+**Pass-tilgang er generalsekretær-only, ikke admin.** Appen lover medlemmene at «generalsekretæren må godkjenne» dagstilgang til sensitive data — varselet om ny forespørsel går kun til ham, og avslagsteksten navngir ham. Regelen som er etablert: **når appen gir medlemmene et løfte om hvem som håndterer sensitive data, følger koden løftet — vi skriver ikke om løftet for å matche en implementasjon som har glidd.** `ensureGodkjennerPassTilgang()` i `lib/auth.ts` + `er_generalsekretaer()` i RLS.
 
 **Innspill-varsler og feilvarsler er IKKE rollestyrt:** hvem som mottar hvilket varsel styres av to uavhengige kolonner, begge admin-styrt per medlem via RedigerMedlemSkjema — `profiles.faar_issue_varsler` for varsel om nye innspill (migrasjon 104) og `profiles.faar_feilvarsler` for den daglige klientfeil-alarmen (migrasjon 123). De to formålene delte opprinnelig én kolonne; skilt fordi innspill er dialog med medlemmene og feilalarmen er drift. Mottaker-spørringer filtrerer på riktig kolonne (`.eq('faar_issue_varsler', true)` hhv. `.eq('faar_feilvarsler', true)`) — aldri på rolle.
+
+**Koblingen mellom et innspill-issue og medlemmet som sendte det inn bor i `innspill_kobling`, ikke i issue-teksten.** Den lå tidligere kun som en HTML-kommentar i bodyen, og forsvant sporløst hver gang teksten ble redigert — noe som skjer rutinemessig når et ønske utvides. Utfallet var at medlemmet verken fikk varsel om at ønsket var levert eller så det på innspill-listen, mens systemet svarte 200 og tegnet grønn hake. **Enhver ny sti som oppretter et innspill-issue MÅ skrive en rad i `innspill_kobling`.** Markøren i body er nå *fallback* for issues opprettet før tabellen introdusert, ikke sannhet — ikke bygg ny logikk på den. Et issue uten rad som er opprettet etter at tabellen ble introdusert regnes som ikke-fra-appen; dato-grensen brukes bevisst i stedet for å tolke overskriften i teksten, fordi den overskriften også skrives for hånd.
 
 **Bruk disse hjelperne:**
 - `kanAdministrere(rolle)` — admin-sjekk i UI, server actions, API-ruter
