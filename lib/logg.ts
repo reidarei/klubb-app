@@ -91,6 +91,7 @@
 //   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)
 //   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
 //   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
+//   github.webhook.innspill.uten_endringslogg — warn: lukket ønske uten merket endringslogg-oppføring, medlemmet får standardteksten. Fyrer IKKE på not_planned (normaltilstand); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -121,6 +122,15 @@ const KONTEKST_WHITELIST = new Set([
   // det IKKE når feil_logg.kontekst: persisterFeilLogg() skriver kun
   // { code, tabell, navn }, og den kontrakten utvides ikke her.
   'issue_nummer',
+  // Den deployede app-versjonen (f.eks. «V3.5.60») — en konstant fra
+  // lib/versjon.json, aldri en radverdi. Uten den kan ikke
+  // github.webhook.innspill.uten_endringslogg skilles i ettertid: dukker
+  // oppføringen senere opp i en NYERE versjon enn den som var ute, ble issuet
+  // lukket før deploy; dukker den aldri opp, ble merkelappen glemt (#633).
+  'versjon',
+  // GitHubs lukkeårsak ('completed' | 'not_planned' | 'duplicate' | null) —
+  // fast enum fra GitHub, ingen PII.
+  'state_reason',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {

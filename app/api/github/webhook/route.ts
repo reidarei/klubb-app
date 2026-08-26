@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { finnInnsender, erTaptAppInnspill } from '@/lib/innspill-kobling'
 import { sendVarsel } from '@/lib/varsler'
-import { formaterDato } from '@/lib/dato'
+import { finnEndringForInnspill, byggInnspillSvar } from '@/lib/innspill-svar'
+import { ENDRINGER } from '@/lib/endringslogg-data'
+import VERSJON from '@/lib/versjon.json'
 import { BASE_URL, GITHUB_ONSKE_LABEL } from '@/lib/config'
 import { logg } from '@/lib/logg'
 import crypto from 'crypto'
@@ -141,44 +143,52 @@ export async function POST(request: Request) {
       logg.warn('github.webhook.kobling.kun_body', { issue_nummer: issue.number })
     }
 
-    let oppsummering = 'Ønsket ditt er håndtert!'
-    if (issue.comments > 0 && issue.comments_url) {
-      try {
-        const token = process.env.GITHUB_TOKEN
-        const kommentarerRes = await fetch(
-          `${issue.comments_url}?per_page=1&page=${issue.comments}`,
-          { headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } : {} }
-        )
-        if (kommentarerRes.ok) {
-          const kommentarer = await kommentarerRes.json()
-          if (kommentarer.length > 0) {
-            oppsummering = kommentarer[0].body
-              .replace(/#{1,6}\s/g, '')
-              .replace(/[*_`]/g, '')
-              .slice(0, 200)
-          }
-        }
-      } catch {
-        // Bruk default oppsummering
-      }
+    // Teksten kommer fra endringslogg-oppføringen merket med dette
+    // issue-nummeret (#633) — aldri fra GitHub-kommentaren, som er skrevet
+    // til Reidar, ikke til medlemmet. Koblingen (`innspill: [<nr>]` i
+    // lib/endringslogg-data.ts) leses fra den DEPLOYEDE bundelen. Derfor
+    // ordningskravet: issuet skal lukkes ETTER at deployen er verifisert —
+    // lukkes det før, leser webhooken forrige bundle og medlemmet får
+    // standardteksten selv om oppføringen står klar i koden. Kravet står i
+    // CLAUDE.md § Policy: Varsler, og warn-en under er eneste deteksjon.
+    const endring = finnEndringForInnspill(ENDRINGER, issue.number)
+    // Warn KUN når vi faktisk forventet en oppføring. GitHub sender
+    // 'completed', 'not_planned', 'duplicate' — eller null på eldre issues.
+    // Bare de to første betyr «dette ble gjennomført»; et avvist eller
+    // duplikat-lukket innspill har legitimt ingen oppføring. Positiv liste,
+    // ikke unntaksliste: en fjerde state_reason fra GitHub skal ikke gi
+    // warn-støy før noen har vurdert den. En warn som fyrer på normaltilstand
+    // blir trent bort, og fanger da heller ikke de to reelle årsakene den
+    // finnes for.
+    const forventetOppfoering = issue.state_reason === 'completed' || issue.state_reason == null
+    if (!endring && forventetOppfoering) {
+      logg.warn('github.webhook.innspill.uten_endringslogg', {
+        issue_nummer: issue.number,
+        state_reason: issue.state_reason ?? null,
+        // Den deployede versjonen skiller de to årsakene i ettertid: dukker
+        // oppføringen senere opp i en NYERE versjon enn denne, ble issuet
+        // lukket før deploy. Dukker den aldri opp, ble merkelappen glemt.
+        versjon: VERSJON.versjon,
+      })
     }
-
-    // Legg til info om at endringen er live om ca. 1 minutt
-    const liveTid = new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000)
-    const liveKl = formaterDato(liveTid.toISOString(), 'HH:mm')
-    oppsummering += `\n\nEndringen er live i appen ca. kl. ${liveKl}.`
+    const { tittel, melding } = byggInnspillSvar(endring, issue.state_reason)
 
     await sendVarsel({
       mottakere: [profilId],
-      tittel: 'Ønsket ditt er gjennomført',
-      melding: oppsummering,
+      tittel,
+      melding,
       url: `${BASE_URL}/innspill#issue-${issue.number}`,
       knappTekst: 'Se svaret',
       type: 'ønske_lukket',
       tillatDuplikat: true,
     })
 
-    return NextResponse.json({ ok: true, action: 'closed', varslet: profilId })
+    return NextResponse.json({
+      ok: true,
+      action: 'closed',
+      varslet: profilId,
+      kilde: endring ? 'endringslogg' : 'standardtekst',
+    })
   }
 
   return NextResponse.json({ ok: true, skipped: 'unhandled-action' })

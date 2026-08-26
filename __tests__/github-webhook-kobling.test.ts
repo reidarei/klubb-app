@@ -12,6 +12,14 @@ import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 import { INNSPILL_KOBLING_INNFOERT } from '@/lib/konstanter'
+// Ikke mocket — ren funksjon. Brukes til å bygge den FORVENTEDE strengen, så
+// testen pinner at ruten sender teksten uavkortet uten å duplisere ordlyden
+// (den er pinnet for seg i __tests__/innspill-svar.test.ts).
+import {
+  byggInnspillSvar,
+  INNSPILL_AVSLUTTET_TITTEL,
+  INNSPILL_AVSLUTTET_MELDING,
+} from '@/lib/innspill-svar'
 
 // Samme generiske chainable mock som varsel-mottaker-felter.test.ts, utvidet
 // med maybeSingle() — innspill_kobling-oppslaget i finnInnsender() bruker den.
@@ -38,9 +46,25 @@ const { mockSendVarsel, mockCreateAdmin, mockLoggFeil, mockLoggWarn } = vi.hoist
   mockLoggWarn: vi.fn(),
 }))
 
+// Fixturen er bevisst OVER 200 tegn (#633-review): det gamle
+// kommentarutdraget klippet på nøyaktig 200, og med en kort mock-tekst ville
+// en gjeninnført .slice(0, 200) hvor som helst i webhook-stien passert grønt.
+const { MOCK_ENDRING } = vi.hoisted(() => ({
+  MOCK_ENDRING: {
+    versjon: 'V3.5.58',
+    dato: '2026-08-26',
+    tekst:
+      'Åpner du et bilde i fullskjerm kan du nå knipe for å zoome inn og dra rundt i bildet — både i chatten og i albumene. Bakgrunnen bak bildet er helt svart, så bildet står alene i stedet for at appen skinner igjennom bak kantene.',
+    innspill: [625],
+  },
+}))
+
 vi.mock('@/lib/varsler', () => ({ sendVarsel: mockSendVarsel }))
 vi.mock('@/lib/logg', () => ({ logg: { feil: mockLoggFeil, warn: mockLoggWarn } }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdmin }))
+// Én endringslogg-oppføring merket #625 (#633) — nok til å teste både
+// «finnes» og «finnes ikke»-grenen uten å røre den ekte, håndskrevne listen.
+vi.mock('@/lib/endringslogg-data', () => ({ ENDRINGER: [MOCK_ENDRING] }))
 
 const HEMMELIGHET = 'test-webhook-secret'
 
@@ -85,7 +109,12 @@ function lagRequest(payload: unknown): Request {
 const FOER_KOBLING = new Date(INNSPILL_KOBLING_INNFOERT.getTime() - 86_400_000).toISOString()
 const ETTER_KOBLING = new Date(INNSPILL_KOBLING_INNFOERT.getTime() + 86_400_000).toISOString()
 
-function lukketPayload(overrides: { number: number; body: string | null; created_at?: string }) {
+function lukketPayload(overrides: {
+  number: number
+  body: string | null
+  created_at?: string
+  state_reason?: string
+}) {
   return {
     action: 'closed',
     issue: {
@@ -94,6 +123,7 @@ function lukketPayload(overrides: { number: number; body: string | null; created
       created_at: overrides.created_at ?? FOER_KOBLING,
       comments: 0,
       labels: [{ name: GITHUB_ONSKE_LABEL }],
+      state_reason: overrides.state_reason ?? null,
     },
   }
 }
@@ -264,5 +294,102 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
     // Ikke kun_body: markøren ble brukt fordi spørringen røk, ikke fordi
     // raden manglet — de to skal ikke se like ut i loggen.
     expect(mockLoggWarn).not.toHaveBeenCalledWith('github.webhook.kobling.kun_body', expect.anything())
+  })
+
+  // #633: teksten medlemmet får skal komme fra endringslogg-oppføringen
+  // merket med issue-nummeret, aldri fra en GitHub-kommentar.
+  it('lukket issue med matchende oppføring → HELE meldingen sendes uavkortet, versjon inkludert', async () => {
+    const { klient } = lagAdminKlient({
+      innspill_kobling: { data: { profil_id: 'db-profil-625' }, error: null },
+    })
+    mockCreateAdmin.mockReturnValue(klient)
+
+    const req = lagRequest(lukketPayload({
+      number: 625,
+      body: '## Ønske fra Ola\n\nZoom på bilder',
+    }))
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.kilde).toBe('endringslogg')
+
+    // Fixturen er over 200 tegn, og asserten er på HELE strengen — en
+    // .slice(0, 200) noe sted i stien kan ikke passere her (#633-review).
+    expect(MOCK_ENDRING.tekst.length).toBeGreaterThan(200)
+    const forventet = byggInnspillSvar(MOCK_ENDRING, null)
+    expect(mockSendVarsel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mottakere: ['db-profil-625'],
+        tittel: forventet.tittel,
+        melding: forventet.melding,
+      }),
+    )
+    expect(forventet.melding).toContain('V3.5.58')
+    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+      'github.webhook.innspill.uten_endringslogg',
+      expect.anything(),
+    )
+  })
+
+  // #633-review (MAJOR 2): not_planned er en NORMALTILSTAND — et innspill vi
+  // ikke går videre med har legitimt ingen endringslogg-oppføring. Fyrer
+  // warn-en her, blir den trent bort og fanger heller ikke de reelle avvikene.
+  it('lukket som not_planned uten oppføring → avslutningstekst og INGEN warn', async () => {
+    const { klient } = lagAdminKlient({
+      innspill_kobling: { data: { profil_id: 'db-profil-888' }, error: null },
+    })
+    mockCreateAdmin.mockReturnValue(klient)
+
+    const req = lagRequest(lukketPayload({
+      number: 888,
+      body: '## Ønske fra Petter\n\nNoe vi ikke gjør',
+      state_reason: 'not_planned',
+    }))
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.kilde).toBe('standardtekst')
+    expect(mockSendVarsel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mottakere: ['db-profil-888'],
+        tittel: INNSPILL_AVSLUTTET_TITTEL,
+        melding: INNSPILL_AVSLUTTET_MELDING,
+      }),
+    )
+    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+      'github.webhook.innspill.uten_endringslogg',
+      expect.anything(),
+    )
+  })
+
+  it('lukket issue uten matchende oppføring → standardtekst + logg.warn, varsel sendes fortsatt', async () => {
+    const { klient } = lagAdminKlient({
+      innspill_kobling: { data: { profil_id: 'db-profil-999' }, error: null },
+    })
+    mockCreateAdmin.mockReturnValue(klient)
+
+    const req = lagRequest(lukketPayload({
+      number: 999,
+      body: '## Ønske fra Kari\n\nNoe helt annet',
+    }))
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.kilde).toBe('standardtekst')
+    expect(mockSendVarsel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mottakere: ['db-profil-999'],
+        tittel: 'Innspillet ditt er håndtert',
+      }),
+    )
+    // Versjonen må være med: den er det eneste som i ettertid skiller «glemt
+    // merkelapp» fra «issuet ble lukket før deployen var ute» (#633-review).
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'github.webhook.innspill.uten_endringslogg',
+      expect.objectContaining({ issue_nummer: 999, versjon: expect.stringMatching(/^V\d+\.\d+\.\d+$/) }),
+    )
   })
 })

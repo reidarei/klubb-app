@@ -21,6 +21,10 @@ export type Endring = {
   versjon: string
   dato: string
   tekst: string
+  // Issue-numrene denne oppføringen svarer ut (#633). Styrer hvilken tekst
+  // innsenderen får når GitHub-issuet lukkes — se lib/innspill-svar.ts.
+  // Valgfritt: de fleste oppføringer har ingen kobling til et konkret innspill.
+  innspill?: number[]
 }
 
 export type LoggRad = {

@@ -22,7 +22,7 @@ export default async function InnspillSide({ searchParams }: Props) {
   const visning = sp.visning ?? 'alle'
 
   // Admin ser alle; vanlig bruker ser kun sine
-  const innspill = await hentInnspill(erAdmin ? undefined : user!.id)
+  const innspill = await hentInnspill(erAdmin ? undefined : user!.id, erAdmin)
 
   // Hent navn på alle innsendere (for admin-visning)
   const profilIder = [...new Set(innspill.map(i => i.profilId).filter((x): x is string => !!x))]
@@ -85,7 +85,7 @@ export default async function InnspillSide({ searchParams }: Props) {
           }}
         >
           {erAdmin
-            ? 'Alle innspill fra gutta. Kommentarene under lukkede innspill er svaret innsenderen får i appen.'
+            ? 'Alle innspill fra gutta. På håndterte ser du både svaret innsenderen fikk og din egen GitHub-kommentar — kommentaren er kun synlig her, for deg.'
             : 'Innspill du har sendt inn. Når et innspill er håndtert, ser du svaret her.'}
         </p>
       </header>
@@ -136,7 +136,7 @@ export default async function InnspillSide({ searchParams }: Props) {
           <SectionLabel>Åpne</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {aapne.map(i => (
-              <InnspillKort key={i.nummer} innspill={i} innsenderNavn={navnMap.get(i.profilId ?? '') ?? null} visInnsender={erAdmin} />
+              <InnspillKort key={i.nummer} innspill={i} innsenderNavn={navnMap.get(i.profilId ?? '') ?? null} visInnsender={erAdmin} erAdmin={erAdmin} />
             ))}
           </div>
         </section>
@@ -148,7 +148,7 @@ export default async function InnspillSide({ searchParams }: Props) {
           <SectionLabel>Håndtert</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {lukkede.map(i => (
-              <InnspillKort key={i.nummer} innspill={i} innsenderNavn={navnMap.get(i.profilId ?? '') ?? null} visInnsender={erAdmin} />
+              <InnspillKort key={i.nummer} innspill={i} innsenderNavn={navnMap.get(i.profilId ?? '') ?? null} visInnsender={erAdmin} erAdmin={erAdmin} />
             ))}
           </div>
         </section>
@@ -161,10 +161,15 @@ function InnspillKort({
   innspill: i,
   innsenderNavn,
   visInnsender,
+  erAdmin,
 }: {
   innspill: Awaited<ReturnType<typeof hentInnspill>>[number]
   innsenderNavn: string | null
   visInnsender: boolean
+  // Eget navn, ikke gjenbruk av visInnsender: dette styrer om GitHub-kommentaren
+  // vises i tillegg til svaret innsenderen fikk, ikke om innsenderens navn
+  // vises (#633).
+  erAdmin: boolean
 }) {
   const erLukket = i.status === 'closed'
   return (
@@ -259,43 +264,63 @@ function InnspillKort({
         </div>
       )}
 
-      {erLukket && i.svar && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: '12px 14px',
-            borderRadius: 10,
-            background: 'color-mix(in srgb, var(--success) 8%, transparent)',
-            border: '0.5px solid color-mix(in srgb, var(--success) 25%, transparent)',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9.5,
-              color: 'var(--success)',
-              letterSpacing: '1.6px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              marginBottom: 6,
-            }}
-          >
-            Svar
-          </div>
-          <p
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 13.5,
-              color: 'var(--text-primary)',
-              lineHeight: 1.55,
-              margin: 0,
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {i.svar}
-          </p>
-        </div>
+      {/* Ordrett samme streng som pushen medlemmet nettopp fikk — bygget av
+          byggInnspillSvar() i lib/innspill.ts, ikke satt sammen her (#633).
+          For admin merkes den som innsenderens svar, siden GitHub-kommentaren
+          hans står rett under og de to sier forskjellige ting. */}
+      {erLukket && i.medlemssvar && (
+        <SvarBoks etikett={erAdmin ? 'Svaret innsenderen fikk' : 'Svar'} tekst={i.medlemssvar} />
       )}
+
+      {/* Kun admin: utviklerkommentaren på GitHub. Nøytral ramme, ikke grønn —
+          den er et notat til ham selv, ikke svaret medlemmet leser. */}
+      {erLukket && erAdmin && i.svar && (
+        <SvarBoks etikett="Din kommentar på GitHub" tekst={i.svar} noytral />
+      )}
+    </div>
+  )
+}
+
+function SvarBoks({ etikett, tekst, noytral }: { etikett: string; tekst: string; noytral?: boolean }) {
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: '12px 14px',
+        borderRadius: 10,
+        background: noytral
+          ? 'color-mix(in srgb, var(--text-tertiary) 7%, transparent)'
+          : 'color-mix(in srgb, var(--success) 8%, transparent)',
+        border: noytral
+          ? '0.5px solid var(--border)'
+          : '0.5px solid color-mix(in srgb, var(--success) 25%, transparent)',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9.5,
+          color: noytral ? 'var(--text-tertiary)' : 'var(--success)',
+          letterSpacing: '1.6px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          marginBottom: 6,
+        }}
+      >
+        {etikett}
+      </div>
+      <p
+        style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: 13.5,
+          color: noytral ? 'var(--text-secondary)' : 'var(--text-primary)',
+          lineHeight: 1.55,
+          margin: 0,
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {tekst}
+      </p>
     </div>
   )
 }
