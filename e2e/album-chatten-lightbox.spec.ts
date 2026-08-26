@@ -24,6 +24,9 @@ test.describe('Album — Fra chatten — lightbox (#623)', () => {
     page,
   }) => {
     await page.goto('/album/chatten')
+    // Ventetilstand FØR count(): uten den kan count() rekke å bli 0 fordi siden
+    // ikke er ferdig, og test.skip under ville gjort testen umulig å feile.
+    await expect(page.getByRole('heading', { name: 'Fra chatten' })).toBeVisible()
 
     const miniatyrer = page.locator('main button:has(img)')
     const antall = await miniatyrer.count()
@@ -53,6 +56,45 @@ test.describe('Album — Fra chatten — lightbox (#623)', () => {
     await expect(teller).toHaveText(forTekst ?? '')
 
     // 4: Escape lukker.
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+  })
+})
+
+// Chat-konsolideringen (#625): components/chat/Chat.tsx byttet ut den
+// enkle, navigasjonsløse BildeLightbox med samme AlbumLightbox som resten av
+// appen (dynamisk importert), for at pinch-zoom skal virke overalt. Med kun
+// ETT bilde sendt inn skal telleren og pil-knappene fortsatt være skjult
+// (bilder.length > 1-gatingen i AlbumLightbox) — denne testen beviser at
+// konsolideringen ikke lekket navigasjons-UI inn i chatten.
+test.describe('Chat — bilde-lightbox er nå AlbumLightbox (#625)', () => {
+  test.skip(
+    !harTestCreds(),
+    'TEST_EPOST/TEST_PASSORD mangler — se e2e/README.md og docs/test-instans.md',
+  )
+
+  test('klikk på et chat-bilde åpner AlbumLightbox uten teller, Escape lukker', async ({ page }) => {
+    await page.goto('/chat')
+    // Ventetilstand FØR count(): rekker ikke chat-feeden å rendre, er count 0 og
+    // testen skipper seg selv — den kunne da aldri feile. Med denne betyr et
+    // skip «ingen bilder i testdataene», ikke «rakk ikke å laste».
+    await expect(page.getByPlaceholder('Skriv en melding…')).toBeVisible()
+
+    const bildeKnapp = page.getByRole('button', { name: 'Vis bilde i full skjerm' })
+    const antall = await bildeKnapp.count()
+    test.skip(
+      antall < 1,
+      'Fant ingen bilder i klubb-chatten på test-instansen — trenger minst ett for å teste lightboxen (#625).',
+    )
+
+    const dialog = page.getByRole('dialog', { name: 'Bilde i full skjerm' })
+    await bildeKnapp.first().click()
+    await expect(dialog).toBeVisible()
+
+    // Ett bilde sendt inn til AlbumLightbox -> ingen teller, ingen piler.
+    await expect(dialog.getByText(/^\d+ \/ \d+$/)).toHaveCount(0)
+    await expect(dialog.getByRole('button', { name: 'Neste bilde' })).toHaveCount(0)
+
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
   })

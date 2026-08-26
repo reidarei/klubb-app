@@ -192,9 +192,12 @@ export default function BildeKommentarSheet({
 
   const innhold = (
     <div
-      // Stopper touch her — hindrer at et sveip inne i sheeten (f.eks. i
-      // meldingslisten) treffer AlbumLightboxens swipe-håndtering og bytter
-      // bilde under brukeren.
+      // Teknisk overflødig siden #625: AlbumLightboxens gest-handlere bor nå
+      // på zoomLag-diven (et søsken av denne sheeten i React-treet, ikke en
+      // ancestor), så React sin (tre-baserte, ikke DOM-baserte) event-bobling
+      // når dem uansett aldri. Latt stå som defensiv rest — historisk stoppet
+      // den et sveip inne i sheeten fra å bytte bilde under brukeren, den
+      // gang swipe-håndteringen lå på selve overlayet (en faktisk ancestor).
       onTouchStart={e => e.stopPropagation()}
       style={{
         position: 'fixed',

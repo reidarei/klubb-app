@@ -303,7 +303,15 @@ export default function ChatMeldingRad({
                   display: 'block',
                   padding: 0,
                   border: 'none',
-                  background: 'none',
+                  // Plassholder-plate: laster ikke <img>-en (nede nett, R2-feil),
+                  // rendrer den 0×0 og knappen ville kollapset til en usynlig,
+                  // uklikkbar flate. Min-målene + fargen gir en synlig, trykkbar
+                  // tom bilderute i stedet. Et bilde som laster dekker plata helt
+                  // (samme radius), så normaltilfellet ser uendret ut.
+                  minWidth: 120,
+                  minHeight: 90,
+                  borderRadius: 8,
+                  background: 'var(--foto-tom-bg)',
                   margin: m.innhold ? '0 0 8px' : 0,
                   cursor: 'zoom-in',
                   maxWidth: '100%',

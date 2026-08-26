@@ -82,6 +82,18 @@
   /* Lett overlay på bilder/flater inni innhold (f.eks. foto-grid "+N"-badge) */
   --overlay-soft: rgba(0, 0, 0, 0.5);
 
+  /* Bildevisning (AlbumLightbox) — helt opak, bevisst tema-uavhengig: et foto
+   * skal stå alene, ikke over app-innhold som skinner igjennom (#625).
+   * Bevisst IKKE --overlay-backdrop: den deles med BildeCropper og
+   * RentefordelingBoks, der kontekst bak scrimen er poenget. */
+  --lightbox-backdrop: #000;
+  /* Kontrollene oppå backdropen (X, teller, piler, handlinger) — tema-uavhengig
+   * av samme grunn: forgrunnen må følge bakgrunnen. --text-primary er #1c1b16 i
+   * lyst tema, som gir ~1,05:1 mot #000 — glyfene forsvant nesten helt, og bare
+   * 1 px-ringen skilte X-knappen fra bakgrunnen (#625). Overstyres bevisst
+   * hverken i dark eller light. */
+  --lightbox-foreground: #f5f5f7;
+
   /* Shadow */
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
   /* Popover-skygge (kontekstmenyer, reaksjons-picker, FAB-meny) */
@@ -249,6 +261,8 @@
   --overlay-control-bg: rgba(22, 20, 15, 0.62);
   --overlay-control-ring: rgba(255, 255, 255, 0.30);
   --overlay-soft: rgba(22, 20, 15, 0.45);
+  /* --lightbox-backdrop varmes bevisst IKKE opp her — den arver #000 fra
+   * :root uansett tema, se begrunnelse der (#625). */
 
   /* Skygge — varm og mykere */
   --shadow-floating: 0 4px 16px rgba(60, 50, 30, 0.10);

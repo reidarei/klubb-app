@@ -319,7 +319,7 @@ Alle lagrede bilde- og video-URL-er skal gjennom `bildeSrc()` i `lib/bilde-utils
 
 **Dekker `<video src>` på lik linje** med `<Image>`/`<img>`.
 
-**Kalles i komponenten som eier `src=`, ikke hos den som sender URL-en videre som prop.** Blad-komponenter som `BildeLightbox`, `BildeBunke` og `KommentarMiniatyr` kaller `bildeSrc()` selv — kallere lenger oppe i treet sender fortsatt rå `bilde_url` videre som prop, akkurat som før.
+**Kalles i komponenten som eier `src=`, ikke hos den som sender URL-en videre som prop.** Blad-komponenter som `AlbumLightbox`, `BildeBunke`, `MiniBunke` (i `EuropaKart.tsx`) og `KommentarMiniatyr` (i `KommentarerPaaKort.tsx`) kaller `bildeSrc()` selv — kallere lenger oppe i treet sender fortsatt rå `bilde_url` videre som prop, akkurat som før. (`BildeLightbox` er slettet — `AlbumLightbox` er nå eneste fullskjerm-bildevisning i appen.)
 
 **`blob:`-URL-er passerer uendret** — de er lokale forhåndsvisninger i opplastingsflyten og treffer aldri R2. Funksjonen må aldri nekte dem. Hvorvidt kallstedet *skal* kalle `bildeSrc()` avgjøres av hva som kan komme inn på samme variabel — ikke av skjønn:
 

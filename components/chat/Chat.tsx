@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { createClient } from '@/lib/supabase/client'
 import {
   sendChatMelding,
@@ -11,7 +12,6 @@ import { konfigFor, type ChatScope as ChatScopeKonfig } from '@/lib/chat-konfig'
 import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
-import BildeLightbox from '@/components/ui/BildeLightbox'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import {
   beregnMentionSøk,
@@ -26,6 +26,15 @@ import { useKeyboardOffset } from './hooks/useKeyboardOffset'
 import { useBildeOpplasting } from './hooks/useBildeOpplasting'
 import { useChatReaksjoner } from './hooks/useChatReaksjoner'
 import { useChatMeldinger } from './hooks/useChatMeldinger'
+
+// Dynamisk import: AlbumLightbox drar med seg BildeKommentarSheet og
+// AlbumBildeReaksjoner (→ chat-hooks, mention-velger, browser-supabase-
+// klienten). Chatten sender verken albumId, brukerId eller profiler til den
+// (se lightboxSrc-bruken lenger ned), så statisk import ville lagt død JS i
+// initial bundle for denne siden. Overlayet vises uansett først etter et
+// klikk, så det er ingen fossefall-kostnad ved å hente det da. Samme mønster
+// som ChatBildeGalleri.tsx (#623/#625).
+const AlbumLightbox = dynamic(() => import('@/components/album/AlbumLightbox'), { ssr: false })
 
 // ChatScope er sentralt definert i lib/chat-konfig.ts og re-eksportert her
 // for kall-ergonomi (eksisterende callsites importerer fra Chat.tsx).
@@ -678,7 +687,19 @@ export default function Chat({
       </div>
 
       {lightboxSrc && (
-        <BildeLightbox src={lightboxSrc} onLukk={() => setLightboxSrc(null)} />
+        // id settes til URL-en: den brukes kun av reaksjons-/kommentar-/
+        // admin-stiene i AlbumLightbox, som alle er gated av props chatten
+        // ikke sender (albumId, brukerId, profiler, kanRedigere) — så
+        // verdien har ingen betydning her utover å være en stabil nøkkel.
+        // lukkVedTrykk gjenskaper BildeLightbox sin gamle "klikk hvor som
+        // helst for å lukke"-oppførsel i tillegg til X-knappen AlbumLightbox
+        // alltid viser.
+        <AlbumLightbox
+          bilder={[{ id: lightboxSrc, bilde_url: lightboxSrc }]}
+          startIndex={0}
+          onLukk={() => setLightboxSrc(null)}
+          lukkVedTrykk
+        />
       )}
     </div>
   )
