@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { finnInnsender, erTaptAppInnspill } from '@/lib/innspill-kobling'
 import { sendVarsel } from '@/lib/varsler'
 import { formaterDato } from '@/lib/dato'
 import { BASE_URL, GITHUB_ONSKE_LABEL } from '@/lib/config'
@@ -79,7 +80,11 @@ export async function POST(request: Request) {
     // selv (via oppretterId under). Spørringen lyktes, så feil-grenen over
     // fanger det ikke — uten denne linjen forsvinner det stille.
     if (adminIder.length === 0) logg.warn('github.webhook.mottakere.tomme', {})
-    const oppretterId = issue.body?.match(/<!-- profil_id:([a-f0-9-]+) -->/)?.[1]
+    // Ved «opened» er DB-raden ofte ikke skrevet ennå: bli-utvikler-ruten
+    // inserter først etter at GitHub har svart på opprettelsen, og webhooken
+    // kan komme først. Body-markøren er derfor normalen her — ikke et avvik
+    // slik en kun_body-warn i closed-grenen under ville antydet.
+    const { profilId: oppretterId } = await finnInnsender(admin, issue)
     const mottakere = oppretterId ? [...adminIder, oppretterId] : adminIder
 
     await sendVarsel({
@@ -97,10 +102,44 @@ export async function POST(request: Request) {
 
   // Ønske lukket — varsle innsenderen
   if (payload.action === 'closed') {
-    const match = issue.body?.match(/<!-- profil_id:([a-f0-9-]+) -->/)
-    if (!match) return NextResponse.json({ ok: true, info: 'Ingen profil_id funnet' })
+    const { profilId, kunFraBody, oppslagFeilet } = await finnInnsender(admin, issue)
 
-    const profilId = match[1]
+    if (!profilId) {
+      if (oppslagFeilet) {
+        // «Vi vet ikke», ikke «koblingen er tapt»: raden finnes sannsynligvis,
+        // det var spørringen som røk. 500 er det ærlige svaret — leveringen
+        // markeres rød hos GitHub og kan redeliveres manuelt, som er eneste
+        // sjanse til å redde varselet (GitHub retryer ikke selv). Å logge
+        // kobling.tapt her ville løyet; kobling.oppslag.feilet er allerede
+        // logget og bærer alarmen (#632).
+        return NextResponse.json({ feil: 'Kunne ikke slå opp avsender' }, { status: 500 })
+      }
+
+      // Skiller «issue skrevet direkte i GitHub, ingen kobling var ventet»
+      // fra «koblingen gikk tapt» — se erTaptAppInnspill() for hvorfor
+      // diskriminatoren er issuets alder og ikke overskriften i teksten.
+      if (!erTaptAppInnspill(issue)) {
+        return NextResponse.json({ ok: true, skipped: 'ikke-fra-appen' })
+      }
+
+      // Koblingen mangler helt (verken DB-rad eller body-markør) for et
+      // issue som tydelig kommer fra appen — et medlem sitter uten varsel om
+      // at innspillet hans er levert. 422, ikke 500: en retry ville aldri
+      // funnet koblingen, den er borte for godt (#632).
+      await logg.feil(
+        'github.webhook.kobling.tapt',
+        new Error('Ingen innspill_kobling-rad og ingen profil_id-markør i body'),
+        { ctx: { issue_nummer: issue.number } },
+      )
+      return NextResponse.json({ ok: false, feil: 'Kunne ikke finne avsender' }, { status: 422 })
+    }
+
+    if (kunFraBody) {
+      // DB-koblingen manglet, men body-markøren reddet den — forventet for
+      // issues opprettet før koblingstabellen. Verdt å se i loggen uten at
+      // det skal telle som en feil.
+      logg.warn('github.webhook.kobling.kun_body', { issue_nummer: issue.number })
+    }
 
     let oppsummering = 'Ønsket ditt er håndtert!'
     if (issue.comments > 0 && issue.comments_url) {

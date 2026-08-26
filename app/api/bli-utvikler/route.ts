@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { GITHUB_REPO, GITHUB_ONSKE_LABEL } from '@/lib/config'
 import { logg } from '@/lib/logg'
@@ -57,6 +58,20 @@ export async function POST(request: Request) {
     const feil = await res.text()
     await logg.feil('bli-utvikler.issue.feilet', new Error(feil))
     return NextResponse.json({ feil: 'Kunne ikke opprette ønske' }, { status: 500 })
+  }
+
+  // Durabel kobling (#632) — primærkilde for hvem som skal varsles når
+  // issuet lukkes. Markøren i body (over) blir stående som fallback, men
+  // overlever ikke en redigering av issue-teksten slik denne raden gjør.
+  const { number } = (await res.json()) as { number: number }
+  const admin = createAdminClient()
+  const { error: koblingFeil } = await admin
+    .from('innspill_kobling')
+    .insert({ issue_nummer: number, profil_id: user.id })
+  if (koblingFeil) {
+    // Ikke kritisk for selve innsendingen — issuet er opprettet og markøren
+    // i body dekker fallback. Logges så tapet ikke drukner stille.
+    await logg.feil('bli-utvikler.kobling.feilet', koblingFeil, { ctx: { profil_id: user.id, issue_nummer: number } })
   }
 
   return NextResponse.json({ ok: true })

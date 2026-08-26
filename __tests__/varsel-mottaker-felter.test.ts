@@ -35,6 +35,13 @@ function lagAdminKlient(tabellResultater: Record<string, unknown>) {
         return chain
       })
     }
+    // Brukt av finnInnsender() i webhook-ruten (innspill_kobling-oppslaget,
+    // #632). Faller tilbake til «ingen rad» hvis testen ikke har konfigurert
+    // et resultat for tabellen — samme nøytrale default som .then() under.
+    chain.maybeSingle = vi.fn(() => {
+      kall.push(['maybeSingle'])
+      return Promise.resolve(resultat ?? { data: null, error: null })
+    })
     chain.then = (resolve: (v: unknown) => void) => Promise.resolve(resultat).then(resolve)
     return chain
   }

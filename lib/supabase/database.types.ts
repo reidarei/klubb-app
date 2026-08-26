@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -731,6 +731,32 @@ export type Database = {
           verdi?: number
         }
         Relationships: []
+      }
+      innspill_kobling: {
+        Row: {
+          issue_nummer: number
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          issue_nummer: number
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          issue_nummer?: number
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "innspill_kobling_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kaaring_vinnere: {
         Row: {

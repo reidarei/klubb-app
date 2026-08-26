@@ -1,8 +1,14 @@
 // Hjelpere for å hente og parse GitHub-issues som klubbens «innspill».
-// Filtrerer på `ønske`-label og plukker ut profil_id fra HTML-kommentar i
-// issue-body (samme mønster som webhooken bruker).
+// Filtrerer på `ønske`-label. Koblingen til avsenderen leses primært fra
+// innspill_kobling (durabel, overlever redigering av issue-teksten, #632) —
+// HTML-kommentaren i body er fallback for issues opprettet før migrasjon 136,
+// eller hvis DB-oppslaget selv feiler. Parsingen bor i lib/innspill-kobling.ts
+// slik at denne siden og webhooken aldri kan tolke samme markør ulikt.
 
 import { githubIssuesUrl } from '@/lib/config'
+import { createServerClient } from '@/lib/supabase/server'
+import { parseProfilIdFraBody } from '@/lib/innspill-kobling'
+import { logg } from '@/lib/logg'
 
 const TOKEN = process.env.GITHUB_TOKEN
 
@@ -35,11 +41,6 @@ function githubHeaders(): HeadersInit {
     Accept: 'application/vnd.github+json',
     ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
   }
-}
-
-function parseProfilId(body: string | null): string | null {
-  if (!body) return null
-  return body.match(/<!--\s*profil_id:([a-f0-9-]+)\s*-->/)?.[1] ?? null
 }
 
 function ryddInnhold(body: string | null): string {
@@ -77,8 +78,11 @@ export async function hentInnspill(profilId?: string): Promise<Innspill[]> {
   // GitHub inkluderer pull requests i /issues — filtrer bort
   const kunIssues = issues.filter(i => !('pull_request' in i))
 
+  const koblinger = await hentKoblinger()
+  const finnProfilId = (i: GitHubIssue) => koblinger.get(i.number) ?? parseProfilIdFraBody(i.body)
+
   const filtrerte = profilId
-    ? kunIssues.filter(i => parseProfilId(i.body) === profilId)
+    ? kunIssues.filter(i => finnProfilId(i) === profilId)
     : kunIssues
 
   // Hent siste kommentar for lukkede issues (parallelt)
@@ -90,11 +94,34 @@ export async function hentInnspill(profilId?: string): Promise<Innspill[]> {
       status: i.state,
       opprettet: i.created_at,
       lukket: i.closed_at,
-      profilId: parseProfilId(i.body),
+      profilId: finnProfilId(i),
       svar: i.state === 'closed' ? await hentSisteKommentar(i) : null,
       githubUrl: i.html_url,
     })),
   )
 
   return medSvar
+}
+
+// Ett samlet oppslag mot innspill_kobling i stedet for ett per issue (#632).
+// Fail-open: feiler spørringen, faller alle issues tilbake til
+// body-markøren via finnProfilId() over — samme mønster som
+// innspill.profiler.oppslag.feilet.
+async function hentKoblinger(): Promise<Map<number, string>> {
+  // Bruker-kontekst, ikke service_role: RLS-policyen på innspill_kobling
+  // (`profil_id = auth.uid() or er_admin()`) gjør nøyaktig den filtreringen
+  // denne siden trenger — et medlem ser sine egne rader, admin ser alle. Å
+  // lese hele tabellen med service_role ville omgått vakten vi nettopp bygde.
+  // Andres issues faller da til body-fallbacken og filtreres bort som før.
+  const supabase = await createServerClient()
+  const { data, error } = await supabase
+    .from('innspill_kobling')
+    .select('issue_nummer, profil_id')
+
+  if (error) {
+    await logg.feil('innspill.koblinger.oppslag.feilet', error)
+    return new Map()
+  }
+
+  return new Map((data ?? []).map(rad => [rad.issue_nummer, rad.profil_id]))
 }

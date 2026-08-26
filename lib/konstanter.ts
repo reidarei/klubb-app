@@ -247,6 +247,19 @@ export const EPOST_BUDSJETT_VINDU_TIMER = 24
 // over dette er reelt tapt kontakt.
 export const DRA_NED_PING_TIMEOUT_MS = 6000
 
+// Tidspunktet koblingstabellen `innspill_kobling` ble tatt i bruk (migrasjon
+// 136, kjørt mot prod 2026-08-26 19:47 UTC). Fra og med da skriver
+// innsendings-ruten alltid en kobling-rad, så «ingen rad» på et nyere
+// ønske-issue betyr at det ikke kom fra appen — ikke at koblingen er tapt.
+// Brukes av lib/innspill-kobling.ts som diskriminator i stedet for å tolke
+// overskriften i issue-teksten. Se #632.
+//
+// Merk det smale gapet mellom migrasjonen og deployen av koden som skriver
+// raden: app-issues fra det vinduet har fortsatt markøren i body, så de
+// dekkes av fallbacken. En fersk instans har ingen eldre issues i det hele
+// tatt, og treffer aldri fallback-grenen.
+export const INNSPILL_KOBLING_INNFOERT = new Date('2026-08-26T19:47:00Z')
+
 // Ferskhetsvindu for push-klikk-URL-en lagret i Cache Storage (#626).
 // public/sw.js er en statisk fil og kan ikke importere denne konstanten —
 // literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster

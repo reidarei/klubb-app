@@ -86,6 +86,11 @@
 //   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
 //   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
 //   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
+//   bli-utvikler.kobling.feilet — insert i innspill_kobling feiler etter opprettet issue, markøren i body dekker fallback (#632)
+//   github.webhook.kobling.oppslag.feilet — innspill_kobling-oppslag feiler; faller tilbake til body-markøren (#632)
+//   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)
+//   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
+//   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -111,6 +116,11 @@ const KONTEKST_WHITELIST = new Set([
   // varsel.chat.fanout.treg (#612), men generisk nok til gjenbruk av
   // fremtidige latency-målinger.
   'ms',
+  // Rent tall (GitHub-issuenummer) — ingen PII. Gjør en tapt kobling (#632)
+  // sporbar til riktig issue i stdout-linja og i Sentry-konteksten. Merk at
+  // det IKKE når feil_logg.kontekst: persisterFeilLogg() skriver kun
+  // { code, tabell, navn }, og den kontrakten utvides ikke her.
+  'issue_nummer',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
