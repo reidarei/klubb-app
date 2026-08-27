@@ -22,9 +22,9 @@ import type { Endring } from '@/lib/endringslogg'
 // Ingen «trykk for å se det under Innspill»-CTA i brødteksten: pushen har
 // allerede knappTekst «Se svaret», og den samme strengen rendres nå ordrett
 // PÅ /innspill — der ville en oppfordring om å gå dit vært selvmotsigende.
-export const INNSPILL_HANDTERT_TITTEL = 'Innspillet ditt er håndtert'
+export const INNSPILL_HANDTERT_TITTEL = 'Takk for innspillet'
 export const INNSPILL_HANDTERT_MELDING =
-  'Takk for innspillet — det er ferdig behandlet.'
+  'Takk for innspillet! Vi har sett på det og lukket saken.'
 
 export const INNSPILL_AVSLUTTET_TITTEL = 'Innspillet ditt er avsluttet'
 export const INNSPILL_AVSLUTTET_MELDING =
@@ -50,9 +50,11 @@ export function finnEndringForInnspill(endringer: Endring[], issueNummer: number
 // skal ikke også avkortes her. /innspill klipper ikke i det hele tatt, og er
 // derfor stedet hele teksten — versjonen inkludert — faktisk kan leses.
 //
-// Rekkefølgen (endring FØRST, takk SIST) er ikke smak: varsel-lista klipper
-// til nøyaktig 2 linjer og iOS viser 2-4 på låseskjermen. Med takk først
-// faller nettopp det medlemmet ba om — hva som ble endret — utenfor klippet.
+// Takken står først og KORT, på samme linje som endringsteksten. Reidar ba om
+// takk tidlig. En kort takk foran koster noen få tegn og dytter derfor ikke
+// selve endringen ut av klippet (varsel-lista viser 2 linjer, iOS 2-4). Hadde
+// takken vært en egen setning på egen linje, ville den spist hele klippet og
+// medlemmet sett høflighet i stedet for hva han faktisk fikk.
 export function byggInnspillSvar(
   endring: Endring | null,
   stateReason?: string | null,
@@ -60,7 +62,7 @@ export function byggInnspillSvar(
   if (endring) {
     return {
       tittel: INNSPILL_PA_PLASS_TITTEL,
-      melding: `${endring.tekst}\n\nDette er ute i appen fra ${endring.versjon}. Takk for at du er med på å utvikle appen med tydelige forbedringsinnspill!`,
+      melding: `Takk for innspillet! ${endring.tekst}\n\nUte i appen fra ${endring.versjon}.`,
     }
   }
 

@@ -12,6 +12,9 @@ import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 import { INNSPILL_KOBLING_INNFOERT } from '@/lib/konstanter'
+// Importeres i stedet for å dupliseres: teksten eies av lib/innspill-svar.ts,
+// og en test som gjentar strengen ville bare pinnet sin egen kopi.
+import { INNSPILL_HANDTERT_TITTEL, INNSPILL_HANDTERT_MELDING } from '@/lib/innspill-svar'
 // Ikke mocket — ren funksjon. Brukes til å bygge den FORVENTEDE strengen, så
 // testen pinner at ruten sender teksten uavkortet uten å duplisere ordlyden
 // (den er pinnet for seg i __tests__/innspill-svar.test.ts).
@@ -382,7 +385,8 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
     expect(mockSendVarsel).toHaveBeenCalledWith(
       expect.objectContaining({
         mottakere: ['db-profil-999'],
-        tittel: 'Innspillet ditt er håndtert',
+        tittel: INNSPILL_HANDTERT_TITTEL,
+        melding: INNSPILL_HANDTERT_MELDING,
       }),
     )
     // Versjonen må være med: den er det eneste som i ettertid skiller «glemt

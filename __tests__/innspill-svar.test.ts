@@ -73,16 +73,18 @@ describe('byggInnspillSvar', () => {
     expect(tittel).toBe(INNSPILL_PA_PLASS_TITTEL)
   })
 
-  // Rekkefølgen er ikke smak: varsel-lista klipper til 2 linjer, så en takk
-  // først ville dyttet nettopp det medlemmet spurte om ut av klippet.
-  // Kommentaren i lib/innspill-svar.ts sier hvorfor — denne håndhever det.
-  it('endringsteksten står FØR takken, ikke etter', () => {
+  // Takken skal stå tidlig, men KORT og på samme linje som endringen — begge
+  // må inn i 2-linjers-klippet. En lang takk på egen linje ville spist klippet
+  // og skjult hva medlemmet faktisk fikk.
+  it('takken står først, men på samme linje som endringen', () => {
     const endring: Endring = { versjon: 'V3.5.60', dato: '2026-08-27', tekst: 'Zoom er på plass', innspill: [625] }
     const { melding } = byggInnspillSvar(endring)
-    const iEndring = melding.indexOf('Zoom er på plass')
     const iTakk = melding.toLowerCase().indexOf('takk')
-    expect(iEndring).toBe(0)
-    expect(iTakk).toBeGreaterThan(iEndring)
+    const iEndring = melding.indexOf('Zoom er på plass')
+    expect(iTakk).toBe(0)
+    expect(iEndring).toBeGreaterThan(iTakk)
+    // Ingen linjeskift mellom takk og endring — begge må inn i 2-linjers-klippet.
+    expect(melding.slice(iTakk, iEndring)).not.toContain('\n')
   })
 
   it('meldingen beriker aldri med teknisk kontekst utover det oppføringsteksten selv sier', () => {
