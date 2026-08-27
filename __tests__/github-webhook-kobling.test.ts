@@ -167,7 +167,15 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
     expect(mockSendVarsel).toHaveBeenCalledWith(
       expect.objectContaining({ mottakere: ['11111111-1111-1111-1111-111111111111'] }),
     )
-    expect(mockLoggFeil).not.toHaveBeenCalled()
+    // Presis assertion: denne testen handler om at KOBLINGEN ble funnet via
+    // markøren. At issuet mangler endringslogg-oppføring er en annen sak, og
+    // logges legitimt her — en bred `not.toHaveBeenCalled()` ville koblet
+    // testen til noe den ikke tester.
+    expect(mockLoggFeil).not.toHaveBeenCalledWith(
+      'github.webhook.kobling.tapt',
+      expect.anything(),
+      expect.anything(),
+    )
   })
 
   it('reformatert markør uten mellomrom parses også (felles regex, #632-review)', async () => {
@@ -186,7 +194,11 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
     expect(mockSendVarsel).toHaveBeenCalledWith(
       expect.objectContaining({ mottakere: ['22222222-2222-2222-2222-222222222222'] }),
     )
-    expect(mockLoggFeil).not.toHaveBeenCalled()
+    expect(mockLoggFeil).not.toHaveBeenCalledWith(
+      'github.webhook.kobling.tapt',
+      expect.anything(),
+      expect.anything(),
+    )
   })
 
   it('gammelt app-issue, verken DB-rad eller markør → logg.feil + 422, ingen varsling', async () => {
@@ -329,8 +341,12 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
       }),
     )
     expect(forventet.melding).toContain('V3.5.58')
-    expect(mockLoggWarn).not.toHaveBeenCalledWith(
+    // Tre argumenter: logg.feil kalles med (event, Error, opts). En matcher
+    // med bare to ville aldri matchet et reelt kall, og testen ville passert
+    // selv om eventet FAKTISK ble logget (#636-review).
+    expect(mockLoggFeil).not.toHaveBeenCalledWith(
       'github.webhook.innspill.uten_endringslogg',
+      expect.anything(),
       expect.anything(),
     )
   })
@@ -391,9 +407,17 @@ describe('/api/github/webhook – closed varsler via innspill_kobling (#632)', (
     )
     // Versjonen må være med: den er det eneste som i ettertid skiller «glemt
     // merkelapp» fra «issuet ble lukket før deployen var ute» (#633-review).
-    expect(mockLoggWarn).toHaveBeenCalledWith(
+    // logg.feil, ikke warn: et brukerinnspill lukket som gjennomført uten
+    // merket oppføring er kontraktbrudd — det skal vekke noen, ikke dempes.
+    expect(mockLoggFeil).toHaveBeenCalledWith(
       'github.webhook.innspill.uten_endringslogg',
-      expect.objectContaining({ issue_nummer: 999, versjon: expect.stringMatching(/^V\d+\.\d+\.\d+$/) }),
+      expect.any(Error),
+      expect.objectContaining({
+        ctx: expect.objectContaining({
+          issue_nummer: 999,
+          versjon: expect.stringMatching(/^V\d+\.\d+\.\d+$/),
+        }),
+      }),
     )
   })
 })

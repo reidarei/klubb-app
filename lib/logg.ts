@@ -91,7 +91,7 @@
 //   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)
 //   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
 //   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
-//   github.webhook.innspill.uten_endringslogg — warn: lukket ønske uten merket endringslogg-oppføring, medlemmet får standardteksten. Fyrer IKKE på not_planned (normaltilstand); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
+//   github.webhook.innspill.uten_endringslogg — FEIL: brukerinnspill lukket som gjennomført uten merket endringslogg-oppføring. Et innspill skal leveres og kommenteres, eller avslås — aldri noe midt imellom, så dette er kontraktbrudd, ikke en normaltilstand. Fyrer IKKE på not_planned/duplicate (legitime utfall); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

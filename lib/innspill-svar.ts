@@ -22,9 +22,14 @@ import type { Endring } from '@/lib/endringslogg'
 // Ingen «trykk for å se det under Innspill»-CTA i brødteksten: pushen har
 // allerede knappTekst «Se svaret», og den samme strengen rendres nå ordrett
 // PÅ /innspill — der ville en oppfordring om å gå dit vært selvmotsigende.
+// Nødløsning, ikke en normaltilstand. Et brukerinnspill skal enten leveres og
+// kommenteres, eller avslås — det finnes ikke noe midt imellom. Havner vi her,
+// er kontrakten brutt (glemt merkelapp, lukket før deploy, eller feil
+// state_reason), og webhooken logger det som en feil. Teksten later derfor
+// ikke som alt er i orden; den gir mannen en vei videre i stedet.
 export const INNSPILL_HANDTERT_TITTEL = 'Takk for innspillet'
 export const INNSPILL_HANDTERT_MELDING =
-  'Takk for innspillet! Vi har sett på det og lukket saken.'
+  'Takk for innspillet! Saken er lukket hos oss. Er du usikker på hva som ble gjort, spør i chatten.'
 
 export const INNSPILL_AVSLUTTET_TITTEL = 'Innspillet ditt er avsluttet'
 export const INNSPILL_AVSLUTTET_MELDING =

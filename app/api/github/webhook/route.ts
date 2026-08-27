@@ -150,26 +150,38 @@ export async function POST(request: Request) {
     // ordningskravet: issuet skal lukkes ETTER at deployen er verifisert —
     // lukkes det før, leser webhooken forrige bundle og medlemmet får
     // standardteksten selv om oppføringen står klar i koden. Kravet står i
-    // CLAUDE.md § Policy: Varsler, og warn-en under er eneste deteksjon.
+    // CLAUDE.md § Policy: Varsler, og feil-eventet under er eneste deteksjon.
     const endring = finnEndringForInnspill(ENDRINGER, issue.number)
-    // Warn KUN når vi faktisk forventet en oppføring. GitHub sender
-    // 'completed', 'not_planned', 'duplicate' — eller null på eldre issues.
-    // Bare de to første betyr «dette ble gjennomført»; et avvist eller
-    // duplikat-lukket innspill har legitimt ingen oppføring. Positiv liste,
-    // ikke unntaksliste: en fjerde state_reason fra GitHub skal ikke gi
-    // warn-støy før noen har vurdert den. En warn som fyrer på normaltilstand
-    // blir trent bort, og fanger da heller ikke de to reelle årsakene den
-    // finnes for.
+    // Vi er inne i grenen der issuet HAR en avsender — altså et ekte
+    // brukerinnspill, ikke et av våre egne drifts-issues. For dem finnes det
+    // ingen mellomtilstand: et innspill blir enten levert og kommentert, eller
+    // avslått. Lukkes det som gjennomført uten en merket endringslogg-
+    // oppføring, er kontrakten brutt — det er ikke en normaltilstand vi skal
+    // dempe med en vag tekst.
+    //
+    // Derfor logg.feil, ikke warn: dette skal vekke noen. Tre årsaker gir
+    // samme utfall — merkelappen ble glemt, issuet ble lukket før deployen var
+    // ute, eller det burde vært lukket som «ikke planlagt».
+    //
+    // 'not_planned' og 'duplicate' er derimot legitime utfall og skal ikke
+    // fyre. Positiv liste, ikke unntaksliste: en fjerde state_reason fra
+    // GitHub skal ikke gi støy før noen har vurdert den.
     const forventetOppfoering = issue.state_reason === 'completed' || issue.state_reason == null
     if (!endring && forventetOppfoering) {
-      logg.warn('github.webhook.innspill.uten_endringslogg', {
-        issue_nummer: issue.number,
-        state_reason: issue.state_reason ?? null,
-        // Den deployede versjonen skiller de to årsakene i ettertid: dukker
-        // oppføringen senere opp i en NYERE versjon enn denne, ble issuet
-        // lukket før deploy. Dukker den aldri opp, ble merkelappen glemt.
-        versjon: VERSJON.versjon,
-      })
+      await logg.feil(
+        'github.webhook.innspill.uten_endringslogg',
+        new Error(`Innspill #${issue.number} lukket som gjennomført uten merket endringslogg-oppføring`),
+        {
+          ctx: {
+            issue_nummer: issue.number,
+            state_reason: issue.state_reason ?? null,
+            // Den deployede versjonen skiller årsakene i ettertid: dukker
+            // oppføringen senere opp i en NYERE versjon enn denne, ble issuet
+            // lukket før deploy. Dukker den aldri opp, ble merkelappen glemt.
+            versjon: VERSJON.versjon,
+          },
+        },
+      )
     }
     const { tittel, melding } = byggInnspillSvar(endring, issue.state_reason)
 
