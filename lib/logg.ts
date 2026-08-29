@@ -92,9 +92,13 @@
 //   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
 //   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
 //   github.webhook.innspill.uten_endringslogg — FEIL: brukerinnspill lukket som gjennomført uten merket endringslogg-oppføring. Et innspill skal leveres og kommenteres, eller avslås — aldri noe midt imellom, så dette er kontraktbrudd, ikke en normaltilstand. Fyrer IKKE på not_planned/duplicate (legitime utfall); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
+//   server.render.feilet        — feil kastet i server component / action / route handler, fanget av onRequestError. Bærer `digest` (koblingen til raden app/error.tsx skriver fra klienten) og en MASKERT melding — eneste sted vi persisterer meldingstekst, se loggRenderFeil() (#631)
+//   server.render.sesjon_utloept — warn: render-feilen var en død sesjon (PGRST301 / AUTH_INGEN_SESJON), ikke en programfeil. Egen event så den ikke drukner i server.render.feilet og ikke vekker døgnalarmen (#631)
+//   server.render.logging.feilet — warn (stdout only): loggRenderFeil() eller den dynamiske importen av lib/logg kastet inne i onRequestError. Siste skanse — vi står i Next sin feilhåndtering, så en throw her ville maskert den ekte feilen (#631)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
+import { maskerRadverdier } from '@/lib/sentry-scrub'
 import type { Json } from '@/lib/supabase/database.types'
 
 // ─── PII-SCRUBBING ──────────────────────────────────────────────────────────
@@ -276,12 +280,14 @@ function klassifiserTilgangsfeil(melding: string, code?: string): 'error' | 'war
 // fanger opp server-feil. Lukker hullet mellom de to feilkanalene beskrevet
 // i #492: Sentry er avhengig av at noen leser eposten, feil_logg driver en
 // bevist-i-drift daglig alarm.
-async function persisterFeilLogg(
+// Felles skrive-sti for alle feil_logg-rader fra serveren. Både
+// persisterFeilLogg() (logg.feil) og loggRenderFeil() (onRequestError) går
+// gjennom denne, slik at timeout-cappen, den tause catchen og 23505-
+// håndteringen ikke drifter fra hverandre mellom de to kanalene.
+async function skrivFeilLoggRad(
   event: string,
-  code: string | undefined,
-  tabell: string | undefined,
-  navn: string | undefined,
-  ctx?: Record<string, unknown>,
+  kontekst: Record<string, unknown>,
+  opts?: { profilId?: string | null; url?: string | null },
 ): Promise<void> {
   try {
     // Lazy import: ingen 'use client'-fil importerer @/lib/logg (verifisert),
@@ -289,33 +295,28 @@ async function persisterFeilLogg(
     const { createAdminClient } = await import('@/lib/supabase/admin')
     const admin = createAdminClient()
 
-    // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
-    // (arrangement_id, count, fingerprint, sample, status) er ikke del av
-    // kontrakten for denne tabellen. melding persisteres bevisst ALDRI:
-    // normaliserFeil() returnerer PostgREST-teksten rått, og den kan bære
-    // radverdier (f.eks. «Key (epost)=(x@y.no) already exists»).
-    const ctxScrubbet = scrubbet(ctx)
-    const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
-
     const { error } = await admin
       .from('feil_logg')
       .insert({
         event,
-        // logg.feil() har i dag bare denne ene veien fram hit — warn
-        // returnerer tidlig lenger opp i feil() og treffer aldri persist.
-        // Skriv nivået eksplisitt likevel fremfor å anta, i tilfelle en
-        // egen fatal-vei legges til senere.
         nivaa: 'error',
-        // navn (feilklassen) er med fordi code/tabell begge er undefined for en
-        // vanlig Error — raden ble da skrevet som `{}` og var verdiløs å lese.
-        kontekst: { code, tabell, navn } as Json,
-        profil_id: profilId,
+        kontekst: kontekst as Json,
+        profil_id: opts?.profilId ?? null,
+        // url settes kun når kallstedet faktisk har en rute. Å alltid sende
+        // `url: null` ville utvidet radformen logg.feil()-stien skriver, og
+        // den formen er pinnet i __tests__/logg.test.ts med vilje.
+        ...(opts?.url ? { url: opts.url } : {}),
       })
       // Hard cap: under pool-utmattelse skal ikke en logge-skriving legge
       // seg oppå trykket ved å vente ubegrenset på en ledig tilkobling.
       .abortSignal(AbortSignal.timeout(1000))
 
-    if (error) {
+    // 23505 er burst-dedupen i feil_logg_profil_event_minutt_uq (mig. 122),
+    // altså at vi allerede har en rad for (profil, event, minutt). Det er
+    // indeksen som gjør jobben sin, ikke en feil — logger vi den som feilet
+    // insert, blir stdout full av støy hver gang noe feiler to ganger på
+    // samme minutt.
+    if (error && error.code !== '23505') {
       // Ren stdout — IKKE logg.feil() her, det ville vært selv-rekursivt.
       console.log(JSON.stringify({ ts: naa(), nivaa: 'warn', event: 'logg.feillogg.insert.feilet', code: error.code }))
     }
@@ -324,6 +325,27 @@ async function persisterFeilLogg(
     // er verre enn feilen den prøvde å logge. Fanger både nettverksfeil og
     // AbortError fra timeouten over.
   }
+}
+
+async function persisterFeilLogg(
+  event: string,
+  code: string | undefined,
+  tabell: string | undefined,
+  navn: string | undefined,
+  ctx?: Record<string, unknown>,
+): Promise<void> {
+  // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
+  // (arrangement_id, count, fingerprint, sample, status) er ikke del av
+  // kontrakten for denne tabellen. melding persisteres bevisst ALDRI her:
+  // normaliserFeil() returnerer PostgREST-teksten rått, og den kan bære
+  // radverdier (f.eks. «Key (epost)=(x@y.no) already exists»).
+  // Render-feil er unntaket — se loggRenderFeil() under, som maskerer først.
+  const ctxScrubbet = scrubbet(ctx)
+  const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
+
+  // navn (feilklassen) er med fordi code/tabell begge er undefined for en
+  // vanlig Error — raden ble da skrevet som `{}` og var verdiløs å lese.
+  await skrivFeilLoggRad(event, { code, tabell, navn }, { profilId })
 }
 
 // ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
@@ -428,4 +450,79 @@ export const logg = {
       Sentry.captureException(error instanceof Error ? error : new Error(melding))
     })
   },
+}
+
+// ─── RENDER-FEIL (onRequestError) ────────────────────────────────────────────
+
+// Hvor mye av feilmeldingen vi tar vare på. Meldingene våre er korte
+// («Kunne ikke hente arrangementer: TypeError: fetch failed» ≈ 55 tegn), men
+// en rå PostgREST-melding med hint og details kan bli lang. Konstanten bor
+// her og ikke i lib/konstanter.ts fordi den er en ren logge-detalj — den
+// speiler ingen DB-constraint og hører ikke til domenet.
+const RENDER_MELDING_MAKS = 500
+
+/**
+ * Skriver en server-render-feil til feil_logg. Kalles fra `onRequestError` i
+ * instrumentation.ts, altså for feil kastet i server components, server
+ * actions og route handlers.
+ *
+ * **Hvorfor denne finnes:** `app/error.tsx` viser brukeren en `digest` — en
+ * djb2-hash av melding + stack — og klient-beaconen skriver den til feil_logg.
+ * Men ingenting lagret noen gang hva den hashen *var* en hash av. Serverfeilen
+ * gikk kun til Sentry, og `SENTRY_DSN` er env-styrt uten default, så en instans
+ * uten nøkkel hadde null server-side feilrapportering. Resultatet så vi i
+ * august 2026: 13 render-feil på forsiden over tre dager, med sju forskjellige
+ * digest-verdier og ingen mulighet til å lese hva som faktisk feilet. Se #631.
+ *
+ * **Meldingen persisteres her, i motsetning til i persisterFeilLogg().** Det er
+ * et bevisst unntak fra regelen over, og hviler på to ting: (1) meldingen går
+ * gjennom `maskerRadverdier()` — nøyaktig samme maske som allerede sendes til
+ * Sentry, altså til en tredjepart, så dette er strengt mindre eksponering enn
+ * det vi gjør i dag; (2) uten meldingen er raden verdiløs, for da vet vi bare
+ * at «en Error skjedde på /», som er akkurat det vi allerede visste.
+ * Utvid ALDRI dette unntaket til logg.feil()-stien uten samme vurdering —
+ * der er `melding` rå PostgREST-tekst som kan bære radverdier.
+ *
+ * Kaster aldri (skrivFeilLoggRad fanger alt): kalles fra Next sin
+ * feilhåndtering, og en logger som velter der ville skjult den ekte feilen.
+ */
+export async function loggRenderFeil(opts: {
+  error: unknown
+  /** Rute-mønsteret fra Next («/», «/arrangementer/[id]») — aldri en URL med query. */
+  rute?: string | null
+  /** Next sin `error.digest` — koblingen til raden klienten skriver fra app/error.tsx. */
+  digest?: string | null
+}): Promise<void> {
+  const { code, tabell, melding, navn } = normaliserFeil(opts.error)
+
+  // Samme klassifisering som logg.feil(): en død sesjon (PGRST301 /
+  // AUTH_INGEN_SESJON) er rutine når iOS spiser cookies, ikke en programfeil.
+  // Uten denne ville hver utløpte innlogging skrevet en error-rad og vekket
+  // døgnalarmen — nøyaktig regresjonen #602 og #604 rettet.
+  if (klassifiserTilgangsfeil(melding, code) === 'warn') {
+    logg.warn('server.render.sesjon_utloept', { code })
+    return
+  }
+
+  const maskert = maskerRadverdier(melding).slice(0, RENDER_MELDING_MAKS)
+
+  console.log(
+    JSON.stringify({
+      ts: naa(),
+      nivaa: 'error',
+      event: 'server.render.feilet',
+      code,
+      tabell,
+      navn,
+      digest: opts.digest,
+      rute: opts.rute,
+      melding: maskert,
+    }),
+  )
+
+  await skrivFeilLoggRad(
+    'server.render.feilet',
+    { code, tabell, navn, digest: opts.digest ?? null, melding: maskert },
+    { url: opts.rute ?? null },
+  )
 }

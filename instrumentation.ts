@@ -39,6 +39,62 @@ export async function register() {
 export async function onRequestError(
   ...args: Parameters<typeof import('@sentry/nextjs').captureRequestError>
 ) {
+  const [error, , context] = args
+
+  // feil_logg FØR Sentry, og bevisst UTENFOR SENTRY_DSN-guarden under:
+  // dette er den eneste server-feilkanalen som virker uten Sentry-nøkkel.
+  // Frem til #631 lå all server-side feilrapportering bak den guarden, så en
+  // instans uten DSN — og vi vet ikke sikkert at prod har en — logget ingenting
+  // i det hele tatt. `digest` tas med fordi Next setter den på feilen FØR den
+  // kaller hit (create-error-handler.js), og det er den eneste tråden tilbake
+  // til raden app/error.tsx skriver fra klienten.
+  //
+  // Next kaller ikke denne hooken for redirect(), notFound() eller avbrutte
+  // responser — de returnerer tidlig via getDigestForWellKnownError/isAbortError
+  // — så vi trenger ingen egen filtrering for dem her.
+  // .catch() selv om loggRenderFeil() er dokumentert som «kaster aldri»:
+  // vi står INNE i Next sin feilhåndtering, og en throw herfra ville lagt seg
+  // oppå — og kunne maskert — den ekte feilen vi nettopp prøvde å beskrive.
+  // Samme resonnement som CLAUDE.md § Policy: Varsler krever for sendVarsel()
+  // etter en committet tilstandsendring. Uten den ville dessuten selve
+  // dynamiske importen under (som kan feile ved cold start) tatt med seg
+  // Sentry-rapporteringen på veien ned.
+  await import('@/lib/logg')
+    .then(({ loggRenderFeil }) =>
+      loggRenderFeil({
+        error,
+        // routePath er rute-MØNSTERET («/arrangementer/[id]»), ikke den
+        // konkrete URL-en. Bevisst: en id i loggen er en radverdi vi ikke
+        // trenger, og Sentry-scrubbingen fjerner request.url av samme grunn.
+        rute: context?.routePath,
+        digest: (error as { digest?: string } | null)?.digest,
+      }),
+    )
+    .catch((loggFeil: unknown) => {
+      // Ren stdout — logg.feil() herfra ville vært sirkulært (den skriver til
+      // samme tabell som nettopp feilet).
+      //
+      // `ts` settes med new Date() og IKKE med naa() fra lib/dato, som er det
+      // resten av loggingen bruker: vi står i catch-en for at en dynamisk
+      // import feilet, og skal ikke gjøre siste skanse avhengig av enda en
+      // modul som kan feile på samme måte. Verdien er identisk — naa() er
+      // new Date().toISOString().
+      //
+      // Kun feilKLASSEN, aldri meldingen: en melding herfra kan stamme fra en
+      // videresendt PostgREST-feil og bære radverdier, og vi er utenfor
+      // maskerRadverdier() på dette punktet. Navnet er en konstant fra koden —
+      // samme resonnement som normaliserFeil() i lib/logg.ts bygger på.
+      // Uten det sto det bare «loggingen feilet», som ikke er til å feilsøke.
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          nivaa: 'warn',
+          event: 'server.render.logging.feilet',
+          navn: loggFeil instanceof Error ? loggFeil.name : typeof loggFeil,
+        }),
+      )
+    })
+
   if (!SENTRY_DSN) return
   const Sentry = await import('@sentry/nextjs')
   Sentry.captureRequestError(...args)

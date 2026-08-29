@@ -55,7 +55,10 @@ function erDroppetMelding(melding: string | undefined): boolean {
 // første indre parentes og lot etternavnet overleve. Over-maskering er riktig
 // feilretning her — flere «=(...)»-par på SAMME linje slås sammen til én
 // maske, altså for mye skjult, ikke for lite. Se #498-review (MINOR 4).
-function maskerRadverdier(melding: string): string {
+// Eksportert fordi lib/logg.ts bruker samme maske før render-feilmeldingen
+// skrives til feil_logg (#631). Masken må være ÉN implementasjon: to kopier
+// ville drevet fra hverandre, og den ene ville lekket det den andre skjulte.
+export function maskerRadverdier(melding: string): string {
   return melding.replace(/=\([^\n]*\)/g, '=(…)')
 }
 

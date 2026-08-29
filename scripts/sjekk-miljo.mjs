@@ -144,6 +144,12 @@ const variabler = [
   { navn: 'ANTHROPIC_API_KEY',         nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Anthropic API-nøkkel — KI-dato-uttrekk er av uten den' },
   { navn: 'ANTHROPIC_MODEL',           nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell for KI-kall (default: claude-haiku-4-5)' },
 
+  // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives
+  // server-feil fortsatt til feil_logg (lib/logg.ts), som er den kanalen
+  // døgnalarmen leser. Sto udokumentert her og i .env.example fram til #631,
+  // og da var det umulig å svare på om prod i det hele tatt hadde den satt.
+  { navn: 'SENTRY_DSN',                nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Sentry DSN — server/edge-feil sendes dit i tillegg til feil_logg' },
+
   // Base-URL
   { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL override (trengs normalt ikke — utledes fra KLUBB_DOMENE/VERCEL_URL)' },
 
