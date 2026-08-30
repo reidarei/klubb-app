@@ -86,7 +86,10 @@ const ALLE_PROFILER = [NILS, OLA, PER]
 // med .in('id', mottakere) per sending. lagChain ignorerer .in-filteret, så
 // vi trenger en egen chain som faktisk filtrerer for å kunne skille «Ola ble
 // varslet» fra «alle ble varslet».
-function profilChain() {
+// `profiler` overstyrbar (default ALLE_PROFILER) slik at kollisjonstesten
+// (#642-oppfølging: to profiler med samme fornavn) kan kjøre med sin egen fixture
+// uten å forstyrre standard-oppsettet resten av filen bruker.
+function profilChain(profiler: typeof ALLE_PROFILER = ALLE_PROFILER) {
   let idFilter: string[] | null = null
   const chain: Record<string, unknown> = {}
   for (const m of ['select', 'eq', 'gt', 'gte', 'lt', 'is', 'not', 'limit', 'order', 'neq']) {
@@ -97,7 +100,7 @@ function profilChain() {
     return chain
   })
   const resultat = () => ({
-    data: idFilter ? ALLE_PROFILER.filter(p => idFilter!.includes(p.id)) : ALLE_PROFILER,
+    data: idFilter ? profiler.filter(p => idFilter!.includes(p.id)) : profiler,
     error: null,
   })
   chain.then = (resolve: (v: unknown) => void) => Promise.resolve(resultat()).then(resolve)
@@ -651,5 +654,105 @@ describe('e-post-døgnbudsjett for chat', () => {
       expect.anything(),
       expect.objectContaining({ ctx: expect.objectContaining({ sample: 'chat_klubb' }) }),
     )
+  })
+})
+
+// ─── 16. Femte, valgfri opts-parameter: dedupNoekkel (#642) ──────────────────
+
+describe('sendChatVarsler – dedupNoekkel-opts', () => {
+  it('nøkkel oppgitt: mention- og broadcast-rader har samme dedup_noekkel', async () => {
+    const { rader } = standardOppsett()
+
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, med dagen!', 'avsender1', false, {
+      dedupNoekkel: 'bursdag-chat:barn1:2026:avsender1',
+    })
+
+    expect(rader).toHaveLength(2)
+    expect(rader.every(r => r.dedup_noekkel === 'bursdag-chat:barn1:2026:avsender1')).toBe(true)
+  })
+
+  it('nøkkel utelatt: dedup_noekkel er null på alle rader — menneskestien er uendret', async () => {
+    const { rader } = standardOppsett()
+
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+
+    expect(rader).toHaveLength(2)
+    expect(rader.every(r => r.dedup_noekkel === null)).toBe(true)
+  })
+})
+
+// ─── 17. Sjette, valgfri opts-parameter: nevnte (#642-oppfølging) ────────────
+
+describe('sendChatVarsler – nevnte-opts', () => {
+  it('nevnte oppgitt: kun de id-ene får mention, uavhengig av hva teksten inneholder', async () => {
+    const { rader } = standardOppsett()
+
+    // Teksten inneholder ingen «@» i det hele tatt — finnNevnte ville gitt
+    // tom liste. opts.nevnte overstyrer likevel og treffer Ola eksplisitt.
+    await sendChatVarsler({ type: 'klubb' }, 'Gratulerer med dagen, ingen tagg her', 'avsender1', false, {
+      nevnte: ['user1'],
+    })
+
+    expect(rader.find(r => r.profil_id === 'user1')?.type).toBe('mention')
+    expect(rader.find(r => r.profil_id === 'user2')?.type).toBe('chat_klubb')
+  })
+
+  it('nevnte med avsenderen selv i lista: avsenderen filtreres bort', async () => {
+    const { rader } = standardOppsett()
+
+    await sendChatVarsler({ type: 'klubb' }, 'Hei gutta', 'avsender1', false, {
+      nevnte: ['user1', 'avsender1'],
+    })
+
+    // Avsenderen skal aldri motta noe varsel om egen melding, uansett om han
+    // (feilaktig) står i en eksplisitt mention-liste.
+    expect(rader.some(r => r.profil_id === 'avsender1')).toBe(false)
+    expect(rader.find(r => r.profil_id === 'user1')?.type).toBe('mention')
+  })
+
+  it('nevnte utelatt: uendret oppførsel — finnNevnte styrer fortsatt (menneskestien)', async () => {
+    const { rader } = standardOppsett()
+
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+
+    expect(rader.find(r => r.profil_id === 'user1')?.type).toBe('mention')
+    expect(rader.find(r => r.profil_id === 'user2')?.type).toBe('chat_klubb')
+  })
+
+  it('kollisjon: to profiler med samme fornavn — kun den eksplisitt nevnte får mention', async () => {
+    // To profiler med samme fornavn matcher begge et rent «@Per» i
+    // finnNevnte()s tekstmatching (.includes()). Med en eksplisitt nevnte-
+    // liste (slik bursdagsgratulasjon.ts nå kaller inn) skal KUN den ene få
+    // mention — den andre er en vanlig broadcast-mottaker, ikke feilaktig
+    // tagget fordi navnet hans inneholder samme fornavn.
+    // Begge har kallenavn ('Per') ulikt fullt navn, slik ekte profiler har.
+    const PER_HANSEN = { id: 'per-hansen', navn: 'Per Hansen', visningsnavn: 'Per', epost: 'ph@test.no' }
+    const PER_OLSEN = { id: 'per-olsen', navn: 'Per Olsen', visningsnavn: 'Per', epost: 'po@test.no' }
+    const profiler = [NILS, PER_HANSEN, PER_OLSEN]
+    const { rader, insertSpy } = insertSpyOppsett()
+
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'profiles') return profilChain(profiler)
+      if (tabell === 'varsel_innstillinger') return innstillingerChain()
+      if (tabell === 'varsel_preferanser') return lagChain([])
+      if (tabell === 'push_subscriptions') return lagChain([])
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      return lagChain([])
+    })
+
+    await sendChatVarsler(
+      { type: 'klubb' },
+      'Gratulerer med dagen @Per Hansen! 🎉',
+      'avsender1',
+      false,
+      { nevnte: ['per-hansen'] },
+    )
+
+    expect(rader.find(r => r.profil_id === 'per-hansen')?.type).toBe('mention')
+    expect(rader.find(r => r.profil_id === 'per-olsen')?.type).toBe('chat_klubb')
   })
 })

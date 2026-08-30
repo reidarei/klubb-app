@@ -1396,6 +1396,23 @@ export async function sendChatVarsler(
   tekst: string | null,
   avsenderId: string,
   harBilde: boolean,
+  // `dedupNoekkel` er `undefined` for en menneskeskrevet melding (ingen
+  // dedup — hver post er per definisjon ny). En automatisk kaller (i dag
+  // kun bursdagsgratulasjon, #642) oppgir samme nøkkel til BEGGE benene
+  // under: indeksen er (dedup_noekkel, profil_id), så en mottaker får maks
+  // én rad uansett hvilket ben som traff ham — det er dét som gjør «legg de
+  // nevnte tilbake i broadcasten ved et kast» trygt ved retry fra et senere slot.
+  //
+  // `nevnte` overstyrer tekst-matchingen (finnNevnte) med en eksplisitt
+  // mottakerliste. Tekstmatching er en heuristikk som bare trengs for
+  // fritekst fra et menneske — en automatisk avsender som allerede kjenner
+  // mottakerens id skal ikke gå veien om navnematching (en tagg på et fornavn
+  // er tvetydig når flere medlemmer deler det; en profil-id er det ikke).
+  // Merk skillet mellom utelatt og tom: `undefined` = «bruk tekstmatching»,
+  // mens `[]` = «ingen skal mentions» og slår tekstmatchingen HELT av. Det er
+  // med vilje — en automatisk kaller som vet at ingen skal tagges skal kunne
+  // si det, uten at en @-lignende streng i teksten overstyrer ham.
+  opts: { dedupNoekkel?: string; nevnte?: string[] } = {},
 ): Promise<void> {
   const start = Date.now()
   const admin = createAdminClient()
@@ -1426,7 +1443,15 @@ export async function sendChatVarsler(
   // en broadcast alle 16 andre ser samme tekst i.
   const meldingTekst = tekst ? `${avsenderNavn}: ${utdrag(tekst)}` : `${avsenderNavn} la ut et bilde`
 
-  const nevnte = tekst ? finnNevnte(tekst, profiler, avsenderId) : []
+  // Eksplisitt liste (opts.nevnte) foran tekst-matching når begge er mulig —
+  // filtreres på samme måte som finnNevnte() ville (avsenderen kan aldri
+  // nevne seg selv, og kun aktive profiler kan motta et varsel).
+  const eksplisitte = opts.nevnte
+  const nevnte = eksplisitte
+    ? profiler.filter(p => eksplisitte.includes(p.id) && p.id !== avsenderId)
+    : tekst
+      ? finnNevnte(tekst, profiler, avsenderId)
+      : []
 
   // Mention FØRST. Kun mottakere som DENNE sendingen faktisk fikk noe fra
   // («sendt») ekskluderes fra broadcast-lista under — kaster mention-benet,
@@ -1452,6 +1477,7 @@ export async function sendChatVarsler(
         knappTekst: innhold.knappTekst,
         type: 'mention',
         tillatDuplikat: true,
+        dedupNoekkel: opts.dedupNoekkel,
       })
     } catch (err) {
       // Eget event, distinkt fra broadcast-benet under — ellers vet vi ikke
@@ -1489,6 +1515,7 @@ export async function sendChatVarsler(
         pushTag: chatPushTag(scope),
         arrangementId: scope.type === 'arrangement' ? scope.id : undefined,
         pollId: scope.type === 'poll' ? scope.id : undefined,
+        dedupNoekkel: opts.dedupNoekkel,
       })
     } catch (err) {
       await logg.feil('chat.varsler.broadcast.feilet', err)

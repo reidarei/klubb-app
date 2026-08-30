@@ -17,6 +17,28 @@
 // som fikk posten sin utsatt til et senere slot fikk aldri varselet. Samme
 // dedup_noekkel lukker også duplikat-bugen der to admins i to ulike slots
 // begge trigget varselet.
+//
+// Chat-varsel (#642): en menneskeskrevet chat-post går gjennom
+// sendChatVarsler() (kalt fra lib/actions/chat.ts) — den automatiske
+// gratulasjonen gjorde det ikke, så ingen fikk varsel om ny melding og
+// taggen (@navn) utløste ikke mention. Fiksen kaller sendChatVarsler()
+// PER AVSENDER, rett etter avsender-iterasjonen, med en per-avsender
+// dedup-nøkkel («bursdag-chat:{barnId}:{år}:{avsenderId}» — merk et annet
+// navnerom enn det dedikerte varselets «bursdag:{barnId}:{år}» over, se
+// #643 for hvorfor de bevisst ikke deler nøkkel). Retry-en er dedup_noekkel,
+// ikke en lokal variabel: kallet gjentas på hvert slot der posten finnes
+// (fersk ELLER fra et tidligere slot), og retry-vinduet er selvbegrensende
+// — kun dagens bursdagsbarn, kun de fire slotene denne morgenen.
+//
+// Taggen bruker fullt navn (`profiles.navn`), IKKE `visningsnavn`
+// (#642-oppfølging): visningsnavn er kallenavnet, og er i praksis fornavnet —
+// migrasjon 018 seedet kolonnen med `split_part(navn, ' ', 1)`. Flere medlemmer
+// i klubben deler fornavn, og finnNevnte()s tekstmatching ville truffet ALLE
+// profiler med det fornavnet. `navn` er dessuten nøyaktig det mention-velgeren
+// setter inn når et menneske tagger, så posten blir ikke til å skille fra en
+// håndskrevet. Cronen kjenner uansett mottakerens id og trenger ikke gjette —
+// `opts.nevnte` (sendChatVarsler) gir eksplisitt mention-mottaker uavhengig av
+// tagg-teksten.
 
 import { formatInTimeZone } from 'date-fns-tz'
 import { TIDSSONE } from '@/lib/dato'
@@ -26,7 +48,7 @@ import {
   BURSDAG_HILSNER,
   BURSDAG_UTROPSTEGN,
 } from '@/lib/konstanter'
-import { sendVarsel } from '@/lib/varsler'
+import { sendVarsel, sendChatVarsler } from '@/lib/varsler'
 import { rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
 import { BASE_URL } from '@/lib/config'
@@ -133,7 +155,11 @@ export async function kjorBursdagsgratulasjon(
 
   // 4. Behandle hvert bursdagsbarn × hvert avsender-admin
   for (const barn of bursdagsbarn) {
-    // visningsnavn er ikke nullable i schema — fornavn er første token.
+    // visningsnavn er kallenavnet (ikke nullable i schema) — fornavn er første
+    // token. Brukes KUN i det dedikerte varselet under, som er en tekst uten @
+    // sendt til bursdagsbarnet selv: der slår lesbarhet entydighet, for mannen
+    // vet hvem han er. Chat-taggen bruker fullt `navn`, se `innhold` lenger ned
+    // (kollisjons-fiksen, #642-oppfølging).
     const fornavn = barn.visningsnavn.trim().split(/\s+/)[0]
 
     // harPost = «finnes det (nå, eller fra før) en chat-post til dette
@@ -155,6 +181,11 @@ export async function kjorBursdagsgratulasjon(
 
       const kilde = `bursdag:${barn.id}:${aarStr}:${avsender.id}`
 
+      // Innholdet av chat-posten denne iterasjonen faktisk endte opp med
+      // (fersk eller fra før) — null betyr «ingen post fra denne avsenderen
+      // (ennå)», og styrer om vi kaller sendChatVarsler() nedenfor.
+      let postetInnhold: string | null = null
+
       // Idempotens-sjekk: allerede postet fra denne avsenderen i år?
       // maybeSingle() returnerer null ved 0 rader uten feil — det vanlige tilfellet.
       //
@@ -167,63 +198,111 @@ export async function kjorBursdagsgratulasjon(
       // eslint-disable-next-line hk/supabase-feil-maa-hentes -- bevisst fail-open: unique-constraint klubb_chat_kilde_ekstern_id_unique (migrasjon 066) fanger den tapte grenen via 23505 rett under (#504)
       const { data: eksisterende } = await admin
         .from('klubb_chat')
-        .select('id')
+        .select('id, innhold')
         .eq('kilde_ekstern_id', kilde)
         .maybeSingle()
 
       if (eksisterende) {
         hoppet++
         harPost = true
-        continue
-      }
+        postetInnhold = eksisterende.innhold
+      } else {
+        // Slot-sannsynlighet: garanterer sending seinest ved siste slot.
+        // Formel: P = 1 / (totalSlots - slotIndex). Siste slot → alltid send.
+        // Eks. ved 4 slots: slot 0 → 25 %, slot 1 → 33 %, slot 2 → 50 %, slot 3 → 100 %.
+        const skalSende =
+          slotIndex === totalSlots - 1 ||
+          Math.random() < 1 / (totalSlots - slotIndex)
 
-      // Slot-sannsynlighet: garanterer sending seinest ved siste slot.
-      // Formel: P = 1 / (totalSlots - slotIndex). Siste slot → alltid send.
-      // Eks. ved 4 slots: slot 0 → 25 %, slot 1 → 33 %, slot 2 → 50 %, slot 3 → 100 %.
-      const skalSende =
-        slotIndex === totalSlots - 1 ||
-        Math.random() < 1 / (totalSlots - slotIndex)
-
-      if (!skalSende) {
-        // Utsett til neste slot — telles ikke som hoppet
-        continue
-      }
-
-      // Tekst-variasjon genereres per avsender slik at to posters fra ulike
-      // admins ikke er identiske.
-      const emojis = trekkEmoji(BURSDAG_EMOJI_ANTALL)
-      const hilsen = BURSDAG_HILSNER[Math.floor(Math.random() * BURSDAG_HILSNER.length)]
-      const utropstegn = BURSDAG_UTROPSTEGN[Math.floor(Math.random() * BURSDAG_UTROPSTEGN.length)]
-      const innhold = `${hilsen} med dagen @${fornavn}${utropstegn} ${emojis.join(' ')}`
-
-      try {
-        const { error: insertErr } = await admin.from('klubb_chat').insert({
-          profil_id: avsender.id,
-          innhold,
-          kilde_ekstern_id: kilde,
-        })
-
-        if (insertErr) {
-          // Unique-constraint-brudd = allerede postet (race condition mellom
-          // sjekk og insert). Behandles som hoppet, ikke feil.
-          if (insertErr.code === '23505') {
-            hoppet++
-            harPost = true
-            continue
-          }
-          await logg.feil('bursdagsgratulasjon.feilet', insertErr, {
-            ctx: { code: insertErr.code },
-          })
-          feil++
+        if (!skalSende) {
+          // Utsett til neste slot — telles ikke som hoppet, og en utsatt post
+          // skal ikke varsle om noe som ikke finnes ennå.
           continue
         }
 
-        harPost = true
-        if (varselHilsen === null) varselHilsen = hilsen
-        sendt++
-      } catch (e) {
-        await logg.feil('bursdagsgratulasjon.feilet', e)
-        feil++
+        // Tekst-variasjon genereres per avsender slik at to posters fra ulike
+        // admins ikke er identiske.
+        const emojis = trekkEmoji(BURSDAG_EMOJI_ANTALL)
+        const hilsen = BURSDAG_HILSNER[Math.floor(Math.random() * BURSDAG_HILSNER.length)]
+        const utropstegn = BURSDAG_UTROPSTEGN[Math.floor(Math.random() * BURSDAG_UTROPSTEGN.length)]
+        // Fullt `navn` i taggen — IKKE `visningsnavn`, som er kallenavnet og
+        // i praksis bare fornavnet (mig. 018). Flere medlemmer deler fornavn,
+        // så en tagg på kallenavnet ville pekt tvetydig på flere profiler.
+        // mentionSplitRegex tillater mellomrom, så «@Ola Nordmann» rendres
+        // som én sammenhengende tagg i chatten.
+        const innhold = `${hilsen} med dagen @${barn.navn}${utropstegn} ${emojis.join(' ')}`
+
+        try {
+          const { error: insertErr } = await admin.from('klubb_chat').insert({
+            profil_id: avsender.id,
+            innhold,
+            kilde_ekstern_id: kilde,
+          })
+
+          if (insertErr) {
+            // Unique-constraint-brudd = allerede postet (race condition mellom
+            // sjekk og insert). Behandles som hoppet, ikke feil.
+            if (insertErr.code === '23505') {
+              hoppet++
+              harPost = true
+              // Fail-open, uten vakt (#504-review NIT-11-resonnementet over
+              // gjelder likt her): den andre prosessen vant racet og har alt
+              // skrevet posten, så et nytt oppslag henter DENS tekst. Feiler
+              // dette oppslaget, faller vi tilbake på vår egen lokale
+              // `innhold` — verste utfall er at chat-varselets utdrag har en
+              // annen hilsen/emoji enn den faktiske chat-posten, ikke at
+              // varselet uteblir.
+              // eslint-disable-next-line hk/supabase-feil-maa-hentes -- fail-open: verste utfall er en litt annen hilsen i varsel-utdraget enn selve posten, se kommentar over
+              const { data: vunnetAv } = await admin
+                .from('klubb_chat')
+                .select('innhold')
+                .eq('kilde_ekstern_id', kilde)
+                .maybeSingle()
+              postetInnhold = vunnetAv?.innhold ?? innhold
+            } else {
+              await logg.feil('bursdagsgratulasjon.feilet', insertErr, {
+                ctx: { code: insertErr.code },
+              })
+              feil++
+              continue
+            }
+          } else {
+            harPost = true
+            if (varselHilsen === null) varselHilsen = hilsen
+            sendt++
+            postetInnhold = innhold
+          }
+        } catch (e) {
+          await logg.feil('bursdagsgratulasjon.feilet', e)
+          feil++
+          continue
+        }
+      }
+
+      // Chat-varsel (#642): samme inngangsport som en menneskeskrevet post
+      // (lib/actions/chat.ts) — utløser broadcast til alle aktive medlemmer
+      // OG et ekte mention-varsel til bursdagsbarnet. Mottakeren av mention-en
+      // kommer fra `opts.nevnte` (barnets id), ikke fra tagg-teksten — teksten
+      // er fortsatt en ekte @-tagg for lesbarhet, men den gjettes ikke på.
+      // Kalles for HVER
+      // avsender (ikke felles for barnet, i motsetning til varselHilsen
+      // under) — to admins som poster hver sin gratulasjon skal gi to
+      // chat-varsler, akkurat som om to menn hadde skrevet hver sin melding
+      // for hånd. dedup_noekkel er per (barn, år, avsender) — samme nøkkel
+      // hver gang dette slotet kjøres for denne posten, så retry fra et
+      // senere slot ikke varsler på nytt.
+      if (postetInnhold) {
+        try {
+          await sendChatVarsler({ type: 'klubb' }, postetInnhold, avsender.id, false, {
+            dedupNoekkel: `bursdag-chat:${barn.id}:${aarStr}:${avsender.id}`,
+            nevnte: [barn.id],
+          })
+        } catch (e) {
+          await logg.feil('bursdagsgratulasjon.chatvarsel.feilet', e, {
+            ctx: { profil_id: barn.id },
+          })
+          feil++
+        }
       }
     }
 

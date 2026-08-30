@@ -45,6 +45,7 @@
 //   bursdagsgratulasjon.profiler.feilet  — profiler-med-fødselsdato-oppslag feiler (#504)
 //   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
 //   bursdagsgratulasjon.varsel.feilet    — varsel til bursdagsbarnet feiler, telles som feil (#504)
+//   bursdagsgratulasjon.chatvarsel.feilet — sendChatVarsler for gratulasjonen kastet; retryes neste slot via dedup_noekkel (#642)
 //   logg.feillogg.insert.feilet — feil_logg-inserten fra logg.feil() selv feilet/timet ut (#496)
 //   pass.varsel.oppslag.feilet  — navn-/tur-berikelse for pass-varsel feiler etter committet skriving, sender likevel (pulje A)
 //   fond.eiendom.oppslag.feilet    — gammel markedsverdi-oppslag feiler før oppdatering/sletting (pulje A)
