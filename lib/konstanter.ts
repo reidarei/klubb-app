@@ -247,6 +247,12 @@ export const EPOST_BUDSJETT_VINDU_TIMER = 24
 // over dette er reelt tapt kontakt.
 export const DRA_NED_PING_TIMEOUT_MS = 6000
 
+// Stikkord på medlemsprofilen (#639). Begge grensene speiler
+// check-constraint profiles_stikkord_gyldig (migrasjon 138) — endres de
+// her, må migrasjonen følge etter.
+export const STIKKORD_MAKS_ANTALL = 10
+export const STIKKORD_MAKS_LENGDE = 30
+
 // Tidspunktet koblingstabellen `innspill_kobling` ble tatt i bruk (migrasjon
 // 136, kjørt mot prod 2026-08-26 19:47 UTC). Fra og med da skriver
 // innsendings-ruten alltid en kobling-rad, så «ingen rad» på et nyere

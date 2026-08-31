@@ -7,7 +7,7 @@ export default async function RedigerProfil() {
 
   const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
-    .select('navn, visningsnavn, telefon, fodselsdato, epost, rolle, bilde_url')
+    .select('navn, visningsnavn, telefon, fodselsdato, epost, rolle, bilde_url, stikkord')
     .eq('id', user!.id)
     .maybeSingle()
 
@@ -22,6 +22,7 @@ export default async function RedigerProfil() {
       epost={profil?.epost ?? user!.email ?? ''}
       bildeUrl={profil?.bilde_url ?? null}
       rolle={profil?.rolle ?? null}
+      stikkord={profil?.stikkord ?? []}
     />
   )
 }

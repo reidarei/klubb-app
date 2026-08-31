@@ -10,6 +10,8 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
 import BildeCropper from '@/components/ui/BildeCropper'
+import { normaliserStikkord, formaterStikkord } from '@/lib/stikkord'
+import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 
 type Props = {
   navn: string
@@ -19,6 +21,7 @@ type Props = {
   epost: string
   bildeUrl: string | null
   rolle?: string | null
+  stikkord: string[]
 }
 
 const labelStil: React.CSSProperties = {
@@ -79,6 +82,7 @@ export default function RedigerProfilForm({
   epost,
   bildeUrl: bildeUrlInit,
   rolle,
+  stikkord: stikkordInit,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -88,6 +92,9 @@ export default function RedigerProfilForm({
   const [visningsnavn, setVisningsnavn] = useState(visnInit)
   const [telefon, setTelefon] = useState(tlfInit)
   const [fodselsdato, setFodselsdato] = useState(fdInit)
+  // State som fritekst — normaliseres først ved lagring (og for live-telleren
+  // under). Å normalisere underveis ville hoppet brukeren midt i skriving.
+  const [stikkord, setStikkord] = useState(formaterStikkord(stikkordInit))
 
   // bildeUrl = lagret URL i DB. bildeFil = ventende ny upload (komprimert
   // + cropped, ikke lastet opp ennå). bildeFjernet = brukeren har klikket
@@ -174,6 +181,7 @@ export default function RedigerProfilForm({
         telefon,
         fodselsdato: fodselsdato || undefined,
         bilde_url: nyBildeUrl,
+        stikkord,
       })
 
       // Slett gammelt R2-bilde hvis byttet eller fjernet (best effort)
@@ -353,7 +361,7 @@ export default function RedigerProfilForm({
             placeholder={navn}
           />
         </Rad>
-        <Rad last>
+        <Rad>
           <div style={labelStil}>Fødselsdato</div>
           <input
             type="date"
@@ -361,6 +369,19 @@ export default function RedigerProfilForm({
             onChange={e => setFodselsdato(e.target.value)}
             style={{ ...inputBaseStil, colorScheme: 'dark' }}
           />
+        </Rad>
+        <Rad last>
+          <div style={labelStil}>Stikkord</div>
+          <input
+            type="text"
+            value={stikkord}
+            onChange={e => setStikkord(e.target.value)}
+            style={inputBaseStil}
+            placeholder="Grillmester, alltid sist hjem, elsker en god historie …"
+          />
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Skill med komma. Maks {STIKKORD_MAKS_ANTALL} stikkord, {STIKKORD_MAKS_LENGDE} tegn hver — {normaliserStikkord(stikkord).length}/{STIKKORD_MAKS_ANTALL}
+          </div>
         </Rad>
       </SkjemaSeksjon>
 

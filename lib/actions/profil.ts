@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { ensureAdmin, ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { normaliserTelefon } from '@/lib/telefon'
+import { normaliserStikkord } from '@/lib/stikkord'
 import { logg } from '@/lib/logg'
 
 // Resultattyper for GS-actions — strukturert retur i stedet for throw,
@@ -21,7 +22,7 @@ export type FjernGeneralsekretaerResultat =
   | { ok: false; kode: 'race_mismatch' }
   | { ok: false; kode: 'feil'; melding: string }
 
-export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: string; telefon: string; fodselsdato?: string; bilde_url?: string | null }) {
+export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: string; telefon: string; fodselsdato?: string; bilde_url?: string | null; stikkord?: string | string[] }) {
   const { supabase, user } = await ensureInnlogget()
 
   const navn = data.navn.trim()
@@ -36,6 +37,10 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
     oppdatert: naa(),
   }
   if (data.bilde_url !== undefined) oppdatering.bilde_url = data.bilde_url
+  // Betinget som bilde_url over: den døde RedigerProfilSkjema.tsx kaller
+  // denne actionen uten stikkord-feltet i det hele tatt. undefined skal
+  // aldri tolkes som «tøm lagrede stikkord».
+  if (data.stikkord !== undefined) oppdatering.stikkord = normaliserStikkord(data.stikkord)
 
   const { error } = await supabase
     .from('profiles')
@@ -45,9 +50,13 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   if (error) throw new Error(error.message)
   revalidatePath('/profil')
   revalidatePath('/klubbinfo/medlemmer')
+  // Egen-redigering revaliderer ikke detaljsiden fra før (oppdaterMedlemAdmin
+  // under gjør det allerede) — stikkord er det første feltet derfra som
+  // faktisk vises på /klubbinfo/medlemmer/[id].
+  revalidatePath(`/klubbinfo/medlemmer/${user.id}`)
 }
 
-export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean }) {
+export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord?: string | string[] }) {
   const { supabase } = await ensureAdmin()
 
   const navn = data.navn.trim()
@@ -114,6 +123,9 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
   const oppdatering: Record<string, unknown> = skalRoreRolle
     ? { ...baseOppdatering, rolle: data.rolle }
     : baseOppdatering
+  // Lagt til ETTER baseOppdatering/rolle-invarianten er avgjort — stikkord
+  // har ingenting med generalsekretær-logikken å gjøre.
+  if (data.stikkord !== undefined) oppdatering.stikkord = normaliserStikkord(data.stikkord)
 
   const { error } = await supabase
     .from('profiles')

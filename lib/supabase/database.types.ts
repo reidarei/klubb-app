@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1438,6 +1438,7 @@ export type Database = {
           oppdatert: string
           opprettet: string
           rolle: string
+          stikkord: string[]
           telefon: string | null
           visningsnavn: string
         }
@@ -1455,6 +1456,7 @@ export type Database = {
           oppdatert?: string
           opprettet?: string
           rolle?: string
+          stikkord?: string[]
           telefon?: string | null
           visningsnavn: string
         }
@@ -1472,6 +1474,7 @@ export type Database = {
           oppdatert?: string
           opprettet?: string
           rolle?: string
+          stikkord?: string[]
           telefon?: string | null
           visningsnavn?: string
         }
@@ -1881,6 +1884,7 @@ export type Database = {
         Returns: undefined
       }
       stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
+      stikkord_gyldig: { Args: { s: string[] }; Returns: boolean }
       tell_aktivitet: {
         Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
         Returns: undefined

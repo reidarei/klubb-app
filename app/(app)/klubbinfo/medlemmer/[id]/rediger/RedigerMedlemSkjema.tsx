@@ -13,6 +13,8 @@ import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Segment from '@/components/ui/Segment'
 import { ToggleRad } from '@/components/ui/ToggleSwitch'
+import { normaliserStikkord, formaterStikkord } from '@/lib/stikkord'
+import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 
 type Medlem = {
   id: string
@@ -25,6 +27,7 @@ type Medlem = {
   fodselsdato: string | null
   faar_issue_varsler: boolean
   faar_feilvarsler: boolean
+  stikkord: string[]
 }
 
 type NaavaerendeGeneralsekretaer = { id: string; navn: string } | null
@@ -87,6 +90,7 @@ export default function RedigerMedlemSkjema({
   const [visningsnavn, setVisningsnavn] = useState(medlem.visningsnavn)
   const [telefon, setTelefon] = useState(medlem.telefon ?? '')
   const [fodselsdato, setFodselsdato] = useState(medlem.fodselsdato ?? '')
+  const [stikkord, setStikkord] = useState(formaterStikkord(medlem.stikkord))
 
   // Valgbare roller (Segment): bare 'medlem' og 'admin'.
   // Generalsekretær-rollen styres av ToggleSwitch nedenfor.
@@ -169,6 +173,7 @@ export default function RedigerMedlemSkjema({
         fodselsdato: fodselsdato || undefined,
         faar_issue_varsler: faarIssueVarsler,
         faar_feilvarsler: faarFeilvarsler,
+        stikkord,
       })
 
       // Steg 2: fjern GS-tittel (om nødvendig).
@@ -267,7 +272,7 @@ export default function RedigerMedlemSkjema({
             placeholder={navn}
           />
         </Rad>
-        <Rad last>
+        <Rad>
           <div style={labelStil}>Fødselsdato</div>
           <input
             type="date"
@@ -275,6 +280,19 @@ export default function RedigerMedlemSkjema({
             onChange={e => setFodselsdato(e.target.value)}
             style={{ ...inputBaseStil, colorScheme: 'dark' }}
           />
+        </Rad>
+        <Rad last>
+          <div style={labelStil}>Stikkord</div>
+          <input
+            type="text"
+            value={stikkord}
+            onChange={e => setStikkord(e.target.value)}
+            style={inputBaseStil}
+            placeholder="Grillmester, alltid sist hjem, elsker en god historie …"
+          />
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Skill med komma. Maks {STIKKORD_MAKS_ANTALL} stikkord, {STIKKORD_MAKS_LENGDE} tegn hver — {normaliserStikkord(stikkord).length}/{STIKKORD_MAKS_ANTALL}
+          </div>
         </Rad>
       </SkjemaSeksjon>
 

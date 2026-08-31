@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
+import { STIKKORD_MAKS_ANTALL } from '../../lib/konstanter'
 
 // Kolonnevern på profiles (mig. 105/123) og oppdateringsgrensen på
 // varsel_logg (mig. 121, IKKE 123 slik issue #533 opprinnelig antok — 123
@@ -20,7 +21,7 @@ const VARSEL_OLA_ID = '00000000-0000-4000-9900-000000000021'
 // Kolonnene testene i denne fila kan komme til å endre hvis en RLS-policy
 // eller triggeren faktisk har et hull. Snapshottes før og skrives ubetinget
 // tilbake etter — se afterAll-kommentaren.
-const PROFIL_KOLONNER = 'rolle, aktiv, faar_issue_varsler, faar_feilvarsler, visningsnavn'
+const PROFIL_KOLONNER = 'rolle, aktiv, faar_issue_varsler, faar_feilvarsler, visningsnavn, stikkord'
 
 test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
   test.skip(!harRlsMiljo(), 'E2E_SUPABASE_* mangler — se docs/test-instans.md')
@@ -146,6 +147,70 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     const { data: etterFeil, error: etterFeilFeil } = await service.from('profiles').select('visningsnavn').eq('id', OLA.id).single()
     expect(etterFeilFeil).toBeNull()
     expect(etterFeil?.visningsnavn).toEqual(forFeil?.visningsnavn)
+  })
+
+  // Stikkord (#639): selvredigerbart felt, IKKE i beskytt_profil_kolonner
+  // (se migrasjon 138) — rad-RLS fra mig. 009 er hele beskyttelsen.
+  test('Petter kan sette sine egne stikkord (revertert i samme test)', async () => {
+    const petter = await loggInnKlient(PETTER.epost)
+    const nye = ['midlertidig-stikkord-1', 'midlertidig-stikkord-2']
+
+    const { data, error } = await petter
+      .from('profiles')
+      .update({ stikkord: nye })
+      .eq('id', PETTER.id)
+      .select('stikkord')
+    expect(error).toBeNull()
+    expect(data).toHaveLength(1)
+    expect(data?.[0].stikkord).toEqual(nye)
+
+    // Revert i SAMME test — samme mønster som visningsnavn-testen over.
+    const { error: revertFeil } = await petter.from('profiles').update({ stikkord: [] }).eq('id', PETTER.id)
+    expect(revertFeil).toBeNull()
+  })
+
+  test('Petter kan ikke sette Olas stikkord (rad-RLS)', async () => {
+    const service = adminKlient('profiles-stikkord-kryssbruker-verify')
+    if (!service) throw new Error('adminKlient ga null')
+    const { data: forFeil, error: forFeilFeil } = await service.from('profiles').select('stikkord').eq('id', OLA.id).single()
+    expect(forFeilFeil).toBeNull()
+
+    const petter = await loggInnKlient(PETTER.epost)
+    const { error } = await petter.from('profiles').update({ stikkord: ['kapret'] }).eq('id', OLA.id)
+    // Samme mønster som visningsnavn-testen: RLS filtrerer raden bort FØR
+    // noe skrives — 0 rader, ingen feil. Verifiseringen med service_role
+    // under er beviset.
+    expect(error).toBeNull()
+
+    const { data: etterFeil, error: etterFeilFeil } = await service.from('profiles').select('stikkord').eq('id', OLA.id).single()
+    expect(etterFeilFeil).toBeNull()
+    expect(etterFeil?.stikkord).toEqual(forFeil?.stikkord)
+  })
+
+  test('DB-grensen holder: for mange stikkord gir 23514 (check_violation)', async () => {
+    const petter = await loggInnKlient(PETTER.epost)
+    const forMange = Array.from({ length: STIKKORD_MAKS_ANTALL + 1 }, (_, i) => `stikkord-${i}`)
+
+    const { error } = await petter.from('profiles').update({ stikkord: forMange }).eq('id', PETTER.id)
+    // Beviser at grensen er DB-sannhet (profiles_stikkord_gyldig, mig. 138),
+    // ikke bare en app-side høflighet i lib/stikkord.ts.
+    expect(error?.code).toBe('23514')
+
+    // Ingen revert nødvendig — updaten feilet, raden er uendret.
+  })
+
+  test('DB-grensen holder: utrimmet stikkord gir 23514 (mig. 139)', async () => {
+    const petter = await loggInnKlient(PETTER.epost)
+
+    // char_length(' ') er 1, så migrasjon 138 slapp dette gjennom. Fra vår
+    // egen UI kan det ikke skje (normaliserStikkord trimmer), men rad-RLS
+    // lar et medlem skrive kolonnen direkte via Data API-et — og da er
+    // DB-en eneste vakt. Copilot-funn på PR #647.
+    for (const ugyldig of [' ', '  ledende', 'etterfølgende ']) {
+      const { error } = await petter.from('profiles').update({ stikkord: [ugyldig] }).eq('id', PETTER.id)
+      expect(error?.code, `«${ugyldig}» skulle vært avvist`).toBe('23514')
+    }
+    // Ingen revert nødvendig — alle updatene feilet, raden er uendret.
   })
 })
 

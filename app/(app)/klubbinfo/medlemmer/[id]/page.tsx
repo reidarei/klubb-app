@@ -4,6 +4,7 @@ import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
 import SectionLabel from '@/components/ui/SectionLabel'
+import Pill from '@/components/ui/Pill'
 import SendMeldingKnapp from './SendMeldingKnapp'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
@@ -26,7 +27,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, navn, visningsnavn, epost, telefon, rolle, fodselsdato, aktiv, bilde_url')
+      .select('id, navn, visningsnavn, epost, telefon, rolle, fodselsdato, aktiv, bilde_url, stikkord')
       .eq('id', id)
       .maybeSingle(),
 
@@ -231,6 +232,26 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
           {!medlem.aktiv && ' · Deaktivert'}
         </div>
       </div>
+
+      {/* Stikkord — skjules helt når tomt, en tom chip-rad ser ødelagt ut (#639) */}
+      {medlem.stikkord && medlem.stikkord.length > 0 && (
+        <section style={{ marginBottom: 28 }}>
+          <SectionLabel>Stikkord</SectionLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {medlem.stikkord.map((s, i) => (
+              // Pill er uppercase som default — et stikkord som «fjellklatring»
+              // skal ikke skrike, derfor overstyrt her (ikke i komponenten).
+              //
+              // Indeks i key-en: DB håndhever ikke unikhet, kun antall og
+              // lengde. normaliserStikkord() dedupliserer, men rad-RLS lar
+              // et medlem skrive kolonnen direkte via API-et utenom den.
+              <Pill key={`${s}-${i}`} variant="neutral" style={{ textTransform: 'none' }}>
+                {s}
+              </Pill>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Kontakt */}
       <section style={{ marginBottom: 28 }}>
