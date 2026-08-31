@@ -13,19 +13,31 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockPaaminnelser, mockBursdag } = vi.hoisted(() => ({
+const { mockPaaminnelser, mockBursdag, mockBursdagsvarsel, mockLoggFeil } = vi.hoisted(() => ({
   mockPaaminnelser: vi.fn(),
   mockBursdag: vi.fn(),
+  mockBursdagsvarsel: vi.fn(),
+  mockLoggFeil: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({}),
+}))
+vi.mock('@/lib/logg', () => ({
+  logg: { warn: vi.fn(), feil: (...a: unknown[]) => mockLoggFeil(...a) },
 }))
 vi.mock('@/lib/actions/paaminnelser', () => ({
   kjorPaaminnelser: (...a: unknown[]) => mockPaaminnelser(...a),
 }))
 vi.mock('@/lib/actions/bursdagsgratulasjon', () => ({
   kjorBursdagsgratulasjon: (...a: unknown[]) => mockBursdag(...a),
+}))
+// Uten denne mocken drar ruten inn ekte lib/actions/bursdagsvarsel →
+// lib/varsler → createAdminClient (fra riktige lib/supabase/admin, ikke den
+// mockede over — sendVarsel bruker sin egen server-klient), og testen feiler
+// på manglende env/nettverk i stedet for å teste gatingen isolert.
+vi.mock('@/lib/actions/bursdagsvarsel', () => ({
+  kjorBursdagsvarsel: (...a: unknown[]) => mockBursdagsvarsel(...a),
 }))
 
 import { NextRequest } from 'next/server'
@@ -47,6 +59,8 @@ beforeEach(() => {
   process.env.CRON_SECRET = HEMMELIGHET
   mockPaaminnelser.mockResolvedValue({ behandlet: [], feil: 0, lukketKaaringer: 0, sendteVarsler: 0 })
   mockBursdag.mockResolvedValue({ postet: 0, hoppet: 0, feil: 0 })
+  mockBursdagsvarsel.mockResolvedValue({ varslet: 0, hoppet: 0, blokkert: 0, feil: 0 })
+  mockLoggFeil.mockResolvedValue(undefined)
 })
 
 describe('cron /api/cron/paaminne – status-gating (#504)', () => {
@@ -92,6 +106,28 @@ describe('cron /api/cron/paaminne – status-gating (#504)', () => {
     expect(body.bursdagFeil).toBe(1)
   })
 
+  it.each([0, 1, 2])('bursdagsvarsel-feil på slot %i gir 200 (nye sjanser senere i dag)', async slot => {
+    mockBursdagsvarsel.mockResolvedValue({ varslet: 0, hoppet: 0, blokkert: 0, feil: 2 })
+
+    const res = await POST(lagReq(slot))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.bursdagsvarselFeil).toBe(2)
+  })
+
+  it('bursdagsvarsel-feil på siste slot gir 500 (terminal)', async () => {
+    mockBursdagsvarsel.mockResolvedValue({ varslet: 0, hoppet: 0, blokkert: 0, feil: 1 })
+
+    const res = await POST(lagReq(BURSDAG_VINDU_SLOTS - 1))
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(body.ok).toBe(false)
+    expect(body.bursdagsvarselFeil).toBe(1)
+  })
+
   it('påminnelser kjøres kun på slot 1, bursdag på alle slots i vinduet', async () => {
     await POST(lagReq(0))
     expect(mockPaaminnelser).not.toHaveBeenCalled()
@@ -127,5 +163,66 @@ describe('cron /api/cron/paaminne – status-gating (#504)', () => {
     const res = await GET(lagReq(1))
 
     expect(res.status).toBe(500)
+  })
+})
+
+// Uavhengigheten mellom jobbene skal være strukturell, ikke bare påstått i en
+// kommentar (#638-review MAJOR). Før try/catch-en rundt hvert kall ville et
+// kast i en tidligere jobb boblet ut av handleren, og bursdagsvarselet ville
+// aldri kjørt — på noen slot, siden gratulasjonen deler hele vinduet.
+describe('cron /api/cron/paaminne – en kastende jobb stopper ikke de andre', () => {
+  it('gratulasjonen kaster: bursdagsvarselet kjøres likevel, feilen telles og logges', async () => {
+    mockBursdag.mockRejectedValue(new Error('gratulasjon nede'))
+
+    const res = await POST(lagReq(0))
+    const body = await res.json()
+
+    expect(mockBursdagsvarsel).toHaveBeenCalledTimes(1)
+    expect(body.bursdagFeil).toBe(1)
+    expect(body.bursdagsvarselFeil).toBe(0)
+    // Slot 0 er ikke terminal — bursdagsjobbene får nye sjanser i dag.
+    expect(res.status).toBe(200)
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'cron.bursdagsgratulasjon.jobb.feilet',
+      expect.any(Error),
+      expect.objectContaining({ ctx: { slot: 0 } }),
+    )
+  })
+
+  it('gratulasjonen kaster på siste slot: 500, men bursdagsvarselet har kjørt', async () => {
+    mockBursdag.mockRejectedValue(new Error('gratulasjon nede'))
+
+    const res = await POST(lagReq(BURSDAG_VINDU_SLOTS - 1))
+
+    expect(mockBursdagsvarsel).toHaveBeenCalledTimes(1)
+    expect(res.status).toBe(500)
+  })
+
+  it('påminnelsene kaster: begge bursdagsjobbene kjøres likevel, status 500', async () => {
+    mockPaaminnelser.mockRejectedValue(new Error('påminnelser nede'))
+
+    const res = await POST(lagReq(1))
+    const body = await res.json()
+
+    expect(mockBursdag).toHaveBeenCalledTimes(1)
+    expect(mockBursdagsvarsel).toHaveBeenCalledTimes(1)
+    expect(body.paaminnerFeil).toBe(1)
+    // Påminnelser har ingen ny sjanse i dag — kast der er alltid rødt.
+    expect(res.status).toBe(500)
+  })
+
+  it('bursdagsvarselet kaster: fanget, telles som feil, ruten svarer fortsatt', async () => {
+    mockBursdagsvarsel.mockRejectedValue(new Error('bursdagsvarsel nede'))
+
+    const res = await POST(lagReq(0))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.bursdagsvarselFeil).toBe(1)
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'cron.bursdagsvarsel.jobb.feilet',
+      expect.any(Error),
+      expect.objectContaining({ ctx: { slot: 0 } }),
+    )
   })
 })

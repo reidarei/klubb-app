@@ -117,6 +117,16 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
   chat_melding: { panel: 'Ny kommentar på et innlegg', kort: 'Kommentar på innlegg' },
   chat_albumbilde: { panel: 'Ny kommentar på et bilde', kort: 'Kommentar på bilde' },
   'privat-melding': { panel: 'Ny privatmelding (til mottakeren)', kort: 'Ny privatmelding' },
+
+  // ── Bursdag ──────────────────────────────────────────────────────────────
+  // bursdag_i_dag er IKKE en etterfølger til bursdagsgratulasjon under —
+  // sistnevnte gikk til bursdagsbarnet selv og sendes ikke lenger (#643),
+  // dette går til alle ANDRE aktive medlemmer, automatisk hver morgen, uten
+  // kobling til gratulasjonen i klubbchatten (#638).
+  bursdag_i_dag: {
+    panel: 'Bursdag i klubben (om morgenen, til alle andre enn bursdagsbarnet)',
+    kort: 'Bursdag i klubben',
+  },
   // Typen sendes ikke lenger (#643 — mention-varselet fra den automatiske
   // chat-posten dekker samme behov, og de to sammen ga bursdagsmannen to
   // varsler om samme gratulasjon). Etiketten må likevel bli stående: historiske

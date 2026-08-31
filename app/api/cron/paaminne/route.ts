@@ -1,7 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { kjorPaaminnelser } from '@/lib/actions/paaminnelser'
 import { kjorBursdagsgratulasjon } from '@/lib/actions/bursdagsgratulasjon'
+import { kjorBursdagsvarsel } from '@/lib/actions/bursdagsvarsel'
 import { BURSDAG_VINDU_SLOTS } from '@/lib/konstanter'
+import { logg } from '@/lib/logg'
 import { NextRequest, NextResponse } from 'next/server'
 
 async function handle(req: NextRequest) {
@@ -44,38 +46,76 @@ async function handle(req: NextRequest) {
     slotIndex = n
   }
 
+  // De tre jobbene under er uavhengige, og hver av dem er innkapslet i sin
+  // egen try/catch. Uten det er uavhengigheten kun en påstand i en kommentar:
+  // et kast i en tidligere jobb ville boblet ut av handleren og hoppet over
+  // resten — for bursdagsvarselet ville det skjedd på ALLE slots, siden
+  // gratulasjonen kjører i samme vindu. En kastet jobb telles som én feil i
+  // sin egen teller og går inn i den vanlige status-gatingen under.
+  let paaminnerFeil = 0
+  let bursdagFeil = 0
+  let bursdagsvarselFeil = 0
+
   // Påminnelser kjøres kun ved slot 1 (06 UTC = 08 norsk sommer / 07 vinter)
   let paaminneResult: Awaited<ReturnType<typeof kjorPaaminnelser>> | null = null
   if (slotIndex === 1) {
-    paaminneResult = await kjorPaaminnelser(admin)
+    try {
+      paaminneResult = await kjorPaaminnelser(admin)
+      paaminnerFeil = paaminneResult.feil
+    } catch (e) {
+      await logg.feil('cron.paaminne.jobb.feilet', e, { ctx: { slot: slotIndex } })
+      paaminnerFeil = 1
+    }
   }
 
   // Bursdagsgratulasjonar kjøres ved alle slots i vinduet (0–3)
   let bursdagResult: Awaited<ReturnType<typeof kjorBursdagsgratulasjon>> | null = null
   if (slotIndex >= 0 && slotIndex < BURSDAG_VINDU_SLOTS) {
-    bursdagResult = await kjorBursdagsgratulasjon(admin, {
-      slotIndex,
-      totalSlots: BURSDAG_VINDU_SLOTS,
-    })
+    try {
+      bursdagResult = await kjorBursdagsgratulasjon(admin, {
+        slotIndex,
+        totalSlots: BURSDAG_VINDU_SLOTS,
+      })
+      bursdagFeil = bursdagResult.feil
+    } catch (e) {
+      await logg.feil('cron.bursdagsgratulasjon.jobb.feilet', e, { ctx: { slot: slotIndex } })
+      bursdagFeil = 1
+    }
   }
 
-  const paaminnerFeil = paaminneResult?.feil ?? 0
-  const bursdagFeil = bursdagResult?.feil ?? 0
+  // Bursdagsvarsel til «de andre» (#638) — egen kodesti, uavhengig av
+  // bursdagResult over. Kjøres på samme slots av samme grunn (sannsynlighets-
+  // styrt sending i gratulasjonen har ingen betydning her, men vinduet 0–3
+  // er felles morgen-vinduet begge jobbene skal operere i).
+  let bursdagsvarselResult: Awaited<ReturnType<typeof kjorBursdagsvarsel>> | null = null
+  if (slotIndex >= 0 && slotIndex < BURSDAG_VINDU_SLOTS) {
+    try {
+      bursdagsvarselResult = await kjorBursdagsvarsel(admin)
+      bursdagsvarselFeil = bursdagsvarselResult.feil
+    } catch (e) {
+      await logg.feil('cron.bursdagsvarsel.jobb.feilet', e, { ctx: { slot: slotIndex } })
+      bursdagsvarselFeil = 1
+    }
+  }
 
   // Gating per jobb, ikke ruten som helhet (#504): paaminner kjører KUN på
   // slot 1 og har ingen senere sjanse samme dag — enhver feil der skal gi
-  // rødt med én gang. Bursdag kjører derimot på alle slots og får nye
-  // sjanser resten av dagen — kun terminal (siste slot) skal gjøre rødt.
+  // rødt med én gang. Bursdag og bursdagsvarsel kjører derimot på alle slots
+  // og får nye sjanser resten av dagen — kun terminal (siste slot) skal
+  // gjøre rødt.
   const erSisteSlot = slotIndex === BURSDAG_VINDU_SLOTS - 1
-  const status = paaminnerFeil > 0 || (bursdagFeil > 0 && erSisteSlot) ? 500 : 200
+  const status =
+    paaminnerFeil > 0 || ((bursdagFeil > 0 || bursdagsvarselFeil > 0) && erSisteSlot) ? 500 : 200
   return NextResponse.json(
     {
       ok: status === 200,
       slot: slotIndex,
       paaminne: paaminneResult ?? 'hoppet',
       bursdag: bursdagResult ?? 'utenfor vindu',
+      bursdagsvarsel: bursdagsvarselResult ?? 'utenfor vindu',
       paaminnerFeil,
       bursdagFeil,
+      bursdagsvarselFeil,
     },
     { status },
   )

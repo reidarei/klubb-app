@@ -50,8 +50,8 @@
 // `opts.nevnte` (sendChatVarsler) gir eksplisitt mention-mottaker uavhengig av
 // tagg-teksten.
 
-import { formatInTimeZone } from 'date-fns-tz'
-import { TIDSSONE } from '@/lib/dato'
+import { iDagOslo } from '@/lib/dato'
+import { finnBursdagsbarn } from '@/lib/bursdag'
 import {
   BURSDAG_EMOJI_POOL,
   BURSDAG_EMOJI_ANTALL,
@@ -85,10 +85,9 @@ export async function kjorBursdagsgratulasjon(
   let hoppet = 0
   let feil = 0
 
-  // 1. Finn dagens dato som MM-DD i norsk tid
-  const idag = new Date()
-  const dagStr = formatInTimeZone(idag, TIDSSONE, 'MM-dd')
-  const aarStr = formatInTimeZone(idag, TIDSSONE, 'yyyy')
+  // 1. Finn dagens dato (norsk tid) som "YYYY-MM-DD"
+  const iDag = iDagOslo()
+  const aarStr = iDag.split('-')[0]
 
   // 2. Hent aktive profiler med fødselsdato
   // Kun id, navn, fodselsdato — visningsnavn har ingen bruker igjen etter at
@@ -112,31 +111,10 @@ export async function kjorBursdagsgratulasjon(
     return { sendt, hoppet, feil }
   }
 
-  // Filtrer i JS på MM-DD. Skuddårsfødte (29.02) i ikke-skuddår
-  // gratuleres 01.03 — enklest å detektere ved at vi matcher 03-01
-  // og i tillegg sjekker om fødselsdatoen var 29. feb.
-  const erSkuddaar = (aar: number) =>
-    (aar % 4 === 0 && aar % 100 !== 0) || aar % 400 === 0
-
-  const bursdagsbarn = profiler.filter(p => {
-    if (!p.fodselsdato) return false
-    const fdato = p.fodselsdato as string // 'YYYY-MM-DD'
-    const [, mm, dd] = fdato.split('-')
-    const fodselsMmDd = `${mm}-${dd}`
-
-    if (fodselsMmDd === dagStr) return true
-
-    // 29. feb-barn i ikke-skuddår → post 01. mars
-    if (
-      fodselsMmDd === '02-29' &&
-      dagStr === '03-01' &&
-      !erSkuddaar(Number(aarStr))
-    ) {
-      return true
-    }
-
-    return false
-  })
+  // Skuddårsregelen (29.02-barn gratuleres 01.03 i ikke-skuddår) er delt med
+  // lib/actions/bursdagsvarsel.ts via lib/bursdag.ts — se filhode der for
+  // hvorfor kun datoregelen deles, ikke selve varslingen (#638).
+  const bursdagsbarn = finnBursdagsbarn(profiler, iDag)
 
   if (bursdagsbarn.length === 0) {
     return { sendt, hoppet, feil }
