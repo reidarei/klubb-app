@@ -156,7 +156,7 @@ Varsler er asynkrone og kan mislykkes midt i utsendingen. For å unngå duplikat
 
 3. **Retry må være tidsbegrenset.** Retry-spørringen som søker etter rader med udefinert markør skal alltid ha en `WHERE created_at > now() - interval '…'` sånn at en permanentuleverbar rad ikke sitter og poller for alltid. Gjør også oppsett-guiden klar på hva verdien skal være når den settes opp.
 
-4. **Duplikat-nøkkelen hindrer duplikater per mottaker.** `varsel_logg.dedup_noekkel` + partial unique index `(profil_id, type, arrangement_id) WHERE dedup_noekkel IS NOT NULL` låser at én (type, arrangement_id)-kombinasjon bare sendes en gang per medlem. Nøkkelen skal alltid være namespaced med typen (f.eks. `'paaminnelse_7_' || arrangement_id`).
+4. **Duplikat-nøkkelen hindrer duplikater per mottaker.** `varsel_logg.dedup_noekkel` + partial unique index `(profil_id, type, arrangement_id) WHERE dedup_noekkel IS NOT NULL` låser at én (type, arrangement_id)-kombinasjon bare sendes en gang per medlem. Nøkkelen skal alltid være namespaced med hendelsen den identifiserer (f.eks. `'paaminnelse_7_' || arrangement_id`, eller `'bursdag-chat:'` for chat-varsel om bursdager), ikke nødvendigvis med varseltypen — én sending kan spenne over flere typer.
 
 5. **`23505` (UNIQUE-brudd) tolkes som suksess, ikke feil.** Hvis duplikat-indexen trigges under utsending til flere mottakere, fanger `.catch()` i utsendingsløkka `23505` **per mottaker** og tolker det som «denne mottakeren har allerede fått varslet» — feilen propageres aldri ut av `sendVarsel()`. Andre feil per mottaker (push-subscription invalid, preference blocked) kastes og bobler ut.
 
