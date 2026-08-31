@@ -5,30 +5,40 @@
 // Idempotens sikres via kilde_ekstern_id = «bursdag:{barnId}:{år}:{adminId}»
 // — unik per avsender, slik at begge kan poste uten å slette hverandres.
 //
-// Varsel til bursdagsbarnet: sendVarsel() sin egen dedup_noekkel
-// («bursdag:{barnId}:{år}», mig. 121) er korrektheten her — IKKE en lokal
-// variabel. Varselet er flyttet UT av avsender-løkka og sendes én gang per
-// barn, EVIG GANG chat-posten finnes (uansett om den ble laget akkurat nå,
-// i et tidligere slot, eller av en annen prosess). Før #504 sto varselet
-// inni avsender-løkka bak `if (!varselSendt)`, og varselSendt var en lokal
-// variabel i én kjøring — når posten allerede fantes fra en tidligere
-// kjøring (`eksisterende`/23505-grenen), hoppet koden ALDRI innom
-// varsel-koden i det hele tatt («hoppet++; continue»), så et bursdagsbarn
-// som fikk posten sin utsatt til et senere slot fikk aldri varselet. Samme
-// dedup_noekkel lukker også duplikat-bugen der to admins i to ulike slots
-// begge trigget varselet.
-//
-// Chat-varsel (#642): en menneskeskrevet chat-post går gjennom
+// Chat-varsel (#642, revidert #643): en menneskeskrevet chat-post går gjennom
 // sendChatVarsler() (kalt fra lib/actions/chat.ts) — den automatiske
 // gratulasjonen gjorde det ikke, så ingen fikk varsel om ny melding og
-// taggen (@navn) utløste ikke mention. Fiksen kaller sendChatVarsler()
-// PER AVSENDER, rett etter avsender-iterasjonen, med en per-avsender
-// dedup-nøkkel («bursdag-chat:{barnId}:{år}:{avsenderId}» — merk et annet
-// navnerom enn det dedikerte varselets «bursdag:{barnId}:{år}» over, se
-// #643 for hvorfor de bevisst ikke deler nøkkel). Retry-en er dedup_noekkel,
-// ikke en lokal variabel: kallet gjentas på hvert slot der posten finnes
-// (fersk ELLER fra et tidligere slot), og retry-vinduet er selvbegrensende
-// — kun dagens bursdagsbarn, kun de fire slotene denne morgenen.
+// taggen (@navn) utløste ikke mention. Fiksen kaller sendChatVarsler() én gang
+// per avsender, sist i hver avsender-iterasjon (inne i løkka, ikke etter den),
+// med en per-avsender dedup-nøkkel
+// («bursdag-chat:{barnId}:{år}:{avsenderId}»). Retry-en er dedup_noekkel,
+// ikke en lokal variabel (#504-lærdommen, som opprinnelig gjaldt et eget
+// dedikert varsel fjernet i #643): kallet gjentas på hvert slot der posten
+// finnes (fersk ELLER fra et tidligere slot), og retry-vinduet er
+// selvbegrensende — kun dagens bursdagsbarn, kun de fire slotene denne
+// morgenen. Var det dedikerte varselet fortsatt her, ville dette vært
+// nøyaktig samme bug-klasse: en lokal variabel i én kjøring ville aldri sett
+// en post som allerede fantes fra en tidligere kjøring.
+//
+// Det dedikerte varselet («Gratulerer med dagen! 🎉» til bursdagsbarnet) er
+// FJERNET i #643: mention-varselet fra sendChatVarsler() over dekker samme
+// behov, og å beholde begge ga bursdagsmannen to varsler om nøyaktig samme
+// gratulasjon i samme minutt. Typen `bursdagsgratulasjon` sendes ikke lenger,
+// men etiketten i lib/varsel-typer.ts må stå — historiske varsel_logg-rader
+// fra før #643 skal fortsatt vises med navn, ikke som rå nøkkel.
+//
+// To konsekvenser av at mention-varselet nå står alene:
+// 1. sendChatVarsler() svelger begge benene sine (chat.varsler.mention.feilet /
+//    chat.varsler.broadcast.feilet) og kaster kun på profiles-oppslaget. Feiler
+//    mention-sendingen, teller verken `feil` eller vår egen
+//    bursdagsgratulasjon.chatvarsel.feilet — sporet er da KUN det generiske
+//    mention-eventet, og cronen svarer 200. Feiler den på siste slot, får
+//    bursdagsmannen ingenting.
+// 2. Varselet henger nå på mention-bryteren i varsel_innstillinger («@-mention
+//    i chat» på /innstillinger), som typen aldri gjorde før. Skrus den av,
+//    returnerer mention-benet type_deaktivert og de nevnte legges tilbake i
+//    broadcasten — som er tellerUlest: false, så et medlem på
+//    varsel_nivaa = 'viktige' mister push/e-post for sin egen gratulasjon.
 //
 // Taggen bruker fullt navn (`profiles.navn`), IKKE `visningsnavn`
 // (#642-oppfølging): visningsnavn er kallenavnet, og er i praksis fornavnet —
@@ -48,10 +58,9 @@ import {
   BURSDAG_HILSNER,
   BURSDAG_UTROPSTEGN,
 } from '@/lib/konstanter'
-import { sendVarsel, sendChatVarsler } from '@/lib/varsler'
+import { sendChatVarsler } from '@/lib/varsler'
 import { rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
-import { BASE_URL } from '@/lib/config'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
@@ -82,9 +91,12 @@ export async function kjorBursdagsgratulasjon(
   const aarStr = formatInTimeZone(idag, TIDSSONE, 'yyyy')
 
   // 2. Hent aktive profiler med fødselsdato
+  // Kun id, navn, fodselsdato — visningsnavn har ingen bruker igjen etter at
+  // det dedikerte varselet (som brukte kallenavnet i teksten) ble fjernet i
+  // #643. Chat-taggen bruker fullt `navn`, se kommentaren i filhodet.
   const { data: profiler, error: profilerFeil } = await admin
     .from('profiles')
-    .select('id, navn, visningsnavn, fodselsdato')
+    .select('id, navn, fodselsdato')
     .eq('aktiv', true)
     .not('fodselsdato', 'is', null)
 
@@ -155,25 +167,6 @@ export async function kjorBursdagsgratulasjon(
 
   // 4. Behandle hvert bursdagsbarn × hvert avsender-admin
   for (const barn of bursdagsbarn) {
-    // visningsnavn er kallenavnet (ikke nullable i schema) — fornavn er første
-    // token. Brukes KUN i det dedikerte varselet under, som er en tekst uten @
-    // sendt til bursdagsbarnet selv: der slår lesbarhet entydighet, for mannen
-    // vet hvem han er. Chat-taggen bruker fullt `navn`, se `innhold` lenger ned
-    // (kollisjons-fiksen, #642-oppfølging).
-    const fornavn = barn.visningsnavn.trim().split(/\s+/)[0]
-
-    // harPost = «finnes det (nå, eller fra før) en chat-post til dette
-    // barnet i år?» — settes i alle tre grenene som betyr nettopp det:
-    // funnet fra før, fersk insert, eller 23505 (racy dobbel-insert). Styrer
-    // om varselet under skal sendes i det hele tatt — vi skal ikke varsle om
-    // en gratulasjon som slot-sannsynligheten har utsatt til et senere slot.
-    let harPost = false
-    // Fanger hilsen fra FØRSTE vellykkede insert i denne kjøringen. Er den
-    // fortsatt null når løkka er ferdig (posten fantes alt fra en tidligere
-    // kjøring/slot), trekker vi en ny under — vi har ikke den opprinnelige
-    // hilsen-teksten liggende noe sted.
-    let varselHilsen: string | null = null
-
     for (const avsender of avsendere) {
       // En admin gratulerer ikke seg selv (dekker også tilfellet der
       // bursdagsbarnet selv er admin)
@@ -204,7 +197,6 @@ export async function kjorBursdagsgratulasjon(
 
       if (eksisterende) {
         hoppet++
-        harPost = true
         postetInnhold = eksisterende.innhold
       } else {
         // Slot-sannsynlighet: garanterer sending seinest ved siste slot.
@@ -244,7 +236,6 @@ export async function kjorBursdagsgratulasjon(
             // sjekk og insert). Behandles som hoppet, ikke feil.
             if (insertErr.code === '23505') {
               hoppet++
-              harPost = true
               // Fail-open, uten vakt (#504-review NIT-11-resonnementet over
               // gjelder likt her): den andre prosessen vant racet og har alt
               // skrevet posten, så et nytt oppslag henter DENS tekst. Feiler
@@ -267,8 +258,6 @@ export async function kjorBursdagsgratulasjon(
               continue
             }
           } else {
-            harPost = true
-            if (varselHilsen === null) varselHilsen = hilsen
             sendt++
             postetInnhold = innhold
           }
@@ -284,13 +273,14 @@ export async function kjorBursdagsgratulasjon(
       // OG et ekte mention-varsel til bursdagsbarnet. Mottakeren av mention-en
       // kommer fra `opts.nevnte` (barnets id), ikke fra tagg-teksten — teksten
       // er fortsatt en ekte @-tagg for lesbarhet, men den gjettes ikke på.
-      // Kalles for HVER
-      // avsender (ikke felles for barnet, i motsetning til varselHilsen
-      // under) — to admins som poster hver sin gratulasjon skal gi to
-      // chat-varsler, akkurat som om to menn hadde skrevet hver sin melding
-      // for hånd. dedup_noekkel er per (barn, år, avsender) — samme nøkkel
-      // hver gang dette slotet kjøres for denne posten, så retry fra et
-      // senere slot ikke varsler på nytt.
+      // Kalles for HVER avsender — to admins som poster hver sin gratulasjon
+      // skal gi to chat-varsler, akkurat som om to menn hadde skrevet hver
+      // sin melding for hånd. Dette er nå ENESTE varsel til bursdagsbarnet
+      // (#643 — det tidligere separate «Gratulerer med dagen!»-varselet er
+      // fjernet, se filhodet), så dedup_noekkel («bursdag-chat:{barnId}:
+      // {år}:{avsenderId}», per (barn, år, avsender)) er retry-korrektheten
+      // fra #504-lærdommen: samme nøkkel hver gang dette slotet kjøres for
+      // denne posten, så retry fra et senere slot ikke varsler på nytt.
       if (postetInnhold) {
         try {
           await sendChatVarsler({ type: 'klubb' }, postetInnhold, avsender.id, false, {
@@ -303,30 +293,6 @@ export async function kjorBursdagsgratulasjon(
           })
           feil++
         }
-      }
-    }
-
-    // Varselet er flyttet UT av avsender-løkka (#504) — selve retry-fiksen.
-    // Sendes én gang per barn per år, uansett hvilken avsender/slot som
-    // faktisk fikk posten inn. dedup_noekkel («bursdag:{barnId}:{år}», mig.
-    // 121) er korrektheten på tvers av prosesser/slots, ikke en lokal
-    // variabel — sendVarsel hopper selv over utsendingen til denne
-    // mottakeren hvis noekkelen alt er brukt (23505 → tolkes som suksess).
-    if (harPost) {
-      const hilsenForVarsel =
-        varselHilsen ?? BURSDAG_HILSNER[Math.floor(Math.random() * BURSDAG_HILSNER.length)]
-      try {
-        await sendVarsel({
-          mottakere: [barn.id],
-          tittel: 'Gratulerer med dagen! 🎉',
-          melding: `${hilsenForVarsel} med dagen ${fornavn}! 🥳🥂`,
-          type: 'bursdagsgratulasjon',
-          url: `${BASE_URL}/chat`,
-          dedupNoekkel: `bursdag:${barn.id}:${aarStr}`,
-        })
-      } catch (e) {
-        await logg.feil('bursdagsgratulasjon.varsel.feilet', e, { ctx: { profil_id: barn.id } })
-        feil++
       }
     }
   }

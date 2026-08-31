@@ -51,7 +51,9 @@ describe('varsel-typer', () => {
   it('har kort navn for hver type, også de uten bryter', () => {
     const utenKort = Object.entries(VARSEL_TEKSTER).filter(([, t]) => !t.kort)
     expect(utenKort).toEqual([])
-    // bursdagsgratulasjon har ingen bryter, men havner i varselhistorikken
+    // bursdagsgratulasjon har ingen bryter, men havner i varselhistorikken.
+    // Typen SENDES ikke lenger (#643 — mention-varselet dekker samme behov),
+    // men etiketten må overleve: uten den vises gamle rader som rå nøkkel.
     expect(VARSEL_TEKSTER.bursdagsgratulasjon.panel).toBeUndefined()
     expect(varselKortNavn('bursdagsgratulasjon')).toBe('Bursdagsgratulasjon')
   })

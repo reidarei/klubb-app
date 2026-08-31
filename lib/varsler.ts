@@ -341,7 +341,7 @@ export async function sendVarsel({
   pollId?: string
   tillatDuplikat?: boolean
   // Navnerom-prefikset per-mottaker-guard (f.eks. «pass-godkjent:{id}»,
-  // «bursdag:{barnId}:{aar}») — se varsel_logg_dedup_noekkel_uniq (mig. 121).
+  // «bursdag-chat:{barnId}:{aar}:{avsenderId}») — se varsel_logg_dedup_noekkel_uniq (mig. 121).
   //
   // Retensjonsinvarianten (#612, grunnlaget en fremtidig pruning-jobb i PR 2
   // vil stole blindt på): en varsel_logg-rad bærer en kvittering HVISS

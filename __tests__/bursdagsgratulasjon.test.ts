@@ -53,60 +53,12 @@ describe('kjorBursdagsgratulasjon – #504', () => {
     )
     expect(mockSendVarsel).not.toHaveBeenCalled()
   })
-
-  it('sender varsel til bursdagsbarnet selv om chat-posten allerede finnes fra et tidligere slot', async () => {
-    // Kjernen i #504-fiksen: `eksisterende`-grenen (posten postet i et
-    // tidligere slot) satte tidligere ALDRI harPost/varselSendt-flagget slik
-    // at varsel-koden ble nådd — «hoppet++; continue» hoppet forbi den helt.
-    let profilesKall = 0
-    const admin = {
-      from: vi.fn((tabell: string) => {
-        if (tabell === 'profiles') {
-          profilesKall++
-          if (profilesKall === 1) {
-            // Bursdagsbarnet
-            return lagChain([
-              {
-                id: 'barn1',
-                // visningsnavn er kallenavnet og skal være ULIKT navn i
-                // fixturen — settes de like, kan en tagg bygget på feil
-                // kolonne aldri oppdages (review-funn på #642).
-                navn: 'Ola Nordmann',
-                visningsnavn: 'Ola',
-                fodselsdato: `2000-${dagStr}`,
-              },
-            ])
-          }
-          // Avsender-admin
-          return lagChain([{ id: 'admin1', navn: 'Admin Adminsen' }])
-        }
-        if (tabell === 'klubb_chat') {
-          // Posten finnes alt — simulerer at en tidligere slot/kjøring
-          // allerede har postet gratulasjonen.
-          return lagChain({ id: 'eksisterende-post', innhold: 'Gratulerer med dagen @Ola! 🎉' })
-        }
-        return lagChain([])
-      }),
-    } as unknown as Admin
-
-    const resultat = await kjorBursdagsgratulasjon(admin, { slotIndex: 2, totalSlots: 4 })
-
-    expect(resultat.hoppet).toBe(1)
-    expect(resultat.sendt).toBe(0)
-    expect(resultat.feil).toBe(0)
-    expect(mockSendVarsel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mottakere: ['barn1'],
-        type: 'bursdagsgratulasjon',
-        dedupNoekkel: `bursdag:barn1:${aarStr}`,
-      }),
-    )
-  })
 })
 
 // #642: den automatiske gratulasjonen skal utløse nøyaktig det samme som en
-// menneskeskrevet chat-post — sendChatVarsler(), ikke bare det dedikerte
-// bursdagsgratulasjon-varselet (som er utenfor scope her, se #643).
+// menneskeskrevet chat-post — sendChatVarsler(), som etter #643 er ENESTE
+// varsel til bursdagsbarnet (det tidligere dedikerte «Gratulerer med
+// dagen!»-varselet er fjernet, se lib/actions/bursdagsgratulasjon.ts filhode).
 describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
   function lagAdmin(klubbChatData: unknown) {
     let profilesKall = 0
@@ -118,11 +70,7 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
             return lagChain([
               {
                 id: 'barn1',
-                // visningsnavn er kallenavnet og skal være ULIKT navn i
-                // fixturen — settes de like, kan en tagg bygget på feil
-                // kolonne aldri oppdages (review-funn på #642).
                 navn: 'Ola Nordmann',
-                visningsnavn: 'Ola',
                 fodselsdato: `2000-${dagStr}`,
               },
             ])
@@ -148,8 +96,6 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
     expect(mockSendChatVarsler).toHaveBeenCalledTimes(1)
     const [scope, tekst, avsenderId, harBilde, opts] = mockSendChatVarsler.mock.calls[0]
     expect(scope).toEqual({ type: 'klubb' })
-    // Fullt navn, ikke kallenavnet ('Ola') — fixturen har dem ULIKE nettopp
-    // for at denne assertionen skal kunne feile hvis koden bytter kolonne.
     expect(tekst).toMatch(/@Ola Nordmann/)
     expect(avsenderId).toBe('admin1')
     expect(harBilde).toBe(false)
@@ -159,7 +105,14 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
     })
   })
 
-  it('post fra tidligere slot: sendChatVarsler kalles likevel, med innhold lest fra DB', async () => {
+  it('post fra tidligere slot: sendChatVarsler kalles likevel, ikke det slettede dedikerte varselet', async () => {
+    // Kjernen i #504-fiksen (opprinnelig pinnet mot det dedikerte varselet,
+    // fjernet i #643): `eksisterende`-grenen (posten postet i et tidligere
+    // slot) satte tidligere ALDRI harPost/varselSendt-flagget slik at
+    // varsel-koden ble nådd — «hoppet++; continue» hoppet forbi den helt.
+    // Etter #643 er sendChatVarsler() eneste varsel, og dedup_noekkel
+    // («bursdag-chat:{barnId}:{år}:{avsenderId}») er retry-korrektheten på
+    // tvers av slots, ikke en lokal variabel.
     const admin = lagAdmin({ id: 'eksisterende-post', innhold: 'Gratulerer med dagen @Ola Nordmann! 🎉' })
 
     const resultat = await kjorBursdagsgratulasjon(admin, { slotIndex: 2, totalSlots: 4 })
@@ -172,16 +125,17 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
       false,
       { dedupNoekkel: `bursdag-chat:barn1:${aarStr}:admin1`, nevnte: ['barn1'] },
     )
+    expect(mockSendVarsel).not.toHaveBeenCalled()
   })
 
   it('fornavn kolliderer med en annen profil: taggen bruker fullt navn, og nevnte peker eksplisitt på barnet', async () => {
     // Flere medlemmer i klubben deler fornavn (her: to «Per») —
     // finnNevnte()s tekstmatching ville truffet begge på et rent fornavn.
     // Fiksen er todelt: (1) taggen i teksten er fullt `navn`, ikke
-    // `visningsnavn` (som er kallenavnet, her «Per»), og (2) opts.nevnte
-    // peker eksplisitt på barnets id uavhengig av teksten — sendChatVarsler
-    // (testet for seg i chat-varsler.test.ts) skal derfor aldri trenge å
-    // gjette hvilken Per det gjelder.
+    // kallenavnet, og (2) opts.nevnte peker eksplisitt på barnets id
+    // uavhengig av teksten — sendChatVarsler (testet for seg i
+    // chat-varsler.test.ts) skal derfor aldri trenge å gjette hvilken Per
+    // det gjelder.
     let profilesKall = 0
     const admin = {
       from: vi.fn((tabell: string) => {
@@ -192,7 +146,6 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
               {
                 id: 'per-hansen',
                 navn: 'Per Hansen',
-                visningsnavn: 'Per',
                 fodselsdato: `2000-${dagStr}`,
               },
             ])
@@ -229,7 +182,7 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
     randomSpy.mockRestore()
   })
 
-  it('sendChatVarsler kaster: feil telles, feilen logges, og det dedikerte varselet sendes fortsatt', async () => {
+  it('sendChatVarsler kaster: feil telles og logges, det dedikerte varselet er ikke gjenopprettet', async () => {
     const admin = lagAdmin(null)
     mockSendChatVarsler.mockRejectedValueOnce(new Error('sendChatVarsler feilet'))
 
@@ -242,8 +195,33 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
       expect.any(Error),
       expect.objectContaining({ ctx: { profil_id: 'barn1' } }),
     )
-    expect(mockSendVarsel).toHaveBeenCalledWith(
-      expect.objectContaining({ mottakere: ['barn1'], type: 'bursdagsgratulasjon' }),
-    )
+    expect(mockSendVarsel).not.toHaveBeenCalled()
+  })
+})
+
+// #643-vakt: bursdagsmannen skal få ETT varsel, ikke to. Regresjonsvakt mot
+// at noen setter det dedikerte bursdagsgratulasjon-varselet tilbake ved
+// siden av chat-mention-varselet.
+describe('kjorBursdagsgratulasjon – ett varsel, ikke to (#643)', () => {
+  it('én avsender, én bursdagsmann: mockSendVarsel kalles aldri, mockSendChatVarsler nøyaktig én gang', async () => {
+    let profilesKall = 0
+    const admin = {
+      from: vi.fn((tabell: string) => {
+        if (tabell === 'profiles') {
+          profilesKall++
+          if (profilesKall === 1) {
+            return lagChain([{ id: 'barn1', navn: 'Ola Nordmann', fodselsdato: `2000-${dagStr}` }])
+          }
+          return lagChain([{ id: 'admin1', navn: 'Admin Adminsen' }])
+        }
+        if (tabell === 'klubb_chat') return lagChain(null)
+        return lagChain([])
+      }),
+    } as unknown as Admin
+
+    await kjorBursdagsgratulasjon(admin, { slotIndex: 3, totalSlots: 4 })
+
+    expect(mockSendVarsel).not.toHaveBeenCalled()
+    expect(mockSendChatVarsler).toHaveBeenCalledTimes(1)
   })
 })

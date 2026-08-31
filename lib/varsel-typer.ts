@@ -25,8 +25,8 @@ export function typeTilNoekkel(type: string): string {
 type VarselTekst = {
   /**
    * Etikett i admin-kontrollpanelet. Utelates for typer som ikke har en egen
-   * bryter i varsel_innstillinger (i dag kun bursdagsgratulasjon, som styres
-   * per admin via profiles.bursdagsgratulasjon_aktiv).
+   * bryter i varsel_innstillinger (i dag kun bursdagsgratulasjon, som ikke
+   * lenger sendes — etiketten står igjen for historiske rader, se under).
    */
   panel?: string
   /** Kort navn i varselhistorikken, der raden også viser mottaker og kanal. */
@@ -117,9 +117,10 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
   chat_melding: { panel: 'Ny kommentar på et innlegg', kort: 'Kommentar på innlegg' },
   chat_albumbilde: { panel: 'Ny kommentar på et bilde', kort: 'Kommentar på bilde' },
   'privat-melding': { panel: 'Ny privatmelding (til mottakeren)', kort: 'Ny privatmelding' },
-  // Ingen bryter i varsel_innstillinger — styres per admin under
-  // «Automatisering» (profiles.bursdagsgratulasjon_aktiv, migrasjon 100).
-  // Står her fordi den fortsatt havner i varselhistorikken.
+  // Typen sendes ikke lenger (#643 — mention-varselet fra den automatiske
+  // chat-posten dekker samme behov, og de to sammen ga bursdagsmannen to
+  // varsler om samme gratulasjon). Etiketten må likevel bli stående: historiske
+  // varsel_logg-rader fra før #643 skal vises med navn her, ikke som rå nøkkel.
   bursdagsgratulasjon: { kort: 'Bursdagsgratulasjon' },
 
   // ── Pass ─────────────────────────────────────────────────────────────────

@@ -1629,8 +1629,8 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
       mottakere: ['user1', 'user2'],
       tittel: 'Test',
       melding: 'Test',
-      type: 'bursdagsgratulasjon',
-      dedupNoekkel: 'bursdag:barn1:2026',
+      type: 'mention',
+      dedupNoekkel: 'bursdag-chat:barn1:2026:admin1',
     })
 
     // user1 traff 23505 (allerede kvittert) — hoppes stille over. user2 får
