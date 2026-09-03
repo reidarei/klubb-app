@@ -13,10 +13,18 @@
 //   4. Melding     — egen tabell `meldinger`       → MeldingKort  (ny — #90)
 //
 // === Seksjons-regler (i prioritert rekkefølge) =======================
-//   0. «Meldinger»  = levende meldinger (se MELDING_LEVENDE_DAGER
+//   0. «bursdagerIDag» = bursdager hvis sortIso faller på samme norske dag
+//                     som naa. Løftet HELT til topps på agenda — over
+//                     «Ikke svart ennå» også — fordi det store bursdagskortet
+//                     (#640) skal være dagens hovedsak uansett hvor mange
+//                     ubesvarte arrangementer et medlem har. Ekskludert fra
+//                     «I dag» under for å unngå duplikatvisning; page.tsx
+//                     rendrer denne lista øverst.
+//   0.5 «Meldinger» = levende meldinger (se MELDING_LEVENDE_DAGER
 //                     under). Plassert øverst på
 //                     agenda, sortert etter sist_aktivitet (nyeste først).
 //   1. «I kveld»    = items hvis sortIso faller på samme norske dag som naa
+//                     (bursdager unntatt — se punkt 0)
 //   2. «Kommende»   = alt annet som ikke er tidligere (sortert stigende
 //                     på sortIso, utkast uten purredato faller til enden)
 //   3. «Tidligere»  = arrangementer/polls som har passert + meldinger som
@@ -180,6 +188,9 @@ export type Agenda = {
   ubesvarte: AgendaItem[]
   // Levende meldinger — øverst på agenda, sortert etter sist_aktivitet
   meldinger: AgendaItem[]
+  // Bursdager i dag — løftet ut av «idag» og rendret som eget stort kort
+  // helt øverst på agendaen, over «Ikke svart ennå» (#640).
+  bursdagerIDag: AgendaItem[]
   idag: AgendaItem[]
   kommende: AgendaItem[]
   tidligere: TidligereItem[]
@@ -609,7 +620,12 @@ export function byggAgenda(input: {
   ]
 
   // Regel 1: I kveld = items med sortIso som ligger på samme norske dag.
-  const idag = alleItems.filter(i => i.sortIso && erSammeNorskeDag(i.sortIso, naa))
+  const idagAlle = alleItems.filter(i => i.sortIso && erSammeNorskeDag(i.sortIso, naa))
+
+  // Regel 0: bursdager i dag løftes ut av «I dag» og rendres separat, helt
+  // øverst på agendaen (#640) — se seksjons-regel-kommentaren i filhodet.
+  const bursdagerIDag = idagAlle.filter(i => i.kind === 'bursdag')
+  const idag = idagAlle.filter(i => i.kind !== 'bursdag')
 
   // Regel 2: Kommende = resten, sortert stigende. Items uten sortIso (utkast
   // uten gyldig purredato) sorteres til enden via null-dytt-regelen.
@@ -621,5 +637,5 @@ export function byggAgenda(input: {
       return a.sortIso.localeCompare(b.sortIso)
     })
 
-  return { ubesvarte, meldinger, idag, kommende, tidligere }
+  return { ubesvarte, meldinger, bursdagerIDag, idag, kommende, tidligere }
 }

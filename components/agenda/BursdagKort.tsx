@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
-import { formaterDato, aarHvisAvvik, iDagOslo } from '@/lib/dato'
+import { SolidChip } from '@/components/ui/Pill'
+import { formaterDato, aarHvisAvvik } from '@/lib/dato'
 
 export type BursdagData = {
   id: string
@@ -13,14 +14,27 @@ export type BursdagData = {
   rolle?: string | null
 }
 
-export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
+// Default-eksporten er en tynn velger mellom de to visningene (#640): på
+// selve dagen er bursdagen dagens hovedsak og skal blåses opp, resten av
+// året er den en vanlig rad blant andre kort.
+//
+// `stort` er en påkrevd prop, ikke noe komponenten regner ut selv: PLASSERINGEN
+// avgjøres av byggAgenda (som splitter på sin egen `naa`), og hvis komponenten
+// i tillegg kalte iDagOslo() ville vi hatt to uavhengige kilder til «er det i
+// dag». Straddler rendringen midnatt kan de divergere — et kompakt kort alene
+// i toppblokken uten seksjonslabel, eller en hero nede i «Kommende». Kallstedet
+// vet allerede hvilken bøtte kortet havnet i, så det bestemmer også varianten.
+export default function BursdagKort({ bursdag, stort }: { bursdag: BursdagData; stort: boolean }) {
+  return stort ? <StortBursdagKort bursdag={bursdag} /> : <KompaktBursdagKort bursdag={bursdag} />
+}
+
+// Kompakt rad — uendret fra før #640, brukt i «Kommende» for bursdager fram
+// i tid. Siden denne komponenten nå kun rendres når stort=false, er den gamle
+// erIDag-forgreningen fjernet til fordel for den nøytrale (dato-visende) stilen.
+function KompaktBursdagKort({ bursdag }: { bursdag: BursdagData }) {
   const mnd = formaterDato(bursdag.dato, 'MMM').toUpperCase()
   const dag = formaterDato(bursdag.dato, 'd')
   const aar = aarHvisAvvik(bursdag.dato)
-  // Bursdag i dag løftes fram som dagens høydepunkt: aksentramme + halo og
-  // «I DAG» i stedet for datoen — på linje med hvordan dagens arrangementer
-  // fremheves. Bursdager fram i tid (i «Kommende») beholder nøytral stil.
-  const erIDag = bursdag.dato === iDagOslo()
 
   return (
     <Link
@@ -31,9 +45,8 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
         alignItems: 'stretch',
         overflow: 'hidden',
         borderRadius: 'var(--radius-card)',
-        border: erIDag ? '1px solid var(--accent)' : '0.5px solid var(--border-subtle)',
+        border: '0.5px solid var(--border-subtle)',
         background: 'var(--bg-elevated)',
-        boxShadow: erIDag ? '0 0 0 4px var(--accent-soft)' : undefined,
         textDecoration: 'none',
         color: 'inherit',
       }}
@@ -49,7 +62,7 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
         }}
       >
         {/* Samme glyf som bursdager får i MiniKalender — se #550. */}
-        <Icon name="flute" size={24} color={erIDag ? 'var(--accent)' : 'var(--text-tertiary)'} strokeWidth={1.25} />
+        <Icon name="flute" size={24} color="var(--text-tertiary)" strokeWidth={1.25} />
       </div>
 
       <div
@@ -76,9 +89,7 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
             textTransform: 'uppercase',
           }}
         >
-          <span style={erIDag ? { color: 'var(--accent)' } : undefined}>
-            {erIDag ? 'I DAG' : `${dag}. ${mnd}${aar ? ` ${aar}` : ''}`}
-          </span>
+          <span>{`${dag}. ${mnd}${aar ? ` ${aar}` : ''}`}</span>
         </div>
 
         <h3
@@ -115,6 +126,86 @@ export default function BursdagKort({ bursdag }: { bursdag: BursdagData }) {
           size={64}
           rolle={bursdag.rolle}
         />
+      </div>
+    </Link>
+  )
+}
+
+// Stort hero-kort — kun rendret på selve bursdagen (#640). Samme visuelle
+// oppskrift som HighlightKort (bilde-hero + chip + innholdsblokk), men med
+// en Avatar i stedet for et 16/10-arrangementsbilde: en mann er ikke et
+// landskap, og Avatar takler manglende bilde (initial-gradient) selv.
+function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
+  return (
+    <Link
+      href={`/klubbinfo/medlemmer/${bursdag.profilId}`}
+      style={{
+        display: 'block',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 'var(--radius)',
+        border: '1px solid var(--accent)',
+        // --accent-soft har alpha ~0.15 og fungerer som halo-ring (0 0 0 4px)
+        // andre steder i appen, ikke som slagskygge — en 30px uskarp skygge i
+        // den fargen er praktisk talt usynlig. --shadow-floating gir kortet det
+        // løftet fra flaten som faktisk er synlig i begge temaer.
+        boxShadow: 'var(--shadow-floating), 0 0 0 1px var(--border-strong)',
+        background: 'var(--bg-elevated)',
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
+      {/* Hero-flaten er stedet et generert bursdagsbilde skal inn (#641) —
+          resten av kortet skal ikke måtte røres da. */}
+      <div
+        style={{
+          position: 'relative',
+          aspectRatio: '4/3',
+          background: 'var(--accent-soft)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Avatar name={bursdag.navn} src={bursdag.bildeUrl ?? null} size={168} rolle={bursdag.rolle} />
+      </div>
+
+      <div style={{ position: 'absolute', top: 12, right: 12 }}>
+        <SolidChip>I dag</SolidChip>
+      </div>
+
+      <div style={{ padding: '18px 18px 20px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--accent)',
+            letterSpacing: '1.6px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+          }}
+        >
+          {/* Samme glyf som bursdager får i MiniKalender — se #550. */}
+          <Icon name="flute" size={16} color="var(--accent)" strokeWidth={1.25} />
+          <span>BURSDAG</span>
+        </div>
+
+        <h3
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 26,
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.3px',
+            lineHeight: 1.15,
+            margin: '8px 0 0',
+          }}
+        >
+          {bursdag.navn} <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>fyller {bursdag.alder}</span>
+        </h3>
       </div>
     </Link>
   )

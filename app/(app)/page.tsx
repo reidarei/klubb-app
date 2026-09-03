@@ -52,7 +52,7 @@ export default async function Forside() {
     chatProfiler,
   } = await hentAgendaData(supabase, { brukerId: user!.id, aar, cutoffIso })
 
-  const { ubesvarte, meldinger, idag, kommende, tidligere } = byggAgenda({
+  const { ubesvarte, meldinger, bursdagerIDag, idag, kommende, tidligere } = byggAgenda({
     arrangementer: arrangementerBerikt,
     ansvar,
     profilerMedBursdag,
@@ -151,6 +151,27 @@ export default async function Forside() {
 
       <PushPaaminnelse />
 
+      {/* Bursdag i dag — dagens hovedsak (#640). Rendres over ALT annet,
+          også «Ikke svart ennå», så et medlem med ubesvarte arrangementer
+          fortsatt ser bursdagen først. Items er allerede filtrert ut av
+          «idag» i byggAgenda for å unngå duplikat, og det er byggAgenda som
+          eier «er det i dag»-avgjørelsen — derfor sendes stort som prop
+          herfra i stedet for at kortet regner det ut på nytt.
+          Deler flere jubilanter samme dag får ALLE stort kort, bevisst: med
+          18 medlemmer er sammenfall ganske sannsynlig, og å degradere den ene
+          til kompakt form ville krevd at vi kåret en «nr. 1». Litt ekstra
+          scrolling én dag i året er den billigere prisen. */}
+      {bursdagerIDag.length > 0 && (
+        <section style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {bursdagerIDag.map(i => {
+              if (i.kind !== 'bursdag') return null
+              return <BursdagKort key={i.data.id} bursdag={i.data} stort />
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Ubesvarte fremtidige arrangementer — vises øverst som påminnelse (#271).
           Hvert kort er en vanlig <Link> med en RsvpInline-rad rett under.
           RsvpInline ligger *utenfor* <Link> for å unngå nested-button-i-link-feil.
@@ -215,9 +236,11 @@ export default async function Forside() {
         </section>
       )}
 
-      {/* I dag — samler alt som skjer i dag (arrangementer, bursdager, poll-
+      {/* I dag — samler alt annet som skjer i dag (arrangementer, poll-
           frister, jubileum). Labelen er «I dag», ikke «I kveld», fordi
-          seksjonen også rommer bursdager som varer hele dagen (#…). Kvelds-
+          seksjonen historisk rommet ting som varer hele dagen. Bursdager i
+          dag rendres IKKE her lenger — de er løftet ut til egen toppblokk
+          over «Ikke svart ennå» (#640), se bursdagerIDag over. Kvelds-
           arrangementer beholder sin egen «I KVELD»-chip på selve kortet. */}
       {idag.length > 0 && (
         <section style={{ marginBottom: 28 }}>
@@ -227,7 +250,6 @@ export default async function Forside() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {idag.map(i => {
               if (i.kind === 'highlight') return <HighlightKort key={i.data.id} arr={i.data} />
-              if (i.kind === 'bursdag') return <BursdagKort key={i.data.id} bursdag={i.data} />
               if (i.kind === 'klubbjubileum') return <KlubbJubileumKort key={i.data.id} jubileum={i.data} />
               if (i.kind === 'utkast') return <UtkastKort key={i.data.id} utkast={i.data} meg={user!.id} />
               if (i.kind === 'poll')
@@ -248,7 +270,9 @@ export default async function Forside() {
           {kommende.map(i => {
             if (i.kind === 'arrangement')
               return <ArrangementKort key={i.data.id} arr={i.data} kommentarer={kommentarerPerArr.get(i.data.id) ?? []} totaltKommentarer={totaltPerArr.get(i.data.id) ?? 0} profiler={chatProfiler} brukerId={user!.id} brukerNavn={minNavn} brukerBildeUrl={minProfil?.bilde_url} brukerRolle={minRolle} />
-            if (i.kind === 'bursdag') return <BursdagKort key={i.data.id} bursdag={i.data} />
+            // stort={false}: alt i «Kommende» ligger per definisjon fram i tid —
+            // den store varianten hører kun til toppblokken over.
+            if (i.kind === 'bursdag') return <BursdagKort key={i.data.id} bursdag={i.data} stort={false} />
             if (i.kind === 'klubbjubileum') return <KlubbJubileumKort key={i.data.id} jubileum={i.data} />
             if (i.kind === 'utkast') return <UtkastKort key={i.data.id} utkast={i.data} meg={user!.id} />
             if (i.kind === 'poll')

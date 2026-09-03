@@ -43,10 +43,11 @@ export default function Pill({ children, variant = 'neutral', small = false, sty
 }
 
 /**
- * Særtilfelle — solid "I KVELD"-chip på HighlightKort.
- * Ikke en Pill-variant: egen farge og form.
+ * Solid chip — fylt accent-flate, ikke en Pill-variant (egen farge og form).
+ * Bevisst generisk: brukes både til «I KVELD» på HighlightKort og «I dag» på
+ * det store bursdagskortet (#640). Navnet beskriver formen, ikke ett kallsted.
  */
-export function IKveldChip({ children = 'I KVELD' }: { children?: ReactNode }) {
+export function SolidChip({ children }: { children: ReactNode }) {
   return (
     <span
       style={{
@@ -66,4 +67,9 @@ export function IKveldChip({ children = 'I KVELD' }: { children?: ReactNode }) {
       {children}
     </span>
   )
+}
+
+/** «I KVELD»-chippen på HighlightKort — tynn wrapper over SolidChip. */
+export function IKveldChip({ children = 'I KVELD' }: { children?: ReactNode }) {
+  return <SolidChip>{children}</SolidChip>
 }
