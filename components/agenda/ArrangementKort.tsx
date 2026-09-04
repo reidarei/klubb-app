@@ -85,6 +85,11 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
   const visKommentarBlokk = !tidligere && visKommentarer
   const siste = visKommentarBlokk ? kommentarer[kommentarer.length - 1] : undefined
   const alderMs = siste ? Date.now() - new Date(siste.opprettet).getTime() : 0
+  // Kollaps kun på ALDER, aldri på tom liste (se #648-review): `apen` i
+  // KommentarerPaaKort er state satt ved mount, og en tom liste er nettopp
+  // tilstanden som kan bli ikke-tom av en optimistisk rad rett etterpå. Startet
+  // kortet kollapset, ville medlemmets egen ferske kommentar vært usynlig — og
+  // `apen` reagerer ikke på at propen senere går tilbake til false.
   const skalKollapse =
     visKommentarBlokk &&
     kommentarer.length > 0 &&

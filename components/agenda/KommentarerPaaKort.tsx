@@ -126,6 +126,29 @@ function relativTid(iso: string): string {
 }
 
 /**
+ * Delt stil for de to header-variantene (chevron-toggle og navigerende label).
+ * Ligger felles fordi de skal SE identiske ut — de skiller seg kun i oppførsel;
+ * to parallelle kopier var nettopp mønsteret som driftet fra hverandre i #648.
+ * Horisontal padding med kompenserende negativ margin utvider treffområdet
+ * uten å flytte teksten (den sto tidligere med padding '8px 0', altså et
+ * treffområde nøyaktig like bredt som teksten).
+ */
+const HEADER_STIL = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  fontFamily: 'var(--font-mono)',
+  fontSize: 10,
+  color: 'var(--text-tertiary)',
+  letterSpacing: '1.4px',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+  cursor: 'pointer',
+  padding: '8px 10px',
+  margin: '0 -10px',
+} as const
+
+/**
  * Kollapsbar kommentar-seksjon på arrangement- og pollkort. Viser opp til 3
  * siste kommentarer og har et inline input-felt under dem for å legge til
  * ny kommentar uten å navigere bort fra agenda.
@@ -211,6 +234,17 @@ export default function KommentarerPaaKort({
   // pusher den eldste ut visuelt i stedet for å legge til en fjerde. Nyeste står
   // sist (lista er kronologisk, eldste øverst), så .slice(-3) gir de 3 nyeste. se #316
   const visteKommentarer = [...kommentarer, ...usynkroniserte].slice(-3)
+
+  // Tre tidligere uavhengige betingelser (chevron på visTall, liste på
+  // visteKommentarer, inline-felt på apen/kommentarer) kunne komme i utakt
+  // når et korts kommentarer alle lå utenfor agenda-queryens topp-30-uttak
+  // (se #648) — telleren sa "6 kommentarer", men listen var tom, og
+  // inline-feltet sto synlig fordi `apen` aldri fikk en chevron å bli
+  // togglet av. Avledet fra én kilde (visteKommentarer) så tilstanden ikke
+  // kan uttrykkes igjen: kanEkspandere styrer om det finnes en liste å
+  // åpne/lukke, utvidet er den faktiske synlige listen.
+  const kanEkspandere = visteKommentarer.length > 0
+  const utvidet = apen && kanEkspandere
 
   function velgMention(navn: string) {
     const ny = velgMentionTekst(tekst, navn)
@@ -338,10 +372,16 @@ export default function KommentarerPaaKort({
       }}
       onClick={stopp}
     >
-      {/* Toggle-header vises hvis det finnes kommentarer totalt — også når
-          listen er tom fordi alle ligger utenfor topp-30-uttaket men innenfor
-          24-mnd-totalvinduet. */}
-      {visTall > 0 && (
+      {/* To varianter av headeren, avhengig av kanEkspandere (se #648):
+          agenda-queryen henter de 30 globalt nyeste kommentarene innenfor
+          samme 12-mnd-vindu (cutoffIso) som arrangementene, på tvers av ALLE
+          arrangementer, og caper til 3 per kort. En kommentar faller altså ut
+          både om den er eldre enn cutoff og om den ikke er blant de 30
+          nyeste. Et kort hvis kommentarer alle er ute av det uttaket får
+          telleren (visTall) uten at visteKommentarer har noe å vise. Da er
+          det ikke noe å ekspandere — headeren blir en navigerende label i
+          stedet for en chevron som toggler en tom seksjon. */}
+      {visTall > 0 && (kanEkspandere ? (
         <span
           role="button"
           tabIndex={0}
@@ -350,19 +390,7 @@ export default function KommentarerPaaKort({
             if (e.key === 'Enter' || e.key === ' ') toggle(e)
           }}
           aria-expanded={apen}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.4px',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            cursor: 'pointer',
-            padding: '2px 0',
-          }}
+          style={HEADER_STIL}
         >
           <svg
             width="10"
@@ -381,16 +409,37 @@ export default function KommentarerPaaKort({
           >
             <path d="M9 6l6 6-6 6" />
           </svg>
-          {apen && kommentarer.length > 0 && visTall > kommentarer.length
-            ? `Siste ${kommentarer.length} av ${visTall} kommentarer`
+          {apen && visTall > visteKommentarer.length
+            ? `Siste ${visteKommentarer.length} av ${visTall} kommentarer`
             : `${visTall} ${visTall === 1 ? 'kommentar' : 'kommentarer'}`}
         </span>
-      )}
+      ) : (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); router.push(detaljUrl(scope)) }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              router.push(detaljUrl(scope))
+            }
+          }}
+          // Tallet må stå FØRST i labelen: aria-label overstyrer tekstinnholdet,
+          // så en ren handlingstekst ville skjult antallet for skjermleser —
+          // chevron-varianten annonserer det.
+          aria-label={`${visTall} ${visTall === 1 ? 'kommentar' : 'kommentarer'} — åpne for å lese`}
+          style={HEADER_STIL}
+        >
+          {`${visTall} ${visTall === 1 ? 'kommentar' : 'kommentarer'}`}
+        </span>
+      ))}
 
-      {/* Kommentar-liste — kun synlig når ekspandert. Optimistiske rader flettes
-          inn via visteKommentarer, deduppes mot server-rader på innhold+avsender
-          og capes til siste 3, så ingen dobbel-rad eller fjerde rad synes. se #316 */}
-      {apen && visteKommentarer.length > 0 && (
+      {/* Kommentar-liste — kun synlig når utvidet (apen && kanEkspandere).
+          Optimistiske rader flettes inn via visteKommentarer, deduppes mot
+          server-rader på innhold+avsender og capes til siste 3, så ingen
+          dobbel-rad eller fjerde rad synes. se #316 */}
+      {utvidet && (
         <div
           style={{
             marginTop: 8,
@@ -521,9 +570,14 @@ export default function KommentarerPaaKort({
         </div>
       )}
 
-      {/* Inline kommentar-input — alltid synlig når seksjonen er åpen (eller
-          når det ikke er kommentarer ennå) */}
-      {(apen || kommentarer.length === 0) && (
+      {/* Inline kommentar-input — synlig når listen faktisk er utvidet, eller
+          når det ikke finnes noen kommentar overhodet ennå (visTall === 0).
+          IKKE på `apen` alene: uten kommentarer å ekspandere finnes ingen
+          chevron å toggle apen med, så apen blir stående på sin
+          initialverdi (true) — å henge feltet på apen alene ville da vist
+          det igjen for et kort man ikke kan lese kommentarene til
+          (nøyaktig bugen i #648, i ny drakt). */}
+      {(utvidet || visTall === 0) && (
         <div style={{ marginTop: kommentarer.length > 0 ? 10 : 0 }} onClick={stopp}>
         {/* Mention-velger ligger over hele raden (tommel + pille) så chips
             ikke krysser den runde rammen. Komponenten returnerer null når
