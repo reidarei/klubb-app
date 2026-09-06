@@ -91,16 +91,20 @@ describe('byggBursdagsprompt', () => {
     expect(prompt).not.toContain('reference photos after the first one')
   })
 
+  // Testnavnene her må IKKE være ekte medlemsnavn: sync-skriptet skrubber
+  // medlemsnavn på vei til det offentlige klubb-app-repoet, og en skrubbet
+  // «Espen» ble til «Per» — som allerede sto i lista, så assertionen
+  // not.toContain('Per') feilet der og bare der. Bruk fiktive navn.
   it('flere medgjester enn taket kuttes', () => {
     const prompt = byggBursdagsprompt({
       navn: 'Ola',
       alder: 50,
       stikkord: [],
-      medgjester: ['Per', 'Pål', 'Per', 'Truls'],
+      medgjester: ['Per', 'Pål', 'Ludvig', 'Vetle'],
     })
     expect(prompt).toContain('Per and Pål')
-    expect(prompt).not.toContain('Per')
-    expect(prompt).not.toContain('Truls')
+    expect(prompt).not.toContain('Ludvig')
+    expect(prompt).not.toContain('Vetle')
   })
 
   // Prompten bygges av konkatenerte template literals. Et ekte linjeskift
