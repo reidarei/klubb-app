@@ -221,7 +221,7 @@ I Vercel → Settings → Environment Variables:
 |---|---|---|
 | `GOOGLE_CLOUD_PROJECT` | Prosjekt-ID (fra Google Cloud Console → Innstillinger) | Obligatorisk |
 | `GOOGLE_CLOUD_LOCATION` | `eu` | Må være EU-lokasjon (eu/west1/west3/west4/west9). Standardmodellen finnes KUN på multiregionen `eu` |
-| `GOOGLE_VERTEX_MODELL` | `gemini-2.0-pro-vision-experimental` | (Valgfritt; default over) |
+| `GOOGLE_VERTEX_MODELL` | `gemini-3.1-flash-image` | (Valgfritt; default over). Nano Banana **Pro** finnes ikke i EU — kun globalt |
 
 ### Trinn 6: Redeploy
 

@@ -90,20 +90,25 @@ export const AI_PAA = ANTHROPIC_API_KEY !== ''
 export const GOOGLE_VERTEX_SA_JSON_B64 = process.env.GOOGLE_VERTEX_SA_JSON_B64 ?? ''
 export const GOOGLE_CLOUD_PROJECT = process.env.GOOGLE_CLOUD_PROJECT ?? ''
 export const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? ''
-// Nano Banana Pro (Gemini 3 Pro Image) — modellen besluttet i #641. Ikke et
-// fritt valg: person-policyen er verifisert manuelt mot denne modellen, og
-// art. 50(2)-etterlevelsen (SynthID-vannmerket i pikseldataen) er dens
-// egenskap, ikke Vertex' generelt.
+// Nano Banana 2 (Gemini 3.1 Flash Image). #641 valgte Nano Banana Pro
+// (`gemini-3-pro-image`), men first light avdekket at den ikke serveres i EU
+// i det hele tatt — verken i en europe-west*-enkeltregion eller på
+// EU-multiregionen. Valget sto da mellom modellen og EU-premisset, og
+// premisset vant: `/om-appen` lover medlemmene at bildet behandles i EU, og
+// vi skriver ikke om det løftet for å beholde en bedre modell.
 //
-// ID-strengen er verifisert ved first light: modellen finnes og svarer, men
-// KUN på EU-multiregionen `eu` — se VERTEX_LOKASJONER under. Fortsatt
-// env-overridable for nedstrøms-instanser. MERK: et bytte
-// til en annen modellFAMILIE (f.eks. en Imagen-modell) krever også en ny
-// request-form i lib/vertex.ts, og et modellbytte generelt kan flytte
-// databehandlingen til en annen jurisdiksjon — se CLAUDE.md § Policy:
+// Nano Banana 2 er samme modellfamilie (Gemini image), altså samme
+// request-form i lib/vertex.ts, og bærer samme SynthID-vannmerke som
+// art. 50(2)-argumentet i docs/ai-act-vurdering.md hviler på. Det som IKKE
+// er overført fra Pro er den manuelle verifiseringen av person-policyen —
+// se § 8 der.
+//
+// MERK: et bytte til en annen modellFAMILIE (f.eks. en Imagen-modell) krever
+// også en ny request-form i lib/vertex.ts, og et modellbytte generelt kan
+// flytte databehandlingen til en annen jurisdiksjon — se CLAUDE.md § Policy:
 // AI-funksjoner.
 export const GOOGLE_VERTEX_MODELL =
-  process.env.GOOGLE_VERTEX_MODELL ?? 'gemini-3-pro-image'
+  process.env.GOOGLE_VERTEX_MODELL ?? 'gemini-3.1-flash-image'
 
 // R2 har egne, S3-lignende regionkoder; Vertex AI (Google Cloud) har sine
 // egne. Denne allowlisten er IKKE R2_JURISDICTION — den styrer hvilket
@@ -114,12 +119,13 @@ export const GOOGLE_VERTEX_MODELL =
 // til det i en env-fil.
 //
 // 'eu' er EU-MULTIREGIONEN, ikke en enkeltregion — og den er i praksis den
-// eneste brukbare verdien for bursdagsbilde i dag: Nano Banana Pro
-// (GOOGLE_VERTEX_MODELL) serveres IKKE i noen av europe-west*-enkeltregionene.
-// Et kall dit svarer 404 NOT_FOUND på hvert forsøk, som er nøyaktig det
-// first light avdekket. Enkeltregionene står likevel igjen i lista: de er
-// gyldige for andre bildemodeller (f.eks. Imagen), og en nedstrøms-instans
-// som velger en annen modell skal fortsatt kunne pinne seg til ett land.
+// eneste brukbare verdien for bursdagsbilde i dag: standardmodellen serveres
+// ikke i noen av europe-west*-enkeltregionene, og et kall dit svarer
+// 404 NOT_FOUND på hvert forsøk. Merk at multiregionen også har sitt eget
+// vertsnavn — se vertexVert() i lib/vertex.ts. Enkeltregionene står likevel
+// igjen i lista: de er gyldige for andre bildemodeller, og en nedstrøms-
+// instans som velger en annen modell skal fortsatt kunne pinne seg til ett
+// land.
 // Multiregionen holder databehandlingen innenfor EU, så det juridiske
 // premisset under er uendret — den sprer den bare over flere EU-land.
 export const VERTEX_LOKASJONER = [

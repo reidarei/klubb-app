@@ -170,6 +170,27 @@ function lagTokenFeil(httpStatus: number, kropp: string): VertexFeil {
   return new VertexFeil('transient', httpStatus, `token-mint: ${trunkert}`)
 }
 
+// Vertex har TRE ulike vertsnavn-former, ikke én med innsatt lokasjon:
+//
+//   enkeltregion   europe-west4  ->  europe-west4-aiplatform.googleapis.com
+//   multiregion    eu | us       ->  aiplatform.eu.rep.googleapis.com
+//   global         global        ->  aiplatform.googleapis.com
+//
+// Multiregionen er den som feller folk: den ser ut som en lokasjonsstreng
+// som alle andre, men bruker et helt eget domene (`.rep.googleapis.com`).
+// Bygger man verten ved å prefikse lokasjonen, blir det
+// eu-aiplatform.googleapis.com, som Google svarer «400 Invalid hostname» på
+// — ikke 404, så feilen ser ut som en feil i request-formen vår i stedet for
+// i adressen. Samme bug er rapportert i litellm, vercel/ai og Roo-Code;
+// prefiks-antakelsen er en kjent felle, ikke noe vi fant på selv.
+//
+// Eksportert kun for test — kallere skal bruke genererBildeVertex().
+export function vertexVert(lokasjon: string): string {
+  if (lokasjon === 'global') return 'aiplatform.googleapis.com'
+  if (lokasjon === 'eu' || lokasjon === 'us') return `aiplatform.${lokasjon}.rep.googleapis.com`
+  return `${lokasjon}-aiplatform.googleapis.com`
+}
+
 export type VertexBilde = {
   bytes: Uint8Array
   mimeType: string
@@ -179,10 +200,13 @@ export type VertexBilde = {
 // Generer ett bursdagsbilde. `bildeBase64` er profilbildet (uten data:-
 // prefiks), sendt inline som referanse. Bestiller 4:3 i 1K.
 //
-// Modellen er Nano Banana Pro (Gemini 3 Pro Image), besluttet i #641 — ikke
-// et åpent valg: person-policyen er verifisert manuelt mot nettopp den
-// modellen, og hele art. 50(2)-argumentet i docs/ai-act-vurdering.md hviler
-// på dens SynthID-vannmerke. Det er en GEMINI-modell, ikke en Imagen-modell,
+// Modellen er Nano Banana 2 (Gemini 3.1 Flash Image) — ikke et åpent valg.
+// #641 valgte Nano Banana Pro og verifiserte person-policyen manuelt mot
+// DEN; Pro viste seg å ikke finnes i EU, så vi byttet ned i samme familie
+// framfor å forlate EU. Person-policy-verifiseringen er altså IKKE overført
+// — se docs/ai-act-vurdering.md § 8. SynthID-vannmerket, som hele
+// art. 50(2)-argumentet hviler på, er felles for Gemini-bildemodellene og
+// følger med. Det er en GEMINI-modell, ikke en Imagen-modell,
 // og bruker derfor `:generateContent` med `contents` — ikke Imagens
 // `:predict` med `instances[].referenceImages`. De to formene er ikke
 // utbyttbare: et Imagen-payload mot en Gemini-modell svarer 400 på hvert
@@ -207,13 +231,8 @@ export async function genererBildeVertex({
   signal?: AbortSignal
 }): Promise<VertexBilde> {
   const auth = await hentVertexAuthHeader(signal)
-  // Verten utledes av lokasjonen: 'europe-west4' gir
-  // europe-west4-aiplatform.googleapis.com, og multiregionen 'eu' gir
-  // eu-aiplatform.googleapis.com. Samme form, ingen særtilfelle — men merk
-  // at 'eu' er den ENESTE lokasjonen som faktisk serverer standardmodellen
-  // (se VERTEX_LOKASJONER i lib/config.ts).
   const endpoint =
-    `https://${GOOGLE_CLOUD_LOCATION}-aiplatform.googleapis.com/v1/` +
+    `https://${vertexVert(GOOGLE_CLOUD_LOCATION)}/v1/` +
     `projects/${GOOGLE_CLOUD_PROJECT}/locations/${GOOGLE_CLOUD_LOCATION}/` +
     `publishers/google/models/${GOOGLE_VERTEX_MODELL}:generateContent`
 

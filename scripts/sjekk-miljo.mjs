@@ -156,8 +156,8 @@ const variabler = [
   // er funksjonen av (BURSDAGSBILDE_PAA i lib/config.ts).
   { navn: 'GOOGLE_VERTEX_SA_JSON_B64', nivaa: 'valgfri',   type: 'base64',   beskrivelse: 'Base64-enkodet service account-JSON — bursdagsbilde er av uten den (SECRET)' },
   { navn: 'GOOGLE_CLOUD_PROJECT',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Google Cloud prosjekt-ID for Vertex AI' },
-  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: eu|europe-west1|west3|west4|west9 (eu kreves for Nano Banana Pro)' },
-  { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3-pro-image)' },
+  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: eu|europe-west1|west3|west4|west9 (eu kreves for standardmodellen)' },
+  { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3.1-flash-image)' },
 
   // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives
   // server-feil fortsatt til feil_logg (lib/logg.ts), som er den kanalen
