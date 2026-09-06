@@ -188,13 +188,13 @@ export type VertexBilde = {
 // utbyttbare: et Imagen-payload mot en Gemini-modell svarer 400 på hvert
 // eneste kall.
 //
-// Selve modell-ID-strengen og feltnavnene under er dokumentasjonskunnskap,
-// ikke verifisert mot en ekte Vertex-konto i denne leveransen (se
-// docs/ai-act-vurdering.md § 8). GOOGLE_VERTEX_MODELL er env-overridable
-// nettopp fordi ID-en kan vise seg å være feil eller foreldet ved first
-// light — men et bytte til en annen MODELLFAMILIE krever også en ny
-// request-form her, og en ny AI Act-vurdering (CLAUDE.md § Policy:
-// AI-funksjoner).
+// Modell-ID-strengen er verifisert ved first light. Fellen var ikke navnet,
+// men LOKASJONEN: modellen serveres ikke i noen europe-west*-enkeltregion, og
+// Googles 404 sier «not found or your project does not have access» — samme
+// melding for feil navn og feil region, så den peker deg mot å mistenke
+// ID-en. GOOGLE_VERTEX_MODELL er fortsatt env-overridable, men et bytte til
+// en annen MODELLFAMILIE krever også en ny request-form her, og en ny AI
+// Act-vurdering (CLAUDE.md § Policy: AI-funksjoner).
 export async function genererBildeVertex({
   bildeBase64,
   mimeType,
@@ -207,6 +207,11 @@ export async function genererBildeVertex({
   signal?: AbortSignal
 }): Promise<VertexBilde> {
   const auth = await hentVertexAuthHeader(signal)
+  // Verten utledes av lokasjonen: 'europe-west4' gir
+  // europe-west4-aiplatform.googleapis.com, og multiregionen 'eu' gir
+  // eu-aiplatform.googleapis.com. Samme form, ingen særtilfelle — men merk
+  // at 'eu' er den ENESTE lokasjonen som faktisk serverer standardmodellen
+  // (se VERTEX_LOKASJONER i lib/config.ts).
   const endpoint =
     `https://${GOOGLE_CLOUD_LOCATION}-aiplatform.googleapis.com/v1/` +
     `projects/${GOOGLE_CLOUD_PROJECT}/locations/${GOOGLE_CLOUD_LOCATION}/` +

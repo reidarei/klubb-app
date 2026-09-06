@@ -220,7 +220,7 @@ I Vercel → Settings → Environment Variables:
 | Variabel | Verdi | Notat |
 |---|---|---|
 | `GOOGLE_CLOUD_PROJECT` | Prosjekt-ID (fra Google Cloud Console → Innstillinger) | Obligatorisk |
-| `GOOGLE_CLOUD_LOCATION` | `europe-west4` | Må være EU-region (west1/west3/west4/west9) |
+| `GOOGLE_CLOUD_LOCATION` | `eu` | Må være EU-lokasjon (eu/west1/west3/west4/west9). Standardmodellen finnes KUN på multiregionen `eu` |
 | `GOOGLE_VERTEX_MODELL` | `gemini-2.0-pro-vision-experimental` | (Valgfritt; default over) |
 
 ### Trinn 6: Redeploy

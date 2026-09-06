@@ -86,7 +86,7 @@ const typer = {
   // Vertex AI-lokasjon — speiler VERTEX_LOKASJONER i lib/config.ts (§ Policy:
   // AI-funksjoner). Samme mønster som r2-jurisdiction over: EU-only, fordi
   // regionstrengen er et juridisk premiss for bursdagsbilde-funksjonen.
-  'vertex-location': (v) => ['europe-west1', 'europe-west3', 'europe-west4', 'europe-west9'].includes(v),
+  'vertex-location': (v) => ['eu', 'europe-west1', 'europe-west3', 'europe-west4', 'europe-west9'].includes(v),
   // Base64-enkodet JSON — grov formatsjekk (vi dekoder ALDRI verdien, kun
   // formen). lib/vertex.ts gir en tydelig feilmelding ved ugyldig innhold
   // når funksjonen faktisk kjøres.
@@ -156,7 +156,7 @@ const variabler = [
   // er funksjonen av (BURSDAGSBILDE_PAA i lib/config.ts).
   { navn: 'GOOGLE_VERTEX_SA_JSON_B64', nivaa: 'valgfri',   type: 'base64',   beskrivelse: 'Base64-enkodet service account-JSON — bursdagsbilde er av uten den (SECRET)' },
   { navn: 'GOOGLE_CLOUD_PROJECT',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Google Cloud prosjekt-ID for Vertex AI' },
-  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: europe-west1|west3|west4|west9' },
+  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: eu|europe-west1|west3|west4|west9 (eu kreves for Nano Banana Pro)' },
   { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3-pro-image)' },
 
   // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives

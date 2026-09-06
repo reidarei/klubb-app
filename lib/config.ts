@@ -95,9 +95,9 @@ export const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? ''
 // art. 50(2)-etterlevelsen (SynthID-vannmerket i pikseldataen) er dens
 // egenskap, ikke Vertex' generelt.
 //
-// Selve ID-strengen er dokumentasjonskunnskap, ikke verifisert mot en ekte
-// konto i denne leveransen — env-overridable nettopp derfor (er den feil ved
-// first light, er «-preview»-suffikset det første å prøve). MERK: et bytte
+// ID-strengen er verifisert ved first light: modellen finnes og svarer, men
+// KUN på EU-multiregionen `eu` — se VERTEX_LOKASJONER under. Fortsatt
+// env-overridable for nedstrøms-instanser. MERK: et bytte
 // til en annen modellFAMILIE (f.eks. en Imagen-modell) krever også en ny
 // request-form i lib/vertex.ts, og et modellbytte generelt kan flytte
 // databehandlingen til en annen jurisdiksjon — se CLAUDE.md § Policy:
@@ -112,7 +112,18 @@ export const GOOGLE_VERTEX_MODELL =
 // persondata forlater instansen til), ikke en ytelsesdetalj — 'global' eller
 // en US-region ville sendt medlemsbilder utenfor EU uten at noen la merke
 // til det i en env-fil.
+//
+// 'eu' er EU-MULTIREGIONEN, ikke en enkeltregion — og den er i praksis den
+// eneste brukbare verdien for bursdagsbilde i dag: Nano Banana Pro
+// (GOOGLE_VERTEX_MODELL) serveres IKKE i noen av europe-west*-enkeltregionene.
+// Et kall dit svarer 404 NOT_FOUND på hvert forsøk, som er nøyaktig det
+// first light avdekket. Enkeltregionene står likevel igjen i lista: de er
+// gyldige for andre bildemodeller (f.eks. Imagen), og en nedstrøms-instans
+// som velger en annen modell skal fortsatt kunne pinne seg til ett land.
+// Multiregionen holder databehandlingen innenfor EU, så det juridiske
+// premisset under er uendret — den sprer den bare over flere EU-land.
 export const VERTEX_LOKASJONER = [
+  'eu',
   'europe-west1',
   'europe-west3',
   'europe-west4',
