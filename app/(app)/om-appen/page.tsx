@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon'
 import Endringslogg from '@/components/Endringslogg'
 import versjon from '@/lib/versjon.json'
 import { KLUBB_NAVN, DATA_LOKASJON } from '@/lib/klubb-config'
-import { AI_PAA } from '@/lib/config'
+import { AI_PAA, BURSDAGSBILDE_PAA } from '@/lib/config'
 import { byggEndringslogg } from '@/lib/endringslogg'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 
@@ -112,6 +112,21 @@ export default function OmAppen() {
             innlegget kan festes øverst frem til den datoen. Dette skjer
             automatisk mens du skriver, og bare på nye innlegg — ingen annen
             tekst i appen sendes ut.
+          </Avsnitt>
+        )}
+        {/* Egen KI-flate, egen leverandør (Google), egen jurisdiksjon fra
+         * AI-funksjoner-avsnittet over — betinget av sitt EGET flagg
+         * (BURSDAGSBILDE_PAA), aldri slått sammen med AI_PAA. Bevisst
+         * taus om AT bursdagsgratulasjonen i klubbchatten er automatisert —
+         * det er en egen, ubeslektet mekanisme (se CLAUDE.md § Policy:
+         * AI-funksjoner). */}
+        {BURSDAGSBILDE_PAA && (
+          <Avsnitt overskrift="Bursdagsbilde">
+            Dagen før bursdagen din sendes profilbildet ditt, sammen med
+            navnet ditt, alderen du fyller og eventuelle stikkord du har lagt
+            inn, til Google (Vertex AI, servere i EU) for å lage et bilde til
+            bursdagskortet ditt. Bildet vises på selve dagen, merket «Laget av
+            KI». Du kan be en admin fjerne det.
           </Avsnitt>
         )}
         <Avsnitt overskrift="E-postvarsler">

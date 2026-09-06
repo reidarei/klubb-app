@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
-import { iDagOslo } from '../lib/dato'
+import { iDagOslo, iMorgenOslo } from '../lib/dato'
 
 // Bursdagskortet blåst opp på selve dagen (#640). Seeder om Ola Testesens
 // fødselsdato (og, i test 2, bildeUrl) til å treffe "i dag", tar skjermbilder
@@ -23,12 +23,6 @@ const OLA_MEDLEMSSIDE = `/klubbinfo/medlemmer/${OLA_ID}`
 // page.screenshot({ path }), men konvensjonen i e2e/ holdes samlet på ett
 // mønster heller enn to.
 const UT_DIR = path.join('.screenshots', 'bursdag-stort-kort')
-
-function iMorgenOslo(): string {
-  const [y, m, d] = iDagOslo().split('-').map(Number)
-  // UTC-aritmetikk ruller måned/år korrekt over ved månedsskifte/nyttår.
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
-}
 
 test.describe('Bursdagskort — stort format på selve dagen (#640)', () => {
   test.skip(!harTestCreds(), 'TEST_EPOST/TEST_PASSORD mangler — se e2e/README.md og docs/test-instans.md')

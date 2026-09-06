@@ -440,6 +440,66 @@ export type Database = {
           },
         ]
       }
+      bursdagsbilde: {
+        Row: {
+          aar: number | null
+          bilde_url: string | null
+          feiringsdato: string
+          forsok: number
+          modell: string | null
+          paabegynt: string | null
+          profil_id: string
+          prompt: string | null
+          siste_feil: string | null
+          slettet_av: string | null
+          slettet_paa: string | null
+          status: string
+        }
+        Insert: {
+          aar?: number | null
+          bilde_url?: string | null
+          feiringsdato: string
+          forsok?: number
+          modell?: string | null
+          paabegynt?: string | null
+          profil_id: string
+          prompt?: string | null
+          siste_feil?: string | null
+          slettet_av?: string | null
+          slettet_paa?: string | null
+          status?: string
+        }
+        Update: {
+          aar?: number | null
+          bilde_url?: string | null
+          feiringsdato?: string
+          forsok?: number
+          modell?: string | null
+          paabegynt?: string | null
+          profil_id?: string
+          prompt?: string | null
+          siste_feil?: string | null
+          slettet_av?: string | null
+          slettet_paa?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bursdagsbilde_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bursdagsbilde_slettet_av_fkey"
+            columns: ["slettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_reaksjoner: {
         Row: {
           emoji: string
@@ -1862,6 +1922,33 @@ export type Database = {
       }
       get_statistikk: { Args: never; Returns: Json }
       har_pass_tilgang: { Args: { eier: string }; Returns: boolean }
+      krev_bursdagsbilde: {
+        Args: {
+          p_feiringsdato: string
+          p_profil_id: string
+          p_tvungen?: boolean
+        }
+        Returns: {
+          aar: number | null
+          bilde_url: string | null
+          feiringsdato: string
+          forsok: number
+          modell: string | null
+          paabegynt: string | null
+          profil_id: string
+          prompt: string | null
+          siste_feil: string | null
+          slettet_av: string | null
+          slettet_paa: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bursdagsbilde"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       lukk_kaaringspoll_naa: {
         Args: { p_poll_id: string }
         Returns: {
@@ -1915,12 +2002,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1944,11 +2031,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1969,11 +2056,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1994,11 +2081,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2011,11 +2098,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

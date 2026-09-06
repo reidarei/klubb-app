@@ -18,6 +18,7 @@ import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
 import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { osloUkestart } from '@/lib/dato'
 import { AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
+import { BURSDAGSBILDE_PAA } from '@/lib/config'
 
 export default async function Innstillinger() {
   const [supabase, profil, bruker] = await Promise.all([
@@ -472,6 +473,47 @@ export default async function Innstillinger() {
         </Link>
       </InnstillingsKort>
       )}
+
+      {/* Bursdagsbilde (#641) — admin-only (ikke generalsekretær-only, i
+          motsetning til pass-godkjenninger). Vises uansett BURSDAGSBILDE_PAA
+          slik at admin kan se location/modell-status og oppsummeringen selv
+          når funksjonen er av. */}
+      <InnstillingsKort
+        tittel="Bursdagsbilde"
+        oppsummering={BURSDAGSBILDE_PAA ? 'KI-generering på' : 'Av — mangler Vertex-credentials'}
+      >
+        <p
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.5,
+            margin: '0 0 12px',
+          }}
+        >
+          Se og styr det KI-genererte bursdagsbildet som vises på
+          bursdagskortet — generer på nytt eller fjern.
+        </p>
+        <Link
+          href="/innstillinger/bursdagsbilde"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 14px',
+            background: 'var(--accent-soft)',
+            border: '0.5px solid var(--accent)',
+            borderRadius: 999,
+            color: 'var(--accent)',
+            fontFamily: 'var(--font-body)',
+            fontSize: 12,
+            fontWeight: 500,
+            textDecoration: 'none',
+          }}
+        >
+          Åpne bursdagsbilde-side →
+        </Link>
+      </InnstillingsKort>
 
       {/* Ønsker fra brukerne */}
       {(() => {

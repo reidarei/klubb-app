@@ -19,6 +19,7 @@ function lagProfilMedBursdag(id: string, dato: string): ProfilMedBursdag {
     fodselsdato: dato,
     bilde_url: null,
     rolle: null,
+    bursdagsbilde: null,
   }
 }
 

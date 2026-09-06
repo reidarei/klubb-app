@@ -76,7 +76,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // Bildekategorier i R2 — én topp-mappe per type. Holder bucket-en organisert
 // og gjør det enkelt å se hva en fil hører til. Legg til ny kategori her
 // når en ny upload-sti tas i bruk.
-export const BILDE_KATEGORIER = ['arrangementer', 'profiler', 'meldinger', 'chat', 'album'] as const
+export const BILDE_KATEGORIER = ['arrangementer', 'profiler', 'meldinger', 'chat', 'album', 'bursdagsbilder'] as const
 export type BildeKategori = (typeof BILDE_KATEGORIER)[number]
 
 // Lag en unik path innen kategorien. Kaster hvis filnavn inneholder

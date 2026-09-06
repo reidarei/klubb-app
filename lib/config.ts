@@ -82,6 +82,68 @@ export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
 // Se docs/ai-act-vurdering.md og «Policy: AI-funksjoner» i CLAUDE.md.
 export const AI_PAA = ANTHROPIC_API_KEY !== ''
 
+// Google Cloud / Vertex AI — bursdagsbilde-generering (#641). Server-only —
+// ALDRI NEXT_PUBLIC_-prefiks, service account-nøkkelen er like sensitiv som
+// R2- eller Supabase-nøklene. Base64-enkodet fordi en rå JSON-service-
+// account-fil inneholder linjeskift og anførselstegn som er upraktiske i
+// .env-filer og Vercel sitt env-UI.
+export const GOOGLE_VERTEX_SA_JSON_B64 = process.env.GOOGLE_VERTEX_SA_JSON_B64 ?? ''
+export const GOOGLE_CLOUD_PROJECT = process.env.GOOGLE_CLOUD_PROJECT ?? ''
+export const GOOGLE_CLOUD_LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? ''
+// Nano Banana Pro (Gemini 3 Pro Image) — modellen besluttet i #641. Ikke et
+// fritt valg: person-policyen er verifisert manuelt mot denne modellen, og
+// art. 50(2)-etterlevelsen (SynthID-vannmerket i pikseldataen) er dens
+// egenskap, ikke Vertex' generelt.
+//
+// Selve ID-strengen er dokumentasjonskunnskap, ikke verifisert mot en ekte
+// konto i denne leveransen — env-overridable nettopp derfor (er den feil ved
+// first light, er «-preview»-suffikset det første å prøve). MERK: et bytte
+// til en annen modellFAMILIE (f.eks. en Imagen-modell) krever også en ny
+// request-form i lib/vertex.ts, og et modellbytte generelt kan flytte
+// databehandlingen til en annen jurisdiksjon — se CLAUDE.md § Policy:
+// AI-funksjoner.
+export const GOOGLE_VERTEX_MODELL =
+  process.env.GOOGLE_VERTEX_MODELL ?? 'gemini-3-pro-image'
+
+// R2 har egne, S3-lignende regionkoder; Vertex AI (Google Cloud) har sine
+// egne. Denne allowlisten er IKKE R2_JURISDICTION — den styrer hvilket
+// Google Cloud-datasenter ansiktsbildet og prompten prosesseres i.
+// EU-only-utvalg med vilje: regionstrengen er et JURIDISK premiss (hvor
+// persondata forlater instansen til), ikke en ytelsesdetalj — 'global' eller
+// en US-region ville sendt medlemsbilder utenfor EU uten at noen la merke
+// til det i en env-fil.
+export const VERTEX_LOKASJONER = [
+  'europe-west1',
+  'europe-west3',
+  'europe-west4',
+  'europe-west9',
+] as const
+
+// Er bursdagsbilde-funksjonen i det hele tatt på? Eget flagg — IKKE slått
+// sammen med AI_PAA. De to KI-flatene har ulike leverandører (Anthropic vs.
+// Google), ulik databehandling (tekst vs. ansiktsbilde) og kan skrus av
+// uavhengig av hverandre; en instans skal kunne ha dato-uttrekk på og
+// bursdagsbilder av (eller omvendt) uten at flaggene griper inn i
+// hverandre. Se CLAUDE.md § Policy: AI-funksjoner.
+export const BURSDAGSBILDE_PAA =
+  GOOGLE_VERTEX_SA_JSON_B64 !== '' && GOOGLE_CLOUD_PROJECT !== ''
+
+// Allowlist-vakten kjører ved modul-load, men BETINGET av BURSDAGSBILDE_PAA
+// — ikke ubetinget. Denne fila er MÅ-MATCHE mot klubb-app og lastes i hver
+// instans (også dev-maskiner uten Google-credentials); et ubetinget kast her
+// ville tatt ned enhver instans som ikke har skrudd på funksjonen ennå.
+// Fail-closed-egenskapen er likevel intakt: ER funksjonen på med en ugyldig
+// location, kaster vi før noe kall mot Vertex i det hele tatt kan skje.
+if (BURSDAGSBILDE_PAA) {
+  const gyldig = (VERTEX_LOKASJONER as readonly string[]).includes(GOOGLE_CLOUD_LOCATION)
+  if (!gyldig) {
+    throw new Error(
+      `GOOGLE_CLOUD_LOCATION ("${GOOGLE_CLOUD_LOCATION}") er ikke i EU-allowlisten ` +
+        `(${VERTEX_LOKASJONER.join(', ')}) — se lib/config.ts § VERTEX_LOKASJONER`,
+    )
+  }
+}
+
 // Base-URL for RESTful oppgjørs-API (f.eks. https://oppgjor.example.com).
 // Tom streng = hent-oppgjør-funksjonen er av (feature-flag-mønster fra #420).
 // Server-only — ALDRI NEXT_PUBLIC_-prefiks.

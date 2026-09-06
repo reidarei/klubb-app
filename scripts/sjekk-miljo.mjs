@@ -83,6 +83,14 @@ const typer = {
   // 'default' gir tomt segment i endpointet, 'eu' gir '.eu'-segment,
   // 'fedramp' gir '.fedramp'-segment (Cloudflares US-myndighetstilbud).
   'r2-jurisdiction': (v) => ['default', 'eu', 'fedramp'].includes(v.toLowerCase()),
+  // Vertex AI-lokasjon — speiler VERTEX_LOKASJONER i lib/config.ts (§ Policy:
+  // AI-funksjoner). Samme mønster som r2-jurisdiction over: EU-only, fordi
+  // regionstrengen er et juridisk premiss for bursdagsbilde-funksjonen.
+  'vertex-location': (v) => ['europe-west1', 'europe-west3', 'europe-west4', 'europe-west9'].includes(v),
+  // Base64-enkodet JSON — grov formatsjekk (vi dekoder ALDRI verdien, kun
+  // formen). lib/vertex.ts gir en tydelig feilmelding ved ugyldig innhold
+  // når funksjonen faktisk kjøres.
+  base64: (v) => /^[A-Za-z0-9+/]+=*$/.test(v),
   // Ikke-tom streng
   streng: (v) => v.trim().length > 0,
   // Positivt heltall
@@ -143,6 +151,13 @@ const variabler = [
   // instansen. Se docs/ai-act-vurdering.md før du skrur dem på.
   { navn: 'ANTHROPIC_API_KEY',         nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Anthropic API-nøkkel — KI-dato-uttrekk er av uten den' },
   { navn: 'ANTHROPIC_MODEL',           nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell for KI-kall (default: claude-haiku-4-5)' },
+
+  // Google Vertex AI — bursdagsbilde-generering (#641). Valgfri: uten disse
+  // er funksjonen av (BURSDAGSBILDE_PAA i lib/config.ts).
+  { navn: 'GOOGLE_VERTEX_SA_JSON_B64', nivaa: 'valgfri',   type: 'base64',   beskrivelse: 'Base64-enkodet service account-JSON — bursdagsbilde er av uten den (SECRET)' },
+  { navn: 'GOOGLE_CLOUD_PROJECT',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Google Cloud prosjekt-ID for Vertex AI' },
+  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: europe-west1|west3|west4|west9' },
+  { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3-pro-image)' },
 
   // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives
   // server-feil fortsatt til feil_logg (lib/logg.ts), som er den kanalen

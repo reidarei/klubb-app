@@ -58,6 +58,18 @@ export function iDagOslo(): string {
 }
 
 /**
+ * Morgendagens dato (norsk tidssone) som "YYYY-MM-DD"-streng — søsteren til
+ * iDagOslo(). Brukt av bursdagsbilde-cronet (#641), som genererer bildet
+ * dagen FØR bursdagen. UTC-aritmetikk på iDagOslo()-strengen (samme knep som
+ * osloUkestart) ruller måned/år korrekt over ved månedsskifte og nyttår, og
+ * unngår DST-fellen ved å aldri legge 24 timer til en lokal Date.
+ */
+export function iMorgenOslo(): string {
+  const [y, m, d] = iDagOslo().split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+}
+
+/**
  * Mandagen i inneværende ISO-uke (norsk tidssone), som "YYYY-MM-DD"-streng.
  * Må matche Postgres' `date_trunc('week', ...)`, som også er mandag-basert.
  * Regner på Oslo-kalenderdato-strengen (via iDagOslo) og gjør deretter ren

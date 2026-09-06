@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
 import { SolidChip } from '@/components/ui/Pill'
 import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { bildeSrc } from '@/lib/bilde-utils'
 
 export type BursdagData = {
   id: string
@@ -12,6 +14,11 @@ export type BursdagData = {
   alder: number
   bildeUrl?: string | null
   rolle?: string | null
+  // KI-generert bursdagsbilde (#641) — satt kun når det finnes en 'ferdig'
+  // rad for DAGENS feiringsdato (se lib/agenda-sortering.ts). Koblingen
+  // skjer alltid på profilId fra embedet, aldri på datosammenligning — se
+  // kommentaren ved beregnBursdager().
+  generertBildeUrl?: string | null
 }
 
 // Default-eksporten er en tynn velger mellom de to visningene (#640): på
@@ -136,6 +143,12 @@ function KompaktBursdagKort({ bursdag }: { bursdag: BursdagData }) {
 // en Avatar i stedet for et 16/10-arrangementsbilde: en mann er ikke et
 // landskap, og Avatar takler manglende bilde (initial-gradient) selv.
 function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
+  // Kun satt når det finnes et FERDIG generert bilde for DAGENS feiring
+  // (#641) — ingen 'paagaar', ingen skeleton. Uten et generert bilde ER
+  // hero-en allerede ansiktet hans (Avatar under), så det er ikke noe å
+  // vise mens man venter.
+  const generertBilde = bildeSrc(bursdag.generertBildeUrl ?? null)
+
   return (
     <Link
       href={`/klubbinfo/medlemmer/${bursdag.profilId}`}
@@ -155,20 +168,38 @@ function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
         color: 'inherit',
       }}
     >
-      {/* Hero-flaten er stedet et generert bursdagsbilde skal inn (#641) —
-          resten av kortet skal ikke måtte røres da. */}
-      <div
-        style={{
-          position: 'relative',
-          aspectRatio: '4/3',
-          background: 'var(--accent-soft)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Avatar name={bursdag.navn} src={bursdag.bildeUrl ?? null} size={168} rolle={bursdag.rolle} />
-      </div>
+      {/* Hero: KI-generert bursdagsbilde når det finnes (#641), ellers samme
+          Avatar-fallback som før — en mann uten generert bilde er allerede
+          representert av sitt eget profilbilde/initial-gradient. */}
+      {generertBilde ? (
+        <div style={{ position: 'relative', aspectRatio: '4/3' }}>
+          <Image
+            src={generertBilde}
+            alt={`Bursdagsbilde av ${bursdag.navn}, laget av KI`}
+            fill
+            style={{ objectFit: 'cover' }}
+            // Samme mønster som HighlightKort — begge kan i prinsippet vises
+            // øverst på agenda samtidig (bursdagskortet + et highlight-kort
+            // rett under), og to `priority`-bilder over folden er bevisst:
+            // begge er reelt synlige ved førstemaling på mobil.
+            sizes="(max-width: 512px) 100vw, 512px"
+            priority
+          />
+        </div>
+      ) : (
+        <div
+          style={{
+            position: 'relative',
+            aspectRatio: '4/3',
+            background: 'var(--accent-soft)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Avatar name={bursdag.navn} src={bursdag.bildeUrl ?? null} size={168} rolle={bursdag.rolle} />
+        </div>
+      )}
 
       <div style={{ position: 'absolute', top: 12, right: 12 }}>
         <SolidChip>I dag</SolidChip>
@@ -191,10 +222,18 @@ function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
           {/* Samme glyf som bursdager får i MiniKalender — se #550. */}
           <Icon name="flute" size={16} color="var(--accent)" strokeWidth={1.25} />
           <span>BURSDAG</span>
+          {/* KI-merket (#641) — kun når hero-en faktisk er det genererte
+              bildet. Ingen overlay, ingen scrim, ingen ny fargetoken:
+              «LAGET AV KI» i --text-tertiary på samme rad, samme
+              font-mono/letterspacing som «BURSDAG». */}
+          {generertBilde && <span style={{ color: 'var(--text-tertiary)' }}>· LAGET AV KI</span>}
         </div>
 
         <h3
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             fontFamily: 'var(--font-display)',
             fontSize: 26,
             fontWeight: 500,
@@ -204,7 +243,15 @@ function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
             margin: '8px 0 0',
           }}
         >
-          {bursdag.navn} <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>fyller {bursdag.alder}</span>
+          {/* Ekte ansikt ved siden av navnet — kun når hero-en er det
+              genererte bildet, slik at man alltid kan se hvem det faktisk
+              er selv om bildet ikke ligner perfekt. */}
+          {generertBilde && (
+            <Avatar name={bursdag.navn} src={bursdag.bildeUrl ?? null} size={28} rolle={bursdag.rolle} />
+          )}
+          <span>
+            {bursdag.navn} <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>fyller {bursdag.alder}</span>
+          </span>
         </h3>
       </div>
     </Link>

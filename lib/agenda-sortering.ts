@@ -102,6 +102,18 @@ export type ProfilMedBursdag = {
   fodselsdato: string | null
   bilde_url?: string | null
   rolle?: string | null
+  // Bursdagsbilde-embedet (#641) — allerede filtrert til dagens feiringsdato
+  // og status='ferdig' i selve spørringen (lib/queries/agenda.ts), så alt
+  // som kommer med her ER et bilde som skal vises. PostgREST returnerer et
+  // embed som array selv når relasjonen er 1:1-lik i praksis (én rad per
+  // profil per dag), derfor arrayet i stedet for et enkeltobjekt.
+  //
+  // PÅKREVD med vilje, ikke valgfri: PostgREST-typene gjør en feilstavet
+  // embed-alias til en EKSTRA `SelectQueryError`-nøkkel på raden, ikke til
+  // en manglende. Var feltet valgfritt, ville en typo i aliaset passert
+  // kompilering og først vist seg som et borte bursdagsbilde i prod. Å kreve
+  // nøkkelen er det eneste som gjør typoen til en byggefeil.
+  bursdagsbilde: { bilde_url: string | null }[] | null
 }
 
 // Rådata fra poll-tabellen + aggregater hentet av forsiden. Forsiden gjør
@@ -347,6 +359,14 @@ export function beregnBursdager(
           alder: aar - fodselsaar,
           bildeUrl: p.bilde_url ?? null,
           rolle: p.rolle ?? null,
+          // Koblingen skjer på profilId FRA EMBEDET, aldri på en
+          // datosammenligning mot `dato` over — se avviks-notatet i
+          // #641-planen: `dato` her bygges av literale MM-DD, mens
+          // spørringen filtrerer embedet på faktisk feiringsdato
+          // (iDagOslo(), med skuddårsregelen fra lib/bursdag.ts). For en
+          // 29.-februar-mann i et ikke-skuddår ville de to divergert.
+          // profilId er upåvirket av det.
+          generertBildeUrl: p.bursdagsbilde?.[0]?.bilde_url ?? null,
         })
       }
     }

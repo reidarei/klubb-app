@@ -11,6 +11,7 @@ import {
 import { hentPollStemmerAggregatBatch } from './poll'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import type { ChatProfil } from '@/lib/mention'
+import { iDagOslo } from '@/lib/dato'
 
 type DB = SupabaseClient<Database>
 
@@ -108,11 +109,36 @@ export async function hentAgendaData(
       )
       .gte('start_tidspunkt', cutoffIso)
       .order('start_tidspunkt', { ascending: true }),
+    // Bursdagsbilde-embedet (#641) ligger her fra dag én, uansett om
+    // BURSDAGSBILDE_PAA er på — slik testes spørringsformen i hver deploy
+    // og hver e2e-runde, ikke bare den dagen funksjonen faktisk skrus på.
+    // Er funksjonen av, finnes det aldri en 'ferdig'-rad, og embedet
+    // returnerer tomme arrays — helt normalt, ikke en feil.
+    //
+    // FK-kvalifiseringen (`bursdagsbilde!bursdagsbilde_profil_id_fkey`) er
+    // OBLIGATORISK: tabellen har to FK-er til profiles (den andre er
+    // slettet_av, migrasjon 140), og uten kvalifiseringen svarer PostgREST
+    // PGRST201 («more than one relationship found») — hele agendaen faller
+    // for ALLE 18, ikke bare bursdagskortet.
+    //
+    // ALDRI `!inner` her: et inner join på bursdagsbilde ville filtrert bort
+    // enhver profil UTEN en matchende bursdagsbilde-rad — altså 17 av 18 en
+    // vanlig dag — og tømt hele bursdagslista på agendaen, ikke bare skjult
+    // bildet.
+    //
+    // Begge fellene over er nå byggefeil, ikke prod-feil: `bursdagsbilde` er
+    // PÅKREVD i ProfilMedBursdag (se lib/agenda-sortering.ts), så både en
+    // feilstavet alias og en droppet FK-hint gir TS2322 på returen under.
     supabase
       .from('profiles')
-      .select('id, visningsnavn, fodselsdato, bilde_url, rolle')
+      .select(
+        `id, visningsnavn, fodselsdato, bilde_url, rolle,
+         bursdagsbilde!bursdagsbilde_profil_id_fkey (bilde_url, status)`,
+      )
       .eq('aktiv', true)
-      .not('fodselsdato', 'is', null),
+      .not('fodselsdato', 'is', null)
+      .eq('bursdagsbilde.feiringsdato', iDagOslo())
+      .eq('bursdagsbilde.status', 'ferdig'),
     supabase
       .from('arrangoransvar')
       .select('arrangement_navn, purredato, ansvarlig_id, profiles (visningsnavn)')
@@ -479,7 +505,7 @@ export async function hentAgendaData(
   return {
     arrangementerBerikt,
     ansvar: ansvar ?? [],
-    profilerMedBursdag: (profilerMedBursdag ?? []) as ProfilMedBursdag[],
+    profilerMedBursdag: profilerMedBursdag ?? [],
     poller,
     meldingerForAgenda,
     kommentarerPerArr,

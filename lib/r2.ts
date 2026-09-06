@@ -56,6 +56,7 @@ export async function lastOppR2(
   sti: string,
   data: Uint8Array | ArrayBuffer | Blob,
   contentType: string,
+  opts?: { signal?: AbortSignal },
 ): Promise<string> {
   const aws = hentKlient()
   // R2 krever eksplisitt Content-Length-header. Vercel-runtime bruker ofte
@@ -73,6 +74,11 @@ export async function lastOppR2(
       'Content-Length': String(lengde),
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
+    // Valgfri — kun bursdagsbilde-cronet (#641) bruker denne p.t., for å
+    // holde seg innenfor sitt R2-budsjett (BURSDAGSBILDE_BUDSJETT_R2_MS)
+    // uten at et hengende R2-kall alene kan sprenge maxDuration. Eksisterende
+    // kallere som ikke sender opts er upåvirket.
+    signal: opts?.signal,
   })
   if (!res.ok) {
     const tekst = await res.text().catch(() => '')
@@ -82,9 +88,9 @@ export async function lastOppR2(
 }
 
 // Slett en fil fra R2. Idempotent — 404 fra R2 telles som suksess.
-export async function slettR2(sti: string): Promise<void> {
+export async function slettR2(sti: string, opts?: { signal?: AbortSignal }): Promise<void> {
   const aws = hentKlient()
-  const res = await aws.fetch(bucketUrl(sti), { method: 'DELETE' })
+  const res = await aws.fetch(bucketUrl(sti), { method: 'DELETE', signal: opts?.signal })
   if (!res.ok && res.status !== 404) {
     const tekst = await res.text().catch(() => '')
     throw new Error(`R2 slett feilet (${res.status}): ${tekst}`)

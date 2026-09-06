@@ -266,6 +266,41 @@ export const STIKKORD_MAKS_LENGDE = 30
 // tatt, og treffer aldri fallback-grenen.
 export const INNSPILL_KOBLING_INNFOERT = new Date('2026-08-26T19:47:00Z')
 
+// ─── BURSDAGSBILDE (#641) ─────────────────────────────────────────────────
+
+// Lease-vinduene under speiler EKSAKT migrasjon 140 (krev_bursdagsbilde()) —
+// endres tallene her, må RPC-en i migrasjonen følge etter, og omvendt.
+//
+// Hvor lenge en 'paagaar'-rad regnes som en hengende (ikke bare treg) kjøring
+// som kan reclaimes av neste cron-invokasjon.
+export const BURSDAGSBILDE_LEASE_MIN = 10
+// Hvor lenge en admin-tvunget generering («Generer»-knappen) blokkerer en NY
+// tvunget generering av samme rad — kort, fordi en admin som dobbelttrykker
+// skal vente sekunder, ikke minutter, men lang nok til at ett ekte
+// Vertex-kall (§ *_MODELL_MS under) rekker å fullføre uforstyrret.
+export const BURSDAGSBILDE_TVING_LEASE_SEK = 60
+// Maks antall AUTOMATISKE forsøk før cron gir opp en rad permanent. Admins
+// «Generer»-knapp går både RUNDT taket og teller ikke opp mot det (se
+// migrasjon 140) — ellers ville to prøvegenereringer i september etterlatt
+// cron med tre forsøk igjen på selve bursdagen.
+export const BURSDAGSBILDE_MAKS_FORSOK = 5
+
+// Budsjett per steg i genererBursdagsbilde() (lib/bursdagsbilde-generering.ts).
+// Summen (5+30+10=45 s) skal være STRENGT mindre enn maxDuration (60 s) på
+// cron-ruta, med minst 10 s margin — ellers dreper Vercel funksjonen midt i
+// en R2-opplasting, og raden blir stående i status 'paagaar' til leasen
+// utløper i stedet for å bli et ærlig 'feilet'.
+export const BURSDAGSBILDE_BUDSJETT_HENT_MS = 5000 // hente profilbildet server-side
+export const BURSDAGSBILDE_BUDSJETT_MODELL_MS = 30000 // Vertex-kallet
+export const BURSDAGSBILDE_BUDSJETT_R2_MS = 10000 // opplasting til R2
+
+// Størrelsescap på profilbildet vi sender til Vertex som input. Samme
+// terskel som andre bilde-opplastinger i appen (lib/actions/bilde-
+// opplasting.ts) — et profilbilde skal aldri være større enn dette uansett,
+// men vi validerer eksplisitt siden bildet her hentes server-side fra en
+// URL vi ikke selv kontrollerte opplastingen av (eldre Supabase Storage-bilder).
+export const BURSDAGSBILDE_INPUT_MAKS_MB = 5
+
 // Ferskhetsvindu for push-klikk-URL-en lagret i Cache Storage (#626).
 // public/sw.js er en statisk fil og kan ikke importere denne konstanten —
 // literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster

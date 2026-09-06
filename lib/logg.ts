@@ -100,6 +100,13 @@
 //   server.render.feilet        — feil kastet i server component / action / route handler, fanget av onRequestError. Bærer `digest` (koblingen til raden app/error.tsx skriver fra klienten) og en MASKERT melding — eneste sted vi persisterer meldingstekst, se loggRenderFeil() (#631)
 //   server.render.sesjon_utloept — warn: render-feilen var en død sesjon (PGRST301 / AUTH_INGEN_SESJON), ikke en programfeil. Egen event så den ikke drukner i server.render.feilet og ikke vekker døgnalarmen (#631)
 //   server.render.logging.feilet — warn (stdout only): loggRenderFeil() eller den dynamiske importen av lib/logg kastet inne i onRequestError. Siste skanse — vi står i Next sin feilhåndtering, så en throw her ville maskert den ekte feilen (#631)
+//   bursdagsbilde.generering.levert — VELLYKKET generering: bytes, mime_type og modell fra Vertex-svaret. Ren observability på warn-kanalen (eneste ikke-Sentry stdout-kanal) — det man trenger å se ved «first light» (#641)
+//   bursdagsbilde.generering.feilet — Vertex-, R2- eller DB-oppdaterings-steget i genererBursdagsbilde() feilet; fingerprint = feilklasse ('auth'/'kvote'/'ugyldig'/'blokkert'/'transient'/'r2'/'db-update') (#641)
+//   bursdagsbilde.profiler.feilet   — fail-closed mottakerspørring (aktive profiler m/ fødselsdato) feiler i cron-ruta; kastes videre, IKKE tolket som «ingen har bursdag» (#641)
+//   bursdagsbilde.claim.feilet      — krev_bursdagsbilde()-RPC-en feiler (ikke 0-rader, som er normalt — en faktisk spørringsfeil) (#641)
+//   bursdagsbilde.slett.feilet      — R2-sletting feiler: enten det GAMLE bildet ved erstatning (raden peker alt på det nye), opprydding av et ferskt objekt etter feilet DB-oppdatering (fingerprint 'opprydding'), eller admin-slettingen der R2-objektet ER borte men raden ikke ble nullet (fingerprint 'db-update-etter-r2' — 'sti' i konteksten er det som gjør manuell opprydding mulig) (#641)
+//   bursdagsbilde.input.avvist      — profilbildet kunne ikke hentes/valideres server-side (HTTP-feil, ugyldig MIME, for stort) før noe Vertex-kall i det hele tatt ble forsøkt (#641)
+//   cron.bursdagsbilde.jobb.feilet  — hoved- eller nødpasset i bursdagsbilde-cronet kastet ut av sin egen try/catch; det andre passet kjørte likevel (#641)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -140,6 +147,18 @@ const KONTEKST_WHITELIST = new Set([
   // GitHubs lukkeårsak ('completed' | 'not_planned' | 'duplicate' | null) —
   // fast enum fra GitHub, ingen PII.
   'state_reason',
+  // Faste enums, ingen PII — brukt av bursdagsbilde-cronet (#641):
+  // 'klasse' er VertexFeilKlasse ('auth'/'kvote'/'ugyldig'/'blokkert'/
+  // 'transient'), 'slot' er cron-vinduets 0-baserte slot-indeks, 'pass' er
+  // 'iMorgen'/'iDag' (hoved- vs. nødpass).
+  'klasse',
+  'slot',
+  'pass',
+  // R2-objektsti (f.eks. «bursdagsbilde/1757…-a1b2c3.jpg») — filnavnet er
+  // tidsstempel + UUID (nyttR2Filnavn), aldri medlemsnavn eller annet fra
+  // brukeren. Uten den er bursdagsbilde.slett.feilet ubrukelig: hele poenget
+  // med det eventet er at noen skal kunne rydde objektet manuelt (#641).
+  'sti',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
