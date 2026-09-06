@@ -196,7 +196,7 @@ Bursdagsbilde-funksjonen er **av som standard**. Den krever Google Cloud-oppsett
 
 1. I Cloud Console, gå til **IAM & Admin** → **Service Accounts**
 2. Trykk «Create Service Account»
-3. Fyll navn og beskrivelse (f.eks. «herreklubb-ai»)
+3. Fyll navn og beskrivelse (f.eks. «klubb-bildegenerering»)
 4. I neste steg, gi rollen **roles/aiplatform.user**
 5. Fortsett til ferdig
 
