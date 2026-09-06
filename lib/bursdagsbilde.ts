@@ -82,25 +82,24 @@ export function byggBursdagsprompt({
   // bursdagskort til gutta, ikke et portrett. Stikkordene (under) gjør det
   // personlig; denne delen gjør det til en spøk alle er med på.
   //
-  // «celebratory rather than risqué» står der av praktiske grunner, ikke
-  // moralske: modellens person-policy avviser lettere en scene med flere
-  // gjenkjennelige mennesker hvis tonen kan leses som seksualisert, og en
-  // avvisning er terminal (status 'avvist', se statusForFeilklasse) — da får
-  // mannen ingenting på bursdagen sin. Linja koster oss ingen stemning og
-  // fjerner den vanligste grunnen til at en slik scene blir nektet.
+  // Scenen har flere gjenkjennelige mennesker i seg, og det er den formen
+  // modellens person-policy avviser lettest. En avvisning er terminal
+  // (status 'avvist', se statusForFeilklasse) — da får mannen ingenting på
+  // bursdagen sin, og bare admins tving-knapp reparerer det. Blir avvisninger
+  // et mønster, er en eksplisitt tone-linje («celebratory rather than
+  // risqué» e.l.) det billigste første mottrekket; den sto her til 2026-09-06.
   let prompt =
     `A warm, photorealistic birthday scene celebrating ${navnSanitert}, the person ` +
     `shown in the reference photo, turning ${alder} years old today. Preserve the ` +
     `same face and likeness as the reference photo — he is the unmistakable focal ` +
     `point of the image. Portray him as the hero of the evening, an Achilles of his ` +
     `time: confident, admired, effortlessly charismatic, adored by everyone around ` +
-    `him. A lively party surrounds him — a crowd of guests raising their glasses to ` +
-    `him, several beautiful women smiling at him and drawn into his orbit, warm ` +
-    `golden light, confetti in the air. Cinematic, flattering and good-humoured; ` +
-    `celebratory rather than risqué.`
+    `him. A lively party surrounds him — several beautiful women smiling at him ` +
+    `and drawn into his orbit, confetti in the air. Cinematic, flattering and ` +
+    `good-humoured.`
 
   if (stikkordSanitert.length > 0) {
-    prompt += ` Subtly weave in these personal traits or interests, only if they fit ` +
+    prompt += ` Subtly weave in these personal traits or interests ` +
       `naturally into the scene: ${stikkordSanitert.join(', ')}.`
   }
 

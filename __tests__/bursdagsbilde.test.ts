@@ -63,15 +63,19 @@ describe('byggBursdagsprompt', () => {
       const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord })
       expect(prompt).toContain('Achilles of his time')
       expect(prompt).toContain('beautiful women')
-      expect(prompt).toContain('raising their glasses')
     }
   })
 
-  // Se kommentaren i byggBursdagsprompt: uten denne linja avvises scenen
-  // oftere av person-policyen, og en avvisning er terminal.
-  it('holder tonen eksplisitt feirende, ikke seksualisert', () => {
+  // Prompten bygges av konkatenerte template literals. Et ekte linjeskift
+  // inni en av dem havner rått i teksten som sendes til modellen, sammen med
+  // kildekodens innrykk — det skjedde 2026-09-06 og sto i prod til det ble
+  // fanget her. Testen over («linjeskift fjernes») dekket det ikke: den
+  // sender linjeskift inn via navn/stikkord, ikke via basis-teksten.
+  it('basis-teksten er fri for linjeskift og avsluttes ordentlig', () => {
     const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: [] })
-    expect(prompt).toContain('celebratory rather than risqué')
+    expect(prompt).not.toContain('\n')
+    expect(prompt).not.toContain('  ')
+    expect(prompt.trimEnd()).toMatch(/\.$/)
   })
 
   it('stikkord vevs inn i prompten når de finnes', () => {
