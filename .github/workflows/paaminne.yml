@@ -1,31 +1,62 @@
-# Daglig påminnelsesjobb — kaller /api/cron/paaminne kl. 06:00 UTC.
-# Secret-oppsett (CRON_SECRET og APP_URL): se docs/oppsett.md, seksjon 9.
+# Daglig påminnelsesjobb og bursdagsbilde-generering.
+# Cron-tidene er i UTC — slot-indeksen (lib/cron-slot.ts) utregnes fra
+# UTC-time for å være DST-uavhengig. Bursdagsbilde-steget er av (svarer 200 uten å gjøre
+# noe) på instanser uten Vertex-credentials — se lib/config.ts § BURSDAGSBILDE_PAA.
+# Secret-oppsett (CRON_SECRET og APP_URL): se docs/oppsett.md.
 #
 # MERK: schedule-triggeren er bevisst kommentert ut i template-repoet. Uten
 # secretene APP_URL/CRON_SECRET feiler jobben hver natt og spammer eieren med
-# feil-eposter. Når du har satt opp secretene (docs/oppsett.md §9), fjern
-# kommentaren på schedule-linjene under for å aktivere den daglige påminnelsen.
+# feil-eposter. Når du har satt opp secretene, fjern kommentaren på
+# schedule-linjene under for å aktivere den daglige påminnelsen.
 
-name: Daglig påminnelse
+name: Daglig påminnelse og bursdagsgratulasjon
 
 on:
   # schedule:
-  #   # Kjører kl. 08:00 norsk sommertid (UTC+2 = 06:00 UTC, vinter: 07:00 norsk)
+  #   # Slot 0: 05 UTC = 07 norsk sommer / 06 norsk vinter
+  #   - cron: '0 5 * * *'
+  #   # Slot 1: 06 UTC = 08 norsk sommer / 07 norsk vinter — påminnelsar kjørar her
   #   - cron: '0 6 * * *'
+  #   # Slot 2: 07 UTC = 09 norsk sommer / 08 norsk vinter
+  #   - cron: '0 7 * * *'
+  #   # Slot 3: 08 UTC = 10 norsk sommer / 09 norsk vinter — siste sjanse for bursdag.
+  #   # NB: på vinterstid faller slot 0 (06 norsk) utenfor det ideelle 07–10-vinduet,
+  #   # men siste slot (09 norsk) garanterer fortsatt sending samme dag.
+  #   - cron: '0 8 * * *'
   workflow_dispatch: # Kan kjøres manuelt fra GitHub
 
 jobs:
   paaminne:
     runs-on: ubuntu-latest
     steps:
-      - name: Send påminnelser
+      - name: Send påminnelser og bursdagsgratulasjonar
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L \
+          RESPONS=$(mktemp)
+          STATUS=$(curl -s -o "$RESPONS" -w "%{http_code}" -L \
             -X POST "${{ secrets.APP_URL }}/api/cron/paaminne" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json")
           echo "HTTP status: $STATUS"
+          echo "Svar: $(cat "$RESPONS")"
           if [ "$STATUS" != "200" ]; then
             echo "::error::Påminnelse-endepunktet svarte med HTTP $STATUS"
+            exit 1
+          fi
+
+      # Bursdagsbilde-generering. Eget steg ETTER varsel-curlen over:
+      # varslene skal alltid gå ut selv om bilde-genereringen svikter helt.
+      # Ingen slotIndex-parameter — ruta regner selv ut slot fra UTC-time
+      # (lib/cron-slot.ts), akkurat som steget over.
+      - name: Generer bursdagsbilde
+        run: |
+          RESPONS=$(mktemp)
+          STATUS=$(curl -s -o "$RESPONS" -w "%{http_code}" -L \
+            -X POST "${{ secrets.APP_URL }}/api/cron/bursdagsbilde" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $STATUS"
+          echo "Svar: $(cat "$RESPONS")"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Bursdagsbilde-endepunktet svarte med HTTP $STATUS"
             exit 1
           fi

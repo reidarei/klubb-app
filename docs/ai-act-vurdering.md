@@ -2,22 +2,32 @@
 
 **Regelverk:** Forordning (EU) 2024/1689 (KI-forordningen / AI Act), som endret ved forenklingspakken «Digital Omnibus», forordning (EU) 2026/1744.
 
-Appen inneholder **én** KI-funksjon, og den er **av som standard**. Dette dokumentet forklarer hva den gjør, hva som utløses hvis du skrur den på, og hva du må passe på hvis du bygger flere.
+Appen inneholder **to** KI-funksjoner, og begge er **av som standard**. Dette dokumentet forklarer hva de gjør, hva som utløses hvis du skrur dem på, og hva du må passe på hvis du bygger flere.
 
 Dokumentet er en teknisk-praktisk gjennomgang, ikke juridisk rådgivning.
 
 ---
 
-## 1. Den ene KI-funksjonen
+## 1. De to KI-funksjonene
+
+### 1a. Datoforslag fra innlegger-tekst
 
 `lib/actions/dato-forslag.ts` sender et innleggsutkast til Anthropic (Claude) for å tolke en eventuell fremtidig dato, slik at innlegget kan festes øverst på agendaen til datoen har passert.
 
-Funksjonen styres av `ANTHROPIC_API_KEY`:
+Styres av `ANTHROPIC_API_KEY`.
 
-- **Nøkkelen er tom eller ikke satt** — funksjonen er en no-op. Anthropic kalles aldri, ingen tekst forlater instansen din, og både AI-avsnittet på `/om-appen` og mikroteksten ved datofeltet skjules automatisk. Dette er standardoppsettet.
-- **Nøkkelen er satt** — medlemmenes innleggstekst sendes til en tredjepart, i praksis utenfor EU/EØS. Les videre før du gjør det.
+### 1b. Bursdagsbildegenerering
 
-Boolen `AI_PAA` i `lib/config.ts` er avledet av nøkkelen, ikke en egen bryter. Det er med vilje: en separat bryter kunne kommet i utakt med virkeligheten og fått appen til å love medlemmene noe annet enn den faktisk gjør.
+`lib/bursdagsbilde-generering.ts` og `app/api/cron/bursdagsbilde/route.ts` genererer et fotorealistisk bursdagsbilde ved å sende medlemmets ansiktsbilde og navn til Google Vertex AI.
+
+Styres av `GOOGLE_VERTEX_SA_JSON_B64` (og `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`).
+
+### Når er funksjonene av?
+
+- **Nøklene er tomme eller ikke satt** — begge funksjonene er no-op. Tredjeparter kalles aldri, ingen data forlater instansen din, og både AI-avsnittet på `/om-appen` og mikrotexter i grensesnittet skjules automatisk. Dette er standardoppsettet.
+- **Nøklene er satt** — medlemmenes data sendes til henholdsvis Anthropic og Google (eller Google-proxy, avhengig av ditt Google-oppsett). Les videre før du gjør det.
+
+Boolene `AI_PAA` og `BURSDAGSBILDE_PAA` i `lib/config.ts` er avledet av nøklene, ikke egne brytere. Det er med vilje: separate brytere kunne kommet i utakt med virkeligheten.
 
 Alt annet automatisk i appen — agenda-sortering, feil-alarm, geokoding, kåringer — er regelbasert og er ikke KI-systemer i forordningens forstand, jf. fortalepunkt 12.
 
@@ -45,11 +55,15 @@ Art. 2(12) unntar fri programvare og åpen kildekode — men **ikke** når art. 
 
 ---
 
-## 4. Før du skrur på nøkkelen
+## 4. Før du skrur på nøklene
 
-1. **Sjekk hva leverandøren gjør med dataen.** Databehandleravtale, overføringsgrunnlag ut av EØS, og hvor lenge de lagrer det du sender. Dette er GDPR, ikke AI Act, men det er punktet med størst faktisk konsekvens for medlemmene dine.
-2. **Fortell medlemmene.** `/om-appen`-teksten gjør det automatisk når nøkkelen er satt — les den og sjekk at den stemmer for ditt oppsett.
-3. **Vurder om du trenger funksjonen.** Den sparer et par tastetrykk. Det er en helt legitim avveining å la den stå av.
+Denne seksjonen gjelder begge KI-funksjonene.
+
+1. **Sjekk hva leverandørene gjør med dataen.** Databehandleravtale, overføringsgrunnlag ut av EØS, og hvor lenge de lagrer det du sender. Dette er GDPR, ikke AI Act, men det er punktet med størst faktisk konsekvens for medlemmene dine.
+   - **Antropic:** Innleggstekst sendes til Claude. Sjekk databehandlingsavtale på console.anthropic.com.
+   - **Google Vertex AI:** Ansiktsbilde og navn sendes til bildemodellen. Sjekk avtaler for Google Cloud-prosjektet ditt.
+2. **Fortell medlemmene.** `/om-appen`-teksten gjør det automatisk når nøklene er satt — les den og sjekk at den stemmer for ditt oppsett.
+3. **Vurder om du trenger funksjonene.** De sparer noen få tastetrykk/klikk. Det er helt legitim avveining å la dem stå av.
 
 ---
 
@@ -85,7 +99,7 @@ Se § 6 under, og «Policy: AI-funksjoner» i `CLAUDE.md`.
 
 ## 6. Bygger du flere KI-funksjoner?
 
-Vurderingen over gjelder **kun** så lenge den eneste KI-flaten er dato-uttrekk. Konklusjonen «minimal risiko» er ikke en egenskap ved appen, men ved den ene funksjonen.
+Vurderingen over gjelder **kun** så lenge KI-flatene er dato-uttrekk og bursdagsbildegenerering. Konklusjonen «minimal risiko» er ikke en egenskap ved appen, men ved de to funksjonene som finnes i dag.
 
 - En samtaleflate (chatbot, «spør appen») utløser **art. 50(1)** på ekte — plikt til å informere om at man snakker med en maskin.
 - Genererer du tekst, bilde, lyd eller video som publiseres i appen, utløser det **art. 50(2)** — plikt til maskinlesbar merking av output.

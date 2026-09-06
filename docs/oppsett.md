@@ -174,7 +174,70 @@ kl. 06:00 UTC hver dag. Du kan når som helst teste manuelt via Actions →
 
 ---
 
-## 10. Sett generalsekretær
+## 10. Google Vertex AI — bursdagsbildegenerering (valgfritt)
+
+Bursdagsbilde-funksjonen er **av som standard**. Den krever Google Cloud-oppsett, og er kun relevant hvis du ønsker å generere fotorealistiske bursdagsbilder for medlemmene.
+
+**Hvis du ikke trenger funksjonen, hopp til § 11.**
+
+### Trinn 1: Opprett Google Cloud-prosjekt
+
+1. Gå til [Google Cloud Console](https://console.cloud.google.com)
+2. Opprett nytt prosjekt (øverst på siden)
+3. Vent på at prosjektet opprettelse er ferdig (kan ta noen minutter)
+
+### Trinn 2: Aktiver Vertex AI API
+
+1. I Cloud Console, søk etter «Vertex AI API»
+2. Trykk på resultatet → «Enable»
+3. Vent på at API-en blir aktivert
+
+### Trinn 3: Opprett service account med rolle
+
+1. I Cloud Console, gå til **IAM & Admin** → **Service Accounts**
+2. Trykk «Create Service Account»
+3. Fyll navn og beskrivelse (f.eks. «herreklubb-ai»)
+4. I neste steg, gi rollen **roles/aiplatform.user**
+5. Fortsett til ferdig
+
+### Trinn 4: Generer og base64-kod JSON-nøkkelen
+
+1. I Service Accounts-listen, trykk på kontoen du nettopp opprettet
+2. Gå til **Keys**-tabben
+3. Trykk «Add Key» → **Create new key** → JSON
+4. Filen blir downloaded automatisk
+5. Base64-kod den:
+   ```bash
+   cat path/to/downloaded-key.json | base64 -w 0 | xclip -selection clipboard
+   ```
+   (På macOS: `pbcopy` i stedet for `xclip`. Windows: PowerShell `[Convert]::ToBase64String([System.IO.File]::ReadAllBytes('path\to\key.json')) | Set-Clipboard`.)
+6. Lim inn den base64-kodete strengen i `GOOGLE_VERTEX_SA_JSON_B64` på Vercel
+
+### Trinn 5: Sett øvrige Vertex-variabler
+
+I Vercel → Settings → Environment Variables:
+
+| Variabel | Verdi | Notat |
+|---|---|---|
+| `GOOGLE_CLOUD_PROJECT` | Prosjekt-ID (fra Google Cloud Console → Innstillinger) | Obligatorisk |
+| `GOOGLE_CLOUD_LOCATION` | `europe-west4` | Må være EU-region (west1/west3/west4/west9) |
+| `GOOGLE_VERTEX_MODELL` | `gemini-2.0-pro-vision-experimental` | (Valgfritt; default over) |
+
+### Trinn 6: Redeploy
+
+Etter å ha satt env-variablene, redeploy appen på Vercel slik at de nye variablene lastes inn.
+
+### Test
+
+1. Logg inn som admin
+2. Gå til **Innstillinger** → **Bursdagsbilde**
+3. Velg et medlem og trykk «Generer bilde»
+
+Første generering kan ta 30–60 sekunder. Hvis den feiler, sjekk Vercel-loggen.
+
+---
+
+## 11. Sett generalsekretær
 
 Generalsekretær settes i appen etter at første admin er opprettet:
 
