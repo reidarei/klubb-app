@@ -30,6 +30,7 @@ import {
   BURSDAGSBILDE_BUDSJETT_MODELL_MS,
   BURSDAGSBILDE_BUDSJETT_R2_MS,
   BURSDAGSBILDE_INPUT_MAKS_MB,
+  MEDGJESTER_MAKS_ANTALL,
 } from '@/lib/konstanter'
 import { logg } from '@/lib/logg'
 
@@ -86,6 +87,80 @@ async function hentProfilbildeBytes(
   }
 
   return { bytes, mimeType }
+}
+
+type Medgjest = { navn: string; bilde: { base64: string; mimeType: string } }
+
+// Velg ut klubbkameratene som skal være med på bildet, og hent ansiktene
+// deres. Utvalget er DETERMINISTISK for (bursdagsbarn, feiringsdato): et
+// nytt forsøk etter en feilet generering skal gi samme følge, ellers ville
+// «prøv igjen» stille byttet ut hvem som var med. Samtidig gir en ny
+// feiringsdato et nytt utvalg, så samme mann ikke får de samme to
+// kameratene år etter år.
+//
+// Hele funksjonen er FAIL-OPEN: bursdagsbildet er hovedsaken, medgjestene
+// er pynt. Feiler oppslaget, eller har klubben for få menn med profilbilde,
+// lages bildet med bursdagsbarnet alene — det er en tydelig dårligere
+// grunn til å stå uten bilde på bursdagen sin enn å mangle en kompis i
+// bakgrunnen. Feil logges, aldri svelges stille.
+async function hentMedgjester(
+  admin: Admin,
+  bursdagsbarnId: string,
+  feiringsdato: string,
+): Promise<Medgjest[]> {
+  const { data, error } = await admin
+    .from('profiles')
+    .select('id, visningsnavn, navn, bilde_url')
+    .eq('aktiv', true)
+    .neq('id', bursdagsbarnId)
+    .not('bilde_url', 'is', null)
+    .order('id', { ascending: true })
+
+  if (error) {
+    await logg.feil('bursdagsbilde.medgjester.oppslag_feilet', error, {
+      ctx: { profil_id: bursdagsbarnId },
+    })
+    return []
+  }
+
+  const kandidater = (data ?? []).filter(
+    (p): p is typeof p & { bilde_url: string } => Boolean(p.bilde_url),
+  )
+  if (kandidater.length === 0) return []
+
+  // Deterministisk rotasjon i stedet for en tilfeldighetsgenerator: start
+  // på en indeks utledet av nøkkelen, og ta de neste N. Enkelt å resonnere
+  // om, og gir ulikt utvalg per mann og per år uten noen lagret tilstand.
+  const start = Math.abs(hashKode(`${bursdagsbarnId}:${feiringsdato}`)) % kandidater.length
+  const valgt = Array.from(
+    { length: Math.min(MEDGJESTER_MAKS_ANTALL, kandidater.length) },
+    (_, i) => kandidater[(start + i) % kandidater.length],
+  )
+
+  const hentet: Medgjest[] = []
+  for (const kandidat of valgt) {
+    try {
+      const bilde = await hentProfilbildeBytes(kandidat.bilde_url)
+      hentet.push({
+        navn: kandidat.visningsnavn || kandidat.navn,
+        bilde: { base64: Buffer.from(bilde.bytes).toString('base64'), mimeType: bilde.mimeType },
+      })
+    } catch (e) {
+      // Én kompis med ødelagt bilde skal ikke ta med seg den andre.
+      await logg.feil('bursdagsbilde.medgjest.hent_feilet', e, {
+        ctx: { profil_id: bursdagsbarnId, medgjest_id: kandidat.id },
+      })
+    }
+  }
+  return hentet
+}
+
+// Liten, stabil strenghash (FNV-1a-aktig). Kun til utvalgsrotasjonen over —
+// ikke kryptografisk, og skal aldri brukes til noe som krever det.
+function hashKode(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
+  return h
 }
 
 export type BursdagsbildeUtfall =
@@ -146,18 +221,28 @@ export async function genererBursdagsbilde(
     return { utfall: inputStatus, klasse: 'ugyldig' }
   }
 
+  // Medgjestene hentes ETTER bursdagsbarnets eget bilde: feiler det, er
+  // hele genereringen ute uansett, og da er det bortkastet å laste ned to
+  // bilder til.
+  const medgjester = await hentMedgjester(admin, profil.id, feiringsdato)
+
   const prompt = byggBursdagsprompt({
     navn: profil.navn,
     alder: profil.alder,
     stikkord: profil.stikkord,
+    medgjester: medgjester.map(m => m.navn),
   })
 
   // 3. Vertex-kallet.
   let bilde: Awaited<ReturnType<typeof genererBildeVertex>>
   try {
     bilde = await genererBildeVertex({
-      bildeBase64: Buffer.from(input.bytes).toString('base64'),
-      mimeType: input.mimeType,
+      // Bursdagsbarnet FØRST — prompten viser til «the first reference
+      // photo» for ham og til de neste for medgjestene, i denne rekkefølgen.
+      bilder: [
+        { base64: Buffer.from(input.bytes).toString('base64'), mimeType: input.mimeType },
+        ...medgjester.map(m => m.bilde),
+      ],
       prompt,
       signal: AbortSignal.timeout(BURSDAGSBILDE_BUDSJETT_MODELL_MS),
     })

@@ -191,14 +191,20 @@ export function vertexVert(lokasjon: string): string {
   return `${lokasjon}-aiplatform.googleapis.com`
 }
 
+export type VertexReferansebilde = {
+  base64: string
+  mimeType: string
+}
+
 export type VertexBilde = {
   bytes: Uint8Array
   mimeType: string
   modell: string
 }
 
-// Generer ett bursdagsbilde. `bildeBase64` er profilbildet (uten data:-
-// prefiks), sendt inline som referanse. Bestiller 4:3 i 1K.
+// Generer ett bursdagsbilde. `bilder` er referansebildene (base64 uten
+// data:-prefiks), sendt inline i den rekkefølgen kallstedet oppgir dem —
+// første er bursdagsbarnet, resten er medgjester. Bestiller 4:3 i 1K.
 //
 // Modellen er Nano Banana 2 (Gemini 3.1 Flash Image) — ikke et åpent valg.
 // #641 valgte Nano Banana Pro og verifiserte person-policyen manuelt mot
@@ -220,16 +226,15 @@ export type VertexBilde = {
 // en annen MODELLFAMILIE krever også en ny request-form her, og en ny AI
 // Act-vurdering (CLAUDE.md § Policy: AI-funksjoner).
 export async function genererBildeVertex({
-  bildeBase64,
-  mimeType,
+  bilder,
   prompt,
   signal,
 }: {
-  bildeBase64: string
-  mimeType: string
+  bilder: VertexReferansebilde[]
   prompt: string
   signal?: AbortSignal
 }): Promise<VertexBilde> {
+  if (bilder.length === 0) throw new Error('genererBildeVertex kalt uten referansebilder')
   const auth = await hentVertexAuthHeader(signal)
   const endpoint =
     `https://${vertexVert(GOOGLE_CLOUD_LOCATION)}/v1/` +
@@ -245,8 +250,13 @@ export async function genererBildeVertex({
           role: 'user',
           // Referansebildet FØRST, prompten etter — Gemini leser delene i
           // rekkefølge, og teksten viser tilbake til «the reference photo».
+          // Rekkefølgen er en DEL AV KONTRAKTEN, ikke en detalj: prompten
+          // viser til bildene som «the first/second/third reference photo»,
+          // så en omstokking her bytter om på hvem som blir hvem i bildet.
+          // Derfor en liste inn, ikke et objekt per rolle — kallstedet eier
+          // rekkefølgen, transporten bare videreformidler den.
           parts: [
-            { inlineData: { mimeType, data: bildeBase64 } },
+            ...bilder.map(b => ({ inlineData: { mimeType: b.mimeType, data: b.base64 } })),
             { text: prompt },
           ],
         },

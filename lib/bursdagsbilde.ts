@@ -9,7 +9,7 @@
 
 import type { VertexFeilKlasse } from '@/lib/vertex'
 import { erSkuddaar } from '@/lib/bursdag'
-import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
+import { MEDGJESTER_MAKS_ANTALL, STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 
 // Feiringsdatoen i ETT bestemt år, med samme skuddårsregel som
 // finnBursdagsbarn() i lib/bursdag.ts: en 29. februar-mann feires 1. mars i
@@ -67,16 +67,30 @@ export function byggBursdagsprompt({
   navn,
   alder,
   stikkord,
+  medgjester = [],
 }: {
   navn: string
   alder: number
   stikkord: string[]
+  /**
+   * Navnene på klubbkameratene hvis ansikter sendes med som referansebilde
+   * 2 og 3. Rekkefølgen MÅ matche `bilder`-lista til genererBildeVertex() —
+   * prompten viser til dem som «second» og «third reference photo», så en
+   * omstokking ett av stedene bytter om på hvem som blir hvem. Tom liste er
+   * normaltilstanden, ikke en feil: har klubben for få menn med profilbilde,
+   * eller feilet oppslaget, lages bildet uten medgjester.
+   */
+  medgjester?: string[]
 }): string {
   const navnSanitert = saniter(navn, 100)
   const stikkordSanitert = stikkord
     .map(s => saniter(s, STIKKORD_MAKS_LENGDE))
     .filter(s => s.length > 0)
     .slice(0, STIKKORD_MAKS_ANTALL)
+  const medgjesterSanitert = medgjester
+    .map(m => saniter(m, 100))
+    .filter(m => m.length > 0)
+    .slice(0, MEDGJESTER_MAKS_ANTALL)
 
   // Basis-scenen er FELLES for alle og bevisst smigrende — dette er et
   // bursdagskort til gutta, ikke et portrett. Stikkordene (under) gjør det
@@ -94,13 +108,31 @@ export function byggBursdagsprompt({
     `same face and likeness as the reference photo — he is the unmistakable focal ` +
     `point of the image. Portray him as the hero of the evening, an Achilles of his ` +
     `time: confident, admired, effortlessly charismatic, adored by everyone around ` +
-    `him. A lively party surrounds him — several beautiful women smiling at him ` +
+    `him. A lively party surrounds him — several beautiful young women smiling at him ` +
     `and drawn into his orbit, confetti in the air. Cinematic, flattering and ` +
-    `good-humoured.`
+    `good-humoured. A huge celebration in an arena, a colosseum or on an enormous ` +
+    `yacht, like we won the world cup and ${navnSanitert} was the best player.`
+
+  // Medgjestene viser til referansebilde 2 og 3. «one close to him, the
+  // other further back in the crowd» er bevisst: to ansikter på samme
+  // avstand konkurrerer med hovedmotivet om oppmerksomheten, og
+  // bursdagsbarnet skal forbli det åpenbare midtpunktet.
+  if (medgjesterSanitert.length > 0) {
+    const navnListe =
+      medgjesterSanitert.length === 1
+        ? medgjesterSanitert[0]
+        : `${medgjesterSanitert.slice(0, -1).join(', ')} and ${medgjesterSanitert.at(-1)}`
+    prompt +=
+      ` His friends from the club are there too: ${navnListe}. The reference photos ` +
+      `after the first one show their faces, in that order — place them among the ` +
+      `guests, one close to him and the other further back in the crowd, keeping ` +
+      `each face recognisable. ${navnSanitert} remains the focal point.`
+  }
 
   if (stikkordSanitert.length > 0) {
-    prompt += ` Subtly weave in these personal traits or interests ` +
-      `naturally into the scene: ${stikkordSanitert.join(', ')}.`
+    prompt +=
+      ` In this setting, make sure ${navnSanitert} is properly depicted with his ` +
+      `face and these personal traits or interests: ${stikkordSanitert.join(', ')}.`
   }
 
   return prompt

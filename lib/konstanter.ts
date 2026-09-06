@@ -301,6 +301,15 @@ export const BURSDAGSBILDE_BUDSJETT_R2_MS = 10000 // opplasting til R2
 // URL vi ikke selv kontrollerte opplastingen av (eldre Supabase Storage-bilder).
 export const BURSDAGSBILDE_INPUT_MAKS_MB = 5
 
+// Hvor mange klubbkamerater som er med på bursdagsbildet ved siden av
+// bursdagsbarnet. Tallet er et TAK på tre ting samtidig, ikke en smakssak:
+// hvor mange ansikter modellen klarer å holde gjenkjennelige i én scene,
+// hvor mange profilbilder vi rekker å hente innenfor
+// BURSDAGSBILDE_BUDSJETT_HENT_MS, og hvor mange menns ansikter som sendes
+// til Google per bursdag (se docs/ai-act-vurdering.md). Økes det, må alle
+// tre vurderes på nytt — særlig den siste.
+export const MEDGJESTER_MAKS_ANTALL = 2
+
 // Ferskhetsvindu for push-klikk-URL-en lagret i Cache Storage (#626).
 // public/sw.js er en statisk fil og kan ikke importere denne konstanten —
 // literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster

@@ -62,8 +62,45 @@ describe('byggBursdagsprompt', () => {
     for (const stikkord of [[], ['fisking']]) {
       const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord })
       expect(prompt).toContain('Achilles of his time')
-      expect(prompt).toContain('beautiful women')
+      expect(prompt).toContain('won the world cup')
     }
+  })
+
+  // Medgjestene viser til «the reference photos after the first one», og
+  // rekkefølgen i prompten MÅ matche bilde-lista som sendes til Vertex.
+  // Testen pinner koblingen: navnene skal stå i samme rekkefølge de kom inn.
+  it('medgjester navngis i oppgitt rekkefølge og viser til referansebildene', () => {
+    const prompt = byggBursdagsprompt({
+      navn: 'Ola',
+      alder: 50,
+      stikkord: [],
+      medgjester: ['Per', 'Pål'],
+    })
+    expect(prompt).toContain('Per and Pål')
+    expect(prompt).toContain('reference photos after the first one')
+    expect(prompt.indexOf('Per')).toBeLessThan(prompt.indexOf('Pål'))
+  })
+
+  // Tom liste er normaltilstanden (for få menn med profilbilde, eller et
+  // feilet oppslag — se hentMedgjester), ikke en feil. Da skal hele
+  // medgjest-setningen utebli, ikke stå igjen som en tom referanse til
+  // bilder som aldri ble sendt.
+  it('uten medgjester nevnes verken venner eller ekstra referansebilder', () => {
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: [] })
+    expect(prompt).not.toContain('friends from the club')
+    expect(prompt).not.toContain('reference photos after the first one')
+  })
+
+  it('flere medgjester enn taket kuttes', () => {
+    const prompt = byggBursdagsprompt({
+      navn: 'Ola',
+      alder: 50,
+      stikkord: [],
+      medgjester: ['Per', 'Pål', 'Per', 'Truls'],
+    })
+    expect(prompt).toContain('Per and Pål')
+    expect(prompt).not.toContain('Per')
+    expect(prompt).not.toContain('Truls')
   })
 
   // Prompten bygges av konkatenerte template literals. Et ekte linjeskift

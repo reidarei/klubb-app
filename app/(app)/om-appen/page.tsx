@@ -127,6 +127,10 @@ export default function OmAppen() {
             inn, til Google (Vertex AI, servere i EU) for å lage et bilde til
             bursdagskortet ditt. Bildet vises på selve dagen, merket «Laget av
             KI». Du kan be en admin fjerne det.
+            {' '}
+            Bildet lages som en festscene, og et par klubbkamerater er med i
+            det. Det betyr at profilbildet og navnet ditt også sendes samme vei
+            når andre har bursdag — ikke bare på din egen.
           </Avsnitt>
         )}
         <Avsnitt overskrift="E-postvarsler">
