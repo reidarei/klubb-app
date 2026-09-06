@@ -78,12 +78,26 @@ export function byggBursdagsprompt({
     .filter(s => s.length > 0)
     .slice(0, STIKKORD_MAKS_ANTALL)
 
+  // Basis-scenen er FELLES for alle og bevisst smigrende — dette er et
+  // bursdagskort til gutta, ikke et portrett. Stikkordene (under) gjør det
+  // personlig; denne delen gjør det til en spøk alle er med på.
+  //
+  // «celebratory rather than risqué» står der av praktiske grunner, ikke
+  // moralske: modellens person-policy avviser lettere en scene med flere
+  // gjenkjennelige mennesker hvis tonen kan leses som seksualisert, og en
+  // avvisning er terminal (status 'avvist', se statusForFeilklasse) — da får
+  // mannen ingenting på bursdagen sin. Linja koster oss ingen stemning og
+  // fjerner den vanligste grunnen til at en slik scene blir nektet.
   let prompt =
-    `A warm, photorealistic birthday portrait of ${navnSanitert}, the person shown ` +
-    `in the reference photo, celebrating turning ${alder} years old today. Preserve ` +
-    `the same face and likeness as the reference photo. Festive atmosphere, warm ` +
-    `golden lighting, subtle celebratory details (confetti, balloons, or a small cake) ` +
-    `in the background — the person's face stays the clear focal point.`
+    `A warm, photorealistic birthday scene celebrating ${navnSanitert}, the person ` +
+    `shown in the reference photo, turning ${alder} years old today. Preserve the ` +
+    `same face and likeness as the reference photo — he is the unmistakable focal ` +
+    `point of the image. Portray him as the hero of the evening, an Achilles of his ` +
+    `time: confident, admired, effortlessly charismatic, adored by everyone around ` +
+    `him. A lively party surrounds him — a crowd of guests raising their glasses to ` +
+    `him, several beautiful women smiling at him and drawn into his orbit, warm ` +
+    `golden light, confetti in the air. Cinematic, flattering and good-humoured; ` +
+    `celebratory rather than risqué.`
 
   if (stikkordSanitert.length > 0) {
     prompt += ` Subtly weave in these personal traits or interests, only if they fit ` +

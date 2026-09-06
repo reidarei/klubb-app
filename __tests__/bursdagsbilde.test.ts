@@ -56,6 +56,24 @@ describe('byggBursdagsprompt', () => {
     expect(prompt.toLowerCase()).not.toContain('weave in')
   })
 
+  // Basis-scenen skal gjelde ALLE, også en mann uten stikkord — det er hele
+  // poenget med at den er basis og ikke noe admin må fylle ut per mann.
+  it('helte-scenen er med uansett om stikkord finnes', () => {
+    for (const stikkord of [[], ['fisking']]) {
+      const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord })
+      expect(prompt).toContain('Achilles of his time')
+      expect(prompt).toContain('beautiful women')
+      expect(prompt).toContain('raising their glasses')
+    }
+  })
+
+  // Se kommentaren i byggBursdagsprompt: uten denne linja avvises scenen
+  // oftere av person-policyen, og en avvisning er terminal.
+  it('holder tonen eksplisitt feirende, ikke seksualisert', () => {
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: [] })
+    expect(prompt).toContain('celebratory rather than risqué')
+  })
+
   it('stikkord vevs inn i prompten når de finnes', () => {
     const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: ['fisking', 'gitar'] })
     expect(prompt).toContain('fisking')
