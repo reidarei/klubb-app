@@ -158,6 +158,7 @@ const variabler = [
   { navn: 'GOOGLE_CLOUD_PROJECT',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Google Cloud prosjekt-ID for Vertex AI' },
   { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: eu|europe-west1|west3|west4|west9 (eu kreves for standardmodellen)' },
   { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3.1-flash-image)' },
+  { navn: 'BURSDAGSBILDE_PROMPT_BASIS', nivaa: 'valgfri',  type: 'streng',   beskrivelse: 'Scene-tekst for bursdagsbildet (default i lib/klubb-prompt.ts). Plassholdere: {navn}, {alder}' },
 
   // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives
   // server-feil fortsatt til feil_logg (lib/logg.ts), som er den kanalen

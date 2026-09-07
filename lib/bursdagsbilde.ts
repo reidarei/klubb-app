@@ -10,6 +10,7 @@
 import type { VertexFeilKlasse } from '@/lib/vertex'
 import { erSkuddaar } from '@/lib/bursdag'
 import { MEDGJESTER_MAKS_ANTALL, STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
+import { BURSDAGSBILDE_PROMPT_BASIS } from '@/lib/klubb-prompt'
 
 // Feiringsdatoen i ETT bestemt år, med samme skuddårsregel som
 // finnBursdagsbarn() i lib/bursdag.ts: en 29. februar-mann feires 1. mars i
@@ -93,25 +94,25 @@ export function byggBursdagsprompt({
     .slice(0, MEDGJESTER_MAKS_ANTALL)
 
   // Basis-scenen er FELLES for alle og bevisst smigrende — dette er et
-  // bursdagskort til gutta, ikke et portrett. Stikkordene (under) gjør det
-  // personlig; denne delen gjør det til en spøk alle er med på.
+  // bursdagskort til gutta, ikke et portrett. Selve teksten er KLUBBCONFIG
+  // (lib/klubb-prompt.ts), ikke hardkodet her: den er redaksjon, den er
+  // klubbspesifikk, og den skal kunne endres med en env-var uten deploy.
   //
   // Scenen har flere gjenkjennelige mennesker i seg, og det er den formen
   // modellens person-policy avviser lettest. En avvisning er terminal
   // (status 'avvist', se statusForFeilklasse) — da får mannen ingenting på
   // bursdagen sin, og bare admins tving-knapp reparerer det. Blir avvisninger
   // et mønster, er en eksplisitt tone-linje («celebratory rather than
-  // risqué» e.l.) det billigste første mottrekket; den sto her til 2026-09-06.
-  let prompt =
-    `A warm, photorealistic birthday scene celebrating ${navnSanitert}, the person ` +
-    `shown in the reference photo, turning ${alder} years old today. Preserve the ` +
-    `same face and likeness as the reference photo — he is the unmistakable focal ` +
-    `point of the image. Portray him as the hero of the evening, an Achilles of his ` +
-    `time: confident, admired, effortlessly charismatic, adored by everyone around ` +
-    `him. A lively party surrounds him — several beautiful young women smiling at him ` +
-    `and drawn into his orbit, confetti in the air. Cinematic, flattering and ` +
-    `good-humoured. A huge celebration in an arena, a colosseum or on an enormous ` +
-    `yacht, like we won the world cup and ${navnSanitert} was the best player.`
+  // risqué» e.l.) det billigste første mottrekket.
+  //
+  // Plassholderne settes inn med en global replace av faste strenger, ikke
+  // med en regex over vilkårlige {…}-uttrykk: teksten kommer fra en env-var
+  // en klubbeier har skrevet, og skal kunne inneholde krøllparenteser uten
+  // at vi later som de betyr noe. Ukjente plassholdere står urørt igjen.
+  let prompt = BURSDAGSBILDE_PROMPT_BASIS.split('{navn}')
+    .join(navnSanitert)
+    .split('{alder}')
+    .join(String(alder))
 
   // Medgjestene viser til referansebilde 2 og 3. «one close to him, the
   // other further back in the crowd» er bevisst: to ansikter på samme

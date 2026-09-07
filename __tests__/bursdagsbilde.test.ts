@@ -6,6 +6,7 @@ import {
   tellerSomFeil,
 } from '@/lib/bursdagsbilde'
 import type { VertexFeilKlasse } from '@/lib/vertex'
+import { BURSDAGSBILDE_PROMPT_BASIS } from '@/lib/klubb-prompt'
 
 describe('nesteFeiringsdato', () => {
   it('en bursdag senere i året gir årets dato', () => {
@@ -58,12 +59,40 @@ describe('byggBursdagsprompt', () => {
 
   // Basis-scenen skal gjelde ALLE, også en mann uten stikkord — det er hele
   // poenget med at den er basis og ikke noe admin må fylle ut per mann.
-  it('helte-scenen er med uansett om stikkord finnes', () => {
+  //
+  // Assert mot KONSTANTEN, aldri mot en frase fra den: teksten er
+  // klubbconfig og divergerer mellom repoene (lib/klubb-prompt.ts). En test
+  // på «Achilles of his time» passerer her og feiler i klubb-app, der
+  // standardteksten er nøytral. Invarianten er at basis kommer først og
+  // komplett — ikke hva den sier.
+  it('basis-scenen er med i sin helhet uansett om stikkord finnes', () => {
+    const forventet = BURSDAGSBILDE_PROMPT_BASIS.split('{navn}')
+      .join('Ola')
+      .split('{alder}')
+      .join('50')
     for (const stikkord of [[], ['fisking']]) {
       const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord })
-      expect(prompt).toContain('Achilles of his time')
-      expect(prompt).toContain('won the world cup')
+      expect(prompt.startsWith(forventet)).toBe(true)
     }
+  })
+
+  // Basis-teksten er klubbconfig (lib/klubb-prompt.ts) med plassholdere.
+  // Erstatningen er global: {navn} står to ganger i standardteksten, og en
+  // .replace() med streng-argument ville byttet bare den første — da hadde
+  // prompten bedt modellen om «{navn} was the best player».
+  it('alle forekomster av plassholderne erstattes', () => {
+    const prompt = byggBursdagsprompt({ navn: 'Ola Testesen', alder: 45, stikkord: [] })
+    expect(prompt).not.toContain('{navn}')
+    expect(prompt).not.toContain('{alder}')
+    expect(prompt).toContain('45')
+  })
+
+  // Uten plassholdere i teksten mister prompten navn og alder helt, uten at
+  // noe feiler synlig — bildet blir bare av «en mann». Testen fanger en
+  // redigering av standardteksten som glemmer dem.
+  it('standardteksten inneholder begge plassholderne', () => {
+    expect(BURSDAGSBILDE_PROMPT_BASIS).toContain('{navn}')
+    expect(BURSDAGSBILDE_PROMPT_BASIS).toContain('{alder}')
   })
 
   // Medgjestene viser til «the reference photos after the first one», og
