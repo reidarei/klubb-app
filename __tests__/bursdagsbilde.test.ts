@@ -61,10 +61,10 @@ describe('byggBursdagsprompt', () => {
   // poenget med at den er basis og ikke noe admin må fylle ut per mann.
   //
   // Assert mot KONSTANTEN, aldri mot en frase fra den: teksten er
-  // klubbconfig og divergerer mellom repoene (lib/klubb-prompt.ts). En test
-  // på «Achilles of his time» passerer her og feiler i klubb-app, der
-  // standardteksten er nøytral. Invarianten er at basis kommer først og
-  // komplett — ikke hva den sier.
+  // klubbconfig (lib/klubb-prompt.ts) og kan settes per instans via env.
+  // En test som sjekker etter en bestemt formulering går i stykker så snart
+  // en klubb endrer scenen sin — og den fanger ikke det den skal uansett.
+  // Invarianten er at basis kommer først og komplett, ikke hva den sier.
   it('basis-scenen er med i sin helhet uansett om stikkord finnes', () => {
     const forventet = BURSDAGSBILDE_PROMPT_BASIS.split('{navn}')
       .join('Ola')
