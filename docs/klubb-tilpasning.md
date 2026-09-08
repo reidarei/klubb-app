@@ -134,6 +134,16 @@ Utover klubbidentiteten i seksjon 1 har `lib/config.ts` flere verdier med hardko
 | `NEXT_PUBLIC_R2_PUBLIC_URL` (eller `R2_PUBLIC_URL`) | `''` (tom) | Public CDN-URL hvor bilder hentes fra (`https://<din-pub-id>.r2.dev` eller custom domain) | **Må settes** — bilder vises ikke uten. |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Ingen | R2-credentials og bucket-navn (server-side; ALDRI med `NEXT_PUBLIC_`-prefiks) | **Må settes** for bildelagring. Marker som «Sensitive» i Vercel. |
 
+### Fondssiden
+
+Bruker klubben fondsfunksjonen, styres kontoinformasjonen av disse. Alle er `NEXT_PUBLIC_`, altså synlige for innloggede medlemmer i klientbundelen — sett aldri noe her du ikke vil at hele klubben skal se.
+
+| Env-var | Default i koden | Hva den styrer |
+|---|---|---|
+| `NEXT_PUBLIC_FOND_KONTONUMMER` | `''` (tom) | Kontonummeret innskudd betales til. Tom verdi skjuler hele blokka med betalingsoppfordring |
+| `NEXT_PUBLIC_FOND_KONTOEIER` | `kassereren` | Hvem kontoen står i navnet til. Brukes i forklaringen av rentefordeling |
+| `NEXT_PUBLIC_FOND_FAST_TREKK_FORSLAG` | `500 kr` | Foreslått månedlig fast trekk, vist som oppfordring |
+
 ---
 
 ## 7. Endringslogg («Hva er nytt»)
