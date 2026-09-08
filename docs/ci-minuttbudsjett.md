@@ -114,6 +114,47 @@ Your deployment's cost may differ based on test count and Chromium cache freshne
 - **`VARSEL_ANDEL`** (0.8) — Threshold at which the step summary warns "approaching limit" (when consumption ≥ 80% of available budget).
 - **`VED_MAALEFEIL`** — Fail-safe when GitHub API is unreachable: `'kutt'` (disable e2e, play it safe) or custom value for other behavior.
 
+## Analyzing CI usage over time
+
+`.github/scripts/ci-tidsbruk.mjs` is a manual reporting tool that breaks down your GitHub Actions spend by job type and duration over a rolling window. Use it to spot trends, measure the cost of e2e, and catch regressions early.
+
+**Usage:**
+
+```bash
+node .github/scripts/ci-tidsbruk.mjs --dager=30
+```
+
+**Note:** This is a standalone script, not an npm command — it's meant to run without triggering a full build. Add `--dager=N` to analyze the last N days (default: 30). The script requires `gh` CLI with valid GitHub authentication.
+
+### Understanding the output
+
+The report has six sections:
+
+1. **Kjøringer (Runs)** — Total count of workflow runs in the period, broken down by event type (pull request, push, scheduled).
+2. **Minutter etter hendelsestype (Minutes by event type)** — Aggregated duration per event type, helping you see where time is spent.
+3. **Jobbfordeling (Job distribution)** — Shows how many jobs ran across all runs, and which job type consumed the most minutes. This is different from run-level accounting: a single run may contain multiple jobs (e.g., lint AND typecheck in parallel), so job-minutes > run-minutes.
+4. **Gating-tabell (Gating table)** — History of e2e gating decisions: how many runs were `approved`, `budget`, `risk`, or `unknown`.
+5. **Rerunner (Reruns)** — How many workflow runs you re-triggered manually, and their total cost.
+6. **Oversikt (Summary)** — Total minutes consumed this period, used capacity as a percentage of quota, and the e2e decision threshold.
+
+### Job-minutes vs. run-minutes
+
+The budget guard counts **run-minutes** — total duration of a single `workflow_run` event. The analysis tool reports **job-minutes** — the sum of all `jobs` within all runs. A job that runs in parallel with others doesn't add to a run's total duration, but does contribute to its CPU cost (and indirectly to GitHub's cost).
+
+Example: A run with three jobs (lint, typecheck, build) that all run in parallel for 5 minutes = 5 run-minutes, but 15 job-minutes from GitHub's perspective. The budget guard cares about run-minutes (how much wall-clock time does the CI server sit idle waiting for your run), while the analysis tool reports job-minutes (aggregate complexity). Both are useful: run-minutes predict quota depletion; job-minutes show where to optimize.
+
+### The "unknown" status
+
+Runs labeled `unknown` in the gating table predate the risk guard (`#663`), so their risk status was never recorded. `unknown ≠ "e2e ran"` — it means the data doesn't say. When you see `unknown`, you can assume older runs used the simpler, budget-only guard. After risk gating was deployed, all new runs are categorized as `approved` (ran e2e), `budget` (quota guard cut it), `risk` (risk guard cut it), or `unknown` only if data collection failed.
+
+### Measuring e2e impact
+
+To measure how much Playwright adds to your quota bill, compare job-minutes before and after your risk guard cut e2e on a risky PR:
+
+- Find a PR on `pull_request` event with both `approved` and `risk`-cut runs.
+- The difference between an approved run's job-minutes and a risk-cut run's job-minutes is roughly your e2e overhead.
+- Adjust `E2E_KOST_MIN` if the real-world cost drifts from your estimate.
+
 ## Testing locally
 
 The guard is in `GITHUB_OUTPUT` and `GITHUB_STEP_SUMMARY` only — it doesn't affect local `npm run dev` or `npx playwright test`. You can run e2e locally anytime.
