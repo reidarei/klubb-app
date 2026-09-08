@@ -56,21 +56,28 @@ For maskable-ikonene: selve motivet bør holdes innenfor en sirkel på ca. 80 % 
 
 ## 3. Farger og tema
 
-Det finnes ikke ett sentralt sted som styrer alle farger. Det er verdt å si usminket: appen bruker overveiende inline-styles (objekt-literaler) fremfor CSS-variabler eller et Tailwind-tema.
+Farger styres av CSS custom properties i **`app/globals.css`**. Det finnes ingen `tailwind.config.ts` — Tailwind v4 trenger den ikke. Tokenene bindes til Tailwind-utilities via `@theme inline`, slik at f.eks. `bg-accent` plukker `--accent` av seg selv. Komponenter bruker enten `var(--token)` eller Tailwind-klassen.
 
-Grep-søk for å finne farge-verdier:
+**Regelen i kodebasen:** ikke hardkod hex- eller rgba-verdier i komponenter. Bruk en eksisterende token, eller legg til en ny i `globals.css` og referer den. De få stedene som bryter regelen har en kommentar som forklarer hvorfor (avatar-farger, rene grafiske elementer, e-postmaler som ikke støtter CSS-variabler).
 
-```bash
-grep -r "#060608\|#18181b\|#a855f7" --include="*.tsx" --include="*.ts" .
-```
+Temaet er brukerstyrt med tre valg — system, mørkt, lyst. `:root` holder mørke defaults, speilet i `[data-theme="dark"]` og overstyrt i `[data-theme="light"]`.
 
-Noen ankerpunkter:
+For JS-kontekster som ikke kan lese CSS-variabler — PWA-manifestet, e-postmaler og ICS-filer — finnes et tynt speil i **`lib/tema.ts`**. Endrer du bakgrunns- eller aksentfargen gjennomgående, oppdater den også, ellers spriker splash-skjermen og e-postene fra appen.
 
-- **`app/globals.css`** — liten CSS-fil med noen CSS custom properties og base-stiler. Inneholder ikke hele temaet.
-- **`app/manifest.ts`** — `background_color` og `theme_color` er hardkodet til `#060608` (mørk bakgrunn). Endre disse om du vil et annet PWA-splash-tema.
-- **Tailwind-konfig (`tailwind.config.ts`)** — installert, men brukes lite. Fargepalett er ikke utvidet der.
+### Slik bytter du klubbens farger
 
-Skal du endre fargetema gjennomgående, er det en manuell jobb. Det finnes ingen enkel «bytt primærfarge»-knapp i denne kodebasen.
+Fire env-vars overstyrer brand-fargene uten at du rører koden:
+
+| Env-var | Standardverdi | Beskrivelse |
+|---|---|---|
+| `NEXT_PUBLIC_KLUBB_FARGE_PRIMAER` | `#e8d9b5` | Aksentfarge (sand/beige) |
+| `NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_SOFT` | `rgba(232, 217, 181, 0.16)` | Myk aksent, brukt på bakgrunnsflater |
+| `NEXT_PUBLIC_KLUBB_FARGE_PRIMAER_HOT` | `#f5e8c8` | Hover- og aktiv-tilstand |
+| `NEXT_PUBLIC_KLUBB_FARGE_BAKGRUNN` | `#0e0f13` | Primær bakgrunn |
+
+Sett dem i `.env.local` lokalt og som Environment Variables i Vercel i produksjon. De injiseres som en inline `<style>` i `<head>`, så `globals.css` forblir uendret — identiteten kommer inn ved deploy, ikke i kildekoden.
+
+Skal du lenger enn de fire aksentfargene — bygge en helt egen palett — er det en manuell jobb i `globals.css`. Men for «gjør appen til vår» holder env-varene.
 
 ---
 
