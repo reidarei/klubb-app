@@ -201,6 +201,11 @@ jobs:
       # To markørsteg — gjør årsaken maskinlesbar via
       # `gh run view --json jobs` uten å måtte parse::notice-tekst. Se
       # docs/ci-minuttbudsjett.md § Slik ser du om e2e faktisk kjørte.
+      #
+      # Navnene under (og «E2e (Playwright)» lenger ned) leses bokstavelig av
+      # .github/scripts/ci-tidsbruk.mjs (#664) og er pinnet av en test
+      # (__tests__/ci-tidsbruk.test.ts) — endrer du et av dem, oppdater
+      # konstantene STEG_E2E/MARKOER_LAV_RISIKO/MARKOER_BUDSJETT der også.
       - name: E2e hoppet over — lav risiko
         if: steps.omfang.outputs.aarsak == 'lav_risiko'
         run: echo "Ingen endret fil kan påvirke en kjørende flyt. Se docs/ci-minuttbudsjett.md."
