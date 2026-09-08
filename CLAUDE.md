@@ -446,9 +446,18 @@ Tredje gang samme problem slår til bør vurderes som en arkitektonisk vakt (jf.
 
 For UI-endringer på vanlig flyt: kjør Playwright lokalt før push (`npx playwright test`). Se `e2e/README.md` for setup.
 
-**E2e er også en CI-port på hver PR** (`.github/workflows/pr-check.yml`, mot en fersk `supabase start` i selve jobben). Lokal kjøring er førstelinjen for rask iterasjon, men er ikke eneste dekning — en PR som glemmer suiten lokalt fanges likevel før merge.
+**E2e er også en CI-port på hver PR** (`.github/workflows/pr-check.yml`, mot en fersk `supabase start` i selve jobben — ikke den selvhostede test-instansen). Lokal kjøring er fortsatt førstelinjen for rask iterasjon, men er ikke lenger eneste dekning: en PR som glemmer å kjøre suiten lokalt fanges likevel før merge.
 
-Samme workflow kjører på `push` til main, men da kun kjerneporten (lint, typecheck, vitest, bygg — uten e2e). **Kodeendringer bør derfor gå gjennom PR**; en direkte push til main får aldri e2e. Budsjettvakten (`.github/scripts/ci-minuttbudsjett.mjs`) kan i tillegg kutte e2e-steget på et privat repo når Actions-kvoten er knapp — en grønn kjøring med kuttet e2e er «ukjent», ikke «grønt». Se [docs/ci-minuttbudsjett.md](docs/ci-minuttbudsjett.md).
+**Samme workflow kjører også på `push` til main, men da kun kjerneporten** (lint, typecheck, vitest, bygg — ~5,5 min, uten e2e), og **kun for commits som ikke allerede er portet på en PR**. Bakgrunn: workflowen kjørte tidligere kun på `pull_request`, og direkte pushes til main fikk null porter. Merge-commits ble deretter portet to ganger på samme kode — statistikk viser `push`-kjøringer som ga kein funn, mens budsjettvakten samtidig kuttet e2e på PR-ene. Siden #610 slår `Avgjør om commiten alt er portet` opp via API-et om commiten har en merget PR og hopper over kjerneporten i så fall; direkte pushes får den fortsatt. Oppslaget feiler åpent — svarer API-et ikke, kjøres porten. **Regelen er at kodeendringer skal gjennom PR** — kun `docs/`, `*.md` og `Design/` hører hjemme som direkte push. Kjerneporten på main er et sikkerhetsnett, ikke et alternativ til PR: en kodeendring som pushes direkte får aldri e2e. Se [docs/oppsett.md](docs/oppsett.md) for arbeidsmodus.
+
+**En PR kan hoppe over e2e av to helt forskjellige grunner — de skal IKKE behandles likt.** Budsjettvakten (`.github/scripts/ci-minuttbudsjett.mjs`) kan kutte e2e hvis månedens GitHub Actions-kvote er knapp: en grønn `sjekk`-kjøring der skal behandles som «ukjent», ikke «grønt», og eskaleres — PR-en er faktisk ikke e2e-dekket. Risiko-vakten (`.github/scripts/e2e-risiko.mjs`) hopper i tillegg over e2e når INGEN endret fil kan påvirke en kjørende flyt (ren dokumentasjon, CI-skript, tester) — det er normal drift, ikke tapt dekning, og krever ingen eskalering. Skill de to med markørstegene:
+
+```bash
+gh run view <run-id> --json jobs \
+  --jq '.jobs[].steps[] | select(.name|startswith("E2e hoppet over")) | select(.conclusion=="success") | .name'
+```
+
+`E2e hoppet over — lav risiko` ⇒ normalt. `E2e hoppet over — budsjettvakten kuttet` ⇒ ukjent dekning, eskaler. Se [docs/ci-minuttbudsjett.md](docs/ci-minuttbudsjett.md) § Slik ser du om e2e faktisk kjørte for full utdyping.
 
 For iOS-PWA-quirks (visualViewport, safe-area, focus/blur på iOS): Playwright reproduserer ikke, verken lokalt eller i CI. Test manuelt på iPhone og dokumenter i PR-en at automatisk verifikasjon ikke er mulig.
 
