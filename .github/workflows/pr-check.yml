@@ -1,20 +1,28 @@
-# CI-sjekk for endringer mot main. Tre omfang:
+# CI-sjekk for endringer mot main. `pull_request` har nå TO mulige omfang, og
+# `push` har to til:
 #
-#   pull_request           → FULL   (~14,5 min): kjerneport + Playwright-e2e
-#   push, direkte til main → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
-#   push, merget PR        → INGEN  (~15 sek):   alt portet på PR-en alt
+#   pull_request, risiko funnet     → FULL   (~14,5 min): kjerneport + Playwright-e2e
+#   pull_request, lav risiko (#663) → KJERNE (~5,5 min):  ingen fil kan påvirke en flyt
+#   push, direkte til main          → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
+#   push, merget PR                 → INGEN  (~15 sek):   alt portet på PR-en alt
 #
-# De to første styres av «Avgjør e2e-omfang», den tredje av «Avgjør om commiten
-# alt er portet».
+# E2e hoppes over av tre, uavhengige grunner (se `steps.omfang.outputs.aarsak`
+# under «Avgjør e2e-omfang»):
+#   - hendelse: `push` — kjørte allerede på PR-en (se lenger ned).
+#   - lav_risiko: ingen endret fil kan påvirke en kjørende flyt (#663,
+#     .github/scripts/e2e-risiko.mjs) — normalt, ingen dekning tapt.
+#   - budsjett: budsjettvakten kuttet fordi månedskvoten er stram
+#     (.github/scripts/ci-minuttbudsjett.mjs) — PR-en ER ikke e2e-dekket,
+#     behandle som «ukjent», ikke «grønt».
 #
-# Kjerneporten er ubetinget i begge tilfeller og skal aldri ofres. E2e ligger i
+# Kjerneporten er ubetinget i alle tilfeller og skal aldri ofres. E2e ligger i
 # SAMME job som resten (ikke et eget) fordi et eget job ville vært usynlig for
 # merge-loopens vente-sjekk — se .claude/commands/agentic.md steg 10.
 #
 # Build-steget bruker dummy-env slik at ingen ekte secrets trengs. E2e-instansen
 # startes fra bunn i selve jobben (fersk `supabase start`) — se e2e/README.md
 # § Sikkerhetsmodellen for hvorfor det er trygt, og docs/ci-minuttbudsjett.md
-# for hvorfor e2e kan bli kuttet også på en PR.
+# for hvorfor e2e kan bli kuttet eller hoppet over også på en PR.
 # E2e-steget inkluderer også e2e/rls/ (#533) — RLS-policyene verifiseres her
 # med ekte anon/authenticated-klienter, ikke bare service_role.
 
@@ -131,26 +139,75 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/ci-minuttbudsjett.mjs
 
-      # Ett sted å resonnere om «skal e2e kjøre». To uavhengige grunner til å
+      # Risiko-gating av e2e (#663) — kjøres ETTER budsjettvakten (så
+      # forbrukstabellen fortsatt skrives på HVER PR, trendgrunnlag for #664)
+      # og FØR «Avgjør e2e-omfang». Kun relevant for pull_request — push-
+      # kjøringer kjører aldri e2e uansett (se «Avgjør e2e-omfang» under), så
+      # å måle risiko der ville vært et bortkastet API-kall.
+      - name: Risiko-gating av e2e
+        id: risiko
+        if: steps.portet.outputs.hopp != 'true' && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMMER: ${{ github.event.pull_request.number }}
+          ENDREDE_FILER: ${{ github.event.pull_request.changed_files }}
+        run: node .github/scripts/e2e-risiko.mjs
+
+      # Ett sted å resonnere om «skal e2e kjøre». Tre uavhengige grunner til å
       # hoppe over, samlet her i stedet for duplisert på seks steg-betingelser
       # (der ett glemt ledd ville gitt en jobb som starter Supabase den ikke
       # bruker — eller verre, kjører e2e vi trodde var av).
+      #
+      # MERK: risiko-STEGET kjører etter budsjett-steget over — bevisst, så
+      # forbrukstabellen skrives på hver PR (trendgrunnlag for #664). Det er
+      # PRIORITETEN i if-kjeden under som setter risiko foran budsjett, ikke
+      # stegrekkefølgen. De to må ikke forveksles.
+      #
+      # RISIKO PRIORITERES FORAN BUDSJETT, bevisst: en dok-PR i en stram måned skal
+      # få `aarsak=lav_risiko` (normalt, forventet), ikke `aarsak=budsjett`
+      # (som eskaleres som «ukjent dekning», se docs/ci-minuttbudsjett.md).
+      # Snur du rekkefølgen, eskalerer pipelinen på noe helt normalt hver
+      # gang budsjettet er stramt samtidig som noen pusher en README-fiks.
       - name: Avgjør e2e-omfang
         id: omfang
         if: steps.portet.outputs.hopp != 'true'
         env:
           HENDELSE: ${{ github.event_name }}
+          RISIKO: ${{ steps.risiko.outputs.risiko }}
           BUDSJETT_OK: ${{ steps.budsjett.outputs.kjor_e2e }}
         run: |
           if [ "$HENDELSE" != "pull_request" ]; then
             echo "::notice::$HENDELSE mot main — kjerneporten kjøres, e2e hoppes over (kjørte allerede på PR-en)."
             echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=hendelse" >> "$GITHUB_OUTPUT"
+          # `= "false"`, ikke `!= "true"`: en TOM eller ukjent verdi (steget
+          # ble hoppet over, skriptet døde før den skrev output) er «ikke
+          # målt», ikke «lav risiko». Den skal falle videre til budsjett/kjorer
+          # slik at e2e KJØRER. Skriptet feiler åpent internt — denne ene linja
+          # er stedet hele den polariteten kan snus ved et uhell.
+          elif [ "$RISIKO" = "false" ]; then
+            echo "::notice::Ingen endret fil kan påvirke en kjørende flyt — e2e hoppes over (#663)."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=lav_risiko" >> "$GITHUB_OUTPUT"
           elif [ "$BUDSJETT_OK" != "true" ]; then
             echo "::notice::Budsjettvakten kuttet e2e — se docs/ci-minuttbudsjett.md."
             echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=budsjett" >> "$GITHUB_OUTPUT"
           else
             echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "aarsak=kjorer" >> "$GITHUB_OUTPUT"
           fi
+
+      # To markørsteg — gjør årsaken maskinlesbar via
+      # `gh run view --json jobs` uten å måtte parse::notice-tekst. Se
+      # docs/ci-minuttbudsjett.md § Slik ser du om e2e faktisk kjørte.
+      - name: E2e hoppet over — lav risiko
+        if: steps.omfang.outputs.aarsak == 'lav_risiko'
+        run: echo "Ingen endret fil kan påvirke en kjørende flyt. Se docs/ci-minuttbudsjett.md."
+
+      - name: E2e hoppet over — budsjettvakten kuttet
+        if: steps.omfang.outputs.aarsak == 'budsjett'
+        run: echo "::warning::PR-en er IKKE e2e-dekket. Behandle som ukjent, ikke grønt."
 
       - name: Installer avhengigheter
         if: steps.portet.outputs.hopp != 'true'
