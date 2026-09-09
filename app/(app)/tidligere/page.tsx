@@ -529,10 +529,15 @@ export default async function TidligereSide({
             </a>
           ) : bunn === 'proev-igjen' && retryHref ? (
             <div style={{ marginTop: 20, textAlign: 'center' }}>
-              <Link
+              {/* Vanlig <a>, ikke next/link (#659) — samme grunn som FilterChip
+                  og «Last mer». retryHref peker på /tidligere med ny
+                  searchParam, altså samme rute, og der henger navigasjonen på
+                  en abortert hover-prefetch. Kritisk her: denne lenka vises kun
+                  når en spørring HAR feilet, og er eneste vei ut av
+                  feiltilstanden — henger den, står brukeren fast. */}
+              <a
                 data-testid="tidligere-proev-igjen"
                 href={retryHref}
-                prefetch={false}
                 // Lenketeksten er «Prøv igjen» uten kontekst når en skjermleser
                 // lister lenkene på siden — aria-label sier hva som prøves.
                 aria-label="Prøv å hente historikken på nytt"
@@ -553,7 +558,7 @@ export default async function TidligereSide({
                 }}
               >
                 Prøv igjen
-              </Link>
+              </a>
             </div>
           ) : null}
         </section>
