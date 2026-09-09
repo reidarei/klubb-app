@@ -78,6 +78,10 @@ test.describe('markerSamtaleLest ved åpning av /samtaler/[id] (#539)', () => {
     // /profil er dynamisk rendret, så et nytt besøk viser tallet ferskt —
     // ingen revalidatePath er involvert (den er nettopp fjernet, #539).
     await page.goto('/profil')
+    // Positiv venting FØRST: uten den passerer toHaveCount(0) under trivielt
+    // mot app/(app)/loading.tsx, som er et tekstfritt skjelett — assertionen
+    // ville da bevist «siden lastet ikke enda», ikke «badgen er borte» (#659).
+    await expect(rad).toBeVisible()
     await expect(rad.getByText('1', { exact: true })).toHaveCount(0)
   })
 })

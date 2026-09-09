@@ -108,21 +108,72 @@ export default defineConfig({
   ...(HAR_TEST_INSTANS
     ? {
         webServer: {
-          command: 'npm run dev -- -p 3100',
+          // #659: e2e kjører nå mot PRODUKSJONSBYGG (`next start`), ikke
+          // `next dev`. Dev-serveren restarter seg selv når heapen passerer
+          // 80 % av taket (`start-server.js:232-243`, isDev-gated) — målt til
+          // to restarter per kjøring, også i de grønne — og river alle åpne
+          // forbindelser samtidig. `next start` registrerer kun logg-only
+          // feilhåndterere (`installProcessErrorHandlers()`, ubetinget i
+          // begge moduser) og dør ikke av det samme.
+          //
+          // KUN `next start` i CI — ALDRI bygg som del av kommandoen. Bygget
+          // skjer i et eget «Bygg»-steg i .github/workflows/pr-check.yml,
+          // FØR dette webServer-kommandoen kjøres. Et `next build && next
+          // start` her ville fått RLS-suiten (e2e/rls/, som ikke tar
+          // `dependencies` på setup/chromium, se «projects» under) til å
+          // vente på et fullt bygg for en sikkerhetsgrense som skal ha
+          // raskest mulig feedback.
+          //
+          // Lokalt bygger vi fortsatt i kommandoen: ingen egen CI-jobb bygger
+          // for deg, og uten `npm run build` her ville `next start` enten
+          // feilet (ingen .next/) eller — verre — stille servert et gammelt
+          // bygg fra forrige økt (stale-build-fellen `reuseExistingServer:
+          // false` under finnes for å unngå).
+          //
+          // `npm run start`, ikke `npx next start` (review av #659): Playwright
+          // spawner denne som en BARNEPROSESS av testrunneren via et shell
+          // (`child_process.spawn(..., { shell: true, env: process.env })`, se
+          // playwright-core/lib/server/utils/processLauncher.js), UTEN å selv
+          // legge node_modules/.bin til i PATH — et bart `next`-kall resolver
+          // derfor ikke. Både `npx` og `npm run` løser det, men `npx` kan
+          // INSTALLERE en manglende pakke fra registeret uten å spørre når
+          // stdin ikke er en TTY (altså i CI): er node_modules ødelagt, hadde
+          // vi da kjørt et nedlastet `next@latest` i stedet for å feile.
+          // `npm run` legger node_modules/.bin på PATH deterministisk, slår
+          // aldri opp mot registeret, og gjør CI-kommandoen symmetrisk med
+          // den lokale under.
+          command: process.env.CI ? 'npm run start -- -p 3100' : 'npm run build && npm run start -- -p 3100',
           url: BASE_URL,
-          // Lokalt vil vi gjenbruke en dev-server utvikleren allerede har
-          // kjørende på :3100. I CI (#534) finnes aldri en forhåndskjørende
-          // server — reuseExistingServer der ville i beste fall vært en
-          // no-op, men i verste fall gjenbrukt en server fra en forrige,
-          // krasjet jobb-kjøring på samme runner-image.
-          reuseExistingServer: !process.env.CI,
-          // CI har mer variabel oppstartstid (delt runner, kaldere cache) enn
-          // en utviklers egen maskin — 180s mot 120s lokalt.
-          timeout: process.env.CI ? 180_000 : 120_000,
-          // Prosess-env overstyrer .env.local i Next.js — dev-serveren for
-          // testene kobles til test-instansen, ikke prod. NEXT_PUBLIC_BASE_URL
-          // settes til localhost slik at varsler-vakten i lib/varsler.ts
-          // (BLOKKER_UTSENDING) blokkerer all push/epost-utsending.
+          // UBETINGET false (#659) — ikke lenger CI-only. En glemt `next
+          // start` på :3100 fra en tidligere lokal kjøring ville nå servert
+          // et STALE bygg helt stille (porten svarer, testene kjører, men mot
+          // gammel kode) — verre enn treg oppstart, fordi det ser riktig ut.
+          // En dev-server på :3100 er dessuten nå feil server uansett (den
+          // starter `next dev`, ikke `next start`).
+          reuseExistingServer: false,
+          // `next start` booter på sekunder — en lang timeout ville skjult en
+          // død server bak ventingen i stedet for å feile raskt. CI: ~60 s
+          // (delt runner, men ingen kompilering å vente på — bygget er
+          // allerede ferdig). Lokalt: opp til 300 s for et kaldt
+          // `next build` (kommandoen over bygger OG starter i CI-modus av).
+          timeout: process.env.CI ? 60_000 : 300_000,
+          // Playwrights default er 'ignore' (review av #659). Da fantes det
+          // ikke noe POSITIVT bevis i CI-loggen for hvilken server som faktisk
+          // startet — styrets akseptansekriterium «ingen dev-restart i loggen»
+          // kunne bare bekreftes som et FRAVÆR, som er like sant hvis
+          // serverloggen aldri ble skrevet. Med 'pipe' står `next start` sin
+          // «▲ Next.js … Ready in Xms» i loggen som kvittering.
+          stdout: 'pipe',
+          // Prosess-env overstyrer .env.local i Next.js. MERK (#659): disse
+          // NEXT_PUBLIC_*-oppføringene er nå INERTE for den SERVERTE appen —
+          // `next start` server et allerede bygget `.next/`, og Next baker
+          // NEXT_PUBLIC_*-verdier inn i bundelen ved BYGGETID, ikke ved
+          // serverstart. Den faktiske gaten er byggestegets env i
+          // .github/workflows/pr-check.yml («Bygg»-steget). Blokken her står
+          // som BELTE, ikke VAKT — den er fortsatt riktig for lokal kjøring
+          // (der kommandoen over bygger OG starter i samme steg, så env-en
+          // FAKTISK blir bakt inn), og feil her ville uansett vært en
+          // dobbeltfeil sammen med byggestegets env, ikke usynlig.
           env: {
             NEXT_PUBLIC_SUPABASE_URL: E2E_SUPABASE_URL,
             NEXT_PUBLIC_SUPABASE_ANON_KEY: E2E_SUPABASE_ANON_KEY,
@@ -134,7 +185,13 @@ export default defineConfig({
             // (som med vilje kjører hele varsel-cronen) helt frem til
             // sendEpostBatch/sendPush med prod-Resend- og VAPID-nøkler.
             ALLOW_LOCAL_NOTIFICATIONS: 'false',
-          },
+            // #659: kutter next/image-optimizeren i dette bygget — se
+            // next.config.ts § images.unoptimized. Denne virker KUN på
+            // `npm run build` i den lokale kommandoen over: `next start`
+            // leser den bakte konfigurasjonen fra
+            // .next/required-server-files.json og trenger ikke flagget satt
+            // på nytt. I CI settes samme flagg i pr-check.yml sitt eget
+           },
         },
       }
     : {}),

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import Link from 'next/link'
 
 type Props = {
   href: string
@@ -34,7 +33,15 @@ export const CHIP_RAD_GAP = USYNLIG_PADDING * 2
 
 export default function FilterChip({ href, aktiv, children }: Props) {
   return (
-    <Link
+    // Vanlig <a>, ikke next/link (#659). En filter-chip peker på samme rute
+    // med ny searchParam, og der forgifter Links hover-prefetch navigasjonen:
+    // prefetchen svarer 200 og blir så abortert, og klikket etterpå venter for
+    // alltid på den døde cache-entryen — URL-en endres aldri. Målt både i CI
+    // og lokalt. `prefetch={false}` hjelper ikke; det slår bare av
+    // viewport-prefetch, ikke hover (Next-dokumentert oppførsel).
+    // Hard navigasjon er dessuten liten pris her: et filterbytte rendrer hele
+    // lista på nytt uansett, så det er ingen delt UI å bevare.
+    <a
       href={href}
       aria-current={aktiv ? 'page' : undefined}
       style={{
@@ -60,6 +67,6 @@ export default function FilterChip({ href, aktiv, children }: Props) {
       >
         {children}
       </span>
-    </Link>
+    </a>
   )
 }

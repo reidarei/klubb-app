@@ -496,7 +496,11 @@ export default async function TidligereSide({
               `&& nesteCursor` / `&& retryHref` under er kun TypeScript-
               narrowing til string — avgjørelsen ligger i `bunn`. */}
           {bunn === 'last-mer' && nesteCursor ? (
-            <Link
+            // Vanlig <a>, ikke next/link — samme grunn som FilterChip (#659):
+            // hover-prefetch mot samme rute med ny searchParam etterlater en
+            // abortert cache-entry som klikket henger på for alltid. En
+            // cursor-lenke er dessuten alltid engangsbruk.
+            <a
               data-testid="tidligere-last-mer"
               href={`/tidligere?${new URLSearchParams({
                 ...(filter !== 'alle' && { type: filter }),
@@ -522,7 +526,7 @@ export default async function TidligereSide({
               }}
             >
               Last mer →
-            </Link>
+            </a>
           ) : bunn === 'proev-igjen' && retryHref ? (
             <div style={{ marginTop: 20, textAlign: 'center' }}>
               <Link

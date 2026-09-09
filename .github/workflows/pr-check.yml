@@ -235,6 +235,27 @@ jobs:
           nohup bash -c 'npx supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,supavisor > supabase-start.log 2>&1; echo $? > supabase-start.exit' > /dev/null 2>&1 &
           echo "supabase start kjører i bakgrunnen (pid $!)."
 
+      # Flyttet hit (#659) fra rett før «E2e (Playwright)»: der lå de etter
+      # «Vent på Supabase», altså ren serietid OPPÅ ventingen på bakgrunns-
+      # prosessen over. Her kjører nedlasting/installasjon av Chromium PARALLELT
+      # med at `supabase start` jobber i bakgrunnen i stedet for etter den.
+      - name: Cache Playwright-browsere
+        if: steps.omfang.outputs.e2e == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          # Uten restore-keys ga ENHVER package-lock.json-endring (også en som
+          # ikke rører Playwright) full Chromium-nedlasting på nytt. Prefikset
+          # treffer forrige cache; `playwright install` legger bare til det som
+          # faktisk mangler hvis versjonen har endret seg.
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Installer Chromium
+        if: steps.omfang.outputs.e2e == 'true'
+        run: npx playwright install --with-deps chromium
+
       # Kjerneporten — ubetinget uansett budsjettvaktens verdikt. Billig, og
       # skal aldri ofres. Den ENE betingelsen er en main-commit som allerede ble
       # portet på PR-en sin (se «Avgjør om commiten alt er portet»); der er det
@@ -250,17 +271,6 @@ jobs:
       - name: Test
         if: steps.portet.outputs.hopp != 'true'
         run: npm test
-
-      - name: Bygg
-        if: steps.portet.outputs.hopp != 'true'
-        env:
-          # Supabase-klienten (lib/supabase/server.ts + client.ts) og push-modulen
-          # leser disse ved modulinnlasting. Vi bruker dummy-verdier siden bygget
-          # ikke faktisk kaller ut — ingen ekte secrets trengs i CI.
-          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
-          NEXT_PUBLIC_VAPID_PUBLIC_KEY: dummy
-        run: npm run build
 
       - name: Vent på Supabase
         if: steps.omfang.outputs.e2e == 'true'
@@ -388,22 +398,50 @@ jobs:
             exit 1
           fi
 
-      - name: Cache Playwright-browsere
-        if: steps.omfang.outputs.e2e == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          # Uten restore-keys ga ENHVER package-lock.json-endring (også en som
-          # ikke rører Playwright) full Chromium-nedlasting på nytt. Prefikset
-          # treffer forrige cache; `playwright install` legger bare til det som
-          # faktisk mangler hvis versjonen har endret seg.
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Installer Chromium
-        if: steps.omfang.outputs.e2e == 'true'
-        run: npx playwright install --with-deps chromium
+      # Flyttet hit (#659), ETTER «Vent på Supabase» og migrasjonsverifiseringen
+      # — se styrets uttalelse på #659. `next start` (playwright.config.ts sitt
+      # `webServer.command` i CI) skal ALDRI bygge selv: RLS-suiten
+      # (e2e/rls/) har ingen `dependencies` på setup/chromium og skal få
+      # raskest mulig feedback, og ville ellers ventet på et fullt Next-bygg
+      # for en sikkerhetsgrense den ikke trenger. Ett bygg her — ikke to
+      # betingede steg (dummy-env / test-instans-env) — er et bevisst valg:
+      # to steg med identiske env-blokker er en stille drift-felle, og
+      # navnet «Bygg» leses bokstavelig av .github/scripts/ci-tidsbruk.mjs
+      # (pinnet i __tests__/ci-tidsbruk.test.ts). Uten «Bygg» ETT sted blir
+      # tidsmålingen blind for halvparten av eksperimentet.
+      #
+      # Fallback-uttrykket (`||`) er BETINGET av den positive artefaktvakten i
+      # e2e/global-setup.ts: slår fallbacken inn ubemerket (E2E_SUPABASE_URL
+      # tom av en eller annen grunn mens e2e likevel kjøres), bygger vi mot
+      # dummy-Supabase — og DA skal artefaktvakten gjøre det høylytt rødt,
+      # ikke stille servere en app uten data. Ett byggesteg uten den vakten
+      # er ikke det styret sa ja til.
+      #
+      # Serialiseringen bak «Vent på Supabase» koster i praksis ~0: lint +
+      # typecheck + vitest (~3 min) dekker det meste av `supabase start`-tiden
+      # allerede (kjørt i bakgrunnen fra steget over), så bygget venter uansett
+      # ikke lenge. IKKE flytt bygget tilbake foran «Vent på Supabase» for å
+      # "spare tid" — det var nøyaktig det som ga dummy-env i artefaktet appen
+      # faktisk serverer, se drift-drøftingen i #659.
+      - name: Bygg
+        if: steps.portet.outputs.hopp != 'true'
+        env:
+          # E2E_SUPABASE_*-variablene settes av «Vent på Supabase» KUN når
+          # e2e faktisk kjører (steps.omfang.outputs.e2e == 'true') — i alle
+          # andre løp (kjerneport-only, lav_risiko, budsjett, push) er de
+          # tomme, og fallbacken til dummy-verdier brukes. Supabase-klienten
+          # (lib/supabase/server.ts + client.ts) og push-modulen leser disse
+          # ved modulinnlasting; bygget kaller aldri faktisk ut mot dem.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.E2E_SUPABASE_URL || 'https://dummy.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.E2E_SUPABASE_ANON_KEY || 'dummy' }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: dummy
+          # Sikkerhetskritisk (#659): uten denne blir BLOKKER_UTSENDING false
+          # i artefaktet (lib/varsler.ts) fordi BASE_URL ikke lenger ser lokal
+          # ut for den SERVERTE appen — `next start` baker NEXT_PUBLIC_*-verdier
+          # inn ved byggetid, webServer.env i playwright.config.ts er for den
+          # kjørende dev-server-prosessen som ikke lenger finnes i CI.
+          NEXT_PUBLIC_BASE_URL: http://localhost:3100
+        run: npm run build
 
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
@@ -412,6 +450,32 @@ jobs:
       - name: E2e (Playwright)
         if: steps.omfang.outputs.e2e == 'true'
         run: npx playwright test
+
+      # Diagnostisk, ikke en port (#659). always() + continue-on-error: sier
+      # ALDRI noe om hvorvidt kjøringen var grønn eller rød — den skal svare
+      # på ETT spørsmål: rev runneren en prosess i minnekrise underveis?
+      # ::warning:: (IKKE ::error::) med vilje: et OOM-spor på en GRØNN
+      # kjøring er det farligste utfallet (et symptom som ikke slo ut som
+      # rødt ENDA), og en error her ville skapt falsk rødt på noe dette steget
+      # ikke skal ha makt til å felle jobben på.
+      - name: Diagnose etter e2e (OOM-spor)
+        if: always() && steps.omfang.outputs.e2e == 'true'
+        continue-on-error: true
+        run: |
+          echo "### Minne (free -m)"
+          free -m || true
+
+          echo "### dmesg — søk etter OOM/killed process"
+          funn=$(sudo dmesg -T 2>/dev/null | grep -iE 'oom|killed process|out of memory' || true)
+          if [ -n "$funn" ]; then
+            echo "::warning::Mulig OOM-spor funnet i dmesg under denne kjøringen — se logg under."
+            echo "$funn"
+          else
+            echo "Ingen OOM-spor."
+          fi
+
+          echo "### Docker-containere som har avsluttet (exited)"
+          docker ps -a --filter status=exited || true
 
       - name: Last opp Playwright-rapport ved feil
         if: failure() && steps.omfang.outputs.e2e == 'true'

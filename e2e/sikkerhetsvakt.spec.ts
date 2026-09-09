@@ -79,6 +79,16 @@ test.describe('sikkerhetsvakt: testprosessen peker mot test-instansen', () => {
   })
 
   test('BASE_URL i testprosessen er lokal, så varsler-vakten er armert', () => {
+    // MERK (#659): denne sier ingenting lenger om den SERVERTE appen. Etter
+    // at e2e gikk over til produksjonsbygg (`next start`), bakes
+    // NEXT_PUBLIC_*-verdiene inn i artefaktet ved BYGGETID (se «Bygg»-steget
+    // i .github/workflows/pr-check.yml) — testPROSESSEN her har sin egen
+    // process.env, satt av playwright.config.ts, og de to kan i prinsippet gå
+    // fra hverandre uten at denne testen ser det. Den er fortsatt verdt å ha
+    // (den fanger fortsatt en spec som importerer server-kode direkte i
+    // testprosessen, se opprinnelig begrunnelse), men den ERSTATTER ikke en
+    // sjekk mot selve serveren — det er jobben til testen under, som faktisk
+    // henter en respons fra :3100.
     // BLOKKER_UTSENDING i lib/varsler.ts utledes av at BASE_URL er
     // localhost/127.0.0.1. Peker den mot prod, er vakten AV for enhver spec
     // som importerer server-kode direkte i stedet for å gå over HTTP.
@@ -89,5 +99,30 @@ test.describe('sikkerhetsvakt: testprosessen peker mot test-instansen', () => {
     expect(base, 'NEXT_PUBLIC_BASE_URL må være lokal i testprosessen').toMatch(
       /localhost|127\.0\.0\.1/,
     )
+  })
+
+  // Live vakt (#659) — ETTER produksjonsbygg-overgangen er testen over
+  // («testprosessen») ikke lenger nok: den sier noe om Playwrights egen
+  // process.env, ikke om det den SERVERTE appen faktisk bakte inn ved
+  // byggetid. Denne henter en ekte respons fra :3100 og påstår innholdet.
+  // ICS-ruta (app/api/arrangementer/[id]/ics/route.ts) er i dag eneste
+  // HTTP-flate i appen som ekker BASE_URL i responskroppen — derfor valgt.
+  //
+  // POSITIV påstand, ikke negativ: samme fil skriver også
+  // `UID:${id}@${KLUBB_DOMENE}`, så en negativ sjekk mot klubbdomenet ville
+  // vært permanent rød (se artefaktvakten i e2e/global-setup.ts for samme
+  // resonnement).
+  //
+  // Bruker `page`-fixture (trenger storageState, se e2e/README.md) — derfor
+  // i chromium-prosjektet og IKKE blant de fixture-løse testene over. ICS-
+  // ruta krever innlogging (middleware.ts har ingen unntak for /api/arrangementer/),
+  // og page.request arver browser-kontekstens cookies fra e2e/.auth/state.json.
+  test('ICS-ruta ekker den lokale BASE_URL-en i den faktisk serverte responsen', async ({ page }) => {
+    // Seedet, stabilt arrangement (supabase/seed.sql) — «Testmøte i klubben».
+    const arrangementId = '00000000-0000-4000-9000-000000000001'
+    const respons = await page.request.get(`/api/arrangementer/${arrangementId}/ics`)
+    expect(respons.ok(), `ICS-ruta svarte ${respons.status()}`).toBeTruthy()
+    const kropp = await respons.text()
+    expect(kropp).toContain('http://localhost:3100')
   })
 })

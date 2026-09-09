@@ -13,6 +13,15 @@ function appVersjon(): string {
 }
 
 const nextConfig: NextConfig = {
+  // Lokal ergonomi (#659): lar e2e-suiten bygge til en EGEN katalog enn
+  // `.next`, slik at en samtidig kjørende `npm run dev` (som skriver til
+  // `.next` med sin egen dev-manifest-struktur) ikke kolliderer med e2e sin
+  // `next build && next start`. Ingen `--dist-dir`-CLI-flagg finnes i Next
+  // 15.5 (verifisert) — dette er eneste vei. e2e/helpers/bygg-artefakt-vakt.ts
+  // leser SAMME variabel med SAMME fallback, ellers leser vakten feil katalog.
+  // Opt-in: variabelen settes ingen steder av oss — den er dokumentert i
+  // e2e/README.md § NEXT_DIST_DIR som noe du kan sette i .env.local selv.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   env: {
     BUILD_TIMESTAMP: new Date().toLocaleString('nb-NO', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     APP_VERSION: appVersjon(),
@@ -34,6 +43,25 @@ const nextConfig: NextConfig = {
     formats: ['image/webp'],
     deviceSizes: [640, 828, 1200],
     imageSizes: [64, 128, 256],
+    // #659, REVIDERT ETTER FØRSTE CI-KJØRING: her sto tidligere
+    // `unoptimized: E2E_UNOPTIMIZED_IMAGES && !VERCEL`, ment å fjerne
+    // serverens utgående kall mot fixtur.r2.dev under e2e. Den gjorde
+    // problemet VERRE, ikke bedre, og er derfor fjernet igjen.
+    //
+    // Mekanismen: med optimizer PÅ henter SERVEREN bildet, får 500 på ~70 ms
+    // og gir opp — nettleseren ser en ferdig (om enn feilet) respons, og
+    // `load` fyrer. Med `unoptimized` rendres rå `src`, så NETTLESEREN ber
+    // direkte om https://fixtur.r2.dev/… Den forespørselen henger i stedet
+    // for å feile raskt, `load` fyrer aldri, og Playwrights `waitForURL`
+    // (som venter på nettopp `load`) timet ut på 60 s. Fire tester i
+    // e2e/tidligere.spec.ts falt på det i run 34373667058 — konsistent, ikke
+    // flakiness.
+    //
+    // Lærdommen er verdt å beholde: en «rask feil» kan være bedre enn ingen
+    // forespørsel, når det som venter er et load-event. Skal den utgående
+    // avhengigheten bort, hører fiksen på KLIENTSIDEN
+    // (`page.route('**/fixtur.r2.dev/**', r => r.abort())` i en delt
+    // fixture), ikke i bildekonfigurasjonen — se #659.
     remotePatterns: [
       {
         protocol: 'https',

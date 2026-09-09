@@ -1,5 +1,6 @@
 import { adminKlient } from './helpers/admin-klient'
 import { fjernFeilLoggGrense, skrivFeilLoggGrense } from './helpers/feil-logg-grense'
+import { verifiserByggArtefakt, verifiserPrerenderManifest } from './helpers/bygg-artefakt-vakt'
 
 /**
  * Global setup: fanger høyeste `feil_logg.id` FØR noen test har kjørt, og
@@ -30,6 +31,21 @@ export default async function globalSetup() {
     fjernFeilLoggGrense()
     return
   }
+
+  // Artefaktvakt (#659) — bor her, ikke bare i workflowen, så den også fanger
+  // et foreldet LOKALT bygg. Kjøres FØR feil_logg-grensen: er byggartefaktet
+  // feil, er resten av kjøringen meningsløs, og vi vil vite det med det
+  // samme — ikke etter en runde med feil_logg-oppslag som uansett kastes bort.
+  // Trygt å kalle her: Playwrights egen rekkefølge (plugin-setup, deriblant
+  // webServer, FØR config.globalSetup) garanterer at `next start` allerede
+  // har svart på helsesjekken når vi når denne linjen, så byggkatalogen
+  // finnes. Se e2e/helpers/bygg-artefakt-vakt.ts for detaljene.
+  const testUrl = process.env.E2E_SUPABASE_URL
+  if (!testUrl) {
+    throw new Error('global-setup: E2E_SUPABASE_URL mangler — kan ikke verifisere byggartefaktet.')
+  }
+  verifiserByggArtefakt(testUrl)
+  verifiserPrerenderManifest()
 
   const { data, error } = await supabase
     .from('feil_logg')
