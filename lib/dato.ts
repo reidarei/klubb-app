@@ -1,4 +1,4 @@
-import { formatInTimeZone } from 'date-fns-tz'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { nb } from 'date-fns/locale'
 
 export const TIDSSONE = 'Europe/Oslo'
@@ -198,19 +198,15 @@ export function isoTilDatetimeLocal(iso: string | null): string {
  */
 export function datetimeLocalTilIso(localStr: string): string {
   if (!localStr) return ''
-  // Bruk formatInTimeZone "baklengs": finn UTC-ekvivalenten
-  // ved å lage en Date med riktig norsk tid
-  const [datePart, timePart] = localStr.split('T')
-  const [y, m, d] = datePart.split('-').map(Number)
-  const [h, mi] = timePart.split(':').map(Number)
-
-  // Bruk Intl for å finne offset for denne datoen i Europe/Oslo
-  const testDate = new Date(Date.UTC(y, m - 1, d, h, mi))
-  const osloStr = testDate.toLocaleString('en-US', { timeZone: TIDSSONE })
-  const osloDate = new Date(osloStr)
-  const offsetMs = osloDate.getTime() - testDate.getTime()
-
-  // Lag riktig UTC-tid: norsk tid minus offset
-  const utcDate = new Date(Date.UTC(y, m - 1, d, h, mi) - offsetMs)
-  return utcDate.toISOString()
+  // fromZonedTime tolker "2026-09-13T11:00" som veggklokke-tid i TIDSSONE og
+  // gir UTC-ekvivalenten. Håndterer sommer-/vintertid selv.
+  //
+  // Den håndskrevne varianten som sto her (#674) regnet ut offseten via
+  // `new Date(dato.toLocaleString('en-US', { timeZone }))`. Den parsingen
+  // tolker strengen i MASKINENS lokale sone, ikke i Oslo — så offseten ble
+  // riktig kun der maskinen allerede stod i UTC. Alle fire kallstedene er
+  // 'use client': koden kjører i medlemmets nettleser, som står i norsk tid,
+  // og der ble offseten 0. Resultat: hvert tidspunkt lagret to timer for sent
+  // om sommeren, én om vinteren. Ikke bytt tilbake til en egen offset-regning.
+  return fromZonedTime(localStr, TIDSSONE).toISOString()
 }

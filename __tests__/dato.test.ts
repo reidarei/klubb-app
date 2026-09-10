@@ -120,12 +120,35 @@ describe('dato – tidssone-policy', () => {
       expect(datetimeLocalTilIso('')).toBe('')
     })
 
-    it('returnerer en gyldig ISO-streng', () => {
-      const resultat = datetimeLocalTilIso('2026-06-15T16:00')
-      expect(resultat).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/)
-      // Verifiser at den parser tilbake til en gyldig dato
-      const dato = new Date(resultat)
-      expect(dato.getTime()).not.toBeNaN()
+    // #674: den gamle testen sjekket KUN formatet og at datoen lot seg parse.
+    // Den passerte glatt mens funksjonen la to timer på hvert tidspunkt satt
+    // fra en norsk nettleser. En test som ikke asserter verdien, vokter ikke
+    // verdien — alle assertene under står derfor på et eksakt klokkeslett.
+    it('tolker input som norsk veggklokke-tid og gir riktig UTC (sommertid)', () => {
+      // 16:00 norsk sommertid (CEST, UTC+2) er 14:00 UTC.
+      expect(datetimeLocalTilIso('2026-06-15T16:00')).toBe('2026-06-15T14:00:00.000Z')
+    })
+
+    it('tolker input som norsk veggklokke-tid og gir riktig UTC (vintertid)', () => {
+      // 18:00 norsk vintertid (CET, UTC+1) er 17:00 UTC.
+      expect(datetimeLocalTilIso('2026-12-24T18:00')).toBe('2026-12-24T17:00:00.000Z')
+    })
+
+    it('er rundturs-stabil mot isoTilDatetimeLocal', () => {
+      // Den ene funksjonen fyller skjemaet, den andre lagrer det. Ryker
+      // symmetrien, flytter tidspunktet seg litt for hver lagring — som var
+      // nøyaktig det Jonna meldte: «den endrer seg hele tiden uten at jeg
+      // gjør noe».
+      for (const lokal of ['2026-06-15T16:00', '2026-12-24T18:00', '2026-09-13T11:00']) {
+        expect(isoTilDatetimeLocal(datetimeLocalTilIso(lokal))).toBe(lokal)
+      }
+    })
+
+    it('treffer riktig side av sommertidsovergangen', () => {
+      // Norge stiller klokka natt til siste søndag i mars 2026 = 29. mars,
+      // 02:00 -> 03:00. Timen før og timen etter har ulik offset.
+      expect(datetimeLocalTilIso('2026-03-29T01:00')).toBe('2026-03-29T00:00:00.000Z') // CET, UTC+1
+      expect(datetimeLocalTilIso('2026-03-29T04:00')).toBe('2026-03-29T02:00:00.000Z') // CEST, UTC+2
     })
 
     it('bevarer dag og måned', () => {
