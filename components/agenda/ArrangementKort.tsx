@@ -1,12 +1,28 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import Icon from '@/components/ui/Icon'
+import Avatar from '@/components/ui/Avatar'
 import Card from '@/components/ui/Card'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
 import { formaterDato, aarHvisAvvik } from '@/lib/dato'
 import { KOMMENTARER_KOLLAPS_DAGER } from '@/lib/konstanter'
 import type { ChatProfil } from '@/lib/mention'
 import { bildeSrc } from '@/lib/bilde-utils'
+
+export type AvreiseDeltaker = {
+  navn: string
+  src: string | null
+  rolle: string | null
+}
+
+/** Avreise-blokka nederst på tur-kortet siste uka før tur (#669). */
+export type AvreiseData = {
+  /** 0 = i dag. Kan bli 0 her: et UBESVART arrangement i dag havner i
+   *  «Ikke svart» som vanlig kort, ikke som highlight. */
+  dagerIgjen: number
+  /** De som har svart ja, kappet til AVREISE_MAKS_ANSIKTER. */
+  deltakere: AvreiseDeltaker[]
+}
 
 export type ArrangementKortData = {
   id: string
@@ -18,6 +34,15 @@ export type ArrangementKortData = {
   antallJa: number
   minStatus: 'ja' | 'kanskje' | 'nei' | null
   harAlbum?: boolean
+  /** Satt kun for turer innen avreisevinduet — se byggAvreise() i agenda-sortering. */
+  avreise?: AvreiseData
+}
+
+// «7 dager igjen» er riktig på avstand, men blir stivt når det nærmer seg.
+function nedtellingTekst(dagerIgjen: number): string {
+  if (dagerIgjen <= 0) return 'I dag'
+  if (dagerIgjen === 1) return 'I morgen'
+  return `${dagerIgjen} dager igjen`
 }
 
 function sceneFor(type: string): 'tur' | 'møte' | 'event' {
@@ -277,6 +302,118 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
           )}
         </div>
         </div>
+
+        {/* Avreise-blokka (#669) — kun turer, siste uka før avreise. Ligger
+            utenfor topp-raden slik at den får hele kortbredden under både
+            teksten og thumben. `arr.avreise` er satt av byggAvreise(), som
+            eier alle vilkårene; her er det ren rendring. */}
+        {arr.avreise && !tidligere && (
+          <div
+            data-testid="avreise-blokk"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              padding: '12px 14px 13px',
+              borderTop: '0.5px solid var(--border-subtle)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+              {arr.avreise.deltakere.map((d, i) => (
+                // zIndex synkende: den første avataren ligger øverst, så
+                // overlappen leses som en bunke fra venstre.
+                <div
+                  key={`${d.navn}-${i}`}
+                  data-testid="avreise-ansikt"
+                  style={{ marginLeft: i === 0 ? 0 : -8, zIndex: 20 - i, position: 'relative' }}
+                >
+                  <Avatar name={d.navn} size={28} src={d.src ?? undefined} rolle={d.rolle} />
+                </div>
+              ))}
+              {arr.antallJa > arr.avreise.deltakere.length && (
+                // Ikke en avatar, men en teller — derfor ingen Avatar-komponent
+                // her (jf. Policy: Avatar, som gjelder profilbilder).
+                <span
+                  style={{
+                    marginLeft: -8,
+                    zIndex: 1,
+                    position: 'relative',
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    border: '1.5px dashed var(--border)',
+                    background: 'var(--bg-elevated-solid)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  +{arr.antallJa - arr.avreise.deltakere.length}
+                </span>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '1.3px',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-tertiary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {nedtellingTekst(arr.avreise.dagerIgjen)}
+              </span>
+              {/* Kondensstripa: prikket der reisa ikke har skjedd ennå, hel der
+                  den er i gang. Dekorativ — nedtellingen står i teksten. */}
+              <svg
+                width="132"
+                height="18"
+                viewBox="0 0 132 18"
+                fill="none"
+                aria-hidden="true"
+                style={{ flexShrink: 0 }}
+              >
+                <path
+                  d="M2 14C26 14 44 11.5 62 8.5"
+                  stroke="var(--accent)"
+                  strokeOpacity="0.28"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeDasharray="1 5"
+                />
+                <path
+                  d="M62 8.5C80 5.5 96 4 112 4"
+                  stroke="var(--accent)"
+                  strokeOpacity="0.55"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <path d="M114 1.5L124 4L114 6.5L116.5 4L114 1.5Z" fill="var(--accent)" />
+                <path
+                  d="M117.5 4L128.5 4"
+                  stroke="var(--accent)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* Kommentarer — inne i kortet, kollapsbart, med inline input; se #274 for visKommentarer-flagg */}
         {visKommentarBlokk && (

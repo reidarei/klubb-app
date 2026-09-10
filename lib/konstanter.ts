@@ -17,6 +17,20 @@ export const PAAMINNELSE_DAGER = {
   PURRING: 3,
 } as const
 
+// Avreise-blokka nederst på tur-kortet (#669): ansiktene til alle som har
+// svart ja, pluss kondensstripa. Vises fra AVREISE_VINDU_DAGER dager før
+// avreise og kun på turer — møter har ingen reise å telle ned til.
+//
+// Verdien er den samme som PAAMINNELSE_DAGER.LANG i dag, men holdes bevisst
+// atskilt: den ene styrer når vi SENDER et varsel, den andre når kortet
+// skifter utseende. Flyttes den ene, skal ikke den andre følge med av vanvare.
+export const AVREISE_VINDU_DAGER = 7
+
+// Hvor mange ansikter som vises før resten samles i «+N». Åtte 30 px-avatarer
+// med 8 px overlapp er det som får plass på et kort på den smaleste telefonen
+// vi støtter uten at rada brytes.
+export const AVREISE_MAKS_ANSIKTER = 8
+
 // Tilgangsvinduet etter en pass-godkjenning. Admin har eksplisitt sagt
 // 1 dag — kort vindu reduserer eksponering hvis godkjenneren glemmer å
 // trekke tilbake.

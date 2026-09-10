@@ -47,7 +47,7 @@
 // tilhører «i kveld» norsk tid hvis det er samme dato etter konvertering.
 
 import type { HighlightKortData } from '@/components/agenda/HighlightKort'
-import type { ArrangementKortData } from '@/components/agenda/ArrangementKort'
+import type { ArrangementKortData, AvreiseData } from '@/components/agenda/ArrangementKort'
 import type { UtkastData } from '@/components/agenda/UtkastKort'
 import type { BursdagData } from '@/components/agenda/BursdagKort'
 import type { KlubbJubileumData } from '@/components/agenda/KlubbJubileumKort'
@@ -55,6 +55,9 @@ import type { PollKortData } from '@/components/agenda/PollKort'
 import type { MeldingKortData } from '@/components/agenda/MeldingKort'
 import type { AlbumKort } from '@/lib/melding-album'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
+import { AVREISE_VINDU_DAGER, AVREISE_MAKS_ANSIKTER } from '@/lib/konstanter'
+import { norskDag } from '@/lib/dato'
+import { differenceInCalendarDays } from 'date-fns'
 
 // Stiftelsesdato — brukes til å beregne neste jubileumsdag på agendaen.
 // Hentes fra klubb-config slik at den kan overstyres via env-var.
@@ -318,9 +321,50 @@ export function tilPollKort(p: PollRaad, avsluttet: boolean): PollKortData {
 
 // Mapper et ArrangementRaad til ArrangementKortData — kompakt kort brukt i
 // «Kommende» og «Tidligere». Ingen deltaker-forhåndsvisning, bare antall ja.
-export function tilKort(arr: ArrangementRaad, meg: string): ArrangementKortData {
+// Bygger avreise-blokka for et tur-kort (#669), eller null når kortet ikke
+// skal ha den. Egen funksjon fordi vilkårene er tre og hvert av dem har en
+// grunn: kun turer (et møte har ingen reise), kun framover (etter avreise
+// er «5 dager igjen» en løgn, og /tidligere skal ikke ha blokka), og kun
+// innenfor vinduet.
+//
+// `naa` sendes inn i stedet for å leses fra klokka — samme grep som
+// beregnBursdager(), slik at testene kan stå på en fast dato.
+function byggAvreise(
+  arr: ArrangementRaad,
+  jaListe: PaameldingRaad[],
+  naa: Date,
+): AvreiseData | null {
+  if (arr.type !== 'tur') return null
+
+  // Begge sider er lokale Date-er på midnatt for sin norske kalenderdag:
+  // norskDag() bygger en slik, og `naa` kommer fra norskDatoNaa() som gjør
+  // nøyaktig det samme. Å kjøre `naa` gjennom norskDag() igjen ville vært en
+  // dobbeltkonvertering — samme antagelse som erSammeNorskeDag() bygger på.
+  const dagerIgjen = differenceInCalendarDays(norskDag(arr.start_tidspunkt), naa)
+  if (dagerIgjen < 0 || dagerIgjen > AVREISE_VINDU_DAGER) return null
+
+  return {
+    dagerIgjen,
+    // Navnløse rader droppes: Avatar ville vist «?» og fortalt ingenting om
+    // hvem som blir med, som er hele poenget med blokka.
+    deltakere: jaListe
+      .map(p => ({
+        navn: p.profiles?.visningsnavn ?? '',
+        src: p.profiles?.bilde_url ?? null,
+        rolle: p.profiles?.rolle ?? null,
+      }))
+      .filter(d => d.navn)
+      .slice(0, AVREISE_MAKS_ANSIKTER),
+  }
+}
+
+// `naa` er valgfri: uten den bygges ingen avreise-blokk. /tidligere kaller
+// uten, og slipper dermed både beregningen og deltaker-objektene i
+// RSC-payloaden for 30 kort som uansett ligger i fortida.
+export function tilKort(arr: ArrangementRaad, meg: string, naa?: Date): ArrangementKortData {
   const jaListe = arr.paameldinger.filter(p => p.status === 'ja')
   const min = arr.paameldinger.find(p => p.profil_id === meg)
+  const avreise = naa ? byggAvreise(arr, jaListe, naa) : null
   return {
     id: arr.id,
     type: arr.type,
@@ -331,6 +375,7 @@ export function tilKort(arr: ArrangementRaad, meg: string): ArrangementKortData 
     antallJa: jaListe.length,
     minStatus: (min?.status as 'ja' | 'kanskje' | 'nei' | undefined) ?? null,
     harAlbum: arr.harAlbum ?? false,
+    ...(avreise ? { avreise } : {}),
   }
 }
 
@@ -568,7 +613,7 @@ export function byggAgenda(input: {
     .map(a => ({
       kind: 'arrangement' as const,
       sortIso: a.start_tidspunkt,
-      data: tilKort(a, meg),
+      data: tilKort(a, meg, naa),
     }))
 
   // Sett med id-er som allerede er i ubesvart — ekskluderes fra idag/kommende
@@ -584,7 +629,7 @@ export function byggAgenda(input: {
       // I kveld → highlight-variant, ellers kompakt kort
       return erIdag
         ? { kind: 'highlight', sortIso: a.start_tidspunkt, data: tilHighlight(a, meg) }
-        : { kind: 'arrangement', sortIso: a.start_tidspunkt, data: tilKort(a, meg) }
+        : { kind: 'arrangement', sortIso: a.start_tidspunkt, data: tilKort(a, meg, naa) }
     })
 
   // Bursdager: sortIso = midt på dagen UTC. Dette plasserer dem tryggt
