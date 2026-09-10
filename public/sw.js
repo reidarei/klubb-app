@@ -230,6 +230,33 @@ self.addEventListener('push', (event) => {
   )
 })
 
+// Observability for push-klikk (#676). Vi teller KLIKK her og NAVIGASJON i
+// klienten; differansen er tapet. Uten begge tallene er en mislykket
+// overlevering helt usynlig — seks runder med fikser (#233, #262, #264, #626)
+// er alle gjort uten å vite hvor ofte det faktisk ryker.
+//
+// navigator.sendBeacon finnes ikke i en Service Worker, så vi bruker fetch.
+// Fire-and-forget med catch: loggingen skal ALDRI kunne forsinke eller felle
+// notificationclick — da ville vi byttet en tapt navigasjon mot ingen
+// navigasjon i det hele tatt.
+function loggPushKlikk(kontekst) {
+  try {
+    fetch('/api/logg-feil', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // keepalive: requesten skal overleve at SW-en termineres rett etterpå.
+      keepalive: true,
+      body: JSON.stringify({
+        event: 'push.klikk',
+        nivaa: 'warn',
+        kontekst,
+      }),
+    }).catch(() => {})
+  } catch {
+    // Ingen fetch tilgjengelig — loggingen er aldri verdt å kaste for.
+  }
+}
+
 // Skriver overleveringen. Egen funksjon fordi kallstedet racer den mot en
 // timeout og da blir uttrykket for langt til å lese.
 async function skrivPendingNav(url) {
@@ -290,6 +317,23 @@ self.addEventListener('notificationclick', (event) => {
     for (const klient of sameOrigin) {
       klient.postMessage({ type: 'navigate', url: navigasjonsmaal })
     }
+
+    // Loggen skrives FØR focus/openWindow: begge kan i praksis avslutte
+    // handleren, og et klikk vi ikke rakk å telle er nøyaktig blindsonen
+    // dette skal lukke.
+    //
+    // `synligKlient` er hypotesen #676 peker på (merket som hypotese, ikke
+    // konklusjon): står appen allerede åpen og SYNLIG, fyres ingen
+    // visibilitychange av focus(), og klienten har da ingen trigger til å
+    // lese overleveringen. Feltet er med for å kunne bekrefte eller avkrefte
+    // det på ekte tall i stedet for resonnement.
+    loggPushKlikk({
+      maal: navigasjonsmaal,
+      hadde_maal: Boolean(target),
+      antall_klienter: sameOrigin.length,
+      synligKlient: sameOrigin.some(k => k.visibilityState === 'visible'),
+      sti: sameOrigin.length > 0 ? 'focus' : 'openWindow',
+    })
 
     if (sameOrigin.length > 0) {
       const forste = sameOrigin[0]

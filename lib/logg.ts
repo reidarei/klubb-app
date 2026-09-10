@@ -88,6 +88,8 @@
 //   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
 //   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
 //   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
+//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer maal, antall_klienter, synligKlient og sti (focus/openWindow). Ikke en feil — halvparten av et regnskap.
+//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
 //   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
 //   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
 //   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)

@@ -39,10 +39,15 @@ export default function ServiceWorkerRegistrering() {
     function handterMelding(event: MessageEvent) {
       const data = event.data
       if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
-      navigerTil(data.url)
+      navigerTil(data.url, 'broadcast')
     }
 
-    function navigerTil(raw: string) {
+    // `kilde` sier hvilken av de tre stiene som faktisk leverte URL-en (#676).
+    // SW-en teller klikk, vi teller navigasjoner — differansen er tapet, og
+    // kilden viser hvilken sti som bærer i praksis. Uten det fikser vi i
+    // blinde: seks runder (#233, #262, #264, #626) er gjort uten å vite hvor
+    // ofte overleveringen ryker eller hvilken vei som faktisk virker.
+    function navigerTil(raw: string, kilde: 'broadcast' | 'cache' | 'kanal') {
       try {
         const url = new URL(raw, window.location.origin)
         if (url.origin !== window.location.origin) return
@@ -56,11 +61,27 @@ export default function ServiceWorkerRegistrering() {
         // mount-pollen etter reload kan finne entryen som slettingen over
         // ikke rakk å fjerne. Dekker også cold-start, der openWindow allerede
         // har landet oss riktig sted.
-        if (url.href === window.location.href) return
+        if (url.href === window.location.href) {
+          // Teller som levert: vi STÅR på målet. Cold-start via openWindow
+          // lander her, og uten denne grenen ville den sett ut som et tap.
+          loggPushNavigasjon(kilde, true)
+          return
+        }
+        loggPushNavigasjon(kilde, false)
         window.location.assign(url.href)
       } catch {
         // Ugyldig URL — ignorer.
       }
+    }
+
+    function loggPushNavigasjon(kilde: string, alleredePaaMaal: boolean) {
+      sendFeilBeacon(
+        'push.klikk.navigert',
+        `push-klikk levert via ${kilde}`,
+        undefined,
+        { kilde, alleredePaaMaal, synlighet: document.visibilityState },
+        'warn',
+      )
     }
 
     function slettPendingNavCache() {
@@ -112,7 +133,7 @@ export default function ServiceWorkerRegistrering() {
       channel.port1.onmessage = (event) => {
         const data = event.data
         if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
-        navigerTil(data.url)
+        navigerTil(data.url, 'kanal')
       }
       reg.active.postMessage({ type: 'check-pending-nav' }, [channel.port2])
     }
@@ -124,7 +145,7 @@ export default function ServiceWorkerRegistrering() {
       const entry = await lesPendingNav()
       if (entry) {
         if (Date.now() - entry.ts < PUSH_KLIKK_VINDU_MS) {
-          navigerTil(entry.url)
+          navigerTil(entry.url, 'cache')
         } else {
           // Eldre enn vinduet — allerede slettet av lesPendingNav over.
           // Ikke en programfeil (klienten kan ha vært lukket lenge), men
