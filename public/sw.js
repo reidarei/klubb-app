@@ -239,6 +239,11 @@ self.addEventListener('push', (event) => {
 // Fire-and-forget med catch: loggingen skal ALDRI kunne forsinke eller felle
 // notificationclick — da ville vi byttet en tapt navigasjon mot ingen
 // navigasjon i det hele tatt.
+// feil_logg.url forblir null for push.klikk-rader (ruta setter kolonnen kun
+// fra kontekst.url, som denne funksjonen aldri sender — en service worker har
+// ingen side-URL å rapportere). Sett ALDRI url = navigasjonsmålet her: det
+// ville gitt kolonnen to betydninger («siden feilen skjedde på» og «dit
+// push-en pekte») avhengig av event-typen på raden.
 function loggPushKlikk(kontekst) {
   try {
     fetch('/api/logg-feil', {
@@ -322,17 +327,24 @@ self.addEventListener('notificationclick', (event) => {
     // handleren, og et klikk vi ikke rakk å telle er nøyaktig blindsonen
     // dette skal lukke.
     //
-    // `synligKlient` er hypotesen #676 peker på (merket som hypotese, ikke
+    // `synlig_klient` er hypotesen #676 peker på (merket som hypotese, ikke
     // konklusjon): står appen allerede åpen og SYNLIG, fyres ingen
     // visibilitychange av focus(), og klienten har da ingen trigger til å
     // lese overleveringen. Feltet er med for å kunne bekrefte eller avkrefte
     // det på ekte tall i stedet for resonnement.
+    //
+    // Feltnavnene under matcher KONTEKST_WHITELIST i lib/logg-sanitering.ts
+    // (klient-lista, den som gjelder rader som kommer inn via
+    // /api/logg-feil) — de strippet stille før #681, og feltet
+    // heter `handling` (ikke `sti`): `sti` er alt tatt i SERVER-whitelisten
+    // med en annen betydning (R2-objektsti, #641), og feil_logg tar imot
+    // rader fra begge sider av samme whitelist.
     loggPushKlikk({
       maal: navigasjonsmaal,
       hadde_maal: Boolean(target),
       antall_klienter: sameOrigin.length,
-      synligKlient: sameOrigin.some(k => k.visibilityState === 'visible'),
-      sti: sameOrigin.length > 0 ? 'focus' : 'openWindow',
+      synlig_klient: sameOrigin.some(k => k.visibilityState === 'visible'),
+      handling: sameOrigin.length > 0 ? 'focus' : 'openWindow',
     })
 
     if (sameOrigin.length > 0) {

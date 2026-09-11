@@ -122,6 +122,16 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626)', () => {
 
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/chat`)
     expect(cache.delete).toHaveBeenCalledWith(NAV_NOKKEL)
+    // Eksplisitt kontroll av HELE kontekst-objektet (#681) — nøkkelnavnene
+    // (kilde/allerede_paa_maal/synlighet) må matche KONTEKST_WHITELIST i
+    // lib/logg-sanitering.ts, ellers strippes de stille som #676-feltene.
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.navigert',
+      'push-klikk levert via cache',
+      undefined,
+      { kilde: 'cache', allerede_paa_maal: false, synlighet: document.visibilityState },
+      'warn',
+    )
   })
 
   it('KRITISK: navigerer likevel selv om navigator.serviceWorker.ready aldri resolver (reg.active utilgjengelig)', async () => {

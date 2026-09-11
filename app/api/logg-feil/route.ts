@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
 import { scrubKontekst, kontekstForStor } from '@/lib/logg-sanitering'
+import { logg } from '@/lib/logg'
 import {
   LOGG_FEIL_RATE_LIMIT_PER_MIN,
   LOGG_EVENT_MAKS_LENGDE,
@@ -69,6 +70,23 @@ function sjekkRateLimit(ip: string, profilId: string | null): boolean {
 
 const GYLDIGE_NIVAA = ['warn', 'error', 'fatal'] as const
 
+// Hvor mye av en strippet kontekst logg-varselet gjengir. Begge grensene
+// gjelder klientkontrollert tekst — se kallstedet lenger ned.
+const STRIPPET_SAMPLE_MAKS = 5
+const STRIPPET_NOEKKEL_MAKS_TEGN = 40
+
+// Formvakt på nøkkelnavnene vi gjengir i loggen (#681-reviewen). Kapping
+// begrenser VOLUM, ikke PII: en klient kan sende «{"ola@example.com": 1}» og
+// få adressen inn i Vercel-loggen. Et feltnavn fra VÅR kildekode er alltid en
+// JS-identifikator, mens en epostadresse, en setning eller en URL aldri er
+// det — så denne regexen beholder hele diagnoseverdien (utvikleren skal kunne
+// lese HVILKET felt som ble strippet) og lukker PII-flaten. Digest eller
+// allowlist ble vurdert og forkastet: en digest er uleselig, og en allowlist
+// er selvmotsigende når eventet finnes nettopp for å fange ukjente felter.
+// Lengden (40) er med vilje den samme som kappet over — regexen erstatter den
+// ikke, den kommer i tillegg.
+const STRIPPET_NOEKKEL_FORM = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/
+
 export async function POST(req: NextRequest) {
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -127,6 +145,50 @@ export async function POST(req: NextRequest) {
 
   if (!sjekkRateLimit(ip, profilId)) {
     return new NextResponse(null, { status: 429 })
+  }
+
+  // Belte ved siden av selen (#681): __tests__/logg-kontekst-dekning.test.ts
+  // dekker felt i VÅR kildekode statisk, men fanger ikke en gammel cachet
+  // klient-bundle som fortsatt sender et felt vi har fjernet fra whitelisten,
+  // eller en tredjeparts-feilkilde. Denne varselen er den ENESTE deteksjonen
+  // av det tilfellet — uten den er en strippet nøkkel like taus som #676 var.
+  //
+  // Står ETTER rate-limiten med vilje: nøkkelnavnene kommer rått fra klienten,
+  // og en storm ville ellers skrevet én stdout-linje per request selv når
+  // requesten uansett svares med 429.
+  if (kontekst && typeof kontekst === 'object') {
+    // Object.keys, ikke `k in kontekstRenset`: `'constructor' in {}` er true,
+    // så en prototype-nøkkel ville blitt strippet uten at vi meldte fra.
+    const beholdt = new Set(Object.keys(kontekstRenset))
+    const strippet = Object.keys(kontekst as Record<string, unknown>).filter(
+      (k) => !beholdt.has(k),
+    )
+    if (strippet.length > 0) {
+      // Kun navn som SER UT som felter fra vår egen kode gjengis; resten
+      // telles. Se STRIPPET_NOEKKEL_FORM for hvorfor formen, ikke innholdet,
+      // er kriteriet.
+      const lesbare = strippet.filter((k) => STRIPPET_NOEKKEL_FORM.test(k))
+      logg.warn('logg-feil.kontekst.strippet', {
+        // `fingerprint` og ikke `event`: logg.warn() spreder konteksten OVER
+        // sine egne felter, så en `event`-nøkkel her ville overskrevet selve
+        // event-navnet i stdout-linja. Verdien er hvilket klient-event som
+        // mistet felter — uten den kan ikke «gammel cachet bundle» skilles
+        // fra «ny regresjon» når flere klienter støyer samtidig.
+        fingerprint: event,
+        count: strippet.length,
+        // Klientkontrollert tekst: formvaktet over, og antall/lengde kappet
+        // her, ellers kan hvem som helst skrive vilkårlig lang tekst inn i
+        // Vercel-loggen.
+        sample: lesbare
+          .slice(0, STRIPPET_SAMPLE_MAKS)
+          .map((k) => k.slice(0, STRIPPET_NOEKKEL_MAKS_TEGN))
+          .join(','),
+        // Antall strippede nøkler som IKKE er identifikator-formede. Et tall
+        // > 0 her betyr «noen sender oss noe som ikke ligner våre felter» —
+        // like nyttig et signal som navnene selv, og uten PII-flaten.
+        ugyldige: strippet.length - lesbare.length,
+      })
+    }
   }
 
   // ── Insert ──────────────────────────────────────────────────────────────────

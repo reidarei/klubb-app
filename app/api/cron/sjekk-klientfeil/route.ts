@@ -70,7 +70,7 @@ async function handle(req: NextRequest) {
       // Ingen har faar_feilvarsler = true: alarmen fyrer aldri, og det ville
       // ellers skjedd helt uten spor. Spørringen lyktes, så feil-grenen over
       // fanger det ikke. Se docs/feilstrategi.md § 4.
-      logg.warn('cron.klientfeil.mottakere.tomme', { antallFeil: antall })
+      logg.warn('cron.klientfeil.mottakere.tomme', { count: antall })
     } else {
       // Egen spørring for topp-3-aggregeringen — bare hentet når alarmen
       // faktisk fyrer, og bare til dette formålet (tellingen over er uendret

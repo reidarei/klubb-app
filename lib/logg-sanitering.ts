@@ -9,7 +9,10 @@ import { LOGG_KONTEKST_MAKS_KB } from '@/lib/konstanter'
 
 // Felter vi tillater fra klienten. Alt annet strippes stille.
 // Speiler KONTEKST_WHITELIST i lib/logg.ts, med klient-spesifikke tillegg.
-const KONTEKST_WHITELIST = new Set([
+// Eksportert (ikke bare modul-lokal) fordi __tests__/logg-kontekst-dekning.test.ts
+// (#681) må kunne lese den for å statisk verifisere at hvert felt et
+// sendFeilBeacon()/loggPushKlikk()-kall faktisk sender står her.
+export const KONTEKST_WHITELIST = new Set([
   'profil_id',
   'arrangement_id',
   'event',
@@ -35,6 +38,18 @@ const KONTEKST_WHITELIST = new Set([
   'standalone', // PWA eller vanlig nettleserfane
   'nettverk', // effectiveType (4g/3g/…), mangler i Safari
   'ressurs', // URL-en til en <script>/<link>/<img> som ikke lastet
+  // Push-klikk-diagnosefelter (#676/#681). Sw.js og ServiceWorkerRegistrering.tsx
+  // sendte disse fra #676, men ingen sto i whitelisten — de strippet stille,
+  // og radene ble tomme ({}). Ingen er personidentifiserende: alle beskriver
+  // klientens tilstand ved klikket, ikke medlemmet.
+  'maal', // pathname til varselets mål (sanitiseres nedenfor, samme gren som `url`)
+  'hadde_maal', // boolean: hadde notifikasjonen en gyldig same-origin-URL
+  'antall_klienter', // antall same-origin vinduer (tall)
+  'synlig_klient', // boolean: var minst ett vindu synlig da SW-en klikket
+  'handling', // 'focus' | 'openWindow': hva notificationclick faktisk gjorde
+  'kilde', // 'broadcast' | 'cache' | 'kanal': hvilken sti som leverte navigasjonen
+  'allerede_paa_maal', // boolean: klienten sto allerede på målet
+  'synlighet', // document.visibilityState på klient-siden
 ])
 
 // Grenser for klient-strengfelter. Rå error-messages/stacks kan inneholde
@@ -88,11 +103,18 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
   if (typeof verdi !== 'string') return verdi
   // `cause` og `name` trunkeres som message: de er korte i praksis, men er
   // fritekst fra et error-objekt og skal ikke kunne blåse opp raden (#575).
+  // `kilde`/`handling`/`synlighet` (#681) er klient-kontrollerte strenger som
+  // SKAL være korte enums ('broadcast'/'focus'/'visible' osv.) — trunker dem
+  // likevel, av samme grunn: en buggy eller ondsinnet klient skal ikke kunne
+  // skrive KB med søppel inn i et felt vi forventer er noen tegn langt.
   if (
     nokkel === 'message' ||
     nokkel === 'digest' ||
     nokkel === 'cause' ||
-    nokkel === 'name'
+    nokkel === 'name' ||
+    nokkel === 'kilde' ||
+    nokkel === 'handling' ||
+    nokkel === 'synlighet'
   ) {
     return trunker(verdi)
   }
@@ -109,8 +131,15 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     }
     return kuttet + '…'
   }
-  if (nokkel === 'url') {
+  if (nokkel === 'url' || nokkel === 'maal') {
     // Behold kun pathname — query-params kan inneholde e-post, token, navn.
+    // `maal` (#681) er varselets navigasjonsmål og går gjennom samme gren som
+    // `url`: begge ender opp som ren pathname, og blir dermed direkte
+    // sammenlignbare når man leter etter «traff push-klikket målet?» — uten
+    // dette ville de to feltene sett forskjellige ut for samme sti av
+    // formateringsgrunner, ikke reelle. Hash (f.eks. «#kommentarer») faller
+    // bort som URL().pathname aldri inkluderer — akseptert kostnad, samme som
+    // for `url`.
     try {
       return new URL(verdi, RELATIV_BASE).pathname
     } catch {

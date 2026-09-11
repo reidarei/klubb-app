@@ -88,8 +88,8 @@
 //   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
 //   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
 //   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
-//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer maal, antall_klienter, synligKlient og sti (focus/openWindow). Ikke en feil — halvparten av et regnskap.
-//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
+//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
+//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal), allerede_paa_maal og synlighet. Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
 //   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
 //   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
 //   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
@@ -109,6 +109,7 @@
 //   bursdagsbilde.slett.feilet      — R2-sletting feiler: enten det GAMLE bildet ved erstatning (raden peker alt på det nye), opprydding av et ferskt objekt etter feilet DB-oppdatering (fingerprint 'opprydding'), eller admin-slettingen der R2-objektet ER borte men raden ikke ble nullet (fingerprint 'db-update-etter-r2' — 'sti' i konteksten er det som gjør manuell opprydding mulig) (#641)
 //   bursdagsbilde.input.avvist      — profilbildet kunne ikke hentes/valideres server-side (HTTP-feil, ugyldig MIME, for stort) før noe Vertex-kall i det hele tatt ble forsøkt (#641)
 //   cron.bursdagsbilde.jobb.feilet  — hoved- eller nødpasset i bursdagsbilde-cronet kastet ut av sin egen try/catch; det andre passet kjørte likevel (#641)
+//   logg-feil.kontekst.strippet     — warn: scrubKontekst() droppet minst én nøkkel fra en klient-innsendt kontekst. Bærer count, sample (kommaseparerte nøkkelnavn, kappet i antall og lengde, og kun de som har form som en identifikator fra vår egen kode), ugyldige (antallet som ikke hadde den formen — nøklene er klient-kontrollerte, så formen er PII-vakten) og fingerprint = klient-eventet som mistet felter (ikke `event`: den nøkkelen ville overskrevet event-navnet i stdout-linja). Belte-og-sele mot __tests__/logg-kontekst-dekning.test.ts: fanger en gammel cachet klient-bundle som sender et felt vakten aldri så (#681)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -120,7 +121,10 @@ import type { Json } from '@/lib/supabase/database.types'
 // Felter vi tillater i kontekst sendt til Sentry og feil_logg.
 // Alt som ikke er på listen strippes ut. Formålet er å unngå at navn,
 // epostadresser, telefonnummer e.l. havner i Sentry-kvotaen.
-const KONTEKST_WHITELIST = new Set([
+// Eksportert (#681) slik at __tests__/logg-kontekst-dekning.test.ts kan
+// verifisere statisk at hvert felt et logg.warn()/logg.feil()-kall sender
+// faktisk står her — samme mekanisme som strippet #676-feltene stille.
+export const KONTEKST_WHITELIST = new Set([
   'profil_id',
   'arrangement_id',
   'event',
@@ -161,6 +165,26 @@ const KONTEKST_WHITELIST = new Set([
   // brukeren. Uten den er bursdagsbilde.slett.feilet ubrukelig: hele poenget
   // med det eventet er at noen skal kunne rydde objektet manuelt (#641).
   'sti',
+  // Uuid-er, på linje med arrangement_id/profil_id over — ingen PII i seg
+  // selv, kun en fremmednøkkel (#681, funnet i samme opprydding som #676-
+  // feltene): album_id (album.profiler.oppslag.feilet) og medgjest_id
+  // (bursdagsbilde-genereringens ctx, ved siden av profil_id for
+  // bursdagsbarnet).
+  'album_id',
+  'medgjest_id',
+  // Rent tall / konstante identifikatorer fra koden og leverandørsvaret,
+  // aldri en radverdi — brukt av bursdagsbilde.generering.levert (#641/#681):
+  // 'bytes' er byte-lengden på det genererte bildet, 'mime_type' og 'modell'
+  // er faste strenger fra Vertex-svaret hhv. GOOGLE_VERTEX_MODELL-env-en.
+  'bytes',
+  'mime_type',
+  'modell',
+  // Rent tall: hvor mange strippede kontekst-nøkler som IKKE var
+  // identifikator-formede, og derfor ikke gjengis i `sample`
+  // (logg-feil.kontekst.strippet, #681). Nøkkelnavnene der kommer rått fra en
+  // uautentisert klient, så formen er vakten mot PII — se
+  // STRIPPET_NOEKKEL_FORM i app/api/logg-feil/route.ts.
+  'ugyldige',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {

@@ -65,6 +65,50 @@ describe('saniterVerdi – url', () => {
   })
 })
 
+describe('saniterVerdi – maal (#681)', () => {
+  it('blir pathname, akkurat som url — query strippes', () => {
+    expect(
+      saniterVerdi('maal', 'https://eksempel.no/arrangementer/abc?token=hemmelig'),
+    ).toBe('/arrangementer/abc')
+  })
+})
+
+describe('saniterVerdi – korte enum-felter trunkeres (#681)', () => {
+  // kilde/handling/synlighet er klient-kontrollerte: de SKAL være korte enums,
+  // men en buggy eller ondsinnet klient kan sende KB med søppel. Fjernes en av
+  // dem fra trunker-grenen i saniterVerdi(), blir denne testen rød.
+  it.each(['kilde', 'handling', 'synlighet'])('kapper en 300-tegns %s', (felt) => {
+    const resultat = saniterVerdi(felt, 'a'.repeat(300)) as string
+    expect(resultat).toBe('a'.repeat(200) + '…')
+  })
+})
+
+describe('scrubKontekst – push.klikk-kontekst (#681)', () => {
+  it('slipper gjennom hele push.klikk-konteksten uendret, bortsett fra maal', () => {
+    expect(
+      scrubKontekst({
+        maal: 'https://eksempel.no/arrangementer/abc?token=hemmelig',
+        hadde_maal: true,
+        antall_klienter: 2,
+        synlig_klient: false,
+        handling: 'openWindow',
+      }),
+    ).toEqual({
+      maal: '/arrangementer/abc',
+      hadde_maal: true,
+      antall_klienter: 2,
+      synlig_klient: false,
+      handling: 'openWindow',
+    })
+  })
+
+  it('slipper gjennom hele push.klikk.navigert-konteksten uendret', () => {
+    expect(
+      scrubKontekst({ kilde: 'broadcast', allerede_paa_maal: true, synlighet: 'visible' }),
+    ).toEqual({ kilde: 'broadcast', allerede_paa_maal: true, synlighet: 'visible' })
+  })
+})
+
 describe('scrubKontekst', () => {
   it('slipper gjennom whitelistede felter og stripper resten', () => {
     expect(

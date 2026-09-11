@@ -75,11 +75,14 @@ export default function ServiceWorkerRegistrering() {
     }
 
     function loggPushNavigasjon(kilde: string, alleredePaaMaal: boolean) {
+      // Nøkkelnavnene (kilde/allerede_paa_maal/synlighet) må matche
+      // KONTEKST_WHITELIST i lib/logg-sanitering.ts — parameteret over kan
+      // forbli camelCase, det er kun objekt-nøkkelen som teller (#681).
       sendFeilBeacon(
         'push.klikk.navigert',
         `push-klikk levert via ${kilde}`,
         undefined,
-        { kilde, alleredePaaMaal, synlighet: document.visibilityState },
+        { kilde, allerede_paa_maal: alleredePaaMaal, synlighet: document.visibilityState },
         'warn',
       )
     }
