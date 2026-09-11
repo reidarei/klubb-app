@@ -1494,6 +1494,7 @@ export type Database = {
           faar_issue_varsler: boolean
           fodselsdato: string | null
           id: string
+          matallergier: string | null
           navn: string
           oppdatert: string
           opprettet: string
@@ -1512,6 +1513,7 @@ export type Database = {
           faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id: string
+          matallergier?: string | null
           navn: string
           oppdatert?: string
           opprettet?: string
@@ -1530,6 +1532,7 @@ export type Database = {
           faar_issue_varsler?: boolean
           fodselsdato?: string | null
           id?: string
+          matallergier?: string | null
           navn?: string
           oppdatert?: string
           opprettet?: string

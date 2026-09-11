@@ -262,6 +262,12 @@ export const DRA_NED_PING_TIMEOUT_MS = 6000
 export const STIKKORD_MAKS_ANTALL = 10
 export const STIKKORD_MAKS_LENGDE = 30
 
+// Matallergier på medlemsprofilen. Speiler check-constraint
+// profiles_matallergier_gyldig (migrasjon 141) — endres den her, må
+// migrasjonen følge etter. Fritekst og ikke avkrysning: allergier er for
+// varierte til en fast liste, og «tåler ikke rå løk» skal kunne stå der.
+export const MATALLERGIER_MAKS_LENGDE = 200
+
 // Tidspunktet koblingstabellen `innspill_kobling` ble tatt i bruk (migrasjon
 // 136, kjørt mot prod 2026-08-26 19:47 UTC). Fra og med da skriver
 // innsendings-ruten alltid en kobling-rad, så «ingen rad» på et nyere

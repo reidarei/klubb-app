@@ -14,7 +14,7 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Segment from '@/components/ui/Segment'
 import { ToggleRad } from '@/components/ui/ToggleSwitch'
 import { normaliserStikkord, formaterStikkord } from '@/lib/stikkord'
-import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
+import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
 
 type Medlem = {
   id: string
@@ -28,6 +28,7 @@ type Medlem = {
   faar_issue_varsler: boolean
   faar_feilvarsler: boolean
   stikkord: string[]
+  matallergier: string | null
 }
 
 type NaavaerendeGeneralsekretaer = { id: string; navn: string } | null
@@ -91,6 +92,7 @@ export default function RedigerMedlemSkjema({
   const [telefon, setTelefon] = useState(medlem.telefon ?? '')
   const [fodselsdato, setFodselsdato] = useState(medlem.fodselsdato ?? '')
   const [stikkord, setStikkord] = useState(formaterStikkord(medlem.stikkord))
+  const [matallergier, setMatallergier] = useState(medlem.matallergier ?? '')
 
   // Valgbare roller (Segment): bare 'medlem' og 'admin'.
   // Generalsekretær-rollen styres av ToggleSwitch nedenfor.
@@ -174,6 +176,7 @@ export default function RedigerMedlemSkjema({
         faar_issue_varsler: faarIssueVarsler,
         faar_feilvarsler: faarFeilvarsler,
         stikkord,
+        matallergier,
       })
 
       // Steg 2: fjern GS-tittel (om nødvendig).
@@ -281,7 +284,7 @@ export default function RedigerMedlemSkjema({
             style={{ ...inputBaseStil, colorScheme: 'dark' }}
           />
         </Rad>
-        <Rad last>
+        <Rad>
           <div style={labelStil}>Stikkord</div>
           <input
             type="text"
@@ -293,6 +296,17 @@ export default function RedigerMedlemSkjema({
           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
             Skill med komma. Maks {STIKKORD_MAKS_ANTALL} stikkord, {STIKKORD_MAKS_LENGDE} tegn hver — {normaliserStikkord(stikkord).length}/{STIKKORD_MAKS_ANTALL}
           </div>
+        </Rad>
+        <Rad last>
+          <div style={labelStil}>Matallergier</div>
+          <input
+            type="text"
+            value={matallergier}
+            onChange={e => setMatallergier(e.target.value)}
+            maxLength={MATALLERGIER_MAKS_LENGDE}
+            style={inputBaseStil}
+            placeholder="Skalldyr, nøtter …"
+          />
         </Rad>
       </SkjemaSeksjon>
 

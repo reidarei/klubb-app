@@ -27,7 +27,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, navn, visningsnavn, epost, telefon, rolle, fodselsdato, aktiv, bilde_url, stikkord')
+      .select('id, navn, visningsnavn, epost, telefon, rolle, fodselsdato, aktiv, bilde_url, stikkord, matallergier')
       .eq('id', id)
       .maybeSingle(),
 
@@ -276,8 +276,11 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                 ? formaterDato(`${medlem.fodselsdato}T12:00:00Z`, 'd. MMMM yyyy')
                 : '—'
             }
-            last
           />
+          {/* Står i Kontakt og ikke i en egen seksjon: den som bestiller mat
+              leter her, der telefonnummeret også er. Vises alltid, også tom —
+              «—» er informasjon i seg selv når du planlegger en middag. */}
+          <FaktaRad label="Matallergier" value={medlem.matallergier ?? '—'} last />
         </div>
       </section>
 

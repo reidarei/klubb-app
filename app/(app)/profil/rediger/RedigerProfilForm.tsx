@@ -11,7 +11,7 @@ import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
 import BildeCropper from '@/components/ui/BildeCropper'
 import { normaliserStikkord, formaterStikkord } from '@/lib/stikkord'
-import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
+import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
 
 type Props = {
   navn: string
@@ -22,6 +22,7 @@ type Props = {
   bildeUrl: string | null
   rolle?: string | null
   stikkord: string[]
+  matallergier: string | null
 }
 
 const labelStil: React.CSSProperties = {
@@ -83,6 +84,7 @@ export default function RedigerProfilForm({
   bildeUrl: bildeUrlInit,
   rolle,
   stikkord: stikkordInit,
+  matallergier: matallergierInit,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -95,6 +97,7 @@ export default function RedigerProfilForm({
   // State som fritekst — normaliseres først ved lagring (og for live-telleren
   // under). Å normalisere underveis ville hoppet brukeren midt i skriving.
   const [stikkord, setStikkord] = useState(formaterStikkord(stikkordInit))
+  const [matallergier, setMatallergier] = useState(matallergierInit ?? '')
 
   // bildeUrl = lagret URL i DB. bildeFil = ventende ny upload (komprimert
   // + cropped, ikke lastet opp ennå). bildeFjernet = brukeren har klikket
@@ -182,6 +185,7 @@ export default function RedigerProfilForm({
         fodselsdato: fodselsdato || undefined,
         bilde_url: nyBildeUrl,
         stikkord,
+        matallergier,
       })
 
       // Slett gammelt R2-bilde hvis byttet eller fjernet (best effort)
@@ -370,7 +374,7 @@ export default function RedigerProfilForm({
             style={{ ...inputBaseStil, colorScheme: 'dark' }}
           />
         </Rad>
-        <Rad last>
+        <Rad>
           <div style={labelStil}>Stikkord</div>
           <input
             type="text"
@@ -381,6 +385,20 @@ export default function RedigerProfilForm({
           />
           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
             Skill med komma. Maks {STIKKORD_MAKS_ANTALL} stikkord, {STIKKORD_MAKS_LENGDE} tegn hver — {normaliserStikkord(stikkord).length}/{STIKKORD_MAKS_ANTALL}
+          </div>
+        </Rad>
+        <Rad last>
+          <div style={labelStil}>Matallergier</div>
+          <input
+            type="text"
+            value={matallergier}
+            onChange={e => setMatallergier(e.target.value)}
+            maxLength={MATALLERGIER_MAKS_LENGDE}
+            style={inputBaseStil}
+            placeholder="Skalldyr, nøtter …"
+          />
+          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Vises for alle i klubben, så den som bestiller mat ser det. La stå tomt hvis du tåler alt.
           </div>
         </Rad>
       </SkjemaSeksjon>

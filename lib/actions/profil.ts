@@ -7,7 +7,17 @@ import { ensureAdmin, ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { normaliserTelefon } from '@/lib/telefon'
 import { normaliserStikkord } from '@/lib/stikkord'
+import { MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
 import { logg } from '@/lib/logg'
+
+// «Ikke utfylt» skal ha ÉN representasjon i dataene: null, aldri tom streng.
+// Kappingen er en siste skanse — skjemaene har maxLength, og DB har
+// check-constraint profiles_matallergier_gyldig — men en action skal ikke
+// stole på at kallstedet har validert.
+function normaliserMatallergier(v: string): string | null {
+  const trimmet = v.trim()
+  return trimmet ? trimmet.slice(0, MATALLERGIER_MAKS_LENGDE) : null
+}
 
 // Resultattyper for GS-actions — strukturert retur i stedet for throw,
 // slik at klienten kan vise reaktiv confirm ved race-tilstand (23505).
@@ -22,7 +32,7 @@ export type FjernGeneralsekretaerResultat =
   | { ok: false; kode: 'race_mismatch' }
   | { ok: false; kode: 'feil'; melding: string }
 
-export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: string; telefon: string; fodselsdato?: string; bilde_url?: string | null; stikkord?: string | string[] }) {
+export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: string; telefon: string; fodselsdato?: string; bilde_url?: string | null; stikkord?: string | string[]; matallergier?: string }) {
   const { supabase, user } = await ensureInnlogget()
 
   const navn = data.navn.trim()
@@ -41,6 +51,11 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   // denne actionen uten stikkord-feltet i det hele tatt. undefined skal
   // aldri tolkes som «tøm lagrede stikkord».
   if (data.stikkord !== undefined) oppdatering.stikkord = normaliserStikkord(data.stikkord)
+  // Betinget av samme grunn som stikkord over: undefined betyr «feltet var
+  // ikke med i kallet», ikke «tøm det som står lagret».
+  if (data.matallergier !== undefined) {
+    oppdatering.matallergier = normaliserMatallergier(data.matallergier)
+  }
 
   const { error } = await supabase
     .from('profiles')
@@ -56,7 +71,7 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   revalidatePath(`/klubbinfo/medlemmer/${user.id}`)
 }
 
-export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord?: string | string[] }) {
+export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord?: string | string[]; matallergier?: string }) {
   const { supabase } = await ensureAdmin()
 
   const navn = data.navn.trim()
@@ -126,6 +141,9 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
   // Lagt til ETTER baseOppdatering/rolle-invarianten er avgjort — stikkord
   // har ingenting med generalsekretær-logikken å gjøre.
   if (data.stikkord !== undefined) oppdatering.stikkord = normaliserStikkord(data.stikkord)
+  if (data.matallergier !== undefined) {
+    oppdatering.matallergier = normaliserMatallergier(data.matallergier)
+  }
 
   const { error } = await supabase
     .from('profiles')
