@@ -116,7 +116,7 @@ test.describe('avreise-blokka på tur-kortet (#669)', () => {
     // Ett ansikt per ja-svar; kanskje-raden skal ikke telle med.
     await expect(kort.getByTestId('avreise-ansikt')).toHaveCount(3)
 
-    // «+N»-telleren skal ikke stå her: tre ja er godt under grensa.
+    // Det finnes ingen «+N»-teller lenger — alle ja-ansiktene rendres.
     await expect(blokk).not.toContainText(/\+\d/)
   })
 

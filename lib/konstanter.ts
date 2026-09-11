@@ -26,11 +26,6 @@ export const PAAMINNELSE_DAGER = {
 // skifter utseende. Flyttes den ene, skal ikke den andre følge med av vanvare.
 export const AVREISE_VINDU_DAGER = 7
 
-// Hvor mange ansikter som vises før resten samles i «+N». Åtte 30 px-avatarer
-// med 8 px overlapp er det som får plass på et kort på den smaleste telefonen
-// vi støtter uten at rada brytes.
-export const AVREISE_MAKS_ANSIKTER = 8
-
 // Tilgangsvinduet etter en pass-godkjenning. Admin har eksplisitt sagt
 // 1 dag — kort vindu reduserer eksponering hvis godkjenneren glemmer å
 // trekke tilbake.

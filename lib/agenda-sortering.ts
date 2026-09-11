@@ -55,7 +55,7 @@ import type { PollKortData } from '@/components/agenda/PollKort'
 import type { MeldingKortData } from '@/components/agenda/MeldingKort'
 import type { AlbumKort } from '@/lib/melding-album'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
-import { AVREISE_VINDU_DAGER, AVREISE_MAKS_ANSIKTER } from '@/lib/konstanter'
+import { AVREISE_VINDU_DAGER } from '@/lib/konstanter'
 import { norskDag } from '@/lib/dato'
 import { differenceInCalendarDays } from 'date-fns'
 
@@ -353,8 +353,7 @@ function byggAvreise(
         src: p.profiles?.bilde_url ?? null,
         rolle: p.profiles?.rolle ?? null,
       }))
-      .filter(d => d.navn)
-      .slice(0, AVREISE_MAKS_ANSIKTER),
+      .filter(d => d.navn),
   }
 }
 

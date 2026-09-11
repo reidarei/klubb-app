@@ -20,7 +20,7 @@ export type AvreiseData = {
   /** 0 = i dag. Kan bli 0 her: et UBESVART arrangement i dag havner i
    *  «Ikke svart» som vanlig kort, ikke som highlight. */
   dagerIgjen: number
-  /** De som har svart ja, kappet til AVREISE_MAKS_ANSIKTER. */
+  /** Alle som har svart ja — ingen kapping, hele gjengen skal være synlig. */
   deltakere: AvreiseDeltaker[]
 }
 
@@ -37,6 +37,12 @@ export type ArrangementKortData = {
   /** Satt kun for turer innen avreisevinduet — se byggAvreise() i agenda-sortering. */
   avreise?: AvreiseData
 }
+
+// Ansiktene i avreise-blokka. Større enn en vanlig listeavatar fordi de skal
+// leses som gjengen som drar, ikke som pynt; overlappen holder bunke-uttrykket
+// uten å spise for mye bredde når hele klubben har sagt ja.
+const AVREISE_ANSIKT_PX = 38
+const AVREISE_OVERLAPP = 9
 
 // «7 dager igjen» er riktig på avstand, men blir stivt når det nærmer seg.
 function nedtellingTekst(dagerIgjen: number): string {
@@ -318,43 +324,41 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
               borderTop: '0.5px solid var(--border-subtle)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-              {arr.avreise.deltakere.map((d, i) => (
+            {/* Alle som har sagt ja, ingen «+N»-teller: hele gjengen skal
+                være synlig. Rada brytes derfor i stedet for å kappes —
+                paddingLeft på containeren nuller ut den negative margin-en
+                på det første ansiktet i HVER rad, så radene starter likt. */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                minWidth: 0,
+                paddingLeft: AVREISE_OVERLAPP,
+                rowGap: 6,
+              }}
+            >
+              {arr.avreise.deltakere.map((d, i, alle) => (
                 // zIndex synkende: den første avataren ligger øverst, så
-                // overlappen leses som en bunke fra venstre.
+                // overlappen leses som en bunke fra venstre. Telles ned fra
+                // antallet, ikke fra et fast tall, siden lista ikke er kappet.
                 <div
                   key={`${d.navn}-${i}`}
                   data-testid="avreise-ansikt"
-                  style={{ marginLeft: i === 0 ? 0 : -8, zIndex: 20 - i, position: 'relative' }}
-                >
-                  <Avatar name={d.navn} size={28} src={d.src ?? undefined} rolle={d.rolle} />
-                </div>
-              ))}
-              {arr.antallJa > arr.avreise.deltakere.length && (
-                // Ikke en avatar, men en teller — derfor ingen Avatar-komponent
-                // her (jf. Policy: Avatar, som gjelder profilbilder).
-                <span
                   style={{
-                    marginLeft: -8,
-                    zIndex: 1,
+                    marginLeft: -AVREISE_OVERLAPP,
+                    zIndex: alle.length - i,
                     position: 'relative',
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    border: '1.5px dashed var(--border)',
-                    background: 'var(--bg-elevated-solid)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: 'var(--text-tertiary)',
                   }}
                 >
-                  +{arr.antallJa - arr.avreise.deltakere.length}
-                </span>
-              )}
+                  <Avatar
+                    name={d.navn}
+                    size={AVREISE_ANSIKT_PX}
+                    src={d.src ?? undefined}
+                    rolle={d.rolle}
+                  />
+                </div>
+              ))}
             </div>
 
             <div

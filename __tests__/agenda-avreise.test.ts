@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { tilKort, type ArrangementRaad, type PaameldingRaad } from '@/lib/agenda-sortering'
-import { AVREISE_VINDU_DAGER, AVREISE_MAKS_ANSIKTER } from '@/lib/konstanter'
+import { AVREISE_VINDU_DAGER } from '@/lib/konstanter'
 
 // Pinner vilkårene for avreise-blokka nederst på tur-kortet (#669): hvem som
 // vises, når blokka dukker opp, og at den holder seg unna møter og fortid.
@@ -97,14 +97,11 @@ describe('avreise-blokka på tur-kortet (#669)', () => {
       expect(kort.avreise?.deltakere).toHaveLength(1)
     })
 
-    it('kapper ansiktene ved grensa, men antallJa teller alle', () => {
-      const mange = Array.from({ length: AVREISE_MAKS_ANSIKTER + 4 }, (_, i) =>
-        paamelding(`Mann ${i}`, 'ja'),
-      )
+    it('tar med alle ansiktene — hele klubben skal være synlig, ingen «+N»', () => {
+      const mange = Array.from({ length: 18 }, (_, i) => paamelding(`Mann ${i}`, 'ja'))
       const kort = tilKort(turPaa('2026-09-12', mange), 'meg', NAA_FAST)
-      expect(kort.avreise?.deltakere).toHaveLength(AVREISE_MAKS_ANSIKTER)
-      // Differansen er det «+N»-telleren i kortet regner seg fram til.
-      expect(kort.antallJa).toBe(AVREISE_MAKS_ANSIKTER + 4)
+      expect(kort.avreise?.deltakere).toHaveLength(18)
+      expect(kort.antallJa).toBe(18)
     })
 
     it('gir tom deltakerliste når ingen har sagt ja ennå', () => {
