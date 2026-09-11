@@ -41,8 +41,8 @@ export type ArrangementKortData = {
 // Ansiktene i avreise-blokka. Større enn en vanlig listeavatar fordi de skal
 // leses som gjengen som drar, ikke som pynt; overlappen holder bunke-uttrykket
 // uten å spise for mye bredde når hele klubben har sagt ja.
-const AVREISE_ANSIKT_PX = 38
-const AVREISE_OVERLAPP = 9
+const AVREISE_ANSIKT_PX = 46
+const AVREISE_OVERLAPP = 10
 
 // «7 dager igjen» er riktig på avstand, men blir stivt når det nærmer seg.
 function nedtellingTekst(dagerIgjen: number): string {
