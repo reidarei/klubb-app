@@ -143,17 +143,17 @@ Enkelte event-navn er unntatt fra alarmen fordi de utløses av forbigående forh
 
 ### Ingen alarm som går umiddelbart
 
-Miljøet er lite, og ingenting i appen er så tidskritisk at åtte timer gjør varig skade. En kanal som varsler med én gang mister dessuten betydning raskt hvis den brukes på noe annet enn det virkelig akutte. Skal noe legges der senere, må det begrunnes med et tap som ikke kan rettes opp i etterkant.
+Klubben er liten, og ingenting i appen er så tidskritisk at åtte timer gjør varig skade. En kanal som varsler med én gang mister dessuten betydning raskt hvis den brukes på noe annet enn det virkelig akutte. Skal noe legges der senere, må det begrunnes med et tap som ikke kan rettes opp i etterkant.
 
 ### Medlemmene er en del av varslingen
 
-I et lite miljø der alle kjenner hverandre oppdages rare ting ofte raskere av et menneske enn av overvåkningen. Innspill-funksjonen i appen dekker dette behovet, og det er derfor ingen egen knapp for å melde fra om feil.
+I en liten klubb der alle kjenner hverandre oppdages rare ting ofte raskere av et menneske enn av overvåkningen. Innspill-funksjonen i appen dekker dette behovet, og det er derfor ingen egen knapp for å melde fra om feil.
 
 ### Hvem som får alarmen
 
 Det styres av bryteren **«Feilvarsler»** i medlemsredigering, som admin setter per medlem. Kolonnen heter `faar_feilvarsler` i databasen.
 
-**Bryteren er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer, og et vanlig medlem kan derfor motta alarmer uten å være admin.
+**Bryteren er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer klubben, og et vanlig medlem kan derfor motta alarmer uten å være admin.
 
 ### To logger med hvert sitt formål
 
@@ -166,9 +166,9 @@ Det styres av bryteren **«Feilvarsler»** i medlemsredigering, som admin setter
 
 ### Hver feil skal kunne diagnostiseres alene
 
-En feilrad som ikke lar seg tolke er nesten like ille som ingen rad. Den typiske varianten er en tekst som `"Load failed"` uten stakkspor og uten feilkode: den kan like gjerne være et tapt nettverksøyeblikk som en app som mangler en kodebit, og det er ingen måte å avgjøre hvilken i etterkant.
+En feilrad som ikke lar seg tolke er nesten like ille som ingen rad. Vi hadde en: teksten var `"Load failed"`, uten stakkspor og uten feilkode, og den kunne like gjerne vært et tapt nettverksøyeblikk som en app som manglet en kodebit. Det var ingen måte å avgjøre det i etterkant.
 
-Derfor følger disse opplysningene med på hver eneste feil fra nettleseren, uten at kallstedet må huske noe:
+Derfor følger nå disse opplysningene med på hver eneste feil fra nettleseren, uten at kallstedet må huske noe:
 
 | Felt | Hva det svarer på |
 |---|---|
@@ -179,7 +179,9 @@ Derfor følger disse opplysningene med på hver eneste feil fra nettleseren, ute
 | `nettverk` | Forbindelsens type (4g, 3g …) der nettleseren oppgir det |
 | `ressurs` | Adressen til en fil som ikke lot seg laste |
 
-Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `app/api/logg-feil/route.ts` — et felt som ikke står der, forsvinner stille.
+Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `lib/logg-sanitering.ts`. Et felt som ikke står der, forsvinner stille — derfor håndhever `__tests__/logg-kontekst-dekning.test.ts` det i stedet for å stole på at noen husker det: bygget feiler både når et kallsted sender et ukjent felt, og når et nytt felt legges til i `diagnostikk()` uten å nå whitelisten. Skulle et felt likevel komme inn utenfra (en gammel utgave av appen som ligger i nettleserens cache), melder serveren fra med `logg-feil.kontekst.strippet` i stedet for å kaste det bort i stillhet.
+
+`ressurs` beholder adressens vertsnavn (i motsetning til `url`, som kuttes til stien) fordi filer kan ligge på et annet domene enn appen selv, og *hvilken tjener som ikke svarte* er halve svaret. To adressetyper behandles særskilt: lokale forhåndsvisninger (`blob:`) beholder sitt eget forstavelse-ledd, ellers limes vertsnavnet på to ganger og adressen ser korrupt ut; innebygde filer (`data:`) beholder kun filtypen, siden resten av adressen *er* selve filen.
 
 **Filer som ikke lastes, fanges særskilt.** Når en kodefil ikke lar seg hente, meldes det fra på selve HTML-elementet og ikke på siden som helhet. En vanlig feillytter ser det derfor aldri. `FeilFangst` lytter i tillegg i den fasen hvor slike meldinger passerer, slik at filnavnet havner i loggen.
 
