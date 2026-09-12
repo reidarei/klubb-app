@@ -7,6 +7,7 @@ import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
 import VarslerInnstillinger from '@/components/VarslerInnstillinger'
 import VarslerListe from '@/components/profil/VarslerListe'
+import EgneOpplysninger from '@/components/profil/EgneOpplysninger'
 import PassInfoKort from '@/components/profil/PassInfoKort'
 import UtseendeValg from '@/components/profil/UtseendeValg'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
@@ -41,7 +42,7 @@ export default async function Profil() {
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('navn, visningsnavn, rolle, bilde_url')
+      .select('navn, visningsnavn, rolle, bilde_url, epost, telefon, fodselsdato, stikkord, matallergier')
       .eq('id', user!.id)
       .maybeSingle(),
     supabase
@@ -220,7 +221,10 @@ export default async function Profil() {
           loddrett tårn (avatar 78 + navn + rolle + to stat-kolonner + fond-rad
           = 360 px), og spiste en tredjedel av mobilskjermen før noe handlingsbart
           innhold kom til syne. Samme data, lagt på tvers: ~118 px. */}
+      {/* data-testid brukt av e2e/profil-opplysninger.spec.ts (#683) — måler
+          hero + Om deg-seksjon til sammen mot høydebudsjettet. */}
       <div
+        data-testid="profil-hero"
         style={{
           padding: '14px 16px',
           marginBottom: 20,
@@ -364,6 +368,21 @@ export default async function Profil() {
           ))}
         </div>
       </div>
+
+      {/* Egne opplysninger (#683) — rett etter hero, før alt annet: dette ER
+          «min profil», og feltene var tidligere kun lesbare inne i
+          redigeringsskjemaet. Tett radform, ikke FaktaRad-formen fra
+          medlemsdetaljsiden — se kommentar i komponenten for hvorfor
+          (høydebudsjett, jf. #589). */}
+      <EgneOpplysninger
+        navn={navn}
+        visningsnavn={profil?.visningsnavn ?? null}
+        fodselsdato={profil?.fodselsdato ?? null}
+        telefon={profil?.telefon ?? null}
+        epost={profil?.epost ?? ''}
+        matallergier={profil?.matallergier ?? null}
+        stikkord={profil?.stikkord ?? []}
+      />
 
       {/* Privatmeldinger — flyttes hit fra /chat (#256) slik at lenken
           er tilgjengelig fra profil-siden, ikke fra klubb-chat. */}

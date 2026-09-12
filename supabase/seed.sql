@@ -81,9 +81,18 @@ where u.email like '%@klubb.test';
 -- ─── Profiler ────────────────────────────────────────────────────────────────
 -- Triggeren har allerede laget radene — gi dem navn, roller og bursdager.
 
+-- E2E Admin er profilen e2e logger inn som, og dermed den «Om deg» rendres
+-- for (#683). Den fylles derfor UT — telefon, matallergier, stikkord og et
+-- visningsnavn ulikt navnet — så CI faktisk ser alle seks radene. Med tomme
+-- felter målte høydevakten den letteste mulige profilen og beviste ingenting.
+-- Matallergi-teksten er bevisst en frase med mellomrom, ikke ett ord: den
+-- skal wrappe over to linjer på 390 px og bevise at verdien ikke kappes.
 update public.profiles set
-  navn = 'E2E Admin', visningsnavn = 'E2E Admin', rolle = 'admin',
-  fodselsdato = '1980-03-15'
+  navn = 'E2E Admin', visningsnavn = 'E2E-admin', rolle = 'admin',
+  fodselsdato = '1980-03-15',
+  telefon = '99 88 77 66',
+  matallergier = 'Tåler ikke rå løk, og er allergisk mot skalldyr',
+  stikkord = array['testbruker', 'administrator']
 where id = '00000000-0000-4000-8000-000000000001';
 
 update public.profiles set

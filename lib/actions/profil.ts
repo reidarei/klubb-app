@@ -47,9 +47,8 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
     oppdatert: naa(),
   }
   if (data.bilde_url !== undefined) oppdatering.bilde_url = data.bilde_url
-  // Betinget som bilde_url over: den døde RedigerProfilSkjema.tsx kaller
-  // denne actionen uten stikkord-feltet i det hele tatt. undefined skal
-  // aldri tolkes som «tøm lagrede stikkord».
+  // undefined betyr «feltet var ikke med i kallet», ikke «tøm det lagrede» —
+  // samme defensive linje som matallergier rett under.
   if (data.stikkord !== undefined) oppdatering.stikkord = normaliserStikkord(data.stikkord)
   // Betinget av samme grunn som stikkord over: undefined betyr «feltet var
   // ikke med i kallet», ikke «tøm det som står lagret».
