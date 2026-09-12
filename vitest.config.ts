@@ -26,6 +26,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // Ikke bruk resolve.conditions: ['react-server'] for å løse dette —
+      // det ville byttet React til server-varianten globalt og brutt alle
+      // hook-baserte komponent-tester. En alias til en tom stub er nok:
+      // lib/config.ts importerer 'server-only' kun for effekten (kaste ved
+      // feil bundle), og stubben gir nettopp ingen effekt (#687).
+      'server-only': path.resolve(__dirname, '__tests__/stubs/server-only.ts'),
     },
   },
 })

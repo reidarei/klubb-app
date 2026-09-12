@@ -79,6 +79,13 @@ if (HAR_TEST_INSTANS) {
 
 export default defineConfig({
   testDir: './e2e',
+  // Én tsconfig for HELE Playwright-prosessen (#687). Uten denne slår
+  // Playwright opp nærmeste tsconfig fra fila som gjør importen — og for
+  // lib/config.ts er det rot-tsconfig.json, ikke e2e/tsconfig.json. Da ville
+  // 'server-only'-mappingen i e2e/tsconfig.json aldri blitt brukt, og en spec
+  // som importerer server-kode direkte kastet ved innsamling. Se e2e/tsconfig.json
+  // for hvorfor rot-tsconfig bevisst ikke er rørt.
+  tsconfig: './e2e/tsconfig.json',
   // Kjører ÉN gang per kjøring, i runner-prosessen — ikke per worker. Fanger
   // høyeste feil_logg.id før første test, slik at feil_logg-vakten i
   // sider-laster.spec.ts har en grense som en retry ikke kan flytte på. Se

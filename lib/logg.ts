@@ -5,6 +5,7 @@
 //   varsel.send.feilet          — sendPush/sendEpost-feil i lib/varsler.ts
 //   varsel.epost.feilet         — Resend API-feil i lib/epost.ts
 //   varsel.url.relativ          — url som verken er absolutt eller starter med «/» (#507)
+//   varsel.url.fremmed          — url pekte ut av appen (eller var malformert); push fikk «/varsler/{id}» når varsel-raden finnes, ellers «/» — aldri stien fra URL-en (#687)
 //   varsel.push.feilet          — web-push-feil i lib/push.ts
 //   bilde.opplast.feilet        — R2-opplasting feiler
 //   video.opplast.feilet        — video-upload feiler
@@ -185,6 +186,13 @@ export const KONTEKST_WHITELIST = new Set([
   // uautentisert klient, så formen er vakten mot PII — se
   // STRIPPET_NOEKKEL_FORM i app/api/logg-feil/route.ts.
   'ugyldige',
+  // Fast enum ('ok'/'fremmed'/'ugyldig') fra lib/config.ts sin relativUrl()
+  // — hvorfor en varsel-URL ble avvist til intern fallback (#687). Ingen PII:
+  // beskriver URL-formen, aldri innholdet i den. Prefikset «url_» er bevisst:
+  // whitelisten er global, så en naken «utfall»-nøkkel ville blitt arvet av
+  // neste kallsted med et helt annet verdirom (og kollidert i navn med
+  // VarselUtfall i lib/varsler.ts).
+  'url_utfall',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {

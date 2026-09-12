@@ -276,15 +276,40 @@ self.addEventListener('notificationclick', (event) => {
   // malformerte eller kryss-origin URL-er — push-handleren over setter alltid
   // `data.url` (til '/' når varselet ikke har noen lenke), så et varsel som
   // legitimt peker på agenda kommer hit som en gyldig '/'-URL, ikke som null.
+  //
+  // maalGrunn (#687) skiller de ulike årsakene til at target kan bli null
+  // — før dette dekket hadde_maal: false alle sammen, og en ekte kryss-origin-
+  // regresjon (#687 selv) var umulig å skille fra en tom payload i loggen.
+  // 'mangler' er i praksis uoppnåelig i dag: push-handleren defaulter alltid
+  // til '/' når varselet ikke har noen lenke. Verdien er likevel med — den
+  // gjør fraværet skillbart fra 'ugyldig' hvis den defaulten noensinne endres,
+  // i stedet for at de to stille faller sammen igjen.
+  //
+  // 'mangler' betyr FRAVÆRENDE (undefined/null/tom streng); en verdi av feil
+  // type (objekt, tall) er 'ugyldig' (review-funn #687). Skillet er hele
+  // poenget med feltet: fravær er en tom payload, feil type er en bug hos
+  // avsenderen — slår vi dem sammen, bærer maal_grunn mindre informasjon enn
+  // den ble innført for.
   let target = null
+  let maalGrunn = 'mangler'
   try {
     const raw = event.notification.data?.url
-    if (typeof raw === 'string' && raw) {
-      const url = new URL(raw, self.location.origin)
-      if (url.origin === self.location.origin) target = url.href
+    if (raw !== undefined && raw !== null && raw !== '') {
+      if (typeof raw !== 'string') {
+        maalGrunn = 'ugyldig'
+      } else {
+        const url = new URL(raw, self.location.origin)
+        if (url.origin === self.location.origin) {
+          target = url.href
+          maalGrunn = 'gyldig'
+        } else {
+          maalGrunn = 'kryss_origin'
+        }
+      }
     }
   } catch {
-    // Ugyldig URL — target forblir null.
+    // new URL() kastet — malformert URL.
+    maalGrunn = 'ugyldig'
   }
 
   event.waitUntil((async () => {
@@ -342,6 +367,7 @@ self.addEventListener('notificationclick', (event) => {
     loggPushKlikk({
       maal: navigasjonsmaal,
       hadde_maal: Boolean(target),
+      maal_grunn: maalGrunn,
       antall_klienter: sameOrigin.length,
       synlig_klient: sameOrigin.some(k => k.visibilityState === 'visible'),
       handling: sameOrigin.length > 0 ? 'focus' : 'openWindow',

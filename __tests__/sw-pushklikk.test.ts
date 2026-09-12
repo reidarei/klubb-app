@@ -103,7 +103,10 @@ function lagPushEvent(payload: unknown) {
   return medWaitUntil({ data: { json: () => payload } })
 }
 
-function lagNotificationClickEvent(url?: string) {
+// url er bevisst `unknown`, ikke `string | undefined`: maal_grunn skal skille
+// fravær fra en verdi av feil TYPE (#687-review), og da må testen kunne dytte
+// inn et objekt eller et tall i payloaden.
+function lagNotificationClickEvent(url?: unknown) {
   return medWaitUntil({ notification: { close: vi.fn(), data: { url } } })
 }
 
@@ -136,6 +139,13 @@ function lastSwInstans(
     clients: clientsMock,
   }
 
+  // loggPushKlikk() fire-and-forgets et fetch('/api/logg-feil', …) — uten en
+  // fetch-global i sandboxen ville sw.js kastet ReferenceError der (fanget av
+  // try/catch i loggPushKlikk selv, men da ville testene aldri sett payloaden
+  // den faktisk sendte). Mocket her, ikke gjort til en no-op i sw.js — vi VIL
+  // asserte på hva som faktisk ble postet (#687).
+  const fetchMock = vi.fn(async () => ({}))
+
   const sandbox = {
     self: selfMock,
     caches: cachesMock,
@@ -143,6 +153,7 @@ function lastSwInstans(
     Response: FakeResponse,
     URL,
     console,
+    fetch: fetchMock,
     // notificationclick racer cache-skrivingen mot en timeout — uten timer-
     // globalene i sandboxen ville sw.js kastet ReferenceError her.
     setTimeout,
@@ -157,7 +168,7 @@ function lastSwInstans(
     if (event._waitUntil) await event._waitUntil
   }
 
-  return { dispatch, cachesMock, clientsMock, selfMock }
+  return { dispatch, cachesMock, clientsMock, selfMock, fetchMock }
 }
 
 describe('push-event', () => {
@@ -271,6 +282,85 @@ describe('notificationclick', () => {
     expect(clientsMock.openWindow).toHaveBeenCalledWith('/')
     cache = await cs.open(NAV_CACHE)
     expect(await cache.match(NAV_NOKKEL)).toBeUndefined()
+  })
+})
+
+// hadde_maal: false dekket tidligere alle årsakene uten å skille dem
+// (#687-issuet selv: en ekte kryss-origin-regresjon var umulig å skille fra
+// en tom payload i loggen). maal_grunn er ETT felt som gjør dem skillbare.
+describe('notificationclick — maal_grunn (#687)', () => {
+  function kontekstFraFetch(fetchMock: ReturnType<typeof vi.fn>) {
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, { body: string }]
+    expect(url).toBe('/api/logg-feil')
+    const body = JSON.parse(init.body) as { event: string; kontekst: Record<string, unknown> }
+    expect(body.event).toBe('push.klikk')
+    return body.kontekst
+  }
+
+  it('gyldig same-origin-URL → maal_grunn: gyldig', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent('/chat'))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('gyldig')
+    expect(kontekst.hadde_maal).toBe(true)
+  })
+
+  it('ingen data.url i det hele tatt → maal_grunn: mangler', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent(undefined))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('mangler')
+    expect(kontekst.hadde_maal).toBe(false)
+  })
+
+  it('tom streng som data.url → maal_grunn: mangler', async () => {
+    // Tom streng er fravær av en lenke, ikke en verdi av feil type.
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent(''))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('mangler')
+    expect(kontekst.hadde_maal).toBe(false)
+  })
+
+  it('null som data.url → maal_grunn: mangler', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent(null))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('mangler')
+  })
+
+  it('data.url av feil type (objekt) → maal_grunn: ugyldig, ikke mangler', async () => {
+    // Review-funn #687: en ikke-streng verdi er en bug hos avsenderen og skal
+    // ikke rapporteres som «varselet hadde ingen lenke».
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent({ sti: '/chat' }))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('ugyldig')
+    expect(kontekst.hadde_maal).toBe(false)
+  })
+
+  it('data.url av feil type (tall) → maal_grunn: ugyldig', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent(42))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('ugyldig')
+  })
+
+  it('malformert URL → maal_grunn: ugyldig', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent('http://['))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('ugyldig')
+    expect(kontekst.hadde_maal).toBe(false)
+  })
+
+  it('kryss-origin URL → maal_grunn: kryss_origin', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+    await dispatch('notificationclick', lagNotificationClickEvent('https://evil.example/x'))
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(kontekst.maal_grunn).toBe('kryss_origin')
+    expect(kontekst.hadde_maal).toBe(false)
   })
 })
 

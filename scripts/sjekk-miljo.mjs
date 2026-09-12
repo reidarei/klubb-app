@@ -166,8 +166,13 @@ const variabler = [
   // og da var det umulig å svare på om prod i det hele tatt hadde den satt.
   { navn: 'SENTRY_DSN',                nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Sentry DSN — server/edge-feil sendes dit i tillegg til feil_logg' },
 
-  // Base-URL
-  { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL override (trengs normalt ikke — utledes fra KLUBB_DOMENE/VERCEL_URL)' },
+  // Base-URL. Nivå 'valgfri' her er bevisst: variabelen er reelt påkrevd i
+  // PRODUKSJON (se SPESIALSJEKK 4 under), men ikke i dev/preview/CI, der
+  // getBaseUrl() i lib/config.ts har trygge fallbacks (localhost hhv.
+  // VERCEL_URL — som Vercel alltid setter på et preview-bygg; gjør den mot
+  // formodning ikke det, kaster getBaseUrl() der også). Feltbasert 'kritisk'
+  // ville falsk-alarmert i alle de tre.
+  { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL — PÅKREVD i produksjon (VERCEL_ENV=production), ellers utledes den fra VERCEL_URL (preview) eller KLUBB_DOMENE (lokalt prod-bygg)' },
 
   // Klubbidentitet
   { navn: 'NEXT_PUBLIC_KLUBB_NAVN',              nivaa: 'valgfri', type: 'streng', beskrivelse: 'Klubbnavn (default: Min Klubb)' },
@@ -292,14 +297,27 @@ if (!r2ServerSatt && !r2KlientSatt) {
 // ─── SPESIALSJEKK 2: BASE_URL vs KLUBB_DOMENE drift ─────────────────────────
 // Hvis begge er satt og BASE_URL ikke stemmer med KLUBB_DOMENE, er det
 // to sannhetskilder som kan gi forskjellige URL-er i varsler og ICS.
+//
+// www-tolerant (#687): KLUBB_DOMENE er ICS-IDENTIFIKATOREN (PRODID/UID) og
+// skal ALDRI endres til www — det ville byttet identitet på eksisterende
+// kalenderoppføringer for hvert medlem. BASE_URL kan derimot legitimt være
+// www.<KLUBB_DOMENE> (den kanoniske verten appen faktisk serveres fra, jf.
+// #687-fiksen i lib/config.ts) uten at det er drift mellom kildene — vi
+// godtar derfor domenet med ELLER uten et ledende www.
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
 const klubbDomene = process.env.NEXT_PUBLIC_KLUBB_DOMENE
 if (baseUrl && baseUrl !== '' && klubbDomene && klubbDomene !== '') {
-  const forventet = `https://${klubbDomene}`
-  if (baseUrl !== forventet) {
+  const forventetApex = `https://${klubbDomene}`
+  const forventetWww = `https://www.${klubbDomene}`
+  // Samme normalisering som getBaseUrl() gjør på verdien (#687-review):
+  // «https://klubb.no/» og «https://klubb.no» er samme vert, og appen bruker
+  // uansett den strippede formen. Uten dette meldte sjekken drift på en env
+  // som er helt i orden.
+  const baseUrlNorm = baseUrl.replace(/\/$/, '')
+  if (baseUrlNorm !== forventetApex && baseUrlNorm !== forventetWww) {
     meldinger.anbefalt.push(
-      `  ${y('⚠')} NEXT_PUBLIC_BASE_URL (${baseUrl}) stemmer ikke med NEXT_PUBLIC_KLUBB_DOMENE (${forventet}) — mulig drift mellom to sannhetskilder`
+      `  ${y('⚠')} NEXT_PUBLIC_BASE_URL (${baseUrl}) stemmer ikke med NEXT_PUBLIC_KLUBB_DOMENE (${forventetApex} eller ${forventetWww}) — mulig drift mellom to sannhetskilder`
     )
     advarsler++
   }
@@ -341,6 +359,19 @@ for (const [key, val] of Object.entries(process.env)) {
     )
     kritiskFeil++
   }
+}
+
+// ─── SPESIALSJEKK 4: NEXT_PUBLIC_BASE_URL påkrevd i produksjon (#687) ───────
+// getBaseUrl() i lib/config.ts kaster selv ved bygg-tid i denne situasjonen
+// (byggegaten), men denne sjekken kjøres FØR bygget og gir en tidligere,
+// mer forståelig melding samme sted som resten av miljøsjekken. Bevisst IKKE
+// koblet til `prebuild` — sjekk-miljo er et frittstående verktøy man kjører
+// manuelt eller i CI, ikke en obligatorisk del av `next build`.
+if (process.env.VERCEL_ENV === 'production' && !(baseUrl && baseUrl !== '')) {
+  meldinger.kritisk.push(
+    `  ${r('✖')} NEXT_PUBLIC_BASE_URL — mangler, men VERCEL_ENV=production. getBaseUrl() i lib/config.ts kaster i denne situasjonen, så bygget stopper: det finnes ingen pålitelig kilde til verten appen faktisk serveres fra (f.eks. et www-subdomene), og en gjettet URL ville fått push-varsler avvist som kryss-origin av service workeren (#687). Sett variabelen eksplisitt.`
+  )
+  kritiskFeil++
 }
 
 // ─── UTSKRIFT ────────────────────────────────────────────────────────────────

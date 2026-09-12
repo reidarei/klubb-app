@@ -1049,6 +1049,187 @@ describe('sendVarsel – URL-normalisering', () => {
   })
 })
 
+describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
+  it('sender en RELATIV url til push og en ABSOLUTT url til e-post fra samme sending', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: '/chat',
+    })
+
+    // Push resolver mot SW-ens egen origin uansett vert BASE_URL peker på
+    // (#687) — en absolutt URL ville blitt avvist som kryss-origin der.
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: '/chat' }),
+    )
+    // E-post har ingen base-URL å resolve mot (#507) — uendret oppførsel.
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `${BASE_URL}/chat` }),
+    )
+  })
+
+  it('bevarer query og hash til push (reelle mål: /album/x?bilde=y, #kommentarer)', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: `${BASE_URL}/arrangementer/dc9377a1-abc#kommentarer`,
+    })
+
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: '/arrangementer/dc9377a1-abc#kommentarer' }),
+    )
+  })
+
+  it('en fremmed url gir push «/» og logger varsel.url.fremmed — e-post beholder den fremmede URL-en', async () => {
+    setupMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
+      push_subscriptions: [
+        { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+      ],
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url: 'https://evil.example/x',
+    })
+
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: '/' }),
+    )
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'varsel.url.fremmed',
+      expect.objectContaining({ sample: 'test', url_utfall: 'fremmed' }),
+    )
+    // En URL som legitimt peker ut av appen skal ikke omskrives til en lokal
+    // sti for e-post — kun push fail-closer til «/».
+    expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://evil.example/x' }),
+    )
+  })
+
+  // Review-funn #687: fallbacken skal treffe på ALLE ikke-ok-utfall, ikke bare
+  // når `url` er helt utelatt. En fremmed/ugyldig URL med en varsel_logg-rad
+  // bak seg skal sende medlemmet til varselet, ikke til agendaen — samme
+  // symptom som issuet handler om, i et smalere tilfelle.
+  it.each([
+    ['fremmed origin', 'https://evil.example/x', 'fremmed'],
+    ['malformert url', 'http://[', 'ugyldig'],
+  ])('%s med varsel_logg-rad gir push /varsler/{id}, ikke «/»', async (_navn, url, utfall) => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'logg-rad-1' }, error: null }) }),
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser')
+        return lagChain([{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }])
+      if (tabell === 'push_subscriptions')
+        return lagChain([
+          { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+        ])
+      return lagChain([])
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      url,
+    })
+
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: '/varsler/logg-rad-1' }),
+    )
+    expect(mockLoggWarn).toHaveBeenCalledWith(
+      'varsel.url.fremmed',
+      expect.objectContaining({ sample: 'test', url_utfall: utfall }),
+    )
+    // Fortsatt fail-closed: push peker aldri ut av appen.
+    expect(mockSendPush).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: expect.stringContaining('evil.example') }),
+    )
+  })
+
+  it('/varsler/{id}-fallbacken er relativ i push, absolutt i varsel_logg.url', async () => {
+    const insertSpy = vi.fn().mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'logg-rad-1' }, error: null }) }),
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'varsel_logg') {
+        const chain = lagChain([])
+        chain.insert = insertSpy
+        return chain
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'varsel_preferanser')
+        return lagChain([{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }])
+      if (tabell === 'push_subscriptions')
+        return lagChain([
+          { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
+        ])
+      return lagChain([])
+    })
+
+    await sendVarsel({
+      mottakere: ['user1'],
+      tittel: 'Test',
+      melding: 'Test melding',
+      type: 'test',
+      // Ingen url oppgitt — sendVarsel faller tilbake til varsel_logg-raden.
+    })
+
+    expect(mockSendPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: '/varsler/logg-rad-1' }),
+    )
+    // varsel_logg.url skrives FØR loggRad-id-en finnes, og forblir null når
+    // ingen url ble oppgitt — uendret oppførsel (se lib/varsler.ts).
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ url: null }))
+  })
+})
+
 describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
   it('logger advarsel når tillatDuplikat er false uten arrangementId/pollId/dedupNoekkel', async () => {
     setupMock({

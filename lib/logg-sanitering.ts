@@ -44,6 +44,7 @@ export const KONTEKST_WHITELIST = new Set([
   // klientens tilstand ved klikket, ikke medlemmet.
   'maal', // pathname til varselets mål (sanitiseres nedenfor, samme gren som `url`)
   'hadde_maal', // boolean: hadde notifikasjonen en gyldig same-origin-URL
+  'maal_grunn', // 'mangler' | 'ugyldig' | 'kryss_origin' | 'gyldig' — HVORFOR target ble null (#687)
   'antall_klienter', // antall same-origin vinduer (tall)
   'synlig_klient', // boolean: var minst ett vindu synlig da SW-en klikket
   'handling', // 'focus' | 'openWindow': hva notificationclick faktisk gjorde
@@ -114,7 +115,8 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     nokkel === 'name' ||
     nokkel === 'kilde' ||
     nokkel === 'handling' ||
-    nokkel === 'synlighet'
+    nokkel === 'synlighet' ||
+    nokkel === 'maal_grunn'
   ) {
     return trunker(verdi)
   }

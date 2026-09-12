@@ -17,7 +17,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE, FORMAT_DATO_KORT } from '@/lib/dato'
-import { BASE_URL, absoluttUrl } from '@/lib/config'
+import { BASE_URL, absoluttUrl, relativUrl } from '@/lib/config'
 import {
   PURRING_MAKS_LENGDE,
   VARSLE_MAKS_LENGDE,
@@ -564,6 +564,16 @@ export async function sendVarsel({
     logg.warn('varsel.url.relativ', { sample: type })
   }
 
+  // Push og e-post går fra HER av bevisst egne veier (#687): push tåler kun
+  // egen origin (SW-en sammenligner strengt, se public/sw.js), e-post trenger
+  // absolutt URL uansett origin. relativUrl() gjøres ÉN gang per sending,
+  // utenfor mottaker-loopen — en fremmed URL er en egenskap ved sendingen,
+  // ikke ved mottakeren, og skal derfor kun logges én gang.
+  const relativt = url ? relativUrl(normalisertUrl!) : undefined
+  if (relativt && relativt.utfall !== 'ok') {
+    logg.warn('varsel.url.fremmed', { sample: type, url_utfall: relativt.utfall })
+  }
+
   // Tellere for VarselUtfall — muteres fra parallelle async-callbacks under.
   // Trygt uten låsing av samme grunn som epostBatch.push over: JS er
   // single-threaded, så to inkrementeringer kan aldri kjøre samtidig.
@@ -655,12 +665,29 @@ export async function sendVarsel({
       if (kanal === 'kun_app') kunApp++
       else levert++
 
+      // Push alltid relativ (Service Workeren resolver mot sin egen origin,
+      // uansett hvilken vert BASE_URL er konfigurert til — #687), e-post
+      // alltid absolutt (ingen base-URL å resolve mot i en innboks, #507).
+      // Splittet HER, ikke tidligere: en fremmed URL skal falle tilbake til
+      // en trygg intern sti kun for push (fail-closed, aldri åpne appen på
+      // ekstern side) — «/varsler/{id}» når varsel-raden finnes, ellers «/».
+      // E-postens href er uendret absolutt uansett origin.
       const varselUrl = normalisertUrl ?? (loggRad ? `${BASE_URL}/varsler/${loggRad.id}` : BASE_URL)
+      // Kun utfall 'ok' gir en sti vi kan sende videre. Er URL-en fremmed
+      // eller malformert, er `relativt.sti` allerede degradert til «/» — og
+      // da er varsel-raden et bedre mål enn agendaen: den viser hele varselet
+      // (review-funn #687). Samme symptom som selve issuet ellers, i smått.
+      const pushUrl =
+        relativt?.utfall === 'ok'
+          ? relativt.sti
+          : loggRad
+            ? `/varsler/${loggRad.id}`
+            : '/'
 
       if (kanPush) {
         await Promise.all(
           profilSubs.map(s =>
-            sendPush(s, { tittel, melding: profilMelding, url: varselUrl, tag: pushTag }),
+            sendPush(s, { tittel, melding: profilMelding, url: pushUrl, tag: pushTag }),
           ),
         )
       }

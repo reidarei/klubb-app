@@ -1,0 +1,29 @@
+{
+  // Egen tsconfig for Playwright-PROSESSEN (#687). Playwright laster den via
+  // `tsconfig: './e2e/tsconfig.json'` i playwright.config.ts, og da gjelder
+  // den for alle filer Playwright selv transformerer — også lib/-filer som en
+  // spec importerer direkte (e2e/kaaring-varsel-retry.spec.ts → lib/varsler-
+  // kaaringspoll.ts → lib/varsler.ts → lib/push.ts → lib/config.ts).
+  //
+  // Hele poenget er path-mappingen av 'server-only' under: lib/config.ts
+  // importerer pakken for effekten (kaste hvis modulen havner i en klient-
+  // bundle), og default-entryen i den pakken kaster i ENHVER ren Node-prosess.
+  // Uten Next sin «react-server»-resolve-condition kaster den altså også i
+  // Playwright-runneren, før en eneste test er samlet inn. Stubben er en tom
+  // no-op — samme grep som vitest.config.ts § resolve.alias bruker.
+  //
+  // Rot-tsconfig.json er BEVISST ikke rørt: Next leser den, så en
+  // 'server-only'-mapping der ville slått av vakten i selve app-bygget — som
+  // er nøyaktig det den står der for å hindre.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // `paths` arves ikke ved `extends` (barnet erstatter hele objektet), så
+    // '@/*' må gjentas her — lib/-filene Playwright drar inn bruker aliaset.
+    // Playwright resolver disse relativt til DENNE fila (tsconfig-en som
+    // deklarerer paths), derav '../'.
+    "paths": {
+      "@/*": ["../*"],
+      "server-only": ["../__tests__/stubs/server-only.ts"]
+    }
+  }
+}
