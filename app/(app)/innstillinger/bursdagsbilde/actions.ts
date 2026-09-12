@@ -52,7 +52,7 @@ export async function genererBursdagsbildeNaa(
       navn: profil.visningsnavn ?? profil.navn ?? 'Ukjent',
       bildeUrl: profil.bilde_url,
       alder: alderIAar(profil.fodselsdato, feiringsdato),
-      stikkord: profil.stikkord ?? [],
+      stikkord: profil.stikkord ?? '',
     },
     feiringsdato,
     tvungen: true,

@@ -256,11 +256,13 @@ export const EPOST_BUDSJETT_VINDU_TIMER = 24
 // over dette er reelt tapt kontakt.
 export const DRA_NED_PING_TIMEOUT_MS = 6000
 
-// Stikkord på medlemsprofilen (#639). Begge grensene speiler
-// check-constraint profiles_stikkord_gyldig (migrasjon 138) — endres de
-// her, må migrasjonen følge etter.
-export const STIKKORD_MAKS_ANTALL = 10
-export const STIKKORD_MAKS_LENGDE = 30
+// Stikkord på medlemsprofilen (#639, fritekst siden #685). Grensen speiler
+// check-constraint profiles_stikkord_gyldig (migrasjon 142) — endres den
+// her, må migrasjonen følge etter. MERK semantikk-endring i #685: dette var
+// tidligere maks tegn PER STIKKORD i en liste (STIKKORD_MAKS_ANTALL styrte
+// antallet); stikkord ble fritekst i én streng, og grensen gjelder nå HELE
+// feltet, som MATALLERGIER_MAKS_LENGDE under.
+export const STIKKORD_MAKS_LENGDE = 200
 
 // Matallergier på medlemsprofilen. Speiler check-constraint
 // profiles_matallergier_gyldig (migrasjon 141) — endres den her, må

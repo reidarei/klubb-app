@@ -41,8 +41,8 @@ type Profil = {
   navn: string | null
   fodselsdato: string | null
   bilde_url: string | null
-  // stikkord finnes i databasetypene (migrasjon 138/139) — ingen cast nødvendig.
-  stikkord: string[] | null
+  // stikkord finnes i databasetypene (migrasjon 142) — ingen cast nødvendig.
+  stikkord: string | null
 }
 
 // Fail-closed (oppdragets krav + Policy: Databasespørringer): en feilet
@@ -107,7 +107,7 @@ async function kjorPass(admin: Admin, pass: PassNavn, feiringsdato: string): Pro
         navn: mann.visningsnavn ?? mann.navn ?? 'Ukjent',
         bildeUrl: mann.bilde_url,
         alder: alderIAar(mann.fodselsdato, fd),
-        stikkord: mann.stikkord ?? [],
+        stikkord: mann.stikkord ?? '',
       },
       feiringsdato: fd,
     })

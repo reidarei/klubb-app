@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 :root {
+  /* Fargeskjema for nettleserens EGNE kontroller — kalenderikonet i
+   * <input type="date">, autofyll-bakgrunn, scrollbars. Uten dette resolver
+   * `color-scheme: light dark` mot OS-preferansen, ikke mot appens tema, og
+   * et medlem med mørkt OS som har valgt lyst tema (#353) fikk et mørkt
+   * kalenderikon på lys bakgrunn (#685-review). Hører hjemme her sammen med
+   * resten av tema-tokenene, ikke som en per-input-overstyring. */
+  color-scheme: dark;
+
   /* Bakgrunn — Obsidian, men løftet for bedre kontrast og mer pust.
    * Endret 2026-05-01: --bg løftet fra #060608 til #0e0f13 (~3 lyshet),
    * elevated-flatene gjort tydelig lysere og mer opake så kort separerer
@@ -129,6 +137,7 @@
 /* Speiling for data-theme="dark" — identiske verdier som :root. Forbereder
  * light-overlay i v2 uten at vi trenger å restrukturere CSS-en da. */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0e0f13;
   --bg-gradient:
     radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.08) 0%, transparent 55%),
@@ -214,6 +223,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   /* Bakgrunn — varm off-white, sand-undertone bevart */
   --bg: #f4f2ec;
   --bg-gradient:
@@ -369,6 +379,18 @@ body {
 }
 .page-enter {
   animation: page-fadein 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Fokusmarkering for opplysnings-radene på /profil/rediger (#685-review).
+   OPPLYSNING_INPUT_RESET fjerner ramme, bakgrunn og outline for at feltet
+   skal se ut som verdien det erstatter — konsekvensen var at en tastaturbruker
+   ikke så hvor fokus sto, nå med fem felter i stedet for to. :focus-visible
+   (ikke :focus) gir markeringen kun til tastatur/AT, så mus og touch beholder
+   det rene uttrykket. inset box-shadow, ikke border: en ramme ville endret
+   radhøyden hver gang fokus flyttet seg. */
+.opplysning-verdi:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1px 0 0 var(--accent);
 }
 
 /* Vis slett-knapp på chat-boble ved hover/fokus */

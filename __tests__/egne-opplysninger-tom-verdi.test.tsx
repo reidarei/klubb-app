@@ -24,7 +24,7 @@ const BASIS = {
   telefon: '99 88 77 66',
   epost: 'ola@klubb.test',
   matallergier: 'Skalldyr',
-  stikkord: ['grillsjef'],
+  stikkord: 'grillsjef',
 }
 
 describe('EgneOpplysninger — tomme verdier', () => {
@@ -34,7 +34,7 @@ describe('EgneOpplysninger — tomme verdier', () => {
   })
 
   it('viser «Ikke satt» for null', () => {
-    render(<EgneOpplysninger {...BASIS} telefon={null} fodselsdato={null} matallergier={null} stikkord={[]} />)
+    render(<EgneOpplysninger {...BASIS} telefon={null} fodselsdato={null} matallergier={null} stikkord={null} />)
     expect(screen.getAllByText('Ikke satt')).toHaveLength(4)
   })
 

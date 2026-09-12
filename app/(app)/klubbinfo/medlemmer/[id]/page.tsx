@@ -4,7 +4,6 @@ import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
 import SectionLabel from '@/components/ui/SectionLabel'
-import Pill from '@/components/ui/Pill'
 import SendMeldingKnapp from './SendMeldingKnapp'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
@@ -233,22 +232,22 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* Stikkord — skjules helt når tomt, en tom chip-rad ser ødelagt ut (#639) */}
-      {medlem.stikkord && medlem.stikkord.length > 0 && (
+      {/* Stikkord — skjules helt når tomt, en tom seksjon ser ødelagt ut
+          (#639). Fritekst siden #685 (Reidar: «jeg vil ikke ha pills») —
+          ikke «om deg», det er feil pronomen på en annens profil. */}
+      {medlem.stikkord && (
         <section style={{ marginBottom: 28 }}>
           <SectionLabel>Stikkord</SectionLabel>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {medlem.stikkord.map((s, i) => (
-              // Pill er uppercase som default — et stikkord som «fjellklatring»
-              // skal ikke skrike, derfor overstyrt her (ikke i komponenten).
-              //
-              // Indeks i key-en: DB håndhever ikke unikhet, kun antall og
-              // lengde. normaliserStikkord() dedupliserer, men rad-RLS lar
-              // et medlem skrive kolonnen direkte via API-et utenom den.
-              <Pill key={`${s}-${i}`} variant="neutral" style={{ textTransform: 'none' }}>
-                {s}
-              </Pill>
-            ))}
+          <div
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 14,
+              color: 'var(--text-primary)',
+              lineHeight: 1.5,
+              overflowWrap: 'break-word',
+            }}
+          >
+            {medlem.stikkord}
           </div>
         </section>
       )}

@@ -9,7 +9,7 @@
 
 import type { VertexFeilKlasse } from '@/lib/vertex'
 import { erSkuddaar } from '@/lib/bursdag'
-import { MEDGJESTER_MAKS_ANTALL, STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
+import { MEDGJESTER_MAKS_ANTALL, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 import { BURSDAGSBILDE_PROMPT_BASIS } from '@/lib/klubb-prompt'
 
 // Feiringsdatoen i ETT bestemt år, med samme skuddårsregel som
@@ -48,11 +48,19 @@ export function nesteFeiringsdato(fodselsdato: string, referansedato: string): s
 // Fjerner linjeskift (en prompt er ett sammenhengende avsnitt, ikke flere
 // linjer JSON-payloaden kunne tolket rart) og kapper defensivt — navn og
 // stikkord kommer fra en profil-rad andre steder i appen allerede har
-// validert (stikkord er begrenset av STIKKORD_MAKS_LENGDE/-ANTALL i mig.
-// 138/139), men denne modulen skal ikke stole blindt på at den validering
-// alltid har kjørt før den når hit.
+// validert (stikkord er begrenset av STIKKORD_MAKS_LENGDE, mig. 142), men
+// denne modulen skal ikke stole blindt på at den validering alltid har
+// kjørt før den når hit.
+//
+// [...streng] itererer KODEPUNKTER, ikke UTF-16-enheter (#685-review): med
+// .slice() alene kunne et emoji som lå akkurat på grensen blitt kappet midt
+// i et surrogatpar, og et halvt tegn sendt videre i prompten til Vertex.
+// Samme grep som normaliserFritekst() i lib/fritekst.ts, som speiler
+// Postgres' char_length i check-constrainten — de to må kappe likt, ellers
+// er «200 tegn» to forskjellige tall avhengig av hvem som teller.
 function saniter(s: string, maksLengde: number): string {
-  return s.replace(/[\r\n]+/g, ' ').trim().slice(0, maksLengde)
+  const enLinje = s.replace(/[\r\n]+/g, ' ').trim()
+  return [...enLinje].slice(0, maksLengde).join('')
 }
 
 // Bygg prompten sendt til Vertex AI. Engelsk tekst — ikke fordi appens
@@ -60,7 +68,7 @@ function saniter(s: string, maksLengde: number): string {
 // aldri vises til noe medlem og bildemodeller er best dokumentert og testet
 // på engelske prompts.
 //
-// Tom stikkordliste ⇒ prompten bygges UTEN stikkord-setningen — ingen
+// Tomt stikkordfelt ⇒ prompten bygges UTEN stikkord-setningen — ingen
 // fallback-tekst, ingen oppdiktede stikkord, ingen egen kodesti for «mann
 // uten stikkord». Se #641-planen: dette er bevisst den enkleste formen som
 // dekker begge tilfeller.
@@ -72,22 +80,21 @@ export function byggBursdagsprompt({
 }: {
   navn: string
   alder: number
-  stikkord: string[]
+  // Fritekst siden #685 (var text[] med maks 10 elementer à 30 tegn) —
+  // hele feltet saniteres som ÉN streng nå, ikke per element.
+  stikkord: string
   /**
    * Navnene på klubbkameratene hvis ansikter sendes med som referansebilde
    * 2 og 3. Rekkefølgen MÅ matche `bilder`-lista til genererBildeVertex() —
    * prompten viser til dem som «second» og «third reference photo», så en
    * omstokking ett av stedene bytter om på hvem som blir hvem. Tom liste er
    * normaltilstanden, ikke en feil: har klubben for få menn med profilbilde,
-   * eller feilet oppslaget, lages bildet uten medgjester.
+   * eller feilet oppslåget, lages bildet uten medgjester.
    */
   medgjester?: string[]
 }): string {
   const navnSanitert = saniter(navn, 100)
-  const stikkordSanitert = stikkord
-    .map(s => saniter(s, STIKKORD_MAKS_LENGDE))
-    .filter(s => s.length > 0)
-    .slice(0, STIKKORD_MAKS_ANTALL)
+  const stikkordSanitert = saniter(stikkord, STIKKORD_MAKS_LENGDE)
   const medgjesterSanitert = medgjester
     .map(m => saniter(m, 100))
     .filter(m => m.length > 0)
@@ -133,7 +140,7 @@ export function byggBursdagsprompt({
   if (stikkordSanitert.length > 0) {
     prompt +=
       ` In this setting, make sure ${navnSanitert} is properly depicted with his ` +
-      `face and these personal traits or interests: ${stikkordSanitert.join(', ')}.`
+      `face and these personal traits or interests: ${stikkordSanitert}.`
   }
 
   return prompt

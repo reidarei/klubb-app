@@ -1499,7 +1499,7 @@ export type Database = {
           oppdatert: string
           opprettet: string
           rolle: string
-          stikkord: string[]
+          stikkord: string | null
           telefon: string | null
           visningsnavn: string
         }
@@ -1518,7 +1518,7 @@ export type Database = {
           oppdatert?: string
           opprettet?: string
           rolle?: string
-          stikkord?: string[]
+          stikkord?: string | null
           telefon?: string | null
           visningsnavn: string
         }
@@ -1537,7 +1537,7 @@ export type Database = {
           oppdatert?: string
           opprettet?: string
           rolle?: string
-          stikkord?: string[]
+          stikkord?: string | null
           telefon?: string | null
           visningsnavn?: string
         }
@@ -1974,7 +1974,6 @@ export type Database = {
         Returns: undefined
       }
       stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
-      stikkord_gyldig: { Args: { s: string[] }; Returns: boolean }
       tell_aktivitet: {
         Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
         Returns: undefined

@@ -10,8 +10,9 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
 import BildeCropper from '@/components/ui/BildeCropper'
-import { normaliserStikkord, formaterStikkord } from '@/lib/stikkord'
-import { STIKKORD_MAKS_ANTALL, STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
+import OpplysningRad, { opplysningVerdiStil, OPPLYSNING_INPUT_RESET } from '@/components/profil/OpplysningRad'
+import OpplysningTekstfelt from '@/components/profil/OpplysningTekstfelt'
+import { STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
 
 type Props = {
   navn: string
@@ -21,7 +22,7 @@ type Props = {
   epost: string
   bildeUrl: string | null
   rolle?: string | null
-  stikkord: string[]
+  stikkord: string
   matallergier: string | null
 }
 
@@ -47,15 +48,36 @@ const inputBaseStil: React.CSSProperties = {
   lineHeight: 1.5,
 }
 
-const accentInputStil: React.CSSProperties = {
-  ...inputBaseStil,
-  fontFamily: 'var(--font-display)',
-  fontSize: 19,
-  fontWeight: 500,
-  letterSpacing: '-0.3px',
-  color: 'var(--accent)',
+/**
+ * Lokal wrapper rundt OpplysningRad (#685-review): etiketten i en rad er en
+ * <div>, ikke en <label>, fordi primitiven også brukes fra /profil der det
+ * ikke finnes noen kontroll å knytte den til. I skjemaet ga det kontrollene
+ * INGEN tilgjengelig navn — en skjermleser leste «edit, blank» for
+ * Visningsnavn, Fødselsdato og Telefon.
+ *
+ * Mekanismen er `aria-label` på kontrollen, og den brukes konsekvent på
+ * hver eneste kontroll i dette skjemaet — ikke htmlFor på noen og aria-label
+ * på andre. Wrapperen gir kalleren etikettstrengen tilbake slik at teksten
+ * som VISES og navnet som LESES OPP per konstruksjon er samme streng, og
+ * ikke kan drifte fra hverandre ved en senere ordlyd-endring.
+ */
+function RedigerRad({
+  label,
+  last,
+  children,
+}: {
+  label: string
+  last?: boolean
+  children: (ariaLabel: string) => React.ReactNode
+}) {
+  return (
+    <OpplysningRad label={label} last={last}>
+      {children(label)}
+    </OpplysningRad>
+  )
 }
 
+// Rad brukes fortsatt i «Sikkerhet» — den seksjonen er URØRT av #685.
 function Rad({
   children,
   last,
@@ -94,9 +116,10 @@ export default function RedigerProfilForm({
   const [visningsnavn, setVisningsnavn] = useState(visnInit)
   const [telefon, setTelefon] = useState(tlfInit)
   const [fodselsdato, setFodselsdato] = useState(fdInit)
-  // State som fritekst — normaliseres først ved lagring (og for live-telleren
-  // under). Å normalisere underveis ville hoppet brukeren midt i skriving.
-  const [stikkord, setStikkord] = useState(formaterStikkord(stikkordInit))
+  // Fritekst — normaliseres først ved lagring (server-side, se
+  // oppdaterEgenProfil). Å normalisere underveis ville hoppet brukeren midt
+  // i skriving.
+  const [stikkord, setStikkord] = useState(stikkordInit)
   const [matallergier, setMatallergier] = useState(matallergierInit ?? '')
 
   // bildeUrl = lagret URL i DB. bildeFil = ventende ny upload (komprimert
@@ -272,8 +295,25 @@ export default function RedigerProfilForm({
           </div>
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
+          {/* Navn flyttet hit fra «Personalia» (#685) — identiteten (bilde +
+              navn) hører sammen visuelt, i stedet for at navnet sto som
+              første rad i skjemaet under. Samme display-stil som den
+              statiske diven den erstatter. */}
+          <input
+            type="text"
+            value={navn}
+            onChange={e => setNavn(e.target.value)}
+            required
+            placeholder="Ditt navn"
+            aria-label="Navn"
+            // opplysning-verdi er ikke bare stil: OPPLYSNING_INPUT_RESET
+            // fjerner outline, og :focus-visible-regelen i globals.css er
+            // det som gir tastaturbrukeren markeringen tilbake
+            // (#685-review). Feltet har verken ramme eller bakgrunn, så uten
+            // klassen er det umulig å se hvor fokus står.
+            className="opplysning-verdi"
             style={{
+              ...OPPLYSNING_INPUT_RESET,
               fontFamily: 'var(--font-display)',
               fontSize: 17,
               fontWeight: 500,
@@ -281,9 +321,7 @@ export default function RedigerProfilForm({
               letterSpacing: '-0.3px',
               marginBottom: 2,
             }}
-          >
-            {navn || 'Ditt navn'}
-          </div>
+          />
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <button
               type="button"
@@ -343,90 +381,118 @@ export default function RedigerProfilForm({
         />
       </div>
 
-      {/* Personalia */}
-      <SkjemaSeksjon label="Personalia">
-        <Rad>
-          <div style={labelStil}>Navn</div>
-          <input
-            type="text"
-            value={navn}
-            onChange={e => setNavn(e.target.value)}
-            style={accentInputStil}
-            required
-          />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Visningsnavn</div>
-          <input
-            type="text"
-            value={visningsnavn}
-            onChange={e => setVisningsnavn(e.target.value)}
-            style={inputBaseStil}
-            placeholder={navn}
-          />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Fødselsdato</div>
-          <input
-            type="date"
-            value={fodselsdato}
-            onChange={e => setFodselsdato(e.target.value)}
-            style={{ ...inputBaseStil, colorScheme: 'dark' }}
-          />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Stikkord</div>
-          <input
-            type="text"
-            value={stikkord}
-            onChange={e => setStikkord(e.target.value)}
-            style={inputBaseStil}
-            placeholder="Grillmester, alltid sist hjem, elsker en god historie …"
-          />
-          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Skill med komma. Maks {STIKKORD_MAKS_ANTALL} stikkord, {STIKKORD_MAKS_LENGDE} tegn hver — {normaliserStikkord(stikkord).length}/{STIKKORD_MAKS_ANTALL}
-          </div>
-        </Rad>
-        <Rad last>
-          <div style={labelStil}>Matallergier</div>
-          <input
-            type="text"
-            value={matallergier}
-            onChange={e => setMatallergier(e.target.value)}
-            maxLength={MATALLERGIER_MAKS_LENGDE}
-            style={inputBaseStil}
-            placeholder="Skalldyr, nøtter …"
-          />
-          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Vises for alle i klubben, så den som bestiller mat ser det. La stå tomt hvis du tåler alt.
-          </div>
-        </Rad>
+      {/* Om deg — én seksjon i STEDET for «Personalia»+«Kontakt» (#685):
+          radene her har nøyaktig samme rekkefølge, etiketter og layout
+          (OpplysningRad/opplysningVerdiStil) som «Om deg» på /profil, slik
+          at å trykke «Rediger» oppleves som at de samme radene blir
+          redigerbare — ikke som et annet skjema. Navn er flyttet ut til
+          identitetsblokka over (se input der). */}
+      <SkjemaSeksjon label="Om deg">
+        <RedigerRad label="Visningsnavn">
+          {ariaLabel => (
+            <input
+              type="text"
+              value={visningsnavn}
+              onChange={e => setVisningsnavn(e.target.value)}
+              placeholder={navn}
+              aria-label={ariaLabel}
+              className="opplysning-verdi"
+              style={{ ...OPPLYSNING_INPUT_RESET, ...opplysningVerdiStil() }}
+            />
+          )}
+        </RedigerRad>
+        <RedigerRad label="Fødselsdato">
+          {ariaLabel => (
+            <input
+              type="date"
+              value={fodselsdato}
+              onChange={e => setFodselsdato(e.target.value)}
+              aria-label={ariaLabel}
+              className="opplysning-verdi"
+              // width: 'auto' overstyrer resettens 100 % (#685-review): en
+              // <input type="date"> ignorerer text-align — UA-ens shadow-DOM
+              // legger delfeltene ut som en intern flex-boks — så en kontroll
+              // i full bredde plasserer datoen til venstre uansett. Krympet til
+              // sitt eget innhold skyver radens space-between den på plass i
+              // høyre kolonne, uten ::-webkit-hacks. Fargeskjemaet (og dermed
+              // kalenderikonet) følger nå appens tema via color-scheme på :root
+              // i globals.css, ikke en overstyring her.
+              style={{ ...OPPLYSNING_INPUT_RESET, ...opplysningVerdiStil(), width: 'auto', marginLeft: 'auto' }}
+            />
+          )}
+        </RedigerRad>
+        <RedigerRad label="Telefon">
+          {ariaLabel => (
+            <input
+              type="tel"
+              value={telefon}
+              onChange={e => setTelefon(e.target.value)}
+              placeholder="Ikke satt"
+              aria-label={ariaLabel}
+              className="opplysning-verdi"
+              style={{ ...OPPLYSNING_INPUT_RESET, ...opplysningVerdiStil() }}
+            />
+          )}
+        </RedigerRad>
+        {/* Eneste raden som beholder OpplysningRad direkte: e-post er ikke
+            redigerbar, så det finnes ingen kontroll å gi et tilgjengelig
+            navn — etiketten og verdien leses som vanlig tekst. */}
+        <OpplysningRad label="E-post">
+          <div className="opplysning-verdi" style={opplysningVerdiStil({ mono: true, dempet: true })}>{epost}</div>
+        </OpplysningRad>
+        {/* Fritekstfeltene bruker OpplysningTekstfelt, ikke <input>: 200 tegn
+            må kunne wrappe over flere linjer akkurat som verdien gjør på
+            /profil (#685-review, BLOCKER). */}
+        <RedigerRad label="Matallergier">
+          {ariaLabel => (
+            <OpplysningTekstfelt
+              verdi={matallergier}
+              onEndre={setMatallergier}
+              maksLengde={MATALLERGIER_MAKS_LENGDE}
+              placeholder="Ikke satt"
+              ariaLabel={ariaLabel}
+            />
+          )}
+        </RedigerRad>
+        {/* Ingen hjelpetekst i denne raden (#685) — fritekst med maxLength
+            har ingen regel å forklare, i motsetning til komma-formatet den
+            tidligere listen krevde. */}
+        <RedigerRad label="Stikkord om deg" last>
+          {ariaLabel => (
+            <OpplysningTekstfelt
+              verdi={stikkord}
+              onEndre={setStikkord}
+              maksLengde={STIKKORD_MAKS_LENGDE}
+              placeholder="Ikke satt"
+              ariaLabel={ariaLabel}
+            />
+          )}
+        </RedigerRad>
       </SkjemaSeksjon>
 
-      {/* Kontakt */}
-      <SkjemaSeksjon label="Kontakt">
-        <Rad>
-          <div style={labelStil}>E-post</div>
-          <div
-            style={{
-              ...inputBaseStil,
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {epost}
-          </div>
-        </Rad>
-        <Rad last>
-          <div style={labelStil}>Telefon</div>
-          <input
-            type="tel"
-            value={telefon}
-            onChange={e => setTelefon(e.target.value)}
-            style={inputBaseStil}
-            placeholder="+47 ..."
-          />
-        </Rad>
-      </SkjemaSeksjon>
+      {/* Synlighets-merknaden er den ENESTE opplysningen medlemmet får om at
+          et art. 9-helsefelt (matallergier, jf. migrasjon 141 § PERSONVERN)
+          deles med hele klubben, og skal derfor ikke kunne feilleses. Den sto
+          tidligere høyrestilt i verdikolonnen 3 px under allergiverdien, der
+          den leste som en fortsettelse av selve verdien (#685-review). Som
+          venstrestilt fotnote under seksjonen er den utvetydig en merknad —
+          og den dekker begge fritekstfeltene, ikke bare det ene.
+          marginTop: -20 spiser opp SkjemaSeksjons egen bunnmarg på 28 px, så
+          avstanden opp til siste rad blir 8 px. */}
+      <div
+        style={{
+          marginTop: -20,
+          marginBottom: 28,
+          padding: '0 4px',
+          textAlign: 'left',
+          fontFamily: 'var(--font-body)',
+          fontSize: 11,
+          lineHeight: 1.4,
+          color: 'var(--text-tertiary)',
+        }}
+      >
+        Matallergier og stikkord er synlige for alle i klubben.
+      </div>
 
       {/* Sikkerhet */}
       <SkjemaSeksjon label="Sikkerhet">
@@ -484,6 +550,9 @@ export default function RedigerProfilForm({
                 type="password"
                 value={passord}
                 onChange={e => setPassord(e.target.value)}
+                // Samme mekanisme som radene over (#685-review): etiketten er
+                // en <div>, ikke en <label>, så navnet må komme herfra.
+                aria-label="Nytt passord"
                 style={inputBaseStil}
                 autoComplete="new-password"
               />
@@ -494,6 +563,7 @@ export default function RedigerProfilForm({
                 type="password"
                 value={bekreft}
                 onChange={e => setBekreft(e.target.value)}
+                aria-label="Bekreft"
                 style={inputBaseStil}
                 autoComplete="new-password"
               />

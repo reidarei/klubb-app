@@ -381,7 +381,7 @@ export default async function Profil() {
         telefon={profil?.telefon ?? null}
         epost={profil?.epost ?? ''}
         matallergier={profil?.matallergier ?? null}
-        stikkord={profil?.stikkord ?? []}
+        stikkord={profil?.stikkord ?? null}
       />
 
       {/* Privatmeldinger — flyttes hit fra /chat (#256) slik at lenken

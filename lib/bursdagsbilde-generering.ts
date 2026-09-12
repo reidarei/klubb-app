@@ -177,7 +177,7 @@ export type BursdagsbildeUtfall =
 export async function genererBursdagsbilde(
   admin: Admin,
   opts: {
-    profil: { id: string; navn: string; bildeUrl: string; alder: number; stikkord: string[] }
+    profil: { id: string; navn: string; bildeUrl: string; alder: number; stikkord: string }
     feiringsdato: string
     tvungen?: boolean
   },

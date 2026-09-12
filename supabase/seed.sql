@@ -92,7 +92,7 @@ update public.profiles set
   fodselsdato = '1980-03-15',
   telefon = '99 88 77 66',
   matallergier = 'Tåler ikke rå løk, og er allergisk mot skalldyr',
-  stikkord = array['testbruker', 'administrator']
+  stikkord = 'testbruker, administrator'
 where id = '00000000-0000-4000-8000-000000000001';
 
 update public.profiles set

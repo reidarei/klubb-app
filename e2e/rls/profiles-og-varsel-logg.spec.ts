@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
-import { STIKKORD_MAKS_ANTALL } from '../../lib/konstanter'
+import { STIKKORD_MAKS_LENGDE } from '../../lib/konstanter'
 
 // Kolonnevern på profiles (mig. 105/123) og oppdateringsgrensen på
 // varsel_logg (mig. 121, IKKE 123 slik issue #533 opprinnelig antok — 123
@@ -149,23 +149,26 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     expect(etterFeil?.visningsnavn).toEqual(forFeil?.visningsnavn)
   })
 
-  // Stikkord (#639): selvredigerbart felt, IKKE i beskytt_profil_kolonner
-  // (se migrasjon 138) — rad-RLS fra mig. 009 er hele beskyttelsen.
+  // Stikkord (#639, fritekst siden #685): selvredigerbart felt, IKKE i
+  // beskytt_profil_kolonner (se migrasjon 138/142) — rad-RLS fra mig. 009
+  // er hele beskyttelsen.
   test('Petter kan sette sine egne stikkord (revertert i samme test)', async () => {
     const petter = await loggInnKlient(PETTER.epost)
-    const nye = ['midlertidig-stikkord-1', 'midlertidig-stikkord-2']
+    const ny = 'midlertidig stikkord'
 
     const { data, error } = await petter
       .from('profiles')
-      .update({ stikkord: nye })
+      .update({ stikkord: ny })
       .eq('id', PETTER.id)
       .select('stikkord')
     expect(error).toBeNull()
     expect(data).toHaveLength(1)
-    expect(data?.[0].stikkord).toEqual(nye)
+    expect(data?.[0].stikkord).toEqual(ny)
 
     // Revert i SAMME test — samme mønster som visningsnavn-testen over.
-    const { error: revertFeil } = await petter.from('profiles').update({ stikkord: [] }).eq('id', PETTER.id)
+    // null, ikke tom streng: «ikke utfylt» har kun én representasjon i
+    // dataene siden #685 (samme constraint-form som matallergier, mig. 141).
+    const { error: revertFeil } = await petter.from('profiles').update({ stikkord: null }).eq('id', PETTER.id)
     expect(revertFeil).toBeNull()
   })
 
@@ -176,7 +179,7 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     expect(forFeilFeil).toBeNull()
 
     const petter = await loggInnKlient(PETTER.epost)
-    const { error } = await petter.from('profiles').update({ stikkord: ['kapret'] }).eq('id', OLA.id)
+    const { error } = await petter.from('profiles').update({ stikkord: 'kapret' }).eq('id', OLA.id)
     // Samme mønster som visningsnavn-testen: RLS filtrerer raden bort FØR
     // noe skrives — 0 rader, ingen feil. Verifiseringen med service_role
     // under er beviset.
@@ -187,30 +190,31 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     expect(etterFeil?.stikkord).toEqual(forFeil?.stikkord)
   })
 
-  test('DB-grensen holder: for mange stikkord gir 23514 (check_violation)', async () => {
+  test('DB-grensen holder: for langt stikkordfelt gir 23514 (check_violation)', async () => {
     const petter = await loggInnKlient(PETTER.epost)
-    const forMange = Array.from({ length: STIKKORD_MAKS_ANTALL + 1 }, (_, i) => `stikkord-${i}`)
+    const forLangt = 'a'.repeat(STIKKORD_MAKS_LENGDE + 1)
 
-    const { error } = await petter.from('profiles').update({ stikkord: forMange }).eq('id', PETTER.id)
-    // Beviser at grensen er DB-sannhet (profiles_stikkord_gyldig, mig. 138),
-    // ikke bare en app-side høflighet i lib/stikkord.ts.
+    const { error } = await petter.from('profiles').update({ stikkord: forLangt }).eq('id', PETTER.id)
+    // Beviser at grensen er DB-sannhet (profiles_stikkord_gyldig, mig. 142),
+    // ikke bare en app-side høflighet i lib/fritekst.ts.
     expect(error?.code).toBe('23514')
 
     // Ingen revert nødvendig — updaten feilet, raden er uendret.
   })
 
-  test('DB-grensen holder: utrimmet stikkord gir 23514 (mig. 139)', async () => {
+  test('DB-grensen holder: stikkordfelt med bare whitespace gir 23514', async () => {
     const petter = await loggInnKlient(PETTER.epost)
 
-    // char_length(' ') er 1, så migrasjon 138 slapp dette gjennom. Fra vår
-    // egen UI kan det ikke skje (normaliserStikkord trimmer), men rad-RLS
-    // lar et medlem skrive kolonnen direkte via Data API-et — og da er
-    // DB-en eneste vakt. Copilot-funn på PR #647.
-    for (const ugyldig of [' ', '  ledende', 'etterfølgende ']) {
-      const { error } = await petter.from('profiles').update({ stikkord: [ugyldig] }).eq('id', PETTER.id)
-      expect(error?.code, `«${ugyldig}» skulle vært avvist`).toBe('23514')
-    }
-    // Ingen revert nødvendig — alle updatene feilet, raden er uendret.
+    // char_length(btrim(' ')) er 0, altså utenfor «between 1 and 200» —
+    // constrainten (mig. 142) speiler matallergier (mig. 141) her: den
+    // krever bare at TRIMMET lengde er innenfor grensen, IKKE at verdien
+    // allerede er trimmet (ulikt den gamle array-varianten, mig. 139, som
+    // krevde eksakt trim per element). Ledende/etterfølgende whitespace
+    // rundt ekte tekst er derfor lovlig på DB-nivå her — vår egen UI
+    // trimmer likevel alltid (normaliserFritekst).
+    const { error } = await petter.from('profiles').update({ stikkord: '   ' }).eq('id', PETTER.id)
+    expect(error?.code).toBe('23514')
+    // Ingen revert nødvendig — updaten feilet, raden er uendret.
   })
 })
 

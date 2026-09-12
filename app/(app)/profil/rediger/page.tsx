@@ -22,7 +22,7 @@ export default async function RedigerProfil() {
       epost={profil?.epost ?? user!.email ?? ''}
       bildeUrl={profil?.bilde_url ?? null}
       rolle={profil?.rolle ?? null}
-      stikkord={profil?.stikkord ?? []}
+      stikkord={profil?.stikkord ?? ''}
       matallergier={profil?.matallergier ?? null}
     />
   )

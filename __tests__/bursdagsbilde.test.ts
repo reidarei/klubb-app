@@ -7,6 +7,7 @@ import {
 } from '@/lib/bursdagsbilde'
 import type { VertexFeilKlasse } from '@/lib/vertex'
 import { BURSDAGSBILDE_PROMPT_BASIS } from '@/lib/klubb-prompt'
+import { STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 
 describe('nesteFeiringsdato', () => {
   it('en bursdag senere i året gir årets dato', () => {
@@ -46,13 +47,13 @@ describe('nesteFeiringsdato', () => {
 
 describe('byggBursdagsprompt', () => {
   it('inneholder navn og alder', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola Testesen', alder: 45, stikkord: [] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola Testesen', alder: 45, stikkord: '' })
     expect(prompt).toContain('Ola Testesen')
     expect(prompt).toContain('45')
   })
 
-  it('tom stikkordliste gir ingen stikkord-setning og ingen fallback-tekst', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: [] })
+  it('tomt stikkordfelt gir ingen stikkord-setning og ingen fallback-tekst', () => {
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: '' })
     expect(prompt.toLowerCase()).not.toContain('personal traits')
     expect(prompt.toLowerCase()).not.toContain('weave in')
   })
@@ -70,7 +71,7 @@ describe('byggBursdagsprompt', () => {
       .join('Ola')
       .split('{alder}')
       .join('50')
-    for (const stikkord of [[], ['fisking']]) {
+    for (const stikkord of ['', 'fisking']) {
       const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord })
       expect(prompt.startsWith(forventet)).toBe(true)
     }
@@ -81,7 +82,7 @@ describe('byggBursdagsprompt', () => {
   // .replace() med streng-argument ville byttet bare den første — da hadde
   // prompten bedt modellen om «{navn} was the best player».
   it('alle forekomster av plassholderne erstattes', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola Testesen', alder: 45, stikkord: [] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola Testesen', alder: 45, stikkord: '' })
     expect(prompt).not.toContain('{navn}')
     expect(prompt).not.toContain('{alder}')
     expect(prompt).toContain('45')
@@ -102,7 +103,7 @@ describe('byggBursdagsprompt', () => {
     const prompt = byggBursdagsprompt({
       navn: 'Ola',
       alder: 50,
-      stikkord: [],
+      stikkord: '',
       medgjester: ['Per', 'Pål'],
     })
     expect(prompt).toContain('Per and Pål')
@@ -115,7 +116,7 @@ describe('byggBursdagsprompt', () => {
   // medgjest-setningen utebli, ikke stå igjen som en tom referanse til
   // bilder som aldri ble sendt.
   it('uten medgjester nevnes verken venner eller ekstra referansebilder', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: [] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: '' })
     expect(prompt).not.toContain('friends from the club')
     expect(prompt).not.toContain('reference photos after the first one')
   })
@@ -128,7 +129,7 @@ describe('byggBursdagsprompt', () => {
     const prompt = byggBursdagsprompt({
       navn: 'Ola',
       alder: 50,
-      stikkord: [],
+      stikkord: '',
       medgjester: ['Per', 'Pål', 'Ludvig', 'Vetle'],
     })
     expect(prompt).toContain('Per and Pål')
@@ -142,21 +143,56 @@ describe('byggBursdagsprompt', () => {
   // fanget her. Testen over («linjeskift fjernes») dekket det ikke: den
   // sender linjeskift inn via navn/stikkord, ikke via basis-teksten.
   it('basis-teksten er fri for linjeskift og avsluttes ordentlig', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: [] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 50, stikkord: '' })
     expect(prompt).not.toContain('\n')
     expect(prompt).not.toContain('  ')
     expect(prompt.trimEnd()).toMatch(/\.$/)
   })
 
   it('stikkord vevs inn i prompten når de finnes', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: ['fisking', 'gitar'] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: 'fisking, gitar' })
     expect(prompt).toContain('fisking')
     expect(prompt).toContain('gitar')
   })
 
   it('linjeskift i navn/stikkord fjernes', () => {
-    const prompt = byggBursdagsprompt({ navn: 'Ola\nTestesen', alder: 30, stikkord: ['fis\nking'] })
+    const prompt = byggBursdagsprompt({ navn: 'Ola\nTestesen', alder: 30, stikkord: 'fis\nking' })
     expect(prompt).not.toContain('\n')
+  })
+
+  // Stikkord ble fritekst i #685 (var text[] med maks 10 elementer à 30
+  // tegn hver — «kutter per element»). Nå er det ETT felt, og kappingen
+  // gjelder hele strengen samlet, ikke lengste enkeltord i den.
+  it('kapper hele stikkordfeltet til STIKKORD_MAKS_LENGDE tegn, ikke per element', () => {
+    const langt = 'a'.repeat(STIKKORD_MAKS_LENGDE + 20)
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: langt })
+    expect(prompt).toContain('a'.repeat(STIKKORD_MAKS_LENGDE))
+    expect(prompt).not.toContain('a'.repeat(STIKKORD_MAKS_LENGDE + 1))
+  })
+
+  // Kappingen teller KODEPUNKTER, ikke UTF-16-enheter (#685-review). Et
+  // emoji som lander akkurat på grensen ble tidligere delt i to av
+  // .slice(), og den ensomme surrogaten fulgte med ut i prompten som ble
+  // sendt til Vertex. Stikkord er fritekst nå, så et emoji i feltet er en
+  // helt normal ting for en mann å skrive.
+  it('kapper på kodepunkt, så et emoji på grensen ikke deles i to', () => {
+    const stikkord = 'a'.repeat(STIKKORD_MAKS_LENGDE - 1) + '👍'
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord })
+    expect(prompt).toContain(stikkord)
+    // Ensom high surrogate uten sin low = et halvt tegn. Denne regexen er
+    // selve beviset: toContain() over ville ikke sett forskjell på et
+    // emoji som ble kappet og ett som overlevde hvis vi bare så på 'a'-ene.
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(prompt)).toBe(false)
+  })
+
+  // Fritekst er mer utsatt for linjeskift enn et array noen gang var (en
+  // mann limer gjerne inn en hel setning med Enter midt i), så pinnes det
+  // eksplisitt her, ikke bare implisitt via testen over.
+  it('linjeskift midt i et langt, sammenhengende stikkordfelt fjernes også', () => {
+    const flerlinjer = 'grillmester\nalltid sist hjem\ngitarist'
+    const prompt = byggBursdagsprompt({ navn: 'Ola', alder: 30, stikkord: flerlinjer })
+    expect(prompt).not.toContain('\n')
+    expect(prompt).toContain('grillmester alltid sist hjem gitarist')
   })
 })
 
