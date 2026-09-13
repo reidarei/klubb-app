@@ -262,7 +262,7 @@ export default function NyttArrangementSkjema({
         </Rad>
 
         <Rad>
-          <div style={monoLabel}>{erTur ? 'Avreise' : 'Start'}</div>
+          <div style={monoLabel}>{erTur ? 'Oppmøte' : 'Start'}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input
               type="datetime-local"

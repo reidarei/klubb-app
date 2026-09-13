@@ -12,7 +12,7 @@ import Chat from '@/components/chat/Chat'
 import PassListe, { type PassListeDeltaker } from '@/components/arrangement/PassListe'
 import PaameldteListe, { type RsvpStatus } from '@/components/arrangement/PaameldteListe'
 import AlbumSeksjon from '@/components/album/AlbumSeksjon'
-import { formaterDato } from '@/lib/dato'
+import { formaterDato, aarHvisAvvik, erSammeNorskeDag } from '@/lib/dato'
 import { kanAdministrere } from '@/lib/roller'
 import { Linkified } from '@/lib/linkify'
 import { logg } from '@/lib/logg'
@@ -32,6 +32,18 @@ function sceneFor(type: string): 'tur' | 'møte' | 'event' {
   if (type === 'tur') return 'tur'
   if (type === 'moete') return 'møte'
   return 'event'
+}
+
+/**
+ * Tidspunkt-linje for fakta-blokka: «Fredag 12. september kl. 08:00».
+ * Året tas kun med når det avviker fra inneværende (aarHvisAvvik), så
+ * normaltilfellet holder seg kort. date-fns/nb gir ukedagen i små
+ * bokstaver — vi løfter første tegn fordi linja står alene i en rad.
+ */
+function tidsLinje(iso: string): string {
+  const medAar = aarHvisAvvik(iso) ? ' yyyy' : ''
+  const s = formaterDato(iso, `EEEE d. MMMM${medAar} 'kl.' HH:mm`)
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 export default async function ArrangementDetaljer({
@@ -151,6 +163,15 @@ export default async function ArrangementDetaljer({
   const dag = formaterDato(arr.start_tidspunkt, 'd')
   const tid = formaterDato(arr.start_tidspunkt, 'HH:mm')
   const datoLang = formaterDato(arr.start_tidspunkt, 'd. MMMM yyyy')
+
+  // Flerdagstur vises som intervall i undertittelen («12. – 14. september 2026»),
+  // slik at varigheten leses uten å måtte scrolle til fakta-blokka. Året henger
+  // kun på siste dato — det er samme år i praksis, og to årstall støyer.
+  const flerdags =
+    erTur && !!arr.slutt_tidspunkt && !erSammeNorskeDag(arr.start_tidspunkt, arr.slutt_tidspunkt)
+  const datoLinje = flerdags
+    ? `${formaterDato(arr.start_tidspunkt, 'd. MMMM')} – ${formaterDato(arr.slutt_tidspunkt!, 'd. MMMM yyyy')}`
+    : datoLang
 
   const opprettetProfil = Array.isArray(arr.opprettet_profil)
     ? arr.opprettet_profil[0]
@@ -363,8 +384,7 @@ export default async function ArrangementDetaljer({
               letterSpacing: '0.1px',
             }}
           >
-            {datoLang}
-            {arr.oppmoetested && <> · {arr.oppmoetested}</>}
+            {datoLinje}
           </div>
         </div>
 
@@ -384,11 +404,29 @@ export default async function ArrangementDetaljer({
         >
           {(
             [
+              // Oppmøte er tid OG sted, og de hører sammen — tidligere sto
+              // tidspunktet kun i dato-chipen på bildet, mens raden het
+              // «Oppmøte» og viste bare stedet.
+              {
+                label: erTur ? 'Oppmøte' : 'Tidspunkt',
+                value: tidsLinje(arr.start_tidspunkt),
+                icon: 'clock' as const,
+              },
               arr.oppmoetested
                 ? {
-                    label: 'Oppmøte',
+                    label: erTur ? 'Oppmøtested' : 'Sted',
                     value: arr.oppmoetested,
                     icon: 'mapPin' as const,
+                  }
+                : null,
+              // Hjemkomst finnes kun på turer, og raden vises selv når den er
+              // tom — «–» forteller gutta at arrangøren ikke har satt den,
+              // mens en skjult rad hadde sett ut som om turen ikke har retur.
+              erTur
+                ? {
+                    label: 'Hjemkomst',
+                    value: arr.slutt_tidspunkt ? tidsLinje(arr.slutt_tidspunkt) : '–',
+                    icon: 'calendar' as const,
                   }
                 : null,
               erTur
@@ -423,7 +461,7 @@ export default async function ArrangementDetaljer({
               label: string
               value: string
               sub?: string
-              icon: 'mapPin' | 'plane' | 'wine' | 'user'
+              icon: 'mapPin' | 'plane' | 'wine' | 'user' | 'clock' | 'calendar'
               sladd?: boolean
             }>
           ).map((f, i, a) => (
