@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Button from '@/components/ui/Button'
 import { KLUBB_NAVN, KLUBB_KORTNAVN } from '@/lib/klubb-config'
+import { PUSH_KLIKK_LOGIN_VINDU_MS } from '@/lib/konstanter'
+import { sendFeilBeacon } from '@/lib/klient-logg'
+import { lesPendingNav, slettPendingNav, lokalSti } from '@/lib/pending-nav'
 
 const inputStil: React.CSSProperties = {
   background: 'var(--bg-elevated-2)',
@@ -28,6 +31,88 @@ export default function LoginSide() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Push-klikk-mål mens sesjonen var utløpt (#688): et trykk på et varsel som
+  // krevde innlogging skal ikke lande på agendaen etterpå. Ref, ikke state —
+  // vi trenger ikke re-rendre siden, bare huske målet til loggInn() lykkes.
+  //
+  // `ts` bæres med (review av PR #690): vinduet ble tidligere kun sjekket der
+  // oppføringen ble LEST. Blir en mann stående på login lenger enn
+  // PUSH_KLIKK_LOGIN_VINDU_MS, er målet foreldet når han endelig logger inn,
+  // og uten tidsstempelet i refen hadde vi ingen måte å oppdage det på.
+  const ventendeRef = useRef<{ sti: string; klikkId?: string; ts: number } | null>(null)
+
+  useEffect(() => {
+    // ServiceWorkerRegistrering er IKKE montert på /login (den ligger i
+    // (app)-layouten), så et push-klikk hit har ingen komponent som lytter på
+    // SW-broadcasten. Cache Storage-oppslaget her er derfor eneste vei inn.
+    async function lesVentendeMaal() {
+      const entry = await lesPendingNav()
+      if (!entry) return
+      const sti = lokalSti(entry.url)
+      const erFerskNok = Date.now() - entry.ts <= PUSH_KLIKK_LOGIN_VINDU_MS
+      if (sti === null || !erFerskNok) {
+        // Ugyldig/kryss-origin mål, eller for gammelt til å bæres gjennom en
+        // innlogging — forkast det i stedet for å la det henge.
+        await slettPendingNav()
+        return
+      }
+      // IKKE slett en gyldig oppføring her: den konsumeres av (app)-
+      // komponenten ved landing, ikke ved lesing (samme kontrakt som
+      // lib/pending-nav.ts ellers — overleveringen skal ikke regnes som
+      // konsumert før navigasjonen faktisk lykkes).
+      ventendeRef.current = { sti, klikkId: entry.klikk_id, ts: entry.ts }
+    }
+
+    function lesVentendeMaalTrygt() {
+      lesVentendeMaal().catch(() => {
+        // Fail-open: Cache Storage kan mangle (privat modus) — ingen mål å
+        // bære videre er ikke verre enn dagens oppførsel (lander på '/').
+      })
+    }
+
+    lesVentendeMaalTrygt()
+
+    // Står PWA-en allerede på /login når varselet kommer, fokuserer SW-en
+    // vinduet uten remount — mount-oppslaget over ville da aldri sett
+    // oppføringen. visibilitychange dekker det tilfellet der dokumentet var
+    // skjult.
+    function handterVisibility() {
+      if (document.visibilityState === 'visible') lesVentendeMaalTrygt()
+    }
+    document.addEventListener('visibilitychange', handterVisibility)
+
+    // ... men er dokumentet ALT synlig når varselet trykkes, fyrer
+    // clients.focus() ingen visibilitychange (public/sw.js beskriver samme
+    // tilfelle), og da hadde login ingen trigger i det hele tatt — refen
+    // forble tom og innloggingen gikk fortsatt til '/' (review av PR #690).
+    // SW-broadcasten er den garanterte triggeren, og speiler lytteren i
+    // components/ServiceWorkerRegistrering.tsx.
+    function handterSwMelding(event: MessageEvent) {
+      const data = event.data
+      if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
+      const url = data.url
+      // SW-en skriver cache-entryen FØR den broadcaster, så et nytt oppslag
+      // her har full informasjon (ts + klikk_id). Feilet den skrivingen
+      // (fail-open i sw.js), er URL-en i meldingen eneste signal — da bruker
+      // vi den, med klikk-tidspunktet satt til nå.
+      lesVentendeMaal()
+        .catch(() => {})
+        .then(() => {
+          if (ventendeRef.current) return
+          const sti = lokalSti(url)
+          if (sti !== null) ventendeRef.current = { sti, ts: Date.now() }
+        })
+        .catch(() => {})
+    }
+    const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null
+    sw?.addEventListener('message', handterSwMelding)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handterVisibility)
+      sw?.removeEventListener('message', handterSwMelding)
+    }
+  }, [])
+
   async function loggInn(e: React.FormEvent) {
     e.preventDefault()
     setLaster(true)
@@ -37,7 +122,42 @@ export default function LoginSide() {
       setFeil('Feil e-post eller passord.')
       setLaster(false)
     } else {
-      router.push('/')
+      const maal = ventendeRef.current
+      // Valider vinduet på nytt HER, ikke bare der oppføringen ble lest
+      // (review av PR #690): tiden mellom lesing og innsendt skjema er
+      // brukerens, og den kan være lang. Et foreldet mål forkastes helt —
+      // å sende en mann til en tur eller en chat han trykket på for en time
+      // siden er verre enn å lande ham på agendaen.
+      if (maal && Date.now() - maal.ts > PUSH_KLIKK_LOGIN_VINDU_MS) {
+        ventendeRef.current = null
+        slettPendingNav().catch(() => {})
+        sendFeilBeacon(
+          'klient.pushklikk.foreldet',
+          `push-klikk-mål var ${Date.now() - maal.ts} ms gammelt ved innlogging (grense ${PUSH_KLIKK_LOGIN_VINDU_MS} ms)`,
+          undefined,
+          undefined,
+          'warn',
+        )
+        router.push('/')
+        router.refresh()
+        return
+      }
+      if (maal) {
+        // Varselet ble trykket mens sesjonen var utløpt og brukeren måtte
+        // logge inn på nytt — verdt å telle for å vite hvor ofte det skjer
+        // (#688). warn, ikke error: dette er en fungerende, om enn omstendelig,
+        // vei — ikke en feil.
+        sendFeilBeacon(
+          'push.klikk.innlogging',
+          `push-klikk-mål ${maal.sti} båret gjennom innlogging`,
+          undefined,
+          { kilde: 'login', klikk_id: maal.klikkId, maal: maal.sti },
+          'warn',
+        )
+        router.push(maal.sti)
+      } else {
+        router.push('/')
+      }
       router.refresh()
     }
   }

@@ -48,9 +48,12 @@ export const KONTEKST_WHITELIST = new Set([
   'antall_klienter', // antall same-origin vinduer (tall)
   'synlig_klient', // boolean: var minst ett vindu synlig da SW-en klikket
   'handling', // 'focus' | 'openWindow': hva notificationclick faktisk gjorde
-  'kilde', // 'broadcast' | 'cache' | 'kanal': hvilken sti som leverte navigasjonen
+  'kilde', // 'broadcast' | 'cache' | 'kanal' | 'login' (#688): hvilken sti som leverte navigasjonen
   'allerede_paa_maal', // boolean: klienten sto allerede på målet
   'synlighet', // document.visibilityState på klient-siden
+  // #688: korrelasjons-ID og forsøksteller for push-klikk-navigasjonskjeden.
+  'klikk_id', // genereres i notificationclick (sw.js), IKKE i push-payloaden — binder push.klikk til den påfølgende push.klikk.navigert/push.klikk.innlogging. Tilfeldig per klikk, ikke personidentifiserende.
+  'forsok', // tall: hvilket navigasjonsforsøk raden gjelder (PUSH_KLIKK_MAKS_FORSOK er loop-bryteren)
 ])
 
 // Grenser for klient-strengfelter. Rå error-messages/stacks kan inneholde
@@ -108,6 +111,10 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
   // SKAL være korte enums ('broadcast'/'focus'/'visible' osv.) — trunker dem
   // likevel, av samme grunn: en buggy eller ondsinnet klient skal ikke kunne
   // skrive KB med søppel inn i et felt vi forventer er noen tegn langt.
+  // `kilde` kan nå også være 'login' (#688): push-klikk-mål levert via
+  // /login-innboksen i stedet for cache/broadcast/kanal. `klikk_id` (#688) er
+  // en generert UUID/fallback-streng — kort i praksis, men trunkeres av samme
+  // grunn som resten av denne gruppa.
   if (
     nokkel === 'message' ||
     nokkel === 'digest' ||
@@ -116,7 +123,8 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     nokkel === 'kilde' ||
     nokkel === 'handling' ||
     nokkel === 'synlighet' ||
-    nokkel === 'maal_grunn'
+    nokkel === 'maal_grunn' ||
+    nokkel === 'klikk_id'
   ) {
     return trunker(verdi)
   }

@@ -332,3 +332,38 @@ export const MEDGJESTER_MAKS_ANTALL = 2
 // literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster
 // som tegnegrensene mot DB-constraints øverst i denne fila.
 export const PUSH_KLIKK_VINDU_MS = 30_000
+
+// ─── PUSH-KLIKK-TELEMETRI (#688) ──────────────────────────────────────────
+
+// Egen rate-limit-bøtte for push-klikk-telemetri, adskilt fra vanlige
+// klientfeil (LOGG_FEIL_RATE_LIMIT_PER_MIN). Uten skillet konkurrerer de om
+// samme 10/min, og en droppet push-beacon er umulig å skille fra en tapt
+// navigasjon — nøyaktig grunn 3 i #688. Høyere enn klientfeil-grensen fordi
+// ett klikk normalt genererer FLERE rader (push.klikk + push.klikk.navigert
+// + evt. push.klikk.innlogging) fra samme IP/profil i rask rekkefølge.
+export const PUSH_TELEMETRI_RATE_LIMIT_PER_MIN = 20
+
+// Eksplisitt liste (ikke en prefiks-regel) over event-navn som telles mot
+// PUSH_TELEMETRI_RATE_LIMIT_PER_MIN i stedet for LOGG_FEIL_RATE_LIMIT_PER_MIN.
+// En prefiks-regel («push.*») ville sluppet et feilstavet event inn i
+// telemetri-bøtta usett — eksplisitt liste tvinger et bevisst valg per event.
+export const PUSH_TELEMETRI_EVENTS = [
+  'push.klikk',
+  'push.klikk.navigert',
+  'push.klikk.innlogging',
+  'klient.pushklikk.foreldet',
+  'klient.pushklikk.oppgitt',
+] as const
+
+// Vindu (ms) for å bære et push-klikk-mål gjennom /login (#688). Lengre enn
+// PUSH_KLIKK_VINDU_MS med vilje: her skjer ingen overraskende navigasjon —
+// brukeren har nettopp logget inn selv og forventer å lande der varselet
+// pekte. 10 minutter dekker en treg innlogging (glemt passord, tilbakestilling
+// underveis) uten å holde målet i live så lenge at det føles vilkårlig.
+export const PUSH_KLIKK_LOGIN_VINDU_MS = 600_000
+
+// Maks antall ganger klienten forsøker å navigere til et push-klikk-mål før
+// oppføringen forkastes. Loop-bryter: uten et tak kunne en målside som alltid
+// redirecter et annet sted (eller en URL som aldri blir «vi står her») holde
+// klienten i en evig runde med tilbakeskriving + navigasjon.
+export const PUSH_KLIKK_MAKS_FORSOK = 2

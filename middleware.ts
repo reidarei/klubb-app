@@ -38,9 +38,15 @@ export async function middleware(request: NextRequest) {
   // /api/ping er bevisst uten auth: den skal måle «når serveren fram?», ikke
   // «er sesjonen gyldig?». Med auth ville en utløpt sesjon blitt rapportert som
   // nettverksfeil i dra-ned-gesten (#572).
+  // /api/logg-feil er bevisst uten auth (#688): ruta er designet for anonyme
+  // feil (valgfri auth, profil_id kan være null, egen rate-limit, scrubbing,
+  // service-role-insert — migrasjon 107 dokumenterer den eksplisitt som
+  // ikke-auth-endepunkt). En redirect til /login her gjorde klientlogging fra
+  // en utløpt sesjon umulig — nøyaktig tilfellet ruta skulle dekke.
   if (request.nextUrl.pathname.startsWith('/api/github/') ||
       request.nextUrl.pathname.startsWith('/api/cron/') ||
-      request.nextUrl.pathname === '/api/ping') {
+      request.nextUrl.pathname === '/api/ping' ||
+      request.nextUrl.pathname === '/api/logg-feil') {
     return NextResponse.next()
   }
 
@@ -92,5 +98,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-|api/cron/|api/github/|api/ping|.*\\.jpg|.*\\.png|.*\\.svg|.*\\.webp).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-|api/cron/|api/github/|api/ping|api/logg-feil|.*\\.jpg|.*\\.png|.*\\.svg|.*\\.webp).*)'],
 }

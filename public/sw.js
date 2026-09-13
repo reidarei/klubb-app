@@ -264,13 +264,32 @@ function loggPushKlikk(kontekst) {
 
 // Skriver overleveringen. Egen funksjon fordi kallstedet racer den mot en
 // timeout og da blir uttrykket for langt til å lese.
-async function skrivPendingNav(url) {
+async function skrivPendingNav(url, klikkId) {
   const cache = await caches.open(NAV_CACHE)
-  await cache.put(NAV_NOKKEL, new Response(JSON.stringify({ url, ts: Date.now() })))
+  await cache.put(NAV_NOKKEL, new Response(JSON.stringify({ url, ts: Date.now(), klikk_id: klikkId })))
+}
+
+// Genererer en korrelasjons-ID for ETT klikk (#688) — ikke for notifikasjonen
+// (flere klikk kan dele notifikasjon når `tag` har kollapset dem, men skal
+// ALDRI dele klikk_id). Genereres her i notificationclick, ikke båret i push-
+// payloaden: payloaden lages på serveren lenge før noen trykker, og en ID
+// generert der ville identifisert SENDINGEN, ikke selve trykket.
+function lagKlikkId() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    // crypto.randomUUID() kan mangle i eldre/uvanlige SW-miljøer — fallback
+    // er ikke kryptografisk, men trenger bare være unik nok til korrelasjon.
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
 }
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  // Genereres ØVERST, én gang per klikk (#688) — identifiserer KLIKKET, ikke
+  // notifikasjonen. To trykk på samme (kollapsede) notifikasjon skal aldri
+  // dele klikk_id, selv når `tag` har slått dem sammen til én rad i UI-et.
+  const klikkId = lagKlikkId()
   // Begrenser til same-origin så en ugyldig eller ekstern URL i payload aldri
   // kan åpne ekstern side eller krasje handleren. target forblir null kun for
   // malformerte eller kryss-origin URL-er — push-handleren over setter alltid
@@ -326,7 +345,7 @@ self.addEventListener('notificationclick', (event) => {
         // snart skrivingen er ferdig, så normaltilfellet ikke etterlater den.
         let timer
         await Promise.race([
-          skrivPendingNav(target).finally(() => clearTimeout(timer)),
+          skrivPendingNav(target, klikkId).finally(() => clearTimeout(timer)),
           new Promise((resolve) => {
             timer = setTimeout(resolve, NAV_SKRIV_TIMEOUT_MS)
           }),
@@ -365,6 +384,7 @@ self.addEventListener('notificationclick', (event) => {
     // med en annen betydning (R2-objektsti, #641), og feil_logg tar imot
     // rader fra begge sider av samme whitelist.
     loggPushKlikk({
+      klikk_id: klikkId,
       maal: navigasjonsmaal,
       hadde_maal: Boolean(target),
       maal_grunn: maalGrunn,
@@ -388,6 +408,13 @@ self.addEventListener('notificationclick', (event) => {
 // (se ServiceWorkerRegistrering.tsx). 30 s-vinduet hindrer at et gammelt
 // klikk re-trigger ved en senere app-åpning — speiler PUSH_KLIKK_VINDU_MS i
 // lib/konstanter.ts (denne fila er statisk og kan ikke importere TS).
+//
+// Bevisst URØRT av #688 (forsøksteller, klikk_id, utsatt konsumering): en
+// klient som havner her har PER DEFINISJON ingen Cache Storage-tilgang, så
+// det finnes ingenting å bevare for et senere forsøk uansett. Denne grenen er
+// legacy for en gammel cachet bundle, ikke hovedstien — ny logikk hører hjemme
+// i lesPendingNav()/skrivPendingNav() i lib/pending-nav.ts, som denne fallback-
+// klienten uansett aldri kaller.
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'check-pending-nav') return
   const port = event.ports[0]

@@ -183,6 +183,8 @@ Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `lib/logg-sani
 
 `ressurs` beholder adressens vertsnavn (i motsetning til `url`, som kuttes til stien) fordi filer kan ligge på et annet domene enn appen selv, og *hvilken tjener som ikke svarte* er halve svaret. To adressetyper behandles særskilt: lokale forhåndsvisninger (`blob:`) beholder sitt eget forstavelse-ledd, ellers limes vertsnavnet på to ganger og adressen ser korrupt ut; innebygde filer (`data:`) beholder kun filtypen, siden resten av adressen *er* selve filen.
 
+**Mottaket er bevisst åpent for uinnloggede.** `/api/logg-feil` er unntatt innloggingskravet i `middleware.ts`, fordi en feil som skjer når sesjonen har gått ut er nettopp den vi trenger å se — med innloggingskrav ble meldingen sendt videre til innloggingssiden og raden aldri skrevet. Det som holder misbruk i sjakk i stedet: en egen grense per avsender per minutt, at identiske meldinger innenfor samme minutt slås sammen til én rad, streng validering av hva som slipper inn, at bare kjente felter beholdes, og at raden skrives av tjeneren selv — ikke av nettleseren. En uinnlogget rad lagres uten medlems-id.
+
 **Filer som ikke lastes, fanges særskilt.** Når en kodefil ikke lar seg hente, meldes det fra på selve HTML-elementet og ikke på siden som helhet. En vanlig feillytter ser det derfor aldri. `FeilFangst` lytter i tillegg i den fasen hvor slike meldinger passerer, slik at filnavnet havner i loggen.
 
 **Manglende kodebit retter seg selv.** Skjer det fordi appen kjører en utdatert utgave, henter den fersk versjon i stedet for å vise feilsiden — én gang, og bare når enheten har nett. Begge sperrene er der med vilje: uten dem ville vi enten sendt folk uten dekning inn i en omlasting som ikke kan lykkes, eller inn i en løkke som aldri stopper.
@@ -209,6 +211,7 @@ Verdiene her kan endres uten at strategien over endres. Konstanter uten oppgitt 
 | ESLint-gjerdet | `error` | `eslint.config.mjs` | På `error` stopper byggingen. Settes den til `warn`, kan feilklassen snike seg inn igjen |
 | Sentry | På i produksjon, av lokalt | Miljøvariabelen `SENTRY_DSN` | Uten verdi sendes ingenting til Sentry. Døgnalarmen virker uansett |
 | Grense for klientfeil | 10 per minutt | `LOGG_FEIL_RATE_LIMIT_PER_MIN` | Hindrer at én nettleser som står og feiler i løkke fyller loggen |
+| Grense for push-telemetri | 20 per minutt | `PUSH_TELEMETRI_RATE_LIMIT_PER_MIN` | Egen bøtte fra vanlige klientfeil — uten skillet konkurrerer push-klikk-telemetri om samme rate som klientfeil, og en droppet beacon er umulig å skille fra en tapt navigasjon |
 
 ---
 

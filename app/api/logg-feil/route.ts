@@ -14,6 +14,8 @@ import { logg } from '@/lib/logg'
 import {
   LOGG_FEIL_RATE_LIMIT_PER_MIN,
   LOGG_EVENT_MAKS_LENGDE,
+  PUSH_TELEMETRI_RATE_LIMIT_PER_MIN,
+  PUSH_TELEMETRI_EVENTS,
 } from '@/lib/konstanter'
 
 // ─── Rate-limit ─────────────────────────────────────────────────────────────
@@ -40,8 +42,17 @@ function prunRateBuckets(naa: number): void {
   }
 }
 
-function sjekkRateLimit(ip: string, profilId: string | null): boolean {
-  const noekkel = `${ip}:${profilId ?? 'anon'}`
+// Push-telemetri-events får et EGET nøkkel-navnerom («push:…»), ikke bare en
+// annen grense — samme rateBuckets-Map (RATE_MAP_MAKS/prunRateBuckets dekker
+// begge navnerom), men uten prefikset ville en vanlig klientfeil og en
+// push.klikk-rad fra samme IP+profil delt bøtte og dermed grensen med den
+// laveste av de to (#688).
+function sjekkRateLimit(ip: string, profilId: string | null, event: string): boolean {
+  const erPushTelemetri = (PUSH_TELEMETRI_EVENTS as readonly string[]).includes(event)
+  const noekkel = erPushTelemetri
+    ? `push:${ip}:${profilId ?? 'anon'}`
+    : `${ip}:${profilId ?? 'anon'}`
+  const grense = erPushTelemetri ? PUSH_TELEMETRI_RATE_LIMIT_PER_MIN : LOGG_FEIL_RATE_LIMIT_PER_MIN
   const naa = Date.now()
 
   // Amortisert opprydding: kjør pruning når Map-en når cap.
@@ -57,7 +68,7 @@ function sjekkRateLimit(ip: string, profilId: string | null): boolean {
 
   // Sjekk før inkrement slik at counteren ikke fortsetter å vokse mot uendelig
   // dersom klienten spammer i vei etter overskridelse.
-  if (bucket.count >= LOGG_FEIL_RATE_LIMIT_PER_MIN) return false
+  if (bucket.count >= grense) return false
   bucket.count += 1
   return true
 }
@@ -143,7 +154,7 @@ export async function POST(req: NextRequest) {
 
   // ── Rate-limit ──────────────────────────────────────────────────────────────
 
-  if (!sjekkRateLimit(ip, profilId)) {
+  if (!sjekkRateLimit(ip, profilId, event)) {
     return new NextResponse(null, { status: 429 })
   }
 

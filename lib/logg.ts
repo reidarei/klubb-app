@@ -89,11 +89,13 @@
 //   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
 //   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
 //   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
-//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
-//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal), allerede_paa_maal og synlighet. Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
+//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer klikk_id (#688, korrelasjons-ID generert i notificationclick — binder raden til den påfølgende push.klikk.navigert/push.klikk.innlogging), maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
+//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal/login — sistnevnte fra #688), allerede_paa_maal, synlighet, klikk_id og forsok (hvilket navigasjonsforsøk raden gjelder, #688). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
 //   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
 //   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
 //   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
+//   push.klikk.innlogging       — warn: klienten bar et push-klikk-mål GJENNOM /login (#688) — sesjonen var utløpt da varselet ble trykket, brukeren logget inn, og målet ble bevart i stedet for å falle til agendaen. Bærer klikk_id og maal (den lokale stien).
+//   klient.pushklikk.oppgitt    — warn: push-klikk-målet ble forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten at klienten landet der — oppføringen forkastes for å bryte en potensiell løkke (#688). Bærer klikk_id, maal og forsok.
 //   bli-utvikler.kobling.feilet — insert i innspill_kobling feiler etter opprettet issue, markøren i body dekker fallback (#632)
 //   github.webhook.kobling.oppslag.feilet — innspill_kobling-oppslag feiler; faller tilbake til body-markøren (#632)
 //   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)

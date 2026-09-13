@@ -158,6 +158,11 @@ function lastSwInstans(
     // globalene i sandboxen ville sw.js kastet ReferenceError her.
     setTimeout,
     clearTimeout,
+    // lagKlikkId() (#688) bruker crypto.randomUUID() — uten global crypto i
+    // sandboxen ville den falt til fallback-strengen i ALLE tester, og
+    // testen som pinner at to klikk får ULIKE ID-er ville aldri kunnet
+    // skille en ekte regresjon (samme streng hver gang) fra fallback-stien.
+    crypto,
   }
   vm.createContext(sandbox)
   vm.runInContext(SW_KILDE, sandbox, { filename: 'sw.js' })
@@ -285,18 +290,21 @@ describe('notificationclick', () => {
   })
 })
 
+// Delt av flere describe-blokker under (maal_grunn og klikk_id) — flyttet til
+// modul-scope så begge kan gjenbruke samme assertion på beacon-konvolutten.
+function kontekstFraFetch(fetchMock: ReturnType<typeof vi.fn>) {
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  const [url, init] = fetchMock.mock.calls[0] as [string, { body: string }]
+  expect(url).toBe('/api/logg-feil')
+  const body = JSON.parse(init.body) as { event: string; kontekst: Record<string, unknown> }
+  expect(body.event).toBe('push.klikk')
+  return body.kontekst
+}
+
 // hadde_maal: false dekket tidligere alle årsakene uten å skille dem
 // (#687-issuet selv: en ekte kryss-origin-regresjon var umulig å skille fra
 // en tom payload i loggen). maal_grunn er ETT felt som gjør dem skillbare.
 describe('notificationclick — maal_grunn (#687)', () => {
-  function kontekstFraFetch(fetchMock: ReturnType<typeof vi.fn>) {
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0] as [string, { body: string }]
-    expect(url).toBe('/api/logg-feil')
-    const body = JSON.parse(init.body) as { event: string; kontekst: Record<string, unknown> }
-    expect(body.event).toBe('push.klikk')
-    return body.kontekst
-  }
 
   it('gyldig same-origin-URL → maal_grunn: gyldig', async () => {
     const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
@@ -364,6 +372,41 @@ describe('notificationclick — maal_grunn (#687)', () => {
   })
 })
 
+// #688: klikk_id identifiserer KLIKKET, ikke notifikasjonen eller sendingen.
+// Genereres i notificationclick (ikke båret i push-payloaden), og skal binde
+// sammen NAV_CACHE-oppføringen (som login-siden/klienten senere leser) og
+// push.klikk-raden som skrives med det samme.
+describe('notificationclick — klikk_id (#688)', () => {
+  it('samme klikk_id i NAV_CACHE-oppføringen og i push.klikk-loggen', async () => {
+    const cs = lagFakeCacheStorage()
+    const { dispatch, fetchMock } = lastSwInstans({ deltCacheStorage: cs, klienter: [] })
+
+    await dispatch('notificationclick', lagNotificationClickEvent('/chat'))
+
+    const kontekst = kontekstFraFetch(fetchMock)
+    expect(typeof kontekst.klikk_id).toBe('string')
+    expect((kontekst.klikk_id as string).length).toBeGreaterThan(0)
+
+    const cache = await cs.open(NAV_CACHE)
+    const lagret = await cache.match(NAV_NOKKEL)
+    const parsert = await lagret!.json()
+    expect(parsert.klikk_id).toBe(kontekst.klikk_id)
+  })
+
+  it('to påfølgende klikk får ULIKE klikk_id-er', async () => {
+    const { dispatch, fetchMock } = lastSwInstans({ klienter: [] })
+
+    await dispatch('notificationclick', lagNotificationClickEvent('/chat'))
+    const forste = kontekstFraFetch(fetchMock).klikk_id
+
+    fetchMock.mockClear()
+    await dispatch('notificationclick', lagNotificationClickEvent('/chat'))
+    const andre = kontekstFraFetch(fetchMock).klikk_id
+
+    expect(forste).not.toBe(andre)
+  })
+})
+
 describe('activate', () => {
   it('rydder ukjente cacher, men beholder NAV_CACHE (regresjonspinne mot #626)', async () => {
     const cs = lagFakeCacheStorage()
@@ -391,13 +434,21 @@ describe('ferskhetsvindu', () => {
 })
 
 describe('navnesynk mellom sw.js og klienten', () => {
-  // NAV_CACHE og NAV_NOKKEL finnes i tre kopier (sw.js, komponenten, denne
-  // fila) fordi public/sw.js er en statisk fil uten bundling og ikke kan
-  // importere fra lib/. Skriveren og leseren må treffe samme cache og samme
-  // nøkkel — drifter én kopi, blir overleveringen stille borte uten at noen
-  // funksjonell test fanger det (begge sider ville lest sin egen tomme cache).
+  // NAV_CACHE og NAV_NOKKEL finnes i to kopier (sw.js og lib/pending-nav.ts,
+  // pluss literalene i denne fila) fordi public/sw.js er en statisk fil uten
+  // bundling og ikke kan importere fra lib/. Skriveren og leseren må treffe
+  // samme cache og samme nøkkel — drifter én kopi, blir overleveringen stille
+  // borte uten at noen funksjonell test fanger det (begge sider ville lest
+  // sin egen tomme cache).
+  //
+  // Flyttet fra components/ServiceWorkerRegistrering.tsx til
+  // lib/pending-nav.ts (#688) — komponenten importerer nå konstantene i
+  // stedet for å duplisere dem. Glemmes denne oppdateringen ved en fremtidig
+  // flytting, feiler testen synlig (component-fila inneholder ikke lenger
+  // literalene, så lesKonstant() returnerer undefined) — men da tester den
+  // ikke lenger DEN faktiske synken, bare at noen glemte å oppdatere den.
   const KLIENT_KILDE = readFileSync(
-    path.resolve(__dirname, '../components/ServiceWorkerRegistrering.tsx'),
+    path.resolve(__dirname, '../lib/pending-nav.ts'),
     'utf-8',
   )
 
