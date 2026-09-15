@@ -199,7 +199,14 @@ export async function leggTilMeldingBilde(meldingId: string, bildeUrl: string) {
   revalidatePath('/')
 }
 
-export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
+export async function oppdaterMeldingPost(
+  meldingId: string,
+  innhold: string,
+  // Festedato. `undefined` = «ikke rør feltet» — en gammel, cachet klient-bundle
+  // som kaller med to argumenter skal ikke nullstille en dato den ikke vet om.
+  // `null` = fjern datoen (brukeren tømte feltet bevisst).
+  aktuell_dato?: string | null,
+) {
   const { supabase } = await ensureInnlogget()
   const tekst = innhold.trim()
 
@@ -230,9 +237,20 @@ export async function oppdaterMeldingPost(meldingId: string, innhold: string) {
 
   // Tom tekst lagres som null (ikke tom streng) — konsistent med opprettMelding
   // og med DB-checken som tillater «null eller 1..2000 tegn».
+  // Samme validering som opprettMelding: ugyldig dato blir null framfor å
+  // velte lagringen av teksten. Feltet utelates helt når kalleren ikke sendte
+  // det, slik at en eksisterende dato står urørt.
+  const endringer: { innhold: string | null; aktuell_dato?: string | null } = {
+    innhold: tekst || null,
+  }
+  if (aktuell_dato !== undefined) {
+    endringer.aktuell_dato =
+      aktuell_dato && erGyldigKalenderdato(aktuell_dato) ? aktuell_dato : null
+  }
+
   const { error } = await supabase
     .from('meldinger')
-    .update({ innhold: tekst || null })
+    .update(endringer)
     .eq('id', meldingId)
 
   if (error) throw new Error(error.message)

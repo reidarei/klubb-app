@@ -5,7 +5,11 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Linkified } from '@/lib/linkify'
 import { oppdaterMeldingPost } from '@/lib/actions/meldinger'
-import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
+import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
+import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
+import { formaterDato } from '@/lib/dato'
+import Icon from '@/components/ui/Icon'
+import { useRedigerModus } from './RedigerModus'
 import SlettBildeKnapp from './SlettBildeKnapp'
 import LeggTilBildeKnapp from './LeggTilBildeKnapp'
 import SlettMeldingKnapp from './SlettMeldingKnapp'
@@ -26,6 +30,8 @@ type Bilde = { id: string; bilde_url: string }
 export default function MeldingRediger({
   meldingId,
   innhold,
+  aktuellDato,
+  aiPaa,
   bilder,
   erAlbum,
   // (forfatter || admin) og ikke FB-importert: styrer tekst-redigering,
@@ -36,27 +42,61 @@ export default function MeldingRediger({
 }: {
   meldingId: string
   innhold: string
+  /** Festedato på innlegget (YYYY-MM-DD) — null når det ikke er festet. */
+  aktuellDato: string | null
+  /** Om KI-dato-uttrekket er tilgjengelig (ANTHROPIC_API_KEY satt). */
+  aiPaa: boolean
   bilder: Bilde[]
   erAlbum: boolean
   kanRedigere: boolean
   kanLeggeTilBilder: boolean
 }) {
-  const [redigerer, setRedigerer] = useState(false)
+  const [redigerer, setRedigererLokal] = useState(false)
   const [tekst, setTekst] = useState(innhold)
+  const [dato, setDato] = useState(aktuellDato ?? '')
+  // Skiller «brukeren tømte datoen bevisst» fra «datoen er bare ikke satt».
+  // Bare i det siste tilfellet slipper vi KI-en til ved lagring.
+  const [datoRoert, setDatoRoert] = useState(false)
   const [feil, setFeil] = useState('')
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  // Rammen rundt (RedigerModus) trenger å vite om skjemaet står åpent, så
+  // kommentarfeltet kan vike. Lokal state beholdes som sannhet slik at
+  // komponenten fortsatt virker uten provider.
+  const { setRedigerer: meldTilRamme } = useRedigerModus()
+
+  function settRedigerer(v: boolean) {
+    setRedigererLokal(v)
+    meldTilRamme(v)
+  }
 
   const visBildeGrid = !erAlbum && bilder.length > 0
   const visLeggTil =
     redigerer && kanLeggeTilBilder && !erAlbum && bilder.length < MELDING_MAKS_BILDER
 
+  // Tomt datofelt som brukeren ikke har rørt betyr «finn den for meg»: vi gjør
+  // ett uttrekk fra teksten ved lagring. Har han tømt feltet selv, respekterer
+  // vi det og lagrer null. Feilende uttrekk gir null — datoen er en
+  // bekvemmelighet, ikke noe som skal blokkere at teksten blir lagret.
+  async function bestemDato(): Promise<string | null> {
+    if (dato) return dato
+    if (datoRoert || !aiPaa) return null
+    if (tekst.trim().length < DATO_FORSLAG_MIN_TEGN) return null
+    try {
+      const r = await foreslaaAktuellDato(tekst)
+      return r.dato ?? null
+    } catch {
+      return null
+    }
+  }
+
   function lagre() {
     setFeil('')
     startTransition(async () => {
       try {
-        await oppdaterMeldingPost(meldingId, tekst)
-        setRedigerer(false)
+        await oppdaterMeldingPost(meldingId, tekst, await bestemDato())
+        settRedigerer(false)
+        setDatoRoert(false)
         router.refresh()
       } catch (err) {
         setFeil(err instanceof Error ? err.message : 'Kunne ikke lagre. Prøv igjen.')
@@ -65,15 +105,45 @@ export default function MeldingRediger({
   }
 
   function avbryt() {
-    // Forkast tekst-endringer og gå tilbake til visningsmodus. Bilde-endringer
-    // er allerede persistert, så de påvirkes ikke av Avbryt.
+    // Forkast tekst- og dato-endringer og gå tilbake til visningsmodus.
+    // Bilde-endringer er allerede persistert, så de påvirkes ikke av Avbryt.
     setTekst(innhold)
+    setDato(aktuellDato ?? '')
+    setDatoRoert(false)
     setFeil('')
-    setRedigerer(false)
+    settRedigerer(false)
   }
 
   return (
     <>
+      {/* AKTUELL DATO — lesevisning. Datoen styrer om innlegget festes øverst
+          på agenda, så den skal være synlig uten å gå i redigeringsmodus.
+          `aktuell_dato` er en ren date-kolonne; formaterDato tolker den som
+          UTC-midnatt og konverterer til Oslo (alltid positiv offset), så
+          dagen blir den samme. */}
+      {!redigerer && aktuellDato && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 14,
+            padding: '5px 10px',
+            borderRadius: 999,
+            background: 'var(--accent-soft)',
+            border: '0.5px solid var(--accent)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '1.2px',
+            textTransform: 'uppercase',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <Icon name="calendar" size={12} color="var(--accent)" strokeWidth={1.8} />
+          Aktuell {formaterDato(aktuellDato, 'd. MMMM')}
+        </div>
+      )}
+
       {/* TEKST — lesevisning eller redigerbar textarea */}
       {redigerer ? (
         <div style={{ marginBottom: 16 }}>
@@ -85,6 +155,48 @@ export default function MeldingRediger({
             style={tekstStil}
           />
           <div style={tellerStil}>{INNLEGG_MAKS_LENGDE - tekst.length} tegn igjen</div>
+
+          {/* AKTUELL DATO — redigerbar. Ingen `min` her (til forskjell fra
+              /meldinger/ny): et eldre innlegg kan ha en passert dato, og en
+              min-grense som ligger etter feltets egen verdi gjør feltet
+              ugyldig i Safari. En passert dato er uansett harmløs — den
+              fester ikke innlegget. */}
+          <div style={{ marginTop: 18 }}>
+            <div style={tellerStil_venstre}>Aktuell dato</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="date"
+                value={dato}
+                onChange={e => {
+                  setDato(e.target.value)
+                  setDatoRoert(true)
+                }}
+                disabled={isPending}
+                style={datoStil}
+              />
+              {dato && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDato('')
+                    setDatoRoert(true)
+                  }}
+                  disabled={isPending}
+                  style={{ ...sekundaerKnapp, padding: '6px 12px', fontSize: 12 }}
+                >
+                  Fjern
+                </button>
+              )}
+            </div>
+            <div style={{ ...tellerStil_venstre, marginTop: 6, textTransform: 'none', letterSpacing: '0.2px' }}>
+              {/* Sier eksplisitt at det er en maskin som leser teksten —
+                  samme konservative lesning av AI Act art. 50(1) som på
+                  /meldinger/ny. Se docs/ai-act-vurdering.md § G2. */}
+              {aiPaa
+                ? 'Lar du feltet stå tomt, foreslår KI en dato ut fra teksten når du lagrer. Holder innlegget festet øverst til datoen er passert.'
+                : 'Holder innlegget festet øverst til datoen er passert.'}
+            </div>
+          </div>
         </div>
       ) : (
         innhold && (
@@ -182,7 +294,7 @@ export default function MeldingRediger({
         ) : (
           <button
             type="button"
-            onClick={() => setRedigerer(true)}
+            onClick={() => settRedigerer(true)}
             style={sekundaerKnapp}
           >
             Rediger
@@ -205,6 +317,29 @@ const tekstStil: CSSProperties = {
   padding: 0,
   resize: 'none',
   minHeight: 120,
+}
+
+// Samme mono-etikett som teller, men venstrestilt — brukes til felt-labels.
+const tellerStil_venstre: CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 10,
+  color: 'var(--text-tertiary)',
+  letterSpacing: '1.2px',
+  textTransform: 'uppercase',
+  marginBottom: 8,
+}
+
+const datoStil: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  background: 'var(--bg-elevated)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 10,
+  padding: '9px 12px',
+  color: 'var(--text-primary)',
+  fontFamily: 'var(--font-body)',
+  fontSize: 14,
+  outline: 'none',
 }
 
 const tellerStil: CSSProperties = {

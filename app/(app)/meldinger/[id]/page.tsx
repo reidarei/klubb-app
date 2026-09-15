@@ -9,8 +9,10 @@ import Icon from '@/components/ui/Icon'
 import Chat from '@/components/chat/Chat'
 import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
 import MeldingRediger from './MeldingRediger'
+import RedigerModus, { SkjulUnderRedigering } from './RedigerModus'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { AI_PAA } from '@/lib/config'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
@@ -26,6 +28,7 @@ type MeldingRad = {
   id: string
   innhold: string | null
   opprettet: string
+  aktuell_dato: string | null
   fra_facebook: boolean | null
   profil_id: string
   profiles: {
@@ -64,7 +67,7 @@ export default async function MeldingDetalj({
     supabase
       .from('meldinger')
       .select(
-        `id, innhold, opprettet, fra_facebook, profil_id,
+        `id, innhold, opprettet, aktuell_dato, fra_facebook, profil_id,
          profiles!meldinger_profil_id_fkey(navn, bilde_url, rolle),
          melding_bilder(id, bilde_url, rekkefoelge),
          ${ALBUM_KORT_SELECT}`,
@@ -133,6 +136,10 @@ export default async function MeldingDetalj({
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
+      {/* RedigerModus holder «redigerer»-flagget slik at kommentarfeltet
+          under kan vike mens innlegget redigeres — chatten hører til samtalen
+          om innlegget, ikke til skjemaet. */}
+      <RedigerModus>
       <header style={{ marginTop: 12, marginBottom: 22 }}>
         <div
           style={{
@@ -254,6 +261,8 @@ export default async function MeldingDetalj({
         <MeldingRediger
           meldingId={melding.id}
           innhold={melding.innhold ?? ''}
+          aktuellDato={melding.aktuell_dato}
+          aiPaa={AI_PAA}
           bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
           erAlbum={!!albumKort}
           kanRedigere={kanRedigere}
@@ -267,14 +276,17 @@ export default async function MeldingDetalj({
         />
       </header>
 
-      <div id="kommentarer">
-        <Chat
-          scope={{ type: 'melding', meldingId: melding.id }}
-          brukerId={user!.id}
-          initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
-          profiler={chatProfiler ?? []}
-        />
-      </div>
+      <SkjulUnderRedigering>
+        <div id="kommentarer">
+          <Chat
+            scope={{ type: 'melding', meldingId: melding.id }}
+            brukerId={user!.id}
+            initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
+            profiler={chatProfiler ?? []}
+          />
+        </div>
+      </SkjulUnderRedigering>
+      </RedigerModus>
     </div>
   )
 }
