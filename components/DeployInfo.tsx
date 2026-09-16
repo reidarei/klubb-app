@@ -8,7 +8,7 @@ const versjon = process.env.APP_VERSION ?? 'v?'
 export default function DeployInfo() {
   return (
     <p
-      className="text-center text-[10px] select-none"
+      className="deploy-info text-center text-[10px] select-none"
       style={{
         color: 'var(--text-tertiary)',
         opacity: 0.5,

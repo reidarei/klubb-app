@@ -113,6 +113,20 @@
 //   bursdagsbilde.input.avvist      — profilbildet kunne ikke hentes/valideres server-side (HTTP-feil, ugyldig MIME, for stort) før noe Vertex-kall i det hele tatt ble forsøkt (#641)
 //   cron.bursdagsbilde.jobb.feilet  — hoved- eller nødpasset i bursdagsbilde-cronet kastet ut av sin egen try/catch; det andre passet kjørte likevel (#641)
 //   logg-feil.kontekst.strippet     — warn: scrubKontekst() droppet minst én nøkkel fra en klient-innsendt kontekst. Bærer count, sample (kommaseparerte nøkkelnavn, kappet i antall og lengde, og kun de som har form som en identifikator fra vår egen kode), ugyldige (antallet som ikke hadde den formen — nøklene er klient-kontrollerte, så formen er PII-vakten) og fingerprint = klient-eventet som mistet felter (ikke `event`: den nøkkelen ville overskrevet event-navnet i stdout-linja). Belte-og-sele mot __tests__/logg-kontekst-dekning.test.ts: fanger en gammel cachet klient-bundle som sender et felt vakten aldri så (#681)
+//   posisjon.deling.feilet          — upsert i posisjon_deling feiler; mannen får «klarte ikke lagre», ingen prikk settes på kartet (#693/#695)
+//   posisjon.punkt.feilet           — insert av et nytt sporpunkt feiler etter at delingen er lagret (#695)
+//   posisjon.punkt.oppdatering.feilet — oppdatering av tidsstempel på et eksisterende punkt feiler (mannen står stille) (#695)
+//   posisjon.siste_punkt.feilet     — warn: oppslag av forrige punkt feiler; vi legger inn et nytt punkt i stedet for å nekte deling (#695)
+//   posisjon.punkt.slett.feilet     — sletting av eget spor ved «slutt å dele» feiler; delingen står fortsatt på (#695)
+//   posisjon.stopp.feilet           — sletting av egen delingsrad feiler; brukeren får beskjed om å prøve igjen (#693)
+//   posisjon.pling.avsender.feilet  — warn: navneoppslag for pling-teksten feiler; varselet sendes med «Noen» som avsender (#695)
+//   cron.posisjon.rydd.feilet       — opprydding av utgåtte posisjonsspor feiler i påminnelses-cronet; de andre jobbene kjører videre (#695)
+//   cron.posisjon.jobb.feilet       — ryddPosisjonsspor() kastet ut av sin egen try/catch; påminnelsene kjørte likevel (#695)
+//   kart.markering.feilet           — insert av en kartmarkering feiler; mannen får «klarte ikke lagre», ingen nål settes (#697)
+//   kart.markering.slett.feilet     — sletting av en kartmarkering feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#697)
+//   kart.chat.hent.feilet           — warn: klubbchat-meldingene kunne ikke hentes til kartets chat-panel; kartet rendres videre med tomt panel (#709)
+//   kart.chat.profiler.feilet       — warn: profil-oppslaget for chat-panelet feilet; navn og avatarer mangler i panelet (#709)
+//   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

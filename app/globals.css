@@ -62,6 +62,26 @@
   --warning-border: rgba(232, 169, 107, 0.34);
   --warning-hot: #f0bc80; /* hover/aktiv warning */
 
+
+  /* ── Kartet (#713) ────────────────────────────────────────────────────────
+   * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
+   * uendret. Tokens er derfor KART-SPESIFIKKE og påvirker ingen annen flate.
+   * (Når «turmodus» kommer, er det disse som får farge på resten.)
+   *
+   * I mørkt tema holdes de dempet: bobler og paneler ligger oppå et kart som
+   * allerede er detaljrikt, og for mye farge her gjør kartet uleselig. */
+  --kart-flate: rgba(32, 45, 52, 0.94);
+  --kart-flate-sterk: rgba(42, 58, 66, 0.97);
+  --kart-kant: rgba(255, 255, 255, 0.14);
+  --kart-sol: #f0b464;
+  --kart-hav: #5fb3bd;
+  --kart-korall: #e0806a;
+  --kart-tekst: #f2efe8;
+  /* Fliser: OSM er lyst, appen er mørk. Inverteringen beholdes, men med
+   * varmere sepia og litt lavere metning enn den rene invert-hue-rotasjonen —
+   * da blir kartet et dempet kveldskart i stedet for et kaldt nattkart. */
+  --kart-flis-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) sepia(0.18) saturate(1.1);
+
   /* Fonter */
   --font-display: var(--font-instrument), Georgia, serif;
   --font-body: var(--font-inter), -apple-system, system-ui, sans-serif;
@@ -176,6 +196,26 @@
   --warning-border: rgba(232, 169, 107, 0.34);
   --warning-hot: #f0bc80;
 
+  /* ── Kartet (#713) ────────────────────────────────────────────────────────
+   * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
+   * uendret. Tokens er derfor KART-SPESIFIKKE og påvirker ingen annen flate.
+   * (Når «turmodus» kommer, er det disse som får farge på resten.)
+   *
+   * I mørkt tema holdes de dempet: bobler og paneler ligger oppå et kart som
+   * allerede er detaljrikt, og for mye farge her gjør kartet uleselig. */
+  --kart-flate: rgba(32, 45, 52, 0.94);
+  --kart-flate-sterk: rgba(42, 58, 66, 0.97);
+  --kart-kant: rgba(255, 255, 255, 0.14);
+  --kart-sol: #f0b464;
+  --kart-hav: #5fb3bd;
+  --kart-korall: #e0806a;
+  --kart-tekst: #f2efe8;
+  /* Fliser: OSM er lyst, appen er mørk. Inverteringen beholdes, men med
+   * varmere sepia og litt lavere metning enn den rene invert-hue-rotasjonen —
+   * da blir kartet et dempet kveldskart i stedet for et kaldt nattkart. */
+  --kart-flis-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) sepia(0.18) saturate(1.1);
+
+
   --font-display: var(--font-instrument), Georgia, serif;
   --font-body: var(--font-inter), -apple-system, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
@@ -265,6 +305,20 @@
   --warning-soft: rgba(185, 112, 31, 0.13);
   --warning-border: rgba(185, 112, 31, 0.32);
   --warning-hot: #9c5d14;
+
+  /* ── Kartet (#713) — lys sommer ───────────────────────────────────────────
+   * Her bærer temaet ferie-følelsen tydeligst: varme, lyse flater over et
+   * OSM-kart som allerede er lyst. Ingen invertering, bare et lite løft i
+   * metning så vann og grøntområder får farge. */
+  --kart-flate: rgba(255, 252, 245, 0.92);
+  --kart-flate-sterk: rgba(255, 253, 248, 0.97);
+  --kart-kant: rgba(120, 85, 50, 0.18);
+  --kart-sol: #d8922c;
+  --kart-hav: #2b8a99;
+  --kart-korall: #c85a3c;
+  --kart-tekst: #2a241c;
+  --kart-flis-filter: saturate(1.12) brightness(1.02);
+
 
   /* Overlay — lightbox holdes mørk (foto), kun varmet */
   --overlay-backdrop: rgba(22, 20, 15, 0.92);
@@ -377,6 +431,15 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+/* Fullskjermsider (i dag kun /kart) setter denne klassen på <body> mens de er
+   montert. DeployInfo ligger i <main> under sideinnholdet og la 44 px ekstra
+   høyde på dokumentet — nok til at iOS' rubber-band hadde noe å dra i, og da
+   skled knappene som ligger oppå kartet ut av skjermen (#706). En fullskjermside
+   har per definisjon ikke plass til en bunnlinje. */
+body.fullskjerm-side .deploy-info {
+  display: none;
+}
+
 .page-enter {
   animation: page-fadein 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }

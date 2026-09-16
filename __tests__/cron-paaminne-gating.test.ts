@@ -13,12 +13,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockPaaminnelser, mockBursdag, mockBursdagsvarsel, mockLoggFeil } = vi.hoisted(() => ({
-  mockPaaminnelser: vi.fn(),
-  mockBursdag: vi.fn(),
-  mockBursdagsvarsel: vi.fn(),
-  mockLoggFeil: vi.fn().mockResolvedValue(undefined),
-}))
+const { mockPaaminnelser, mockBursdag, mockBursdagsvarsel, mockPosisjon, mockLoggFeil } =
+  vi.hoisted(() => ({
+    mockPaaminnelser: vi.fn(),
+    mockBursdag: vi.fn(),
+    mockBursdagsvarsel: vi.fn(),
+    mockPosisjon: vi.fn(),
+    mockLoggFeil: vi.fn().mockResolvedValue(undefined),
+  }))
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({}),
@@ -38,6 +40,13 @@ vi.mock('@/lib/actions/bursdagsgratulasjon', () => ({
 // på manglende env/nettverk i stedet for å teste gatingen isolert.
 vi.mock('@/lib/actions/bursdagsvarsel', () => ({
   kjorBursdagsvarsel: (...a: unknown[]) => mockBursdagsvarsel(...a),
+}))
+// Posisjonsoppryddingen (#695) kjører på slot 1, som påminnelsene. Uten mocken
+// treffer den ekte Supabase-kall og feiler på manglende env — og siden jobben
+// gates som påminnelsene (ingen ny sjanse i dag), ville hver eneste 200-test
+// her blitt 500 av en helt urelatert grunn.
+vi.mock('@/lib/actions/posisjon-opprydding', () => ({
+  ryddPosisjonsspor: (...a: unknown[]) => mockPosisjon(...a),
 }))
 
 import { NextRequest } from 'next/server'
@@ -60,6 +69,7 @@ beforeEach(() => {
   mockPaaminnelser.mockResolvedValue({ behandlet: [], feil: 0, lukketKaaringer: 0, sendteVarsler: 0 })
   mockBursdag.mockResolvedValue({ postet: 0, hoppet: 0, feil: 0 })
   mockBursdagsvarsel.mockResolvedValue({ varslet: 0, hoppet: 0, blokkert: 0, feil: 0 })
+  mockPosisjon.mockResolvedValue({ delinger: 0, eldreloese: 0, avsluttede: 0, gamleLoese: 0, markeringer: 0, feil: 0 })
   mockLoggFeil.mockResolvedValue(undefined)
 })
 
@@ -82,6 +92,53 @@ describe('cron /api/cron/paaminne – status-gating (#504)', () => {
     expect(res.status).toBe(500)
     expect(body.ok).toBe(false)
     expect(body.paaminnerFeil).toBe(2)
+  })
+
+  it('posisjonsopprydding som feiler gir 500 (kjører kun slot 1, ingen ny sjanse)', async () => {
+    mockPosisjon.mockResolvedValue({ delinger: 0, eldreloese: 0, avsluttede: 0, gamleLoese: 0, markeringer: 0, feil: 1 })
+
+    const res = await POST(lagReq(1))
+    const body = await res.json()
+
+    // Samme gating som påminnelsene: jobben kjører én gang i døgnet, så en feil
+    // har ingen senere sjanse og skal gi rødt med en gang. Uten dette kunne
+    // oppryddingen vært død i ukevis mens kjøringen sto grønn — og da ville
+    // «sporet slettes når turen er over» stille sluttet å være sant (#695).
+    expect(res.status).toBe(500)
+    expect(body.ok).toBe(false)
+    expect(body.posisjonFeil).toBe(1)
+  })
+
+  it('posisjonsoppryddingen kaster: påminnelsene kjøres likevel', async () => {
+    mockPosisjon.mockRejectedValue(new Error('rydd sprakk'))
+
+    const res = await POST(lagReq(1))
+    const body = await res.json()
+
+    expect(mockPaaminnelser).toHaveBeenCalledTimes(1)
+    expect(res.status).toBe(500)
+    expect(body.posisjonFeil).toBe(1)
+    expect(mockLoggFeil).toHaveBeenCalledWith(
+      'cron.posisjon.jobb.feilet',
+      expect.any(Error),
+      expect.objectContaining({ ctx: { slot: 1 } }),
+    )
+  })
+
+  it('posisjonsoppryddingen kjøres kun på slot 1', async () => {
+    for (const slot of [0, 2, 3]) {
+      vi.clearAllMocks()
+      mockPaaminnelser.mockResolvedValue({ behandlet: [], feil: 0, lukketKaaringer: 0, sendteVarsler: 0 })
+      mockBursdag.mockResolvedValue({ postet: 0, hoppet: 0, feil: 0 })
+      mockBursdagsvarsel.mockResolvedValue({ varslet: 0, hoppet: 0, blokkert: 0, feil: 0 })
+      mockPosisjon.mockResolvedValue({ delinger: 0, eldreloese: 0, avsluttede: 0, gamleLoese: 0, markeringer: 0, feil: 0 })
+
+      const res = await POST(lagReq(slot))
+      const body = await res.json()
+      expect(mockPosisjon).not.toHaveBeenCalled()
+      expect(body.posisjon).toBe('hoppet')
+      expect(res.status).toBe(200)
+    }
   })
 
   it.each([0, 1, 2])('bursdagsfeil på slot %i gir 200 (nye sjanser senere i dag)', async slot => {

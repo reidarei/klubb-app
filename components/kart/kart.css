@@ -1,0 +1,309 @@
+/* Kart-spesifikk CSS. Bevisst en egen fil og ikke globals.css: dette lastes
+   kun av /kart, mens globals.css følger med på hver eneste sidevisning. */
+
+/* OSMs fliser er lyse, og appen er mørk som default. Filteret snur dem til et
+   mørkt kart som hører hjemme i resten av UI-et. hue-rotate kompenserer for at
+   invert() gjør blått vann oransje; brightness demper det helt hvite.
+
+   Filteret treffer KUN .leaflet-tile-pane. Markørene våre ligger i
+   .leaflet-marker-pane, som er et søsken — de beholder derfor riktige farger
+   uten at vi må invertere dem tilbake. */
+/* Flis-filteret bor i --kart-flis-filter (globals.css) og er dermed
+   tema-styrt som alt annet: mørkt tema inverterer OSM til et dempet
+   kveldskart, lyst tema løfter bare metningen litt så vann og grønt får
+   farge (#713). Én regel i stedet for to, siden tokenet allerede skiller. */
+.leaflet-tile-pane {
+  filter: var(--kart-flis-filter);
+}
+
+/* Leaflet tegner attribusjonen med egne hardkodede farger som blir uleselige
+   mot vår bakgrunn. Vilkårene krever at den STÅR der, ikke at den skriker. */
+.leaflet-container .leaflet-control-attribution {
+  background: var(--kart-flate);
+  color: var(--text-tertiary);
+  font-family: var(--font-body);
+  font-size: 9px;
+  border-radius: 8px 0 0 0;
+  padding: 2px 6px;
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--text-secondary);
+}
+
+/* Markøren. Bærer enten profilbildet eller initialer; i initial-tilfellet
+   arver den gradienten fra .avatar-initialer (globals.css) via --avatar-hue,
+   slik at en mann har samme farge her som i lista under kartet. */
+.kart-markoer {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  /* Ring mot kartet under: uten den forsvinner en mørk markør i en mørk gate. */
+  border: 2px solid var(--kart-flate-sterk);
+  box-shadow: var(--shadow-popover);
+  /* Bildet fyller sirkelen helt — uten dette stikker hjørnene utenfor ringen. */
+  overflow: hidden;
+  background: var(--bg-elevated-solid);
+}
+
+.kart-markoer img {
+  width: 100%;
+  height: 100%;
+  /* cover og ikke contain: et portrett skal fylle sirkelen, ikke ligge som et
+     lite bilde med luft rundt. Ansiktet er stort sett midt i bildet. */
+  object-fit: cover;
+  display: block;
+}
+
+/* Eget punkt får aksentring. Du skal finne deg selv først — alt annet på
+   kartet leses i forhold til hvor du står. */
+.kart-markoer-meg {
+  border-color: var(--accent);
+}
+
+/* Generalsekretæren, samme gule ring som i resten av appen (Policy: Roller).
+   Taper bevisst mot .kart-markoer-meg, som står senere i fila. */
+.kart-markoer-gs {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-floating), 0 0 0 1px var(--accent);
+}
+
+/* Gammelt punkt dempes, men skjules aldri. Uten bakgrunnsposisjon på iOS er et
+   punkt bare like ferskt som forrige gang mannen hadde appen oppe. */
+.kart-markoer-gammel {
+  opacity: 0.55;
+}
+
+/* Usikkerhetssirkelen. Fyll uten strek: en strek ville lest som en grense
+   («han er innenfor her»), mens dette er en uskarphet. */
+.kart-usikkerhet {
+  fill: var(--kart-hav);
+  fill-opacity: 0.12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-container .leaflet-fade-anim .leaflet-tile,
+  .leaflet-container .leaflet-zoom-anim .leaflet-zoom-animated {
+    transition: none !important;
+  }
+}
+
+/* Sporet (#695): de tidligere punktene, og linja mellom dem.
+   Små prikker uten initialer — de skal leses som «her var han», ikke
+   konkurrere med markøren som sier «her er han». */
+.kart-spor-prikk {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: oklch(64% 0.12 var(--avatar-hue));
+  border: 1.5px solid var(--bg-elevated-solid);
+  opacity: 0.8;
+}
+
+/* Ruta tegnes med color satt i JS (Leaflet skriver SVG-attributtet og
+   overstyrer CSS-fill/stroke). Klassen bærer bare det attributtet ikke kan:
+   stiplet strek, som skiller «rute vi har utledet av noen få punkter» fra en
+   faktisk sporet linje. Vi vet ikke hva han gjorde mellom to prikker. */
+.kart-rute {
+  stroke-dasharray: 6 6;
+  stroke-linecap: round;
+}
+
+/* Markering (#708): én snakkeboble som starter med symbolet og peker ned på
+   stedet. Tidligere sto symbolet både på en nål OG i etiketten — det leste som
+   to markeringer. Bobla er nå hele markeringen.
+
+   Ankeret er et 1x1 usynlig punkt; alt visuelt ligger i tooltipen. */
+.kart-markering-anker {
+  background: none;
+  border: none;
+}
+
+.leaflet-tooltip.kart-markering-etikett {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  /* 500 og ikke 600 (#713): halvfet er tyngre enn en etikett på et kart
+     trenger å være, og lettere skrift er hele poenget med løftet. */
+  font-weight: 500;
+  color: var(--kart-tekst);
+  background: var(--kart-flate-sterk);
+  border: 0.5px solid var(--kart-kant);
+  /* Helt rund i endene — en snakkeboble, ikke en knapp. */
+  border-radius: 999px;
+  padding: 7px 13px;
+  box-shadow: var(--shadow-popover);
+  white-space: nowrap;
+  /* Bobla er trykkflaten. 44 px er for høyt for en boble som skal ligge tett
+     på kartet, men bredden er alltid godt over — og halen under legger til
+     høyde i praksis. */
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.kart-boble-symbol {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.kart-boble-tekst {
+  /* Kappes heller enn å stikke ut av kartet. Hele teksten står i panelet og i
+     detaljvisningen når man trykker. */
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Leaflets egen pil skrus AV. Den lot seg ikke få fram uansett hvilke
+   border-verdier vi satte — bobla ble stående som et avrundet rektangel. Vi
+   tegner halen selv i stedet (under), der vi har full kontroll. */
+.leaflet-tooltip.kart-markering-etikett::before {
+  display: none;
+}
+
+/* Halen: en rotert firkant, ikke en border-trekant.
+   
+   Border-trekanten ble prøvd først og var usynlig på kartet: en CSS-trekant
+   ER en border, så den kan ikke ha kant selv, og uten kontur gikk den i ett
+   med det mørke kartet under. En rotert firkant er en vanlig boks — den kan ha
+   bakgrunn OG kant, akkurat som bobla, og leses derfor som en forlengelse av
+   den. Halvparten skjules av boblas egen bakgrunn; det som stikker ut er
+   spissen. */
+.kart-boble-hale {
+  position: absolute;
+  /* Mot venstre ende, ikke midt på. Verdien speiler HALE_FRA_VENSTRE i
+     PosisjonsKart.tsx, som forskyver hele bobla like mye motsatt vei så
+     spissen fortsatt lander på stedet — endres den ene, må den andre følge. */
+  left: 22px;
+  margin-left: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--kart-flate-sterk);
+  /* Bare de to sidene som faktisk vender ut mot kartet etter rotasjonen. */
+  border-right: 0.5px solid var(--kart-kant);
+  border-bottom: 0.5px solid var(--kart-kant);
+  transform: rotate(45deg);
+  /* Skal aldri stjele et trykk fra bobla selv. */
+  pointer-events: none;
+}
+
+/* Siktet som viser hvor markeringen havner (#704). Et kryss og ikke en nål:
+   nåla er hva du FÅR, krysset er hvor du sikter — de skal ikke forveksles.
+
+   Bevisst uten clip-path. Første forsøk brukte en polygon() for å lage et hull
+   midt i strekene; polygonen var selvkryssende og klippet bort HELE elementet,
+   så siktet var usynlig i akkurat den situasjonen det finnes for. To rene
+   streker og en ring gjør samme jobb og kan ikke feile på samme måte. */
+.kart-sikte {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--kart-sol);
+  border-radius: 50%;
+  /* Mørk ring utenpå, ellers forsvinner aksenten i lyse kartflater. */
+  box-shadow: 0 0 0 1px var(--overlay-control-bg), inset 0 0 0 1px var(--overlay-control-bg);
+}
+
+.kart-sikte::before,
+.kart-sikte::after {
+  content: '';
+  position: absolute;
+  background: var(--kart-sol);
+  box-shadow: 0 0 0 1px var(--overlay-control-bg);
+}
+
+/* Vannrett strek, litt bredere enn ringen så krysset leses som et sikte. */
+.kart-sikte::before {
+  left: -8px;
+  right: -8px;
+  top: calc(50% - 1px);
+  height: 2px;
+}
+
+/* Loddrett strek. */
+.kart-sikte::after {
+  top: -8px;
+  bottom: -8px;
+  left: calc(50% - 1px);
+  width: 2px;
+}
+
+/* Sporet (#695): de tidligere punktene, og linja mellom dem.
+   Små prikker uten initialer — de skal leses som «her var han», ikke
+   konkurrere med markøren som sier «her er han». */
+.kart-spor-prikk {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: oklch(62% 0.13 var(--avatar-hue));
+  border: 1.5px solid var(--bg-elevated-solid);
+  opacity: 0.8;
+}
+
+
+
+/* Siktet som viser hvor markeringen havner (#700). Et kryss og ikke en nål:
+   nåla er hva du FÅR, krysset er hvor du sikter — de skal ikke forveksles. */
+.kart-sikte {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+
+.kart-sikte::before,
+.kart-sikte::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  /* Mørk kant rundt strekene, ellers forsvinner de i lyse kartflater. */
+  box-shadow: 0 0 0 1px var(--overlay-control-bg);
+}
+
+/* Vannrett strek, med et hull i midten så selve punktet ikke dekkes. */
+.kart-sikte::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  clip-path: polygon(0 0, 38% 0, 38% 100%, 0 100%, 0 0, 62% 0, 100% 0, 100% 100%, 62% 100%, 62% 0);
+}
+
+
+
+/* Chat i kartets venstrepanel (#709, strammet i #710).
+   
+   Chat-komponenten er dimensjonert for /chat, som har 480 px å gå på. I
+   kartets 320 px panel sprenger enkelte faste min-bredder containeren — og
+   siden `overflow-y: auto` implisitt gir `overflow-x: auto`, kunne panelet
+   dras sidelengs. Panelet har nå `overflow-x: hidden`, men det alene ville
+   bare KLIPPET innholdet; her får det plass i stedet.
+   
+   Scopet til dette panelet: /chat skal være uendret. */
+.kart-chat-panel img,
+.kart-chat-panel video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Redigeringsboksen har inline `min-width: 220px` (ChatMeldingRad), som med
+   avatar og mellomrom sprenger et 300 px innholdsfelt. !important fordi
+   inline-stil ellers vinner. */
+.kart-chat-panel textarea {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+/* Lange ord og URL-er uten mellomrom er det klassiske tilfellet som skyver en
+   smal container ut i bredden. */
+.kart-chat-panel * {
+  overflow-wrap: anywhere;
+}

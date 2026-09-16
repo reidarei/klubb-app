@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { kjorPaaminnelser } from '@/lib/actions/paaminnelser'
 import { kjorBursdagsgratulasjon } from '@/lib/actions/bursdagsgratulasjon'
 import { kjorBursdagsvarsel } from '@/lib/actions/bursdagsvarsel'
+import { ryddPosisjonsspor } from '@/lib/actions/posisjon-opprydding'
 import { BURSDAG_VINDU_SLOTS } from '@/lib/konstanter'
 import { utledSlotIndex, parseSlotOverride, UgyldigSlotIndexFeil } from '@/lib/cron-slot'
 import { logg } from '@/lib/logg'
@@ -44,6 +45,7 @@ async function handle(req: NextRequest) {
   let paaminnerFeil = 0
   let bursdagFeil = 0
   let bursdagsvarselFeil = 0
+  let posisjonFeil = 0
 
   // Påminnelser kjøres kun ved slot 1 (06 UTC = 08 norsk sommer / 07 vinter)
   let paaminneResult: Awaited<ReturnType<typeof kjorPaaminnelser>> | null = null
@@ -87,6 +89,21 @@ async function handle(req: NextRequest) {
     }
   }
 
+  // Opprydding av posisjonsspor (#695). Kjøres kun på slot 1, som påminnelsene:
+  // jobben er idempotent og har ingen hast — et spor som ligger noen timer
+  // ekstra er skjult av RLS i mellomtiden uansett. Egen try/catch så en feil
+  // her aldri tar med seg påminnelsene, jf. #638-review.
+  let posisjonResult: Awaited<ReturnType<typeof ryddPosisjonsspor>> | null = null
+  if (slotIndex === 1) {
+    try {
+      posisjonResult = await ryddPosisjonsspor(admin)
+      posisjonFeil = posisjonResult.feil
+    } catch (e) {
+      await logg.feil('cron.posisjon.jobb.feilet', e, { ctx: { slot: slotIndex } })
+      posisjonFeil = 1
+    }
+  }
+
   // Gating per jobb, ikke ruten som helhet (#504): paaminner kjører KUN på
   // slot 1 og har ingen senere sjanse samme dag — enhver feil der skal gi
   // rødt med én gang. Bursdag og bursdagsvarsel kjører derimot på alle slots
@@ -94,7 +111,9 @@ async function handle(req: NextRequest) {
   // gjøre rødt.
   const erSisteSlot = slotIndex === BURSDAG_VINDU_SLOTS - 1
   const status =
-    paaminnerFeil > 0 || ((bursdagFeil > 0 || bursdagsvarselFeil > 0) && erSisteSlot) ? 500 : 200
+    paaminnerFeil > 0 || posisjonFeil > 0 || ((bursdagFeil > 0 || bursdagsvarselFeil > 0) && erSisteSlot)
+      ? 500
+      : 200
   return NextResponse.json(
     {
       ok: status === 200,
@@ -102,7 +121,9 @@ async function handle(req: NextRequest) {
       paaminne: paaminneResult ?? 'hoppet',
       bursdag: bursdagResult ?? 'utenfor vindu',
       bursdagsvarsel: bursdagsvarselResult ?? 'utenfor vindu',
+      posisjon: posisjonResult ?? 'hoppet',
       paaminnerFeil,
+      posisjonFeil,
       bursdagFeil,
       bursdagsvarselFeil,
     },

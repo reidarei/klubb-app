@@ -63,6 +63,11 @@ export const MELDING_MAKS_BILDER = 10
 // kommer inn; over terskelen lar vi ham være i fred. Se #238.
 export const CHAT_NAER_BUNN_TERSKEL_PX = 150
 
+// Luft mellom skrivefeltet og tastaturets overkant i panel-chatten (kartets
+// sidepanel), der feltet ligger i normal flyt i stedet for forankret til
+// viewporten. Se #714.
+export const CHAT_TASTATUR_LUFT_PX = 12
+
 // Maks tegn i valgfri hilsen ved purring av arrangøransvarlig.
 // Tilfeldigvis samme verdi som CHAT_MAKS_LENGDE, men definert separat
 // fordi hilsenen ikke lagres i DB — den går rett inn i sendVarsel-
@@ -367,3 +372,73 @@ export const PUSH_KLIKK_LOGIN_VINDU_MS = 600_000
 // redirecter et annet sted (eller en URL som aldri blir «vi står her») holde
 // klienten i en evig runde med tilbakeskriving + navigasjon.
 export const PUSH_KLIKK_MAKS_FORSOK = 2
+
+// ─── POSISJONSDELING (#693) ───────────────────────────────────────────────
+
+// Hvor lenge én «Del posisjonen min» varer før den slår seg av selv. Verdien
+// er en avveining mot NØYAKTIG ETT problem: at noen deler og glemmer det.
+// For kort, og du må trykke på nytt midt i kvelden; for lang, og «tidsbegrenset»
+// blir en påstand uten innhold. 8 timer dekker en kveld ute eller en dag på
+// tur, og er kort nok til at ingenting står og deler mens du sover.
+//
+// Hvert trykk FORNYER vinduet — knappen er «del i 8 timer fra nå», ikke
+// «del til et fast klokkeslett».
+export const POSISJON_DELING_TIMER = 8
+
+// Hvor langt tilbake sporet vises når det IKKE pågår et arrangement (#698).
+//
+// Opprinnelig ble sporet kun tegnet under et arrangement, og ellers klippet til
+// siste punkt. Reidar flyttet seg hjemmefra til jobb og så at bildet hans
+// flyttet seg uten å legge igjen noe — for ham var hele poenget å se hvor man
+// har vært, ikke bare hvor man er. Punktene ble lagret hele tiden; det var kun
+// visningen som skjulte dem.
+//
+// 24 timer avgrenser det til «hvor har vi vært i dag og i natt». Uten en grense
+// ville et spor vokst så lenge delingen ble fornyet, og kartet blitt uleselig.
+// Pågår et arrangement, gjelder ikke grensen — da avgrenser arrangementet
+// isteden, og en tur over flere dager skal vises i sin helhet.
+export const POSISJON_SPOR_TIMER = 24
+
+// Over denne alderen regnes et punkt som gammelt, og kartet demper prikken.
+// Poenget er ikke å skjule punktet, men å hindre at det leses som «her er han
+// NÅ»: uten bakgrunnsposisjon på iOS er et punkt bare like ferskt som forrige
+// gang mannen hadde appen oppe, og 30 minutter er nok til at han har rukket å
+// gå et helt annet sted.
+// Minste flytting (meter) før en innmelding blir et NYTT punkt i sporet i
+// stedet for å oppdatere tiden på det forrige (#695). Terskelen er bevisst
+// større enn typisk GPS-drift i by (±10–30 m): uten den ville en mann som
+// sitter tre timer på samme pub tegnet et spor som ser ut som vandring, og
+// prikkene ville ligget oppå hverandre på samme fortau.
+export const POSISJON_MIN_FLYTT_M = 60
+
+export const POSISJON_FERSK_MINUTTER = 30
+
+// Markeringer på kartet (#697) — «møt meg her», «bussen går herfra».
+//
+// Tegngrensen speiler check-constraint kart_markering_tekst_gyldig (migrasjon
+// 145) — endres den her, må migrasjonen følge etter. 60 er lavt med vilje: en
+// markering er en etikett ved siden av en nål på et kart, ikke et innlegg, og
+// lengre tekst ville uansett ikke fått plass uten å dekke kartet under.
+export const KART_MARKERING_MAKS_LENGDE = 60
+
+// Levetid for en markering satt UTENOM et arrangement. Pågår et arrangement med
+// sluttid, arver markeringen den i stedet. 12 timer dekker en kveld og natta
+// etter, og er kort nok til at kartet ikke fylles opp av gamle nåler ingen
+// husker hvorfor står der.
+export const KART_MARKERING_TIMER = 12
+
+// Hvor lenge «Pling»-knappen står låst og dempet etter et trykk. Den er en
+// KVITTERING, ikke en sperre mot spam: uten den så knappen helt uendret ut
+// etter trykket, og man visste ikke om plinget faktisk gikk ut. Når den går
+// tilbake til normal er det samtidig invitasjonen til å spørre en gang til.
+export const POSISJON_PLING_KVITTERING_SEK = 10
+
+// Startzoom når kartet har ett eller flere punkter å vise. 14 er gatenivå —
+// nært nok til at du ser hvilken kvartal han står i, men ikke så nært at to
+// menn i samme gate faller utenfor hverandres skjermbilde.
+export const POSISJON_KART_ZOOM = 14
+
+// Fallback-utsnitt når INGEN deler. Kartet må åpne et sted, og et tomt
+// verdenskart sier mindre enn klubbens egen bydel. Verdiene er eksempel-bydel;
+// de bor i klubb-config fordi en nedstrøms klubb holder til et annet sted.
+export const POSISJON_KART_FALLBACK_ZOOM = 12

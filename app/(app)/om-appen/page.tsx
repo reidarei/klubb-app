@@ -6,6 +6,7 @@ import versjon from '@/lib/versjon.json'
 import { KLUBB_NAVN, DATA_LOKASJON } from '@/lib/klubb-config'
 import { AI_PAA, BURSDAGSBILDE_PAA } from '@/lib/config'
 import { byggEndringslogg } from '@/lib/endringslogg'
+import { POSISJON_DELING_TIMER } from '@/lib/konstanter'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 
 export default function OmAppen() {
@@ -95,6 +96,20 @@ export default function OmAppen() {
         <Avsnitt overskrift="Hva vi lagrer">
           Alt, til evig tid. Når du dævver blir det fortsatt liggende
           til spott og spe for evig tid.
+        </Avsnitt>
+        {/* Posisjon er det mest følsomme appen bærer, og løftet her er det
+         * medlemmet faktisk kan holde oss til: frivillig, tidsbegrenset, og
+         * uten spor. Teksten speiler koden — sletting ved «slutt å dele» er
+         * en ekte DELETE, ikke bare en RLS-effekt (se migrasjon 143). */}
+        <Avsnitt overskrift="Posisjon på kartet">
+          Kartet under Klubb viser bare dem som selv har trykket «Del
+          posisjonen min». Delingen slutter av seg selv etter {POSISJON_DELING_TIMER}{' '}
+          timer, og du kan skru den av når som helst.
+          {' '}
+          Mens du deler lagres hver posisjon du melder inn, slik at ruta di
+          vises på kartet — det siste døgnet til vanlig, og hele turen hvis et
+          arrangement pågår. Ruta slettes når arrangementet er over, og med én
+          gang hvis du skrur av delingen selv.
         </Avsnitt>
         <Avsnitt overskrift="Ingen tracking">
           Vi har ingen annonser, ingen Google Analytics, ingen Facebook-

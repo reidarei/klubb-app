@@ -6,7 +6,7 @@ export type IkonNavn =
   | 'doc' | 'building' | 'chart' | 'cog' | 'arrowRight' | 'checkmark'
   | 'x' | 'send' | 'list' | 'search' | 'cake' | 'cigar' | 'wine' | 'crown'
   | 'sparkle' | 'diamond' | 'flame' | 'image' | 'thumbsUp'
-  | 'beer' | 'flute' | 'medal'
+  | 'beer' | 'flute' | 'medal' | 'map'
 
 const PATHS: Record<IkonNavn, React.ReactNode> = {
   calendar: <path d="M8 2v3M16 2v3M3 9h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />,
@@ -15,6 +15,10 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   mapPin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z" /><circle cx="12" cy="10" r="3" /></>,
+  // Brettet kart — posisjonskartet under Klubb (#693). Eget ikon og ikke mapPin:
+  // den er allerede tatt av «Turene», og to like ikoner i samme liste gjør
+  // radene umulige å skille på et blikk.
+  map: <><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z" /><path d="M8 2v16M16 6v16" /></>,
   // Agenda-familien (plane/beer/flute/medal) er tegnet som LUKKEDE silhuetter
   // så den samme pathen bærer to optiske størrelser: fylt på 11 px i
   // MiniKalender, som omriss på 24 px på kortene. Se #550.

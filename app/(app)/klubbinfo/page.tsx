@@ -87,6 +87,11 @@ export default async function Klubbinfo() {
       href: '/album',
     },
     {
+      icon: 'map',
+      title: 'Kart',
+      href: '/kart',
+    },
+    {
       icon: 'mapPin',
       title: 'Turene',
       meta: antallTurer ? String(antallTurer) : undefined,

@@ -20,9 +20,9 @@ import {
   type ChatProfil,
 } from '@/lib/mention'
 import MentionVelger from '@/components/agenda/MentionVelger'
-import { CHAT_NAER_BUNN_TERSKEL_PX } from '@/lib/konstanter'
+import { CHAT_NAER_BUNN_TERSKEL_PX, CHAT_TASTATUR_LUFT_PX } from '@/lib/konstanter'
 import ChatMeldingRad from './ChatMeldingRad'
-import { useKeyboardOffset } from './hooks/useKeyboardOffset'
+import { useKeyboardOffset, useTastaturHoyde } from './hooks/useKeyboardOffset'
 import { useBildeOpplasting } from './hooks/useBildeOpplasting'
 import { useChatReaksjoner } from './hooks/useChatReaksjoner'
 import { useChatMeldinger } from './hooks/useChatMeldinger'
@@ -66,6 +66,19 @@ type Props = {
    * Brukes på chat-fokuserte sider (/chat, /samtaler/[id]). Default false så
    * detaljsider med chat under hovedinnholdet ikke spretter til bunn. */
   autoScrollTilBunn?: boolean
+  /**
+   * Elementet som skal scrolles i stedet for vinduet.
+   *
+   * Utelates den, scrolles `window` — dagens oppførsel på /chat og
+   * /samtaler/[id], der SIDEN er scroll-containeren. Kartet (#711) rendrer
+   * chatten i et sidepanel med egen scroll, og der låser kartsiden dessuten
+   * vindusscroll helt: `window.scrollTo` gjorde da ingenting, og chatten ble
+   * stående et tilfeldig sted midt i tråden i stedet for nederst.
+   *
+   * En funksjon og ikke en ref: panelet monteres etter Chat i noen
+   * rekkefølger, og en ref ville vært null på det tidspunktet.
+   */
+  scrollContainer?: () => HTMLElement | null
 }
 
 export default function Chat({
@@ -75,6 +88,7 @@ export default function Chat({
   profiler,
   visSeksjonsLabel = true,
   autoScrollTilBunn = false,
+  scrollContainer,
 }: Props) {
   const [tekst, setTekst] = useState('')
   const [sender, setSender] = useState(false)
@@ -151,16 +165,25 @@ export default function Chat({
     // Denne useCallback brukes fortsatt for realtime-INSERT-grenen og som
     // defense-in-depth-fallback hvis inline-scriptet blokkeres.
     if (typeof window === 'undefined') return
+    const boks = scrollContainer?.()
+    if (boks) {
+      boks.scrollTo({ top: boks.scrollHeight, behavior: instant ? 'auto' : 'smooth' })
+      return
+    }
     window.scrollTo({
       top: document.documentElement.scrollHeight,
       behavior: instant ? 'auto' : 'smooth',
     })
-  }, [])
+  }, [scrollContainer])
 
   // Sjekker om brukeren befinner seg nær bunnen av siden.
   // Kjøres kun klient-side (window er undefined under SSR).
   function erNaerBunn(terskel = CHAT_NAER_BUNN_TERSKEL_PX) {
     if (typeof window === 'undefined') return true
+    const boks = scrollContainer?.()
+    if (boks) {
+      return boks.scrollHeight - boks.scrollTop - boks.clientHeight <= terskel
+    }
     const rest = document.documentElement.scrollHeight - window.scrollY - window.innerHeight
     return rest <= terskel
   }
@@ -178,8 +201,18 @@ export default function Chat({
     if (!harMountet.current) {
       harMountet.current = true
       if (autoScrollTilBunn) {
-        // requestAnimationFrame så DOM er rendret før vi måler/scroller
-        requestAnimationFrame(() => scrollTilBunn(true))
+        // requestAnimationFrame så DOM er rendret før vi måler/scroller.
+        // To runder når vi scroller en egen container (#711): panelet glir inn
+        // over 220 ms, og bilder uten satte dimensjoner får høyde først etter
+        // at de har lastet — én frame er da for tidlig, og chatten ble stående
+        // et stykke over bunnen.
+        requestAnimationFrame(() => {
+          scrollTilBunn(true)
+          if (scrollContainer) {
+            requestAnimationFrame(() => scrollTilBunn(true))
+            window.setTimeout(() => scrollTilBunn(true), 400)
+          }
+        })
       }
       return
     }
@@ -196,8 +229,24 @@ export default function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meldinger.length, scrollTilBunn, autoScrollTilBunn])
 
-  // iOS-tastaturhøyde — skjør visualViewport-logikk, se hooks/useKeyboardOffset.ts
+  // iOS-tastaturhøyde — skjør visualViewport-logikk, se hooks/useKeyboardOffset.ts.
+  // keyboardOffset (viewport-forankret) brukes KUN i !iEgenBoks-grenene under;
+  // tastaturHoyde (stabil, for flyt) brukes KUN i iEgenBoks-grenen. Se #714.
   const keyboardOffset = useKeyboardOffset()
+  const tastaturHoyde = useTastaturHoyde()
+
+  // Rendres chatten i sin EGEN scroll-boks (kartets sidepanel, #711), eller
+  // er den sidens hovedinnhold?
+  //
+  // Skillet styrer input-pillen: på /chat og /samtaler/[id] ER chatten siden,
+  // og pillen forankres til viewporten (`position: fixed`) slik den alltid
+  // har gjort — se CLAUDE.md § Policy: Skrivefelt og iOS-tastatur for hvorfor
+  // det unntaket er varig. I et sidepanel (kartet) ligger pillen i stedet i
+  // NORMAL FLYT som siste element under meldingene, ikke forankret i det hele
+  // tatt — `sticky` festet den til boksens bunn og gjenskapte akkurat den
+  // dansende, viewport-avhengige posisjoneringen chatten på egen side har
+  // (#712, #713). Se #714.
+  const iEgenBoks = Boolean(scrollContainer)
 
   // Reaksjoner (fetch + realtime + optimistisk toggle) bor i egen hook.
   const { reaksjonerPerMelding, toggleReaksjon: toggleReaksjonBase } =
@@ -209,6 +258,28 @@ export default function Chat({
     setPickerFor(null)
     toggleReaksjonBase(meldingId, emoji)
   }
+
+  // Fokus-scroll (#714): engangs-scroll når feltet får fokus, pluss en
+  // kompletterende effekt for tastatur-animasjonen. vv.resize (som driver
+  // tastaturHoyde) kommer ETTER focus-eventet, så paddingen som gir plass
+  // til å scrolle i finnes ikke ennå på fokus-tidspunktet — uten denne
+  // effekten stopper scrollen for tidlig.
+  //
+  // iOS leverer typisk FLERE resize-høyder mens tastaturet animerer opp, så
+  // guarden står på «høyden vokser», ikke bare på 0→N: stoppet vi etter
+  // første trinn, rakk paddingen å vokse videre uten at noen scrollet, og
+  // feltet kunne ende bak tastaturet likevel. Retningen er det bærende — vi
+  // scroller ALDRI når høyden synker eller står stille (N→0, N→M<N), for da
+  // er vi tilbake i den løpende omposisjoneringen som ER bug-klassen (#222,
+  // #236, #712, #713). Dette er en scroll av boksen, ikke en flytting av
+  // feltet, og skjer kun mens feltet faktisk har fokus.
+  const forrigeTastaturHoyde = useRef(0)
+  useEffect(() => {
+    const vokser = tastaturHoyde > forrigeTastaturHoyde.current
+    forrigeTastaturHoyde.current = tastaturHoyde
+    if (!vokser || !iEgenBoks) return
+    if (document.activeElement === inputRef.current) scrollTilBunn(true)
+  }, [tastaturHoyde, iEgenBoks, scrollTilBunn])
 
   async function handleSend() {
     const melding = tekst.trim() || null
@@ -406,15 +477,20 @@ export default function Chat({
           over sin naturlige posisjon og dekket siste melding.
           På chat-fokuserte sider vokser paddingen i tillegg med keyboardOffset
           slik at dokumentet blir høyt nok til å scrolle siste melding opp
-          over tastaturet når det åpner (jf. #216). */}
+          over tastaturet når det åpner (jf. #216).
+          I egen boks (iEgenBoks) er padding-bottom 0: pillen ligger i normal
+          flyt rett under meldingslisten, ikke forankret, så det trengs ikke
+          noe tomrom å reservere for den. Se #714. */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           marginBottom: 4,
-          paddingBottom: autoScrollTilBunn
-            ? `calc(64px + ${keyboardOffset}px + env(safe-area-inset-bottom))`
-            : 'calc(64px + env(safe-area-inset-bottom))',
+          paddingBottom: iEgenBoks
+            ? 0
+            : autoScrollTilBunn
+              ? `calc(64px + ${keyboardOffset}px + env(safe-area-inset-bottom))`
+              : 'calc(64px + env(safe-area-inset-bottom))',
         }}
       >
         {meldinger.length === 0 && (
@@ -475,54 +551,69 @@ export default function Chat({
       </div>
 
       {/* Container med mention-chips, bilde-preview, evt. feilmelding
-          og input-pill. Mention-chips ligger inni for å unngå at de
-          skjules bak input-pill når flere chips wrappes til flere linjer.
-          På chat-fokuserte sider er container fixed til bunn av viewportet
-          så pillen alltid er synlig (også når innholdet er kortere enn
-          skjermen); ellers sticky, sånn at den følger med når brukeren
-          scroller chat-seksjonen inn i bilde på detalj-sider.
+          og input-pill.
+          I egen boks (kartets sidepanel, #711) ligger pillen i NORMAL FLYT
+          som siste element under meldingene — ingen position, ingen bottom-
+          offset. Scroller man opp i panelet, går pillen ut av syne sammen
+          med resten av innholdet, som er ønsket (se CLAUDE.md § Policy:
+          Skrivefelt og iOS-tastatur). Fire runder i samme bug-klasse
+          (#222, #236, #712, #713) landet på dette: forankring til
+          viewporten er problemet, ikke løsningen. Se #714.
+          Utenfor egen boks: på chat-fokuserte sider er container fixed til
+          bunn av viewportet så pillen alltid er synlig (også når innholdet
+          er kortere enn skjermen); ellers sticky, sånn at den følger med når
+          brukeren scroller chat-seksjonen inn i bilde på detalj-sider.
           `bottom` løftes med keyboardOffset så pillen holder seg over
-          iOS-tastaturet (jf. #216). */}
+          iOS-tastaturet (jf. #216). Mention-chips ligger inni containeren
+          for å unngå at de skjules bak input-pill når flere chips wrappes
+          til flere linjer. */}
       <div
         style={
-          autoScrollTilBunn
+          iEgenBoks
             ? {
-                position: 'fixed',
-                left: 0,
-                right: 0,
-                bottom:
-                  keyboardOffset > 0
-                    ? `${keyboardOffset}px`
-                    : 'env(safe-area-inset-bottom)',
-                zIndex: 20,
-                display: 'flex',
-                justifyContent: 'center',
-                // pointer-events: none på ytre wrapper så taps over/under
-                // pillen treffer chat-innholdet under; inner gjenoppretter
-                // pointer-events for selve pillen.
-                pointerEvents: 'none',
+                paddingBottom: tastaturHoyde > 0 ? tastaturHoyde + CHAT_TASTATUR_LUFT_PX : 0,
+                marginTop: 6,
               }
-            : {
-                position: 'sticky',
-                bottom:
-                  keyboardOffset > 0
-                    ? `${keyboardOffset}px`
-                    : 'env(safe-area-inset-bottom)',
-                zIndex: 20,
-              }
+            : autoScrollTilBunn
+              ? {
+                  position: 'fixed',
+                  left: 0,
+                  right: 0,
+                  bottom:
+                    keyboardOffset > 0
+                      ? `${keyboardOffset}px`
+                      : 'env(safe-area-inset-bottom)',
+                  zIndex: 20,
+                  display: 'flex',
+                  justifyContent: 'center',
+                  // pointer-events: none på ytre wrapper så taps over/under
+                  // pillen treffer chat-innholdet under; inner gjenoppretter
+                  // pointer-events for selve pillen.
+                  pointerEvents: 'none',
+                }
+              : {
+                  position: 'sticky',
+                  bottom:
+                    keyboardOffset > 0
+                      ? `${keyboardOffset}px`
+                      : 'env(safe-area-inset-bottom)',
+                  zIndex: 20,
+                }
         }
       >
         <div
           style={
-            autoScrollTilBunn
-              ? {
-                  width: '100%',
-                  maxWidth: 480,
-                  padding: '0 20px',
-                  boxSizing: 'border-box',
-                  pointerEvents: 'auto',
-                }
-              : undefined
+            iEgenBoks
+              ? { width: '100%', boxSizing: 'border-box' }
+              : autoScrollTilBunn
+                ? {
+                    width: '100%',
+                    maxWidth: 480,
+                    padding: '0 20px',
+                    boxSizing: 'border-box',
+                    pointerEvents: 'auto',
+                  }
+                : undefined
           }
         >
       {/* @mention-forslag */}
@@ -645,6 +736,12 @@ export default function Chat({
               e.preventDefault()
               handleSend()
             }
+          }}
+          onFocus={() => {
+            // Engangs-scroll ved fokus, ikke en løpende lytter. Kompletteres
+            // av tastaturHoyde-effekten over for tilfellet der tastaturet
+            // åpner senere enn fokuset (#714).
+            if (iEgenBoks) scrollTilBunn(true)
           }}
           placeholder={bildePreview ? 'Legg til tekst (valgfritt)…' : 'Skriv en melding…'}
           maxLength={konfig.charLimit}

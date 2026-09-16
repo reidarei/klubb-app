@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
 import { AVREISE_VINDU_DAGER } from '../lib/konstanter'
+import { iDagOslo, datetimeLocalTilIso } from '../lib/dato'
 
 /**
  * Avreise-blokka nederst på tur-kortet (#669): ansiktene til alle som har
@@ -28,11 +29,14 @@ const DAGER_TIL_NAER = 3
 let seedet = false
 
 function omDager(dager: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + dager)
-  // Midt på dagen, så testen ikke vipper over en døgngrense mens den kjører.
-  d.setHours(12, 0, 0, 0)
-  return d.toISOString()
+  // Norsk dato, ikke runnerens. `new Date()` + setHours(12) ga UTC-middag på CI
+  // (runneren står i UTC), mens appen teller dager i Europe/Oslo — mellom 22:00
+  // og 24:00 UTC er norsk dato allerede neste dag, og nedtellingen viste én dag
+  // for lite. UTC-aritmetikk på dato-strengen ruller måned/år korrekt, samme
+  // knep som iMorgenOslo(). Jf. Policy: Tidshåndtering.
+  const [y, m, d] = iDagOslo().split('-').map(Number)
+  const maalDato = new Date(Date.UTC(y, m - 1, d + dager)).toISOString().slice(0, 10)
+  return datetimeLocalTilIso(`${maalDato}T12:00`)
 }
 
 function kortFor(page: Page, tittel: string) {

@@ -917,6 +917,57 @@ export type Database = {
         }
         Relationships: []
       }
+      kart_markering: {
+        Row: {
+          arrangement_id: string | null
+          id: string
+          lat: number
+          lng: number
+          opprettet: string
+          opprettet_av: string
+          symbol: string
+          tekst: string
+          utloper: string
+        }
+        Insert: {
+          arrangement_id?: string | null
+          id?: string
+          lat: number
+          lng: number
+          opprettet?: string
+          opprettet_av: string
+          symbol?: string
+          tekst: string
+          utloper: string
+        }
+        Update: {
+          arrangement_id?: string | null
+          id?: string
+          lat?: number
+          lng?: number
+          opprettet?: string
+          opprettet_av?: string
+          symbol?: string
+          tekst?: string
+          utloper?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kart_markering_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kart_markering_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       klubb_chat: {
         Row: {
           bilde_url: string | null
@@ -1477,6 +1528,77 @@ export type Database = {
           {
             foreignKeyName: "poll_valg_referanse_profil_id_fkey"
             columns: ["referanse_profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posisjon_deling: {
+        Row: {
+          deler_til: string
+          oppdatert: string
+          profil_id: string
+        }
+        Insert: {
+          deler_til: string
+          oppdatert?: string
+          profil_id: string
+        }
+        Update: {
+          deler_til?: string
+          oppdatert?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posisjon_deling_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posisjon_punkt: {
+        Row: {
+          arrangement_id: string | null
+          id: string
+          lat: number
+          lng: number
+          noeyaktighet_m: number | null
+          profil_id: string
+          registrert: string
+        }
+        Insert: {
+          arrangement_id?: string | null
+          id?: string
+          lat: number
+          lng: number
+          noeyaktighet_m?: number | null
+          profil_id: string
+          registrert?: string
+        }
+        Update: {
+          arrangement_id?: string | null
+          id?: string
+          lat?: number
+          lng?: number
+          noeyaktighet_m?: number | null
+          profil_id?: string
+          registrert?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posisjon_punkt_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posisjon_punkt_profil_id_fkey"
+            columns: ["profil_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

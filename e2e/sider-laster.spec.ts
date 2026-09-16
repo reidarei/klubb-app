@@ -53,6 +53,7 @@ const RUTER: Rute[] = [
   { sti: '/tidligere', overskrift: 'Hele historikken' },
   { sti: '/kaaringer', overskrift: 'Hall of Fame' },
   { sti: '/stedene', overskrift: /Vi har vært verden rundt/ },
+  { sti: '/kart' }, // ingen overskrift: kartet er fullskjerm (#704)
   { sti: '/fond' },
   { sti: '/fond/rediger' },
   { sti: '/klubbinfo' },

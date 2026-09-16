@@ -37,6 +37,14 @@ export const KLUBB_STIFTET = {
 // Stiftelsessted — vises ved siden av stiftelsesdatoen på klubbinfo-siden.
 export const KLUBB_STED = process.env.NEXT_PUBLIC_KLUBB_STED ?? 'Oslo'
 
+// Kartets startsentre — brukt når en tur/arrangement vises på kartet
+// uten spesifikke koordinater. Sett dine egne verdier hvis klubben din
+// velger sitt eget hjemstad. Se docs/klubb-tilpasning.md.
+export const KLUBB_KART_SENTER = {
+  lat: Number(process.env.NEXT_PUBLIC_KLUBB_KART_LAT ?? 59.9139),
+  lng: Number(process.env.NEXT_PUBLIC_KLUBB_KART_LNG ?? 10.7522),
+} as const
+
 // «Om klubben»-avsnittene på klubbinfo-siden. Env-varen bruker `|` som
 // avsnitt-skille (én env-var kan ikke holde et array direkte).
 export const KLUBB_OM_AVSNITT: readonly string[] = process.env.NEXT_PUBLIC_KLUBB_OM

@@ -2,6 +2,27 @@
 
 import { useState, useEffect } from 'react'
 
+// To hooks, to spørsmål (#714 — se også CLAUDE.md § Policy: Skrivefelt og
+// iOS-tastatur):
+//
+// - useKeyboardOffset(): «hvor mye må et VIEWPORT-FORANKRET element (fixed/
+//   sticky/absolute) løftes for å stå over tastaturet?» Inkluderer
+//   vv.offsetTop og lytter på vv.scroll i tillegg til vv.resize — nødvendig
+//   fordi et forankret element må følge visual-viewportens bevegelser, og
+//   derfor per design ustabil (bounce-quirk #222/#236). Kun for de tre
+//   forbrukerne som faktisk forankrer til viewporten: PosisjonsKart sin
+//   bunn-blokk (absolute i en fastlåst flate), BildeKommentarSheet, og
+//   Chat sin !iEgenBoks-gren — altså /chat og /samtaler/[id], der chatten
+//   ER siden og pillen er `position: fixed`. Den siste er ikke en rest
+//   som skal ryddes bort, men det varig dokumenterte unntaket i policyen.
+// - useTastaturHoyde(): «hvor høyt er tastaturet?» En ren trinnfunksjon av
+//   av/på-tilstanden, uten offsetTop og uten scroll-lytter. Stabil, for
+//   elementer som ligger I NORMAL FLYT (padding-bottom, ikke posisjon).
+//
+// De skal IKKE slås sammen — de svarer på forskjellige spørsmål, og et
+// forsøk på å gjenbruke den ene til den andres formål er nøyaktig hvordan
+// denne bug-klassen har kommet tilbake fire ganger (#222, #236, #712, #713).
+
 // Tastatur-høyde via visualViewport. Når iOS-tastaturet åpner med
 // interactiveWidget='overlays-content' (jf. app/layout.tsx, valgt for å
 // unngå dock-bug-klassen) endrer ikke window.innerHeight seg, men
@@ -28,4 +49,25 @@ export function useKeyboardOffset(): number {
     }
   }, [])
   return keyboardOffset
+}
+
+// Tastatur-høyde uten offsetTop og uten scroll-lytter — kun vv.resize.
+// Svarer på «hvor høyt er tastaturet», ikke «hvor mye må jeg løfte noe».
+// For elementer i normal flyt (padding-bottom + engangs-scroll ved focus),
+// aldri for posisjonering. Se filhode-kommentaren over og #714.
+export function useTastaturHoyde(): number {
+  const [tastaturHoyde, setTastaturHoyde] = useState(0)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return
+    const vv = window.visualViewport
+    function oppdater() {
+      setTastaturHoyde(Math.max(0, window.innerHeight - vv.height))
+    }
+    vv.addEventListener('resize', oppdater)
+    oppdater()
+    return () => {
+      vv.removeEventListener('resize', oppdater)
+    }
+  }, [])
+  return tastaturHoyde
 }

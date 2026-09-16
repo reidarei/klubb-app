@@ -118,6 +118,14 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
   chat_albumbilde: { panel: 'Ny kommentar på et bilde', kort: 'Kommentar på bilde' },
   'privat-melding': { panel: 'Ny privatmelding (til mottakeren)', kort: 'Ny privatmelding' },
 
+  // ── Posisjon ─────────────────────────────────────────────────────────────
+  // Manuell og gjentakbar: én mann trykker «Pling» på en annen i kartlista.
+  // Erstatningen for bakgrunnssporing, som iOS ikke gir en PWA (#695).
+  posisjon_pling: {
+    panel: 'Pling om hvor noen er (fra «Pling»-knappen på kartet)',
+    kort: 'Pling om posisjon',
+  },
+
   // ── Bursdag ──────────────────────────────────────────────────────────────
   // bursdag_i_dag er IKKE en etterfølger til bursdagsgratulasjon under —
   // sistnevnte gikk til bursdagsbarnet selv og sendes ikke lenger (#643),
