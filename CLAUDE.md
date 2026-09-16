@@ -401,6 +401,22 @@ App-navigasjon består av sticky TopHeader med tre alltid-synlige tekst-tabs (Ag
 
 Keep-listen i `activate` (`public/sw.js`) er stedet bug-klassen gjeninnføres: den sletter alle cache-navn utenfor listen, så en tredje cache som legges til uten å whitelistes river bort overleveringen ved neste deploy. Skrivingen i `notificationclick` skal være fail-open og tidsbegrenset — et hengende cache-lag må aldri kunne blokkere `focus`/`openWindow`, for da gjør trykket på varselet ingenting i det hele tatt.
 
+
+## Policy: Skrivefelt og iOS-tastatur
+
+Skrivefelt inne i en egen scroll-boks (f.eks. et sidepanel eller et chat-vindu) skal ligge i NORMAL FLYT som siste element, ikke forankres til viewporten med `fixed` eller `sticky`. Når brukeren scroller opp i boksen, skal feltet gå ut av syne sammen med innholdet — det er ønsket oppførsel.
+
+**Aldri forankre med `visualViewport.offsetTop`.** Formelen `innerHeight − height − offsetTop` er teknisk korrekt for viewport-forankrede elementer, men er derfor ustabil — den følger den bevegelsen som skaper "dansingen" som dette gjelder. Løsningen er å ikke forankre, ikke å jage offseten videre med enda en korreksjon.
+
+**Plass til tastaturet skabes med PLASS Å SCROLLE I, ikke omposisjonering.** Bruk `padding-bottom` under feltet, lik tastaturhøyden, pluss et scroll ved `focus`. iOS leverer flere resize-høyder mens tastaturet animerer opp, så en effekt må fyre så lenge høyden vokser, ikke bare på første trinn. Aldri omposisjonerer feltet på scroll- eller viewport-hendelser.
+
+**To hooks, to formål** (`components/chat/hooks/useKeyboardOffset.ts`):
+- `useTastaturHoyde()` — for elementer i flyt, basert på `vv.resize` uten `offsetTop`
+- `useKeyboardOffset()` — for elementer som MÅ forankres (`fixed`/`sticky`), bruker `offsetTop`
+
+Ikke blander dem — hver svarer på sitt spørsmål. Forsøk på gjenbruk er hvordan denne klassen kommer tilbake gjentatte ganger.
+
+**Unntak** — hvis appen sin primære chatflate (`/chat`) er en dedikert side og ikke kan ligge inne i en scroll-boks, forankres skrivefeltet fortsatt (`position: fixed` med `useKeyboardOffset()`). Enhver ny scroll-boks med skrivefelt skal følge samme mønster som dokumentert over.
 ## Policy: Migrasjoner
 
 Nye tabeller i `public`-schema må eksplisitt gi tilgang til Data API-rollene. Supabase fjerner de implisitte default-grants på `public`-schema: **30. mai 2026** for nye prosjekter, **30. oktober 2026** håndhevet på alle eksisterende prosjekter (inkludert vårt). Uten `GRANT` returnerer PostgREST `42501` selv om RLS-policyen tillater raden — `supabase-js` ser ikke at tabellen finnes.
