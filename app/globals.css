@@ -74,6 +74,11 @@
   --kart-flate-sterk: rgba(42, 58, 66, 0.97);
   --kart-kant: rgba(255, 255, 255, 0.14);
   --kart-sol: #f0b464;
+  /* Mørk tekst på sol-bakgrunn (kartets primærknapper). Egen token, ikke
+   * --accent-foreground: sol er en annen farge enn sand-aksenten og skal kunne
+   * justeres uavhengig. Samme verdi i lyst tema — sol er varm og lys nok til
+   * mørk tekst i begge. */
+  --kart-sol-tekst: #241a0c;
   --kart-hav: #5fb3bd;
   --kart-korall: #e0806a;
   --kart-tekst: #f2efe8;
@@ -207,6 +212,11 @@
   --kart-flate-sterk: rgba(42, 58, 66, 0.97);
   --kart-kant: rgba(255, 255, 255, 0.14);
   --kart-sol: #f0b464;
+  /* Mørk tekst på sol-bakgrunn (kartets primærknapper). Egen token, ikke
+   * --accent-foreground: sol er en annen farge enn sand-aksenten og skal kunne
+   * justeres uavhengig. Samme verdi i lyst tema — sol er varm og lys nok til
+   * mørk tekst i begge. */
+  --kart-sol-tekst: #241a0c;
   --kart-hav: #5fb3bd;
   --kart-korall: #e0806a;
   --kart-tekst: #f2efe8;
@@ -314,6 +324,7 @@
   --kart-flate-sterk: rgba(255, 253, 248, 0.97);
   --kart-kant: rgba(120, 85, 50, 0.18);
   --kart-sol: #d8922c;
+  --kart-sol-tekst: #241a0c;
   --kart-hav: #2b8a99;
   --kart-korall: #c85a3c;
   --kart-tekst: #2a241c;

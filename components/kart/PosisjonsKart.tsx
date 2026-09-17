@@ -34,6 +34,15 @@ import {
 // serveren å bygge markup ingen ser (#709).
 const Chat = dynamic(() => import('@/components/chat/Chat'), { ssr: false })
 
+// Timeplan-panelet (#716) — statisk import, IKKE dynamic(): panelet er en
+// liten liste og et skjema (noen få kB gz), og «Timeplan · 17:00»-pilla må
+// kunne vise neste post i FØRSTE paint uten en chunk-hent midt i trykket.
+import TimeplanPanel, { type TimeplanArrangement, type TimeplanPost } from './TimeplanPanel'
+import { beregnDefaultTimeplanDato } from './NyTimeplanPost'
+// Re-eksportert slik at page.tsx kan importere ALLE kart-typene fra ett sted
+// (samme mønster som Mann/Markering/Punkt under).
+export type { TimeplanArrangement, TimeplanPost }
+
 import 'leaflet/dist/leaflet.css'
 import './kart.css'
 
@@ -88,6 +97,16 @@ type Props = {
   visChat: boolean
   chatMeldinger: React.ComponentProps<typeof Chat>['initialMeldinger']
   chatProfiler: React.ComponentProps<typeof Chat>['profiler']
+  /**
+   * Arrangementet timeplan-knappen skal peke til (#716) — pågående med
+   * senest start, ellers nærmeste framtidige, uansett hvor langt fram. null
+   * betyr «ingen aktuelt arrangement», og da rendres pilla ikke i det hele
+   * tatt.
+   */
+  timeplanArrangement: TimeplanArrangement | null
+  timeplanPoster: TimeplanPost[]
+  /** kart.timeplan.hent.feilet traff på serveren — panelet får egen feiltilstand. */
+  timeplanFeil: boolean
 }
 
 function relativTid(iso: string): string {
@@ -186,6 +205,9 @@ export default function PosisjonsKart({
   visChat,
   chatMeldinger,
   chatProfiler,
+  timeplanArrangement,
+  timeplanPoster,
+  timeplanFeil,
 }: Props) {
   const kartRef = useRef<HTMLDivElement>(null)
   const kartetRef = useRef<LeafletMap | null>(null)
@@ -209,10 +231,13 @@ export default function PosisjonsKart({
   // dermed krysset man skulle sikte med. Man skrev inn teksten uten å ha sett
   // hvor nåla havnet.
   //
-  //   'av'    — ingenting på gang
-  //   'sted'  — krysset står på kartet, kartet er fritt å flytte, ingen tekst
-  //   'tekst' — stedet er låst, nå skriver man hva det er
-  const [steg, setSteg] = useState<'av' | 'sted' | 'tekst'>('av')
+  //   'av'             — ingenting på gang
+  //   'sted'           — krysset står på kartet, kartet er fritt å flytte, ingen tekst
+  //   'tekst'          — stedet er låst, nå skriver man hva det er
+  //   'timeplan-punkt' — samme sikte, men for en timeplan-post (#716): ÉN
+  //                      sikte-tilstand for hele kartet, aldri to parallelle
+  //                      sikte-flagg. Panelet glir helt ut mens dette står på.
+  const [steg, setSteg] = useState<'av' | 'sted' | 'tekst' | 'timeplan-punkt'>('av')
   const [markeringTekst, setMarkeringTekst] = useState('')
   const [markeringSymbol, setMarkeringSymbol] = useState<MarkeringSymbol>(STANDARD_SYMBOL)
   // Koordinatet låses når man bekrefter stedet, slik at en utilsiktet
@@ -223,13 +248,52 @@ export default function PosisjonsKart({
   // Fjern-knappen lå i en liste langt under kartet, som man må scrolle forbi
   // hele kartet og mannelista for å nå. Det er ikke der man leter.
   const [valgtMarkering, setValgtMarkering] = useState<string | null>(null)
-  // Sidepanelet med lista (#704). Minimert som default: kartet er grunnen til
-  // at man er her, og lista er oppslagsverket ved siden av.
-  const [panelAapent, setPanelAapent] = useState(false)
-  // Chatten i venstrepanelet. Minimert som default, som lista til høyre:
-  // kartet er grunnen til at man er på siden.
-  const [chatAapent, setChatAapent] = useState(false)
+  // Ett panel om gangen, samlet i én union (#716) — tre booleans ga 8
+  // tilstander hvorav 5 var ulovlige. panelAapent/chatAapent/timeplanAapent
+  // under er avledet LOKALT per render, ikke egen state, slik at all
+  // eksisterende JSX (aria-expanded, transform, betingelser lenger ned)
+  // kan stå UENDRET: e2e (kart-markering.spec.ts, kart-markorer.spec.ts)
+  // leser disse testid-ene og verdiene, og skal ikke måtte endres av denne
+  // refaktoreringen.
+  const [aapentPanel, setAapentPanel] = useState<'ingen' | 'liste' | 'chat' | 'timeplan'>('ingen')
+  const panelAapent = aapentPanel === 'liste'
+  const chatAapent = aapentPanel === 'chat'
+  const timeplanAapent = aapentPanel === 'timeplan'
   const chatPanelRef = useRef<HTMLElement>(null)
+
+  // Timeplan-utkast (#716). Bor HER, ikke i TimeplanPanel/NyTimeplanPost —
+  // bindende arkitekturbeslutning: panelet glir helt ut mens man velger et
+  // punkt på kartet (steg 'timeplan-punkt' under), og skal glide inn igjen
+  // med utkastet intakt. dato initialiseres lazy til arrangementets
+  // startdato hvis turen ikke har begynt, ellers dagens dato.
+  const [timeplanDato, setTimeplanDato] = useState(() =>
+    timeplanArrangement ? beregnDefaultTimeplanDato(timeplanArrangement) : '',
+  )
+  const [timeplanTekst, setTimeplanTekst] = useState('')
+  const [timeplanManuellKlokke, setTimeplanManuellKlokke] = useState<string | null>(null)
+  const [timeplanPunkt, setTimeplanPunkt] = useState<{ lat: number; lng: number } | null>(null)
+
+  // Arrangement-bundet state nullstilles når serveren peker på et ANNET
+  // arrangement (#716 review). En RSC-revalidering et annet sted i komponenten
+  // (settMarkering() e.l.) kan bytte aktuelt arrangement uten at noe
+  // remonteres, og den lazy useState-initialiseringen over kjører kun ved
+  // mount — uten dette ble gammel dato, gammel tekst og gammelt punkt stående
+  // under tittelen til en helt annen tur. Dekker samtidig overgangen
+  // null → satt, som denne effekten håndterte alene før.
+  //
+  // Sammenligningen står på ID-en i en ref, ikke på objektidentiteten:
+  // props-objektet er nytt ved hver RSC-render, så en ren deps-sammenligning
+  // ville tømt utkastet hans hver gang en vilkårlig action revaliderte siden.
+  const forrigeTimeplanId = useRef<string | null>(timeplanArrangement?.id ?? null)
+  useEffect(() => {
+    const id = timeplanArrangement?.id ?? null
+    if (id === forrigeTimeplanId.current) return
+    forrigeTimeplanId.current = id
+    setTimeplanDato(timeplanArrangement ? beregnDefaultTimeplanDato(timeplanArrangement) : '')
+    setTimeplanTekst('')
+    setTimeplanManuellKlokke(null)
+    setTimeplanPunkt(null)
+  }, [timeplanArrangement])
 
   // Tastatur-høyden. Brukes KUN til å løfte bunn-blokka (absolute, #714)
   // når man skriver markeringsteksten — uten det havner tekstfeltet bak
@@ -296,22 +360,61 @@ export default function PosisjonsKart({
   const meg = menn.find(m => m.profilId === megId) ?? null
   const megDeler = meg !== null
 
+  // Navn/bilde til MEG selv til den optimistiske timeplan-raden (#716) —
+  // chatProfiler dekker alle aktive medlemmer uansett om jeg deler posisjon,
+  // til forskjell fra `meg` over (som krever aktiv deling).
+  const megProfil = chatProfiler.find(p => p.id === megId) ?? null
+  const megNavn = megProfil?.navn || 'Deg'
+  const megBildeUrl = megProfil?.bilde_url ?? null
+  const megRolle = megProfil?.rolle ?? null
+
   // Ett panel om gangen. To åpne paneler på en 390 px skjerm ville latt igjen
   // en stripe kart i midten — da er man like langt som før kartet ble
   // fullskjerm.
   const aapneListe = useCallback(() => {
-    setChatAapent(false)
-    setPanelAapent(a => !a)
+    setAapentPanel(p => (p === 'liste' ? 'ingen' : 'liste'))
   }, [])
 
   const aapneChat = useCallback(() => {
-    setPanelAapent(false)
-    setChatAapent(a => !a)
+    setAapentPanel(p => (p === 'chat' ? 'ingen' : 'chat'))
   }, [])
+
+  const aapneTimeplan = useCallback(() => {
+    setAapentPanel(p => (p === 'timeplan' ? 'ingen' : 'timeplan'))
+  }, [])
+
+  const endreTimeplanUtkast = useCallback(
+    (patch: {
+      dato?: string
+      tekst?: string
+      manuellKlokke?: string | null
+      punkt?: { lat: number; lng: number } | null
+    }) => {
+      if (patch.dato !== undefined) setTimeplanDato(patch.dato)
+      if (patch.tekst !== undefined) setTimeplanTekst(patch.tekst)
+      if (patch.manuellKlokke !== undefined) setTimeplanManuellKlokke(patch.manuellKlokke)
+      if (patch.punkt !== undefined) setTimeplanPunkt(patch.punkt)
+    },
+    [],
+  )
 
   const senterPaa = useCallback((lat: number, lng: number) => {
     kartetRef.current?.flyTo([lat, lng], POSISJON_KART_ZOOM)
   }, [])
+
+  // «Vis stedet på kartet» fra en timeplan-rad: lukk panelet FØRST (#716
+  // review). Panelet dekker 88 % av flaten, så punktet ble sentrert rett bak
+  // det — knappen flyttet kartet uten at man så noe som helst. Kartflaten
+  // beholder full størrelse (panelet er et overlegg, ikke en kolonne), så
+  // sentreringen treffer riktig med en gang; flyTo-animasjonen og panelets
+  // utglidning går side om side.
+  const senterPaaFraTimeplan = useCallback(
+    (lat: number, lng: number) => {
+      setAapentPanel('ingen')
+      senterPaa(lat, lng)
+    },
+    [senterPaa],
+  )
 
   // Kjernen i innmeldingen. `stille` skiller den automatiske oppdateringen ved
   // sidelast fra et bevisst knappetrykk: den automatiske skal aldri vise en
@@ -684,6 +787,36 @@ export default function PosisjonsKart({
     setFeil(null)
   }, [])
 
+  // Punktvalg for en timeplan-post (#716) — samme sikte som markeringsflyten
+  // over, gjenbrukt via steg 'timeplan-punkt' (ÉN sikte-tilstand for hele
+  // kartet). Panelet glir helt ut (aapentPanel → 'ingen') og inn igjen
+  // (aapentPanel → 'timeplan') rundt dette; utkastet selv rører vi ikke, det
+  // bor i egen state over og overlever runden uendret.
+  const startTimeplanPunktvalg = useCallback(() => {
+    setAapentPanel('ingen')
+    setFeil(null)
+    setSteg('timeplan-punkt')
+  }, [])
+
+  const bekreftTimeplanPunkt = useCallback(() => {
+    const kart = kartetRef.current
+    if (!kart) {
+      setFeil('Kartet er ikke klart ennå. Prøv igjen om et øyeblikk.')
+      return
+    }
+    const senter = kart.getCenter()
+    setTimeplanPunkt({ lat: senter.lat, lng: senter.lng })
+    setFeil(null)
+    setSteg('av')
+    setAapentPanel('timeplan')
+  }, [])
+
+  const avbrytTimeplanPunkt = useCallback(() => {
+    setFeil(null)
+    setSteg('av')
+    setAapentPanel('timeplan')
+  }, [])
+
   const lagreMarkering = useCallback(async () => {
     const tekst = markeringTekst.trim()
     if (!tekst) {
@@ -768,6 +901,19 @@ export default function PosisjonsKart({
   }, [])
 
   const antallPaaKartet = menn.length + markeringer.length
+
+  // «Timeplan · 17:00» på pilla (#716) — neste post som ikke er passert enda,
+  // fra SERVERENS liste. Bevisst forenkling: en post lagt til tidligere i
+  // DENNE økten (kun i TimeplanPanel sin optimistiske state) rekker ikke
+  // oppdatere denne teksten før neste fulle sidelast — pilla er en
+  // orientering, ikke fasit; panelet (som ER autoritativt) viser alltid
+  // riktig liste.
+  const nesteTimeplanKlokke = (() => {
+    const kommende = timeplanPoster
+      .filter(p => new Date(p.tidspunkt).getTime() >= Date.now())
+      .sort((a, b) => new Date(a.tidspunkt).getTime() - new Date(b.tidspunkt).getTime())
+    return kommende[0] ? formaterDato(kommende[0].tidspunkt, 'HH:mm') : null
+  })()
 
   return (
     <div
@@ -866,6 +1012,25 @@ export default function PosisjonsKart({
           </button>
         )}
 
+        {/* Timeplan-pilla (#716). Rendres kun når det finnes et aktuelt
+            arrangement — uansett hvor langt fram — og skjules mens man
+            sikter, samme gate som «Sett markering» over. Viser neste
+            kommende KLOKKESLETT, ikke teksten: knapperaden flexWrap-er
+            allerede, og en pille med variabel lengde ville skjøvet de andre
+            ned over kartet. */}
+        {timeplanArrangement && steg === 'av' && (
+          <button
+            type="button"
+            onClick={aapneTimeplan}
+            aria-expanded={timeplanAapent}
+            aria-label={timeplanAapent ? 'Lukk timeplanen' : 'Vis timeplanen'}
+            data-testid="timeplan-pille"
+            style={PILLE}
+          >
+            {nesteTimeplanKlokke ? `Timeplan · ${nesteTimeplanKlokke}` : 'Timeplan'}
+          </button>
+        )}
+
         {/* «Sporer» foran tittelen: en naken arrangementstittel i en pille
             forklarer ikke hvorfor den står der. Ordet er det som gjør at man
             skjønner at rutene på kartet hører til akkurat denne turen. */}
@@ -880,7 +1045,7 @@ export default function PosisjonsKart({
       </div>
 
       {/* ── Siktet ───────────────────────────────────────────────────────── */}
-      {steg === 'sted' && (
+      {(steg === 'sted' || steg === 'timeplan-punkt') && (
         <div
           data-testid="markering-sikte"
           aria-hidden="true"
@@ -950,6 +1115,36 @@ export default function PosisjonsKart({
                   type="button"
                   onClick={avbrytMarkering}
                   data-testid="markering-avbryt"
+                  style={{ ...PILLE, pointerEvents: 'auto' }}
+                >
+                  Avbryt
+                </button>
+              </div>
+            </>
+          )}
+
+          {steg === 'timeplan-punkt' && (
+            <>
+              <div style={HJELPETEKST}>Flytt kartet så krysset står der posten skal.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={bekreftTimeplanPunkt}
+                  disabled={!kartKlar}
+                  data-testid="timeplan-punkt-bekreft"
+                  style={{
+                    ...PILLE_PRIMAER,
+                    flex: 1,
+                    pointerEvents: 'auto',
+                    opacity: kartKlar ? 1 : 0.6,
+                  }}
+                >
+                  Her er det
+                </button>
+                <button
+                  type="button"
+                  onClick={avbrytTimeplanPunkt}
+                  data-testid="timeplan-punkt-avbryt"
                   style={{ ...PILLE, pointerEvents: 'auto' }}
                 >
                   Avbryt
@@ -1164,7 +1359,11 @@ export default function PosisjonsKart({
           Speiler listepanelet til høyre. Gutta er ofte på kartet fordi de skal
           finne hverandre — da er det å måtte bytte fane for å skrive «vi er
           her» én omvei for mye. */}
-      {visChat && !panelAapent && (
+      {/* Timeplan-panelet (#716) tar samme høyre kant som listepanelet — de
+          er gjensidig utelukkende via aapentPanel-unionen, så håndtakene
+          under skjules mens timeplan er ute, akkurat som de allerede
+          skjuler hverandre. */}
+      {visChat && !panelAapent && !timeplanAapent && (
         <>
           <button
             type="button"
@@ -1258,8 +1457,9 @@ export default function PosisjonsKart({
           Bredden er capet på 300 px: på en telefon i portrett ville 85 % dekket
           hele kartet, og da er man like langt som før redesignet. */}
       {/* Håndtakene skjuler hverandre: med begge synlige sto de side om side når
-          et panel var ute, og det var uklart hvilket som lukket hva. */}
-      {!chatAapent && (
+          et panel var ute, og det var uklart hvilket som lukket hva. Samme
+          gjelder timeplan-panelet (#716), som deler høyre kant med lista. */}
+      {!chatAapent && !timeplanAapent && (
       <button
         type="button"
         onClick={aapneListe}
@@ -1534,6 +1734,38 @@ export default function PosisjonsKart({
           </div>
         ))}
       </aside>
+
+      {/* ── Timeplan-panelet ──────────────────────────────────────────────
+          Deler høyre kant med listepanelet over (gjensidig utelukkende via
+          aapentPanel). Ingen eget håndtak (#716) — pilla i knapperaden er
+          eneste åpner, og panelet har sin egen lukkeknapp i toppen. */}
+      {timeplanArrangement && (
+        <TimeplanPanel
+          // Nøkkelen er arrangementets id (#716 review): panelets `poster`
+          // seedes kun ved mount, så uten den ble den forrige turens liste
+          // stående når en RSC-revalidering byttet aktuelt arrangement.
+          key={timeplanArrangement.id}
+          arrangement={timeplanArrangement}
+          initialPoster={timeplanPoster}
+          feilVedHenting={timeplanFeil}
+          erAapent={timeplanAapent}
+          onLukk={() => setAapentPanel('ingen')}
+          megId={megId}
+          megNavn={megNavn}
+          megBildeUrl={megBildeUrl}
+          megRolle={megRolle}
+          erAdmin={erAdmin}
+          utkast={{
+            dato: timeplanDato,
+            tekst: timeplanTekst,
+            manuellKlokke: timeplanManuellKlokke,
+            punkt: timeplanPunkt,
+          }}
+          onEndreUtkast={endreTimeplanUtkast}
+          onStartPunktvalg={startTimeplanPunktvalg}
+          onSenterPaa={senterPaaFraTimeplan}
+        />
+      )}
     </div>
   )
 }
@@ -1623,7 +1855,7 @@ const PILLE_PRIMAER = {
   // Sol, ikke appens sand-aksent: den primære handlingen på kartet skal være
   // det varmeste punktet på skjermen.
   background: 'var(--kart-sol)',
-  color: '#241a0c',
+  color: 'var(--kart-sol-tekst)',
   border: 'none',
   fontWeight: 600,
 } as const

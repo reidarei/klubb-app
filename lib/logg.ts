@@ -127,6 +127,9 @@
 //   kart.chat.hent.feilet           — warn: klubbchat-meldingene kunne ikke hentes til kartets chat-panel; kartet rendres videre med tomt panel (#709)
 //   kart.chat.profiler.feilet       — warn: profil-oppslaget for chat-panelet feilet; navn og avatarer mangler i panelet (#709)
 //   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
+//   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
+//   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
+//   kart.timeplan.slett.feilet      — sletting av en timeplan-post feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#716)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'

@@ -1787,6 +1787,54 @@ export type Database = {
           },
         ]
       }
+      timeplan_post: {
+        Row: {
+          arrangement_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          opprettet: string
+          opprettet_av: string
+          tekst: string
+          tidspunkt: string
+        }
+        Insert: {
+          arrangement_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          opprettet?: string
+          opprettet_av: string
+          tekst: string
+          tidspunkt: string
+        }
+        Update: {
+          arrangement_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          opprettet?: string
+          opprettet_av?: string
+          tekst?: string
+          tidspunkt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeplan_post_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeplan_post_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       varsel_innstillinger: {
         Row: {
           aktiv: boolean

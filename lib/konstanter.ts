@@ -63,9 +63,9 @@ export const MELDING_MAKS_BILDER = 10
 // kommer inn; over terskelen lar vi ham være i fred. Se #238.
 export const CHAT_NAER_BUNN_TERSKEL_PX = 150
 
-// Luft mellom skrivefeltet og tastaturets overkant i panel-chatten (kartets
-// sidepanel), der feltet ligger i normal flyt i stedet for forankret til
-// viewporten. Se #714.
+// Luft mellom skrivefeltet og tastaturets overkant i kartets sidepaneler
+// (chat, #714, og timeplanen, #716), der feltet ligger i normal flyt i
+// stedet for forankret til viewporten.
 export const CHAT_TASTATUR_LUFT_PX = 12
 
 // Maks tegn i valgfri hilsen ved purring av arrangøransvarlig.
@@ -442,3 +442,11 @@ export const POSISJON_KART_ZOOM = 14
 // verdenskart sier mindre enn klubbens egen bydel. Verdiene er eksempel-bydel;
 // de bor i klubb-config fordi en nedstrøms klubb holder til et annet sted.
 export const POSISJON_KART_FALLBACK_ZOOM = 12
+
+// Timeplan på kartet (#716) — «17:00 Middag på Lorry», én linje per post.
+//
+// Speiler check-constraint timeplan_post_tekst_gyldig (migrasjon 147) —
+// endres den her, må migrasjonen følge etter. 120, ikke KART_MARKERING_
+// MAKS_LENGDEs 60: en timeplanlinje («Avgang fra Grønland, husk pass») har
+// ikke samme plassbegrensning som en etikett ved siden av en nål.
+export const TIMEPLAN_TEKST_MAKS_LENGDE = 120

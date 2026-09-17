@@ -4,14 +4,27 @@ import { kanAdministrere } from '@/lib/roller'
 import { hentAppFlagg, CHAT_FANE } from '@/lib/app-innstillinger'
 import { KLUBB_KART_SENTER } from '@/lib/klubb-config'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
+import { finnAktuellArrangement } from '@/lib/timeplan'
 import { POSISJON_SPOR_TIMER } from '@/lib/konstanter'
-import PosisjonsKart, { type Mann, type Markering, type Punkt } from '@/components/kart/PosisjonsKart'
+import PosisjonsKart, {
+  type Mann,
+  type Markering,
+  type Punkt,
+  type TimeplanArrangement,
+  type TimeplanPost,
+} from '@/components/kart/PosisjonsKart'
 import { logg } from '@/lib/logg'
 
 // Kartet skal alltid vise hvor gutta ER, ikke hvor de var da siden sist ble
 // bygget. force-dynamic er derfor ikke en optimalisering vi har glemt — det er
 // hele poenget med sida.
 export const dynamic = 'force-dynamic'
+
+// «Nil UUID» — finnes aldri som en ekte rad-id. Brukt til å scope
+// timeplan_post-spørringen (#716) til «ingenting» når det ikke er noe
+// aktuelt arrangement, i stedet for en betinget Promise-gren. Se wave 2
+// under.
+const TIMEPLAN_INGEN_ARRANGEMENT = '00000000-0000-0000-0000-000000000000'
 
 // «Kart» — hvor de som deler posisjon befinner seg, og hvor de har vært i løpet
 // av et pågående arrangement (#693, spor i #695).
@@ -32,6 +45,7 @@ export default async function Kart() {
     { data: punkter, error: punktFeil },
     { data: markeringRader, error: markeringFeil },
     paagaaende,
+    aktueltArrangement,
   ] = await Promise.all([
     supabase
       .from('posisjon_deling')
@@ -45,6 +59,11 @@ export default async function Kart() {
       .select('id, lat, lng, tekst, symbol, opprettet, utloper, opprettet_av, profiles!kart_markering_opprettet_av_fkey ( navn, visningsnavn )')
       .order('opprettet', { ascending: false }),
     finnPaagaaendeArrangement(supabase),
+    // Timeplan-knappens arrangement (#716) — femte parallelle i samme bølge,
+    // ikke en tredje bølge. Fail CLOSED: finnAktuellArrangement() kaster ved
+    // spørringsfeil i stedet for å returnere null, så en feilet spørring
+    // aldri leses som «ingen aktuelt arrangement» (se lib/timeplan.ts).
+    finnAktuellArrangement(supabase),
   ])
 
   // Klubbchatten i venstrepanelet (#709). Hentes her og ikke i komponenten:
@@ -56,6 +75,7 @@ export default async function Kart() {
     { data: chatMeldinger, error: chatFeil },
     { data: chatProfiler, error: chatProfilFeil },
     chatFane,
+    { data: timeplanRader, error: timeplanHentFeil },
   ] = await Promise.all([
     supabase
       .from('klubb_chat')
@@ -64,6 +84,21 @@ export default async function Kart() {
       .limit(30),
     supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
     hentAppFlagg(supabase, CHAT_FANE, true),
+    // Fjerde parallelle i bølge 2 (#716) — ikke en tredje bølge. Scopet til
+    // en UUID som garantert ikke finnes når det ikke er noe aktuelt
+    // arrangement, i stedet for en betinget Promise.resolve(): uniform
+    // spørringsform holder Promise.all-ens typeinferens enkel, og kostnaden
+    // er ett billig, indeksert 0-rader-oppslag.
+    supabase
+      .from('timeplan_post')
+      .select(
+        'id, tidspunkt, tekst, lat, lng, opprettet, opprettet_av, profiles!timeplan_post_opprettet_av_fkey ( navn, visningsnavn, bilde_url, rolle )',
+      )
+      .eq('arrangement_id', aktueltArrangement?.id ?? TIMEPLAN_INGEN_ARRANGEMENT)
+      // Stabil sekundærsortering (migrasjon 147, #716-planlegging).
+      .order('tidspunkt', { ascending: true })
+      .order('opprettet', { ascending: true })
+      .order('id', { ascending: true }),
   ])
 
   // Chatten er et TILLEGG på denne siden, ikke grunnen til at man er her. En
@@ -71,6 +106,13 @@ export default async function Kart() {
   // Motsatt av /chat, der samme feil med rette kaster.
   if (chatFeil) logg.warn('kart.chat.hent.feilet', { code: chatFeil.code })
   if (chatProfilFeil) logg.warn('kart.chat.profiler.feilet', { code: chatProfilFeil.code })
+
+  // Timeplanen er også et TILLEGG — kartet skal ikke tas ned av en feilet
+  // post-spørring. Men i motsetning til chatten skal panelet ALDRI vise en
+  // tom liste ved feil (det ville lest som «ingen har lagt inn noe»);
+  // timeplanFeil-flagget under gir TimeplanPanel sin egen, synlige
+  // feiltilstand.
+  if (timeplanHentFeil) logg.warn('kart.timeplan.hent.feilet', { code: timeplanHentFeil.code })
 
   // Kaster i stedet for å rendre et tomt kart: «ingen deler» og «spørringen
   // feilet» ser identiske ut for brukeren, og et kart som lyver om at ingen er
@@ -112,8 +154,48 @@ export default async function Kart() {
     profiles: { navn: string; visningsnavn: string | null } | { navn: string; visningsnavn: string | null }[] | null
   }
 
+  type TimeplanPostRad = {
+    id: string
+    tidspunkt: string
+    tekst: string
+    lat: number | null
+    lng: number | null
+    opprettet: string
+    opprettet_av: string
+    profiles: RawProfil | RawProfil[] | null
+  }
+
   const naaMs = Date.now()
   const megId = bruker!.id
+
+  // Arrangementet timeplan-pilla peker til, i klient-formen (#716). null
+  // betyr «ingen aktuelt arrangement» — pilla rendres da ikke i det hele tatt.
+  const timeplanArrangement: TimeplanArrangement | null = aktueltArrangement
+    ? {
+        id: aktueltArrangement.id,
+        tittel: aktueltArrangement.tittel,
+        startTidspunkt: aktueltArrangement.startTidspunkt,
+        sluttTidspunkt: aktueltArrangement.sluttTidspunkt,
+        blaatur: aktueltArrangement.destinasjonSensurert,
+      }
+    : null
+
+  const timeplanPoster: TimeplanPost[] = ((timeplanRader ?? []) as TimeplanPostRad[]).map(t => {
+    const pr = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles
+    return {
+      id: t.id,
+      tidspunkt: t.tidspunkt,
+      tekst: t.tekst,
+      lat: t.lat,
+      lng: t.lng,
+      opprettet: t.opprettet,
+      opprettetAv: t.opprettet_av,
+      opprettetAvNavn: pr?.visningsnavn || pr?.navn || 'Ukjent',
+      opprettetAvBildeUrl: pr?.bilde_url ?? null,
+      opprettetAvRolle: pr?.rolle ?? null,
+      erMin: t.opprettet_av === megId,
+    }
+  })
 
   // Utløpte markeringer kommer med fra RLS for den som satte dem (samme unntak
   // som egen posisjonsrad). De skal ikke tegnes — cron rydder dem, men kartet
@@ -208,6 +290,9 @@ export default async function Kart() {
       visChat={kanAdministrere(profil?.rolle) || chatFane}
       chatMeldinger={[...(chatMeldinger ?? [])].reverse()}
       chatProfiler={chatProfiler ?? []}
+      timeplanArrangement={timeplanArrangement}
+      timeplanPoster={timeplanPoster}
+      timeplanFeil={timeplanHentFeil !== null}
     />
   )
 }
