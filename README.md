@@ -170,6 +170,7 @@ samtale (privat 1:1) ──── samtale_chat
                   + delt chat_reaksjoner-tabell
 
 arrangoransvar (hvem er ansvarlig for hvilke faste arrangementer per år)
+timeplan (agenda-påminnelsespunkter med adresse og geokoderte koordinater)
 kaaringmaler / kaaring_vinnere (kategorier og årets vinnere)
 varsel_logg (alle utsendte push/epost loggføres)
 feil_logg (klient-side JavaScript-feil med 30-dagers retention)
