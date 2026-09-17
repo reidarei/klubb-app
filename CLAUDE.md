@@ -425,6 +425,9 @@ Nye tabeller i `public`-schema må eksplisitt gi tilgang til Data API-rollene. S
 
 ```sql
 create table public.<tabell> (
+
+**Hele maskineriet forutsetter at visual viewport faktisk krymper.** `interactiveWidget` i `app/layout.tsx` skal stå på `'resizes-visual'` — ikke fjernes, ikke settes til noe annet. `'overlays-content'` slår krympingen helt av på Android Chromium (Safari ignorerer nøkkelen uansett hvilken verdi som står der), og `'resizes-content'` krymper `innerHeight` i tillegg, som nuller formelen fra den andre siden. Begge verdiene gir `useTastaturHoyde()`/`useKeyboardOffset()` en konstant `0`, og alle forbrukerne (chat-pille, chat-paneler, skjemaer) mister tastatur-håndteringen samtidig, stille. Denne invarianten vaktes av automatiserte tester — endrer du verdien, feiler testene.
+
   ...
 );
 
