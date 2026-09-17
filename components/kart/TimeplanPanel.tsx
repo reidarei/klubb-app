@@ -7,6 +7,7 @@ import { CHAT_TASTATUR_LUFT_PX } from '@/lib/konstanter'
 import { useTastaturHoyde } from '@/components/chat/hooks/useKeyboardOffset'
 import NyTimeplanPost from './NyTimeplanPost'
 import TimeplanRad from './TimeplanRad'
+import { norskDatoNokkel, formaterDato } from '@/lib/dato'
 
 export type TimeplanArrangement = {
   id: string
@@ -480,18 +481,47 @@ export default function TimeplanPanel({
           </div>
         )}
 
-        {sortert.map(post => (
-          <TimeplanRad
-            key={post.id}
-            post={post}
-            erPassert={new Date(post.tidspunkt).getTime() < naaMs}
-            kanFjerne={post.erMin || erAdmin}
-            sender={sendingIds.has(post.id)}
-            onSenterPaa={onSenterPaa}
-            onFjern={fjern}
-            megPunkt={megPunkt}
-          />
-        ))}
+        {sortert.map((post, i) => {
+          // Dagsskille når datoen endrer seg (#738). Uten det står «20:30
+          // middag» uten å si hvilken dag — ubrukelig på en tur over fire
+          // dager, som er nettopp når timeplanen trengs. Sammenligner norsk
+          // kalenderdag, ikke ms, så skillet treffer midnatt i Oslo og ikke
+          // der telefonen tilfeldigvis står (jf. Policy: Tidshåndtering).
+          const forrige = i > 0 ? sortert[i - 1] : null
+          const nyDag =
+            !forrige || norskDatoNokkel(forrige.tidspunkt) !== norskDatoNokkel(post.tidspunkt)
+          return (
+            <div key={post.id}>
+              {nyDag && (
+                <div
+                  role="separator"
+                  data-testid="timeplan-dagsskille"
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    letterSpacing: '1.4px',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-tertiary)',
+                    borderBottom: '0.5px solid var(--border)',
+                    paddingBottom: 4,
+                    margin: i === 0 ? '0 0 8px' : '14px 0 8px',
+                  }}
+                >
+                  {formaterDato(post.tidspunkt, 'EEEE d. MMM')}
+                </div>
+              )}
+              <TimeplanRad
+                post={post}
+                erPassert={new Date(post.tidspunkt).getTime() < naaMs}
+                kanFjerne={post.erMin || erAdmin}
+                sender={sendingIds.has(post.id)}
+                onSenterPaa={onSenterPaa}
+                onFjern={fjern}
+                megPunkt={megPunkt}
+              />
+            </div>
+          )
+        })}
       </div>
     </aside>
   )

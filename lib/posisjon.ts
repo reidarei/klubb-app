@@ -19,6 +19,11 @@ import { naa } from '@/lib/dato'
  */
 export const ARRANGEMENT_ANTATT_TIMER = 12
 
+// Hvor langt tilbake vi i det hele tatt LETER etter et pågående arrangement.
+// Ikke en varighetsregel — kun en grense som holder spørringen bounded, så en
+// flerdagstur fanges uten at vi drar inn hele historikken (#735).
+export const PAAGAAENDE_MAKS_DAGER = 30
+
 export async function finnPaagaaendeArrangement(
   supabase: SupabaseClient,
   // sluttTidspunkt er med fordi kartmarkeringer (#697) lar utløpstiden sin
@@ -30,22 +35,40 @@ export async function finnPaagaaendeArrangement(
     Date.now() - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000,
   ).toISOString()
 
+  // Et arrangement MED sluttid varer til sluttiden, uansett hvor lenge siden det
+  // startet. Fram til #735 lå 12-timersgrensen i selve spørringen og gjaldt begge
+  // grener — da sluttet en flerdagstur å være «pågående» fra og med dag 2, midt i
+  // turen: nye punkter mistet arrangement_id, kartet falt til 24-timersvinduet, og
+  // markeringer sluttet å arve turens sluttid. Oppryddingsjobben har alltid hatt
+  // den riktige, asymmetriske regelen (kun grenen UTEN sluttid er capet); dette
+  // bringer helperen i synk med den.
+  const eldsteAktuelle = new Date(
+    Date.now() - PAAGAAENDE_MAKS_DAGER * 24 * 60 * 60 * 1000,
+  ).toISOString()
+
   const { data, error } = await supabase
     .from('arrangementer')
-    .select('id, tittel, slutt_tidspunkt')
+    .select('id, tittel, start_tidspunkt, slutt_tidspunkt')
     .lte('start_tidspunkt', naaIso)
-    // Grensen gjelder begge grener: med sluttid må starten uansett være innenfor
-    // et døgn-ish, ellers ville en ukelang tur gjort hele uka til ett spor.
-    .gte('start_tidspunkt', tidligstStart)
+    // Bred nedre grense, kun for å holde spørringen bounded. Den ekte
+    // avgrensningen gjøres per gren i .find() under.
+    .gte('start_tidspunkt', eldsteAktuelle)
     .order('start_tidspunkt', { ascending: false })
-    .limit(5)
+    .limit(20)
 
   // Fail-open med vilje: klarer vi ikke slå opp arrangementet, skal posisjonen
   // fortsatt kunne lagres — den blir bare et løst punkt uten spor-tilhørighet.
   // Å kaste her ville gjort en treg spørring til «du får ikke dele posisjon».
   if (error || !data) return null
 
-  const kandidat = data.find(a => !a.slutt_tidspunkt || a.slutt_tidspunkt >= naaIso)
+  // Med sluttid: pågår til sluttiden. Uten sluttid: antatt varighet fra start —
+  // den grenen MÅ ha en cap, ellers ville et gammelt arrangement uten sluttid
+  // stått som «pågående» for alltid.
+  const kandidat = data.find(a =>
+    a.slutt_tidspunkt
+      ? a.slutt_tidspunkt >= naaIso
+      : a.start_tidspunkt >= tidligstStart,
+  )
   return kandidat
     ? { id: kandidat.id, tittel: kandidat.tittel, sluttTidspunkt: kandidat.slutt_tidspunkt }
     : null

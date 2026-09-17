@@ -474,25 +474,27 @@ export default function PosisjonsKart({
   // Bygger stedslenken og forsøker å legge den på utklippstavlen (#719).
   // Delt mellom «Kopier lenke»-knappen i MarkeringDetalj og langtrykket på
   // selve boblen i kartet — se kommentaren ved state-deklarasjonen.
+  // Kvitteringen deles av langtrykket og av Kopier-knappen i fallback-panelet.
+  const visLenkeKvittering = useCallback(() => {
+    setLenkeFallback(null)
+    setLenkeKopiert(true)
+    if (lenkeKopiertTimer.current) window.clearTimeout(lenkeKopiertTimer.current)
+    lenkeKopiertTimer.current = window.setTimeout(
+      () => setLenkeKopiert(false),
+      KART_LENKE_KOPIERT_KVITTERING_SEK * 1000,
+    )
+  }, [])
+
   const kopierLenke = useCallback((lat: number, lng: number, tekst: string) => {
     const lenke = byggStedLenke(window.location.origin, lat, lng, tekst)
-    const visKvittering = () => {
-      setLenkeFallback(null)
-      setLenkeKopiert(true)
-      if (lenkeKopiertTimer.current) window.clearTimeout(lenkeKopiertTimer.current)
-      lenkeKopiertTimer.current = window.setTimeout(
-        () => setLenkeKopiert(false),
-        KART_LENKE_KOPIERT_KVITTERING_SEK * 1000,
-      )
-    }
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(lenke).then(visKvittering).catch(() => setLenkeFallback(lenke))
+      navigator.clipboard.writeText(lenke).then(visLenkeKvittering).catch(() => setLenkeFallback(lenke))
     } else {
       // Ingen Clipboard API i det hele tatt (eldre WebKit, usikker kontekst)
       // — rett til fallback-feltet i stedet for et garantert avvist forsøk.
       setLenkeFallback(lenke)
     }
-  }, [])
+  }, [visLenkeKvittering])
 
   // Kjernen i innmeldingen. `stille` skiller den automatiske oppdateringen ved
   // sidelast fra et bevisst knappetrykk: den automatiske skal aldri vise en
@@ -1524,16 +1526,23 @@ export default function PosisjonsKart({
               </div>
               <input
                 type="text"
-                readOnly
                 value={lenkeFallback}
                 data-testid="lenke-fallback-felt"
-                // Forhåndsselektert: han skal slippe å markere selv, kun
-                // trykke kopier i tastaturet/kontekstmenyen.
+                // IKKE readOnly: iOS Safari ignorerer select() og
+                // setSelectionRange() på et readonly-felt, så teksten lot seg
+                // ikke markere i det hele tatt — og uten Kopier-knappen under
+                // sto man da helt fast (#737). inputMode="none" hindrer at
+                // tastaturet spretter opp selv om feltet er redigerbart.
+                inputMode="none"
+                onChange={() => {}}
                 ref={el => {
-                  el?.focus()
-                  el?.select()
+                  if (!el) return
+                  el.focus()
+                  // setSelectionRange, ikke select(): den førstnevnte er den
+                  // som faktisk virker i WebKit.
+                  el.setSelectionRange(0, el.value.length)
                 }}
-                onFocus={e => e.currentTarget.select()}
+                onFocus={e => e.currentTarget.setSelectionRange(0, e.currentTarget.value.length)}
                 style={{
                   fontFamily: 'var(--font-body)',
                   fontSize: 16,
@@ -1545,14 +1554,39 @@ export default function PosisjonsKart({
                   width: '100%',
                 }}
               />
-              <button
-                type="button"
-                onClick={() => setLenkeFallback(null)}
-                data-testid="lenke-fallback-lukk"
-                style={{ ...PILLE, alignSelf: 'flex-start' }}
-              >
-                Lukk
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {/* Et ekte click er den mest pålitelige brukergesten for
+                    clipboard i WebKit — langt sikrere enn pointerup etter et
+                    langtrykk, som er det som feilet og sendte oss hit (#737).
+                    Derfor et nytt forsøk her framfor bare å be om manuell
+                    markering. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const v = lenkeFallback
+                    if (!v) return
+                    navigator.clipboard
+                      ?.writeText(v)
+                      .then(visLenkeKvittering)
+                      .catch(() => {
+                        /* Fortsatt nektet — feltet over er da eneste vei,
+                           og det er nå markerbart. */
+                      })
+                  }}
+                  data-testid="lenke-fallback-kopier"
+                  style={{ ...PILLE_PRIMAER, alignSelf: 'flex-start' }}
+                >
+                  Kopier
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLenkeFallback(null)}
+                  data-testid="lenke-fallback-lukk"
+                  style={{ ...PILLE, alignSelf: 'flex-start' }}
+                >
+                  Lukk
+                </button>
+              </div>
             </>
           )}
         </div>
