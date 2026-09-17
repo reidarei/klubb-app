@@ -23,6 +23,8 @@ export type TimeplanPost = {
   tekst: string
   lat: number | null
   lng: number | null
+  /** Alternativ til/i tillegg til punkt (#732) — foretrekkes ved navigering. */
+  adresse: string | null
   opprettet: string
   opprettetAv: string
   opprettetAvNavn: string
@@ -46,6 +48,8 @@ export type TimeplanUtkast = {
   /** Overstyrer parserens tolkning når han bruker tidschipen. */
   manuellKlokke: string | null
   punkt: { lat: number; lng: number } | null
+  /** Alternativ til punkt (#732) — fritekst, geokodet best-effort server-side. */
+  adresse: string | null
 }
 
 /** Alt som trengs for å sende en linje — og for å sende den på nytt. */
@@ -55,6 +59,7 @@ type Sending = {
   klokke: string
   tekst: string
   punkt: { lat: number; lng: number } | null
+  adresse: string | null
 }
 
 /** En sending som ikke kom fram, med feilteksten fra forsøket. */
@@ -76,6 +81,8 @@ type Props = {
   onEndreUtkast: (patch: Partial<TimeplanUtkast>) => void
   onStartPunktvalg: () => void
   onSenterPaa: (lat: number, lng: number) => void
+  /** Din siste delte posisjon (#728) — null hvis du ikke deler. */
+  megPunkt: { lat: number; lng: number } | null
 }
 
 export default function TimeplanPanel({
@@ -93,6 +100,7 @@ export default function TimeplanPanel({
   onEndreUtkast,
   onStartPunktvalg,
   onSenterPaa,
+  megPunkt,
 }: Props) {
   // Egen state, seedet fra prop-en ved første render — samme mønster som
   // Chat sin initialMeldinger. Nødvendig fordi vi bevisst IKKE kaller
@@ -149,6 +157,7 @@ export default function TimeplanPanel({
       tekst: sending.tekst,
       lat: sending.punkt?.lat ?? null,
       lng: sending.punkt?.lng ?? null,
+      adresse: sending.adresse,
       opprettet: new Date().toISOString(),
       opprettetAv: megId,
       opprettetAvNavn: megNavn,
@@ -170,13 +179,25 @@ export default function TimeplanPanel({
         tekst: sending.tekst,
         lat: sending.punkt?.lat ?? null,
         lng: sending.punkt?.lng ?? null,
+        adresse: sending.adresse,
       })
       if (!svar.ok) {
         mislyktes(sending, svar.melding)
         return
       }
-      // Bytt provisorisk tidspunkt med den kanoniske serververdien.
-      setPoster(p => p.map(x => (x.id === sending.id ? { ...x, tidspunkt: svar.tidspunkt } : x)))
+      // Bytt provisorisk tidspunkt med den kanoniske serververdien, og
+      // punktet med et ev. GEOKODET punkt (#732) — serveren kan ha funnet
+      // koordinater ut fra adressen som klienten ikke kjente ved sendingen.
+      // Adressen kommer samme vei: på en blåtur stripper basen den, og da skal
+      // den forsvinne fra den optimistiske raden også, ikke bli stående til
+      // neste sidelast.
+      setPoster(p =>
+        p.map(x =>
+          x.id === sending.id
+            ? { ...x, tidspunkt: svar.tidspunkt, lat: svar.lat, lng: svar.lng, adresse: svar.adresse }
+            : x,
+        ),
+      )
     } catch {
       mislyktes(sending, 'Klarte ikke lagre timeplanposten. Prøv igjen.')
     } finally {
@@ -200,7 +221,7 @@ export default function TimeplanPanel({
     // utkastet med det samme slik at neste linje kan skrives mens forrige
     // fortsatt lagres. En feil legger IKKE teksten tilbake hit; den havner i
     // «feilede»-køen, som ikke kan kollidere med det han skriver nå.
-    onEndreUtkast({ tekst: '', manuellKlokke: null, punkt: null })
+    onEndreUtkast({ tekst: '', manuellKlokke: null, punkt: null, adresse: null })
 
     void send({
       id: crypto.randomUUID(),
@@ -208,6 +229,7 @@ export default function TimeplanPanel({
       klokke,
       tekst,
       punkt: utkast.punkt,
+      adresse: utkast.adresse,
     })
   }
 
@@ -442,6 +464,22 @@ export default function TimeplanPanel({
           </div>
         )}
 
+        {/* Ingen avstand uten egen posisjon (#728) — vist ÉN gang, ikke
+            gjentatt på hver rad. Kun når det faktisk finnes en post med
+            koordinat å vise avstand til. */}
+        {!megPunkt && sortert.some(p => p.lat !== null && p.lng !== null) && (
+          <div
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 12.5,
+              color: 'var(--text-tertiary)',
+              marginBottom: 8,
+            }}
+          >
+            Del posisjonen din for å se avstand.
+          </div>
+        )}
+
         {sortert.map(post => (
           <TimeplanRad
             key={post.id}
@@ -451,6 +489,7 @@ export default function TimeplanPanel({
             sender={sendingIds.has(post.id)}
             onSenterPaa={onSenterPaa}
             onFjern={fjern}
+            megPunkt={megPunkt}
           />
         ))}
       </div>

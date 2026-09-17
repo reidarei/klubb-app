@@ -129,6 +129,9 @@
 //   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
 //   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
 //   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
+//   kart.timeplan.opprett.arrangement_borte — warn: inserten fikk 23503 på arrangement_id, altså ble turen slettet mellom vakten og inserten (geokodingen kan ligge inntil 5 s imellom). Normal samtidighet, ikke serverfeil — mannen får samme «finnes ikke lenger» som vakten gir
+//   kart.timeplan.opprett.retry_les_feilet — «Prøv igjen» traff 23505 (raden er lagret), men den lagrede raden kunne ikke leses tilbake; posten svares ut uten sted framfor med et punkt vi ikke har dekning for
+//   kart.timeplan.opprett.uten_kvittering  — warn: inserten gikk fint, men PostgREST ga ingen rad tilbake; svaret faller tilbake på verdiene vi selv skrev. Bærer sample = postens id
 //   kart.timeplan.slett.feilet      — sletting av en timeplan-post feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#716)
 
 import { naa } from '@/lib/dato'

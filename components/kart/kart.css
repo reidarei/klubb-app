@@ -146,6 +146,11 @@
      høyde i praksis. */
   min-height: 32px;
   cursor: pointer;
+  /* Langtrykk kopierer stedslenken (#719). Uten disse to overtar iOS' egen
+     callout-meny (Kopier/Del/…) og tekstmarkering på et langt trykk, og
+     appens egen håndtering når aldri fram. */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .kart-boble-symbol {
@@ -192,6 +197,16 @@
   border-bottom: 0.5px solid var(--kart-kant);
   transform: rotate(45deg);
   /* Skal aldri stjele et trykk fra bobla selv. */
+  pointer-events: none;
+}
+
+/* Markøren for et DELT sted (#719) — en enkel 📍, hverken en person eller en
+   snakkeboble. Egen, tydelig visuell identitet: dette er verken en mann eller
+   en markering noen har satt akkurat nå, men punktet en lenke pekte på. */
+.kart-delt-sted-naal {
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(var(--kart-naal-skygge));
   pointer-events: none;
 }
 

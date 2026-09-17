@@ -2,12 +2,21 @@
 
 import { ensureInnlogget } from '@/lib/auth'
 import { naa, datetimeLocalTilIso } from '@/lib/dato'
-import { TIMEPLAN_TEKST_MAKS_LENGDE } from '@/lib/konstanter'
+import { TIMEPLAN_TEKST_MAKS_LENGDE, TIMEPLAN_ADRESSE_MAKS_LENGDE } from '@/lib/konstanter'
+import { geokod } from '@/lib/geokoding'
 import { logg } from '@/lib/logg'
 
 // Samme resultat-form som posisjons-/markerings-actionene: knappen står i en
 // klientkomponent som må skille «input var ugyldig» fra «det gikk ikke».
-export type TimeplanSkrivResultat = { ok: true; tidspunkt: string } | { ok: false; melding: string }
+// lat/lng er med i suksess-svaret (#732): en adresse kan resultere i et
+// GEOKODET punkt som klienten ikke kjenner selv, og den optimistiske raden
+// må oppdateres med det for at 📍-knappen skal dukke opp uten en full
+// sidelast. adresse er med av samme grunn motsatt vei: basen kan ha STRIPPET
+// den (blåtur-triggeren, migrasjon 149), og da skal ikke klienten bli stående
+// med et sted den selv ikke lenger har lov til å vise.
+export type TimeplanSkrivResultat =
+  | { ok: true; tidspunkt: string; lat: number | null; lng: number | null; adresse: string | null }
+  | { ok: false; melding: string }
 export type TimeplanSlettResultat = { ok: true } | { ok: false; melding: string }
 
 export type NyTimeplanPostInput = {
@@ -25,6 +34,8 @@ export type NyTimeplanPostInput = {
   tekst: string
   lat: number | null
   lng: number | null
+  /** Alternativ til punkt (#732) — fritekst-adresse, geokodet best-effort server-side. */
+  adresse: string | null
 }
 
 /**
@@ -61,6 +72,11 @@ export async function opprettTimeplanPost(input: NyTimeplanPostInput): Promise<T
     }
   }
 
+  const adresseInput = input.adresse?.trim() || null
+  if (adresseInput && adresseInput.length > TIMEPLAN_ADRESSE_MAKS_LENGDE) {
+    return { ok: false, melding: `Maks ${TIMEPLAN_ADRESSE_MAKS_LENGDE} tegn i adressen.` }
+  }
+
   // Actionen mottar arrangement_id FRA KLIENTEN og validerer at raden
   // fortsatt finnes, i stedet for å regne aktuelt arrangement på nytt —
   // endrer eller sletter noen arrangementet mellom sidelast og lagring, skal
@@ -82,43 +98,124 @@ export async function opprettTimeplanPost(input: NyTimeplanPostInput): Promise<T
     return { ok: false, melding: 'Arrangementet finnes ikke lenger.' }
   }
 
-  // Blåtur: nålen strippes stille, teksten går fint. Merk hvor vakten BOR
-  // (#716 review): den autoritative er triggeren timeplan_post_strip_blaatur
-  // i migrasjon 148 — den gjelder også for en klient som går utenom denne
-  // actionen og skriver rett på Data API-et. Strippingen her sparer en
-  // unødvendig rundtur og holder svaret ærlig; den er ikke sikkerheten, og
-  // skal aldri beskrives som det.
+  // Blåtur: nålen OG adressen strippes stille, teksten går fint. Merk hvor
+  // vakten BOR (#732, viderefører #716 review): den autoritative er
+  // triggeren timeplan_post_strip_blaatur i migrasjon 149 — den gjelder også
+  // for en klient som går utenom denne actionen og skriver rett på Data
+  // API-et. Strippingen her sparer en unødvendig rundtur og holder svaret
+  // ærlig; den er ikke sikkerheten, og skal aldri beskrives som det.
   const destSensurert =
     (arrangement.sensurerte_felt as Record<string, boolean> | null)?.destinasjon === true
-  const lat = destSensurert ? null : input.lat
-  const lng = destSensurert ? null : input.lng
 
-  const { error } = await supabase.from('timeplan_post').insert({
-    id: input.id,
-    arrangement_id: input.arrangementId,
-    opprettet_av: user.id,
-    tidspunkt,
-    tekst,
-    lat,
-    lng,
-    opprettet: naa(),
-  })
+  // Geokoding er BEST-EFFORT og kun forsøkt når mannen IKKE allerede har
+  // valgt et punkt i kartet (#732 — regissørens avgjørelse 2). Lykkes den,
+  // får posten et punkt i tillegg til adressen; bommer den (eller er
+  // arrangementet en blåtur, se stripping under), står adressen alene —
+  // raden er fortsatt trykkbar til Google Maps via teksten, se
+  // lib/kart-navigasjon.ts. Ingen stille tap av det medlemmet skrev.
+  let lat = input.lat
+  let lng = input.lng
+  if (!harPunkt && adresseInput && !destSensurert) {
+    const geokodet = await geokod(adresseInput)
+    if (geokodet) {
+      lat = geokodet.lat
+      lng = geokodet.lng
+    }
+  }
 
-  // 23505 = primærnøkkelen finnes allerede. Klienten sender samme id ved
-  // «Prøv igjen», så dette betyr at forrige forsøk faktisk landet før
-  // forbindelsen røk: raden er der, altså er dette en suksess. Uten denne
-  // grenen ville retry-knappen stått og feilet på en post som var lagret.
-  if (error && error.code !== '23505') {
-    await logg.feil('kart.timeplan.opprett.feilet', error).catch(() => {})
-    return { ok: false, melding: 'Klarte ikke lagre timeplanposten. Prøv igjen.' }
+  const adresse = destSensurert ? null : adresseInput
+  lat = destSensurert ? null : lat
+  lng = destSensurert ? null : lng
+
+  // .select() på inserten koster ingen ekstra rundtur, og gjør at svaret er
+  // raden slik den FAKTISK ble lagret — ikke verdiene vi regnet ut på vei inn.
+  // Det er triggeren timeplan_post_strip_blaatur (migrasjon 148/149) som har
+  // siste ord om sted-kolonnene; strippingen over er en snarvei, ikke fasiten.
+  const { data: lagret, error } = await supabase
+    .from('timeplan_post')
+    .insert({
+      id: input.id,
+      arrangement_id: input.arrangementId,
+      opprettet_av: user.id,
+      tidspunkt,
+      tekst,
+      lat,
+      lng,
+      adresse,
+      opprettet: naa(),
+    })
+    .select('tidspunkt, lat, lng, adresse')
+    .maybeSingle()
+
+  if (error) {
+    // 23503 = FK-brudd. Den eneste FK-en som kan ryke her er arrangement_id
+    // (opprettet_av er den innloggede brukeren), så dette betyr at turen ble
+    // slettet ETTER at vakten over fant den. Vinduet er reelt, ikke teoretisk:
+    // den best-effort geokodingen mellom sjekken og inserten kan ta opptil
+    // fem sekunder. Utfallet er det samme som !arrangement over — bare
+    // oppdaget av basen i stedet for av oss — altså normal samtidighet, ikke
+    // en serverfeil, og skal derfor ikke i feil_logg. Samme tekst som vakten
+    // over med vilje: to formuleringer for samme tilstand ville bare vært
+    // forvirrende for mannen som leser dem.
+    if (error.code === '23503') {
+      logg.warn('kart.timeplan.opprett.arrangement_borte', { sample: input.arrangementId })
+      return { ok: false, melding: 'Arrangementet finnes ikke lenger.' }
+    }
+
+    // 23505 = primærnøkkelen finnes allerede. Klienten sender samme id ved
+    // «Prøv igjen», så dette betyr at forrige forsøk faktisk landet før
+    // forbindelsen røk: raden er der, altså er dette en suksess. Uten denne
+    // grenen ville retry-knappen stått og feilet på en post som var lagret.
+    if (error.code !== '23505') {
+      await logg.feil('kart.timeplan.opprett.feilet', error).catch(() => {})
+      return { ok: false, melding: 'Klarte ikke lagre timeplanposten. Prøv igjen.' }
+    }
+
+    // Raden fra FØRSTE forsøk er sannheten, ikke denne rundens geokoding:
+    // Nominatim kan svare noe annet nå enn den gjorde da raden ble skrevet, og
+    // klienten ville da vist — og navigert til — et punkt basen ikke har.
+    // «select using (true)» (migrasjon 147) gjør at vi alltid får lese raden.
+    const { data: fraFoerste, error: lesFeil } = await supabase
+      .from('timeplan_post')
+      .select('tidspunkt, lat, lng, adresse')
+      .eq('id', input.id)
+      .maybeSingle()
+
+    if (lesFeil || !fraFoerste) {
+      // Vi VET at raden er lagret — det er nettopp hva 23505 betyr — men vi
+      // fikk ikke lest den tilbake. Da svares det uten sted: å vise mindre enn
+      // basen har retter seg selv ved neste sidelast, mens et punkt vi ikke har
+      // dekning for kan sende mannen til feil adresse.
+      await logg
+        .feil('kart.timeplan.opprett.retry_les_feilet', lesFeil ?? new Error('fant ikke raden etter 23505'))
+        .catch(() => {})
+      return { ok: true, tidspunkt, lat: null, lng: null, adresse: null }
+    }
+
+    return {
+      ok: true,
+      tidspunkt: fraFoerste.tidspunkt,
+      lat: fraFoerste.lat,
+      lng: fraFoerste.lng,
+      adresse: fraFoerste.adresse,
+    }
+  }
+
+  if (!lagret) {
+    // Inserten gikk gjennom uten feil, men PostgREST ga ingen rad tilbake.
+    // Her er verdiene under VÅRE egne, fra nettopp denne inserten — de er
+    // trygge å svare med, i motsetning til 23505-grenen over der raden ble
+    // skrevet av et tidligere kall vi ikke kjenner innholdet i.
+    logg.warn('kart.timeplan.opprett.uten_kvittering', { sample: input.id })
+    return { ok: true, tidspunkt, lat, lng, adresse }
   }
 
   // INGEN revalidatePath('/kart') herfra (#716-planlegging, uenighet C).
   // Ferskhet kommer av optimistisk lokal state — denne responsen gir
-  // klienten den kanoniske tidspunkt-verdien til å erstatte sin egen
-  // provisoriske sortering med. En revalidering ville uansett bare speilet
-  // min egen post tilbake til meg selv.
-  return { ok: true, tidspunkt }
+  // klienten den kanoniske tidspunkt-verdien (og et ev. geokodet punkt) til
+  // å erstatte sin egen provisoriske sortering med. En revalidering ville
+  // uansett bare speilet min egen post tilbake til meg selv.
+  return { ok: true, tidspunkt: lagret.tidspunkt, lat: lagret.lat, lng: lagret.lng, adresse: lagret.adresse }
 }
 
 /**

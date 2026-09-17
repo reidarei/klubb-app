@@ -5,6 +5,7 @@ import { ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { POSISJON_DELING_TIMER, POSISJON_MIN_FLYTT_M } from '@/lib/konstanter'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
+import { avstandM } from '@/lib/geo-avstand'
 import { sendVarsel } from '@/lib/varsler'
 import { logg } from '@/lib/logg'
 
@@ -21,19 +22,11 @@ function gyldigKoordinat(lat: number, lng: number): boolean {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }
 
-// Avstand i meter mellom to punkter (haversine). Brukes til å avgjøre om en ny
-// innmelding er en FLYTTING eller bare GPS-støy på samme sted — se kommentaren
-// i delPosisjon(). Jorda som kule er mer enn presist nok på gatenivå.
-function avstandM(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const R = 6_371_000
-  const rad = (g: number) => (g * Math.PI) / 180
-  const dLat = rad(bLat - aLat)
-  const dLng = rad(bLng - aLng)
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
+// avstandM() flyttet til lib/geo-avstand.ts (#728-uttrekk) — brukes til å
+// avgjøre om en ny innmelding er en FLYTTING eller bare GPS-støy på samme
+// sted, se kommentaren i delPosisjon(). Flyttet fordi avstand til en
+// markering/timeplan-post nå også skal vises i klientkomponenter, som ikke
+// kan importere en 'use server'-fil.
 
 /**
  * Lagrer min posisjon og (for)nyer delingsvinduet med POSISJON_DELING_TIMER.

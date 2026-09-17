@@ -6,6 +6,8 @@ import { KLUBB_KART_SENTER } from '@/lib/klubb-config'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
 import { finnAktuellArrangement } from '@/lib/timeplan'
 import { POSISJON_SPOR_TIMER } from '@/lib/konstanter'
+import { parseStedParam } from '@/lib/kart-lenke'
+import { beregnPingKandidater } from '@/lib/kart-deltakere'
 import PosisjonsKart, {
   type Mann,
   type Markering,
@@ -26,6 +28,11 @@ export const dynamic = 'force-dynamic'
 // under.
 const TIMEPLAN_INGEN_ARRANGEMENT = '00000000-0000-0000-0000-000000000000'
 
+// Samme triks som over, for påmeldinger-spørringen «Ping en herre» bruker
+// (#725): scoper til «ingenting» når det ikke er noe pågående arrangement,
+// i stedet for en betinget Promise-gren.
+const KART_DELTAKERE_INGEN_ARRANGEMENT = '00000000-0000-0000-0000-000000000000'
+
 // «Kart» — hvor de som deler posisjon befinner seg, og hvor de har vært i løpet
 // av et pågående arrangement (#693, spor i #695).
 //
@@ -33,12 +40,20 @@ const TIMEPLAN_INGEN_ARRANGEMENT = '00000000-0000-0000-0000-000000000000'
 // trenger ikke filtrere på det selv. Ett unntak håndteres her: policyen slipper
 // gjennom DINE EGNE punkter også når din deling er utløpt, slik at appen kan
 // skille «du deler ikke» fra «delingen din gikk ut».
-export default async function Kart() {
-  const [supabase, bruker, profil] = await Promise.all([
+type Props = {
+  // Delt stedslenke (#719): ?lat=&lng=&tekst= — serverside-parsing, ikke
+  // useSearchParams() på klienten, samme mønster som arrangementer/ny.
+  searchParams: Promise<{ lat?: string; lng?: string; tekst?: string }>
+}
+
+export default async function Kart({ searchParams }: Props) {
+  const [supabase, bruker, profil, sp] = await Promise.all([
     createServerClient(),
     getInnloggetBruker(),
     getProfil(),
+    searchParams,
   ])
+  const deltSted = parseStedParam(sp)
 
   const [
     { data: delinger, error: delingFeil },
@@ -76,6 +91,7 @@ export default async function Kart() {
     { data: chatProfiler, error: chatProfilFeil },
     chatFane,
     { data: timeplanRader, error: timeplanHentFeil },
+    { data: paameldingRader, error: paameldingFeil },
   ] = await Promise.all([
     supabase
       .from('klubb_chat')
@@ -92,13 +108,25 @@ export default async function Kart() {
     supabase
       .from('timeplan_post')
       .select(
-        'id, tidspunkt, tekst, lat, lng, opprettet, opprettet_av, profiles!timeplan_post_opprettet_av_fkey ( navn, visningsnavn, bilde_url, rolle )',
+        'id, tidspunkt, tekst, lat, lng, adresse, opprettet, opprettet_av, profiles!timeplan_post_opprettet_av_fkey ( navn, visningsnavn, bilde_url, rolle )',
       )
       .eq('arrangement_id', aktueltArrangement?.id ?? TIMEPLAN_INGEN_ARRANGEMENT)
       // Stabil sekundærsortering (migrasjon 147, #716-planlegging).
       .order('tidspunkt', { ascending: true })
       .order('opprettet', { ascending: true })
       .order('id', { ascending: true }),
+    // Femte parallelle i bølge 2 (#725) — «Ping en herre»-kandidatene. Kun
+    // status 'ja' hentes; scopet til KART_DELTAKERE_INGEN_ARRANGEMENT når
+    // ingen arrangement pågår (samme triks som timeplan_post-spørringen
+    // over). paagaaende er fra bølge 1 (finnPaagaaendeArrangement — IKKE
+    // finnAktuellArrangement, som ville falt tilbake på nærmeste FRAMTIDIGE
+    // arrangement uansett hvor langt fram, og gitt julebord-påmeldte en
+    // pling-liste midt i september).
+    supabase
+      .from('paameldinger')
+      .select('profil_id, status')
+      .eq('arrangement_id', paagaaende?.id ?? KART_DELTAKERE_INGEN_ARRANGEMENT)
+      .eq('status', 'ja'),
   ])
 
   // Chatten er et TILLEGG på denne siden, ikke grunnen til at man er her. En
@@ -106,6 +134,11 @@ export default async function Kart() {
   // Motsatt av /chat, der samme feil med rette kaster.
   if (chatFeil) logg.warn('kart.chat.hent.feilet', { code: chatFeil.code })
   if (chatProfilFeil) logg.warn('kart.chat.profiler.feilet', { code: chatProfilFeil.code })
+
+  // «Ping en herre» er et TILLEGG i listepanelet, ikke grunnen til at man er
+  // på kartet — en feilet spørring skal ikke ta ned siden, bare gi en tom
+  // (eller ufullstendig) kandidatliste.
+  if (paameldingFeil) logg.warn('kart.deltakere.paameldinger.feilet', { code: paameldingFeil.code })
 
   // Timeplanen er også et TILLEGG — kartet skal ikke tas ned av en feilet
   // post-spørring. Men i motsetning til chatten skal panelet ALDRI vise en
@@ -160,6 +193,7 @@ export default async function Kart() {
     tekst: string
     lat: number | null
     lng: number | null
+    adresse: string | null
     opprettet: string
     opprettet_av: string
     profiles: RawProfil | RawProfil[] | null
@@ -188,6 +222,7 @@ export default async function Kart() {
       tekst: t.tekst,
       lat: t.lat,
       lng: t.lng,
+      adresse: t.adresse,
       opprettet: t.opprettet,
       opprettetAv: t.opprettet_av,
       opprettetAvNavn: pr?.visningsnavn || pr?.navn || 'Ukjent',
@@ -267,6 +302,16 @@ export default async function Kart() {
     })
     .filter((m): m is Mann => m !== null)
 
+  // «Ping en herre» (#725) — kandidatene som IKKE allerede deler posisjon.
+  // Gjenbruker chatProfiler (allerede «alle aktive medlemmer») i stedet for
+  // en sjette spørring.
+  const pingKandidater = beregnPingKandidater(
+    chatProfiler ?? [],
+    paameldingRader ?? [],
+    paagaaende?.id ?? null,
+    aktiveIder,
+  )
+
   return (
     <PosisjonsKart
       menn={menn}
@@ -293,6 +338,8 @@ export default async function Kart() {
       timeplanArrangement={timeplanArrangement}
       timeplanPoster={timeplanPoster}
       timeplanFeil={timeplanHentFeil !== null}
+      deltSted={deltSted}
+      pingKandidater={pingKandidater}
     />
   )
 }

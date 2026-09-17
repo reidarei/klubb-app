@@ -138,6 +138,33 @@ export default function BliUtvikler() {
           >
             Tilbake til tidslinjen
           </button>
+          {/* Sekundærknapp (#720) — «Tilbake til tidslinjen» er fortsatt
+              primær, men mange har mer enn ett ønske på hjertet med det
+              samme. Nullstiller lokal state fremfor å navigere, slik at han
+              lander på et blankt skjema uten en full sidelast. */}
+          <button
+            type="button"
+            onClick={() => {
+              setTekst('')
+              setFeil('')
+              setSendt(false)
+            }}
+            style={{
+              width: '100%',
+              padding: '14px 0',
+              marginTop: 10,
+              borderRadius: 999,
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              border: '0.5px solid var(--border-strong)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Send inn et nytt ønske
+          </button>
         </div>
       </div>
     )

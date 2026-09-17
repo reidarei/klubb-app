@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { googleMapsAppUrl, googleMapsNettUrl } from '@/lib/kart-navigasjon'
+import {
+  googleMapsAppUrl,
+  googleMapsNettUrl,
+  googleMapsAppUrlAdresse,
+  googleMapsNettUrlAdresse,
+} from '@/lib/kart-navigasjon'
 
 // Koordinatene er det eneste som betyr noe i disse URL-ene: forsvinner de,
 // åpner lenka bare Google Maps uten mål, og knappen er verdiløs. Testen står
@@ -34,5 +39,26 @@ describe('kart-navigasjon (#711)', () => {
     // Vestlig lengdegrad og sørlig bredde finnes — Island-turen lå på −22°.
     expect(googleMapsNettUrl(-33.86, -151.2)).toContain('destination=-33.86,-151.2')
     expect(googleMapsAppUrl(-33.86, -151.2)).toContain('daddr=-33.86,-151.2')
+  })
+})
+
+// #732: en timeplan-post kan navigeres via ADRESSE i stedet for koordinat —
+// Google er bedre på gateadresser enn vår egen Nominatim-geokoding.
+describe('kart-navigasjon — adresse-variant (#732)', () => {
+  it('app-URL-en url-enkoder adressen', () => {
+    const url = googleMapsAppUrlAdresse('Karl Johans gate 1')
+    expect(url.startsWith('comgooglemaps://')).toBe(true)
+    expect(url).toContain('daddr=Karl%20Johans%20gate%201')
+  })
+
+  it('nett-URL-en url-enkoder adressen', () => {
+    const url = googleMapsNettUrlAdresse('Karl Johans gate 1')
+    expect(url).toContain('google.com/maps/dir/')
+    expect(url).toContain('destination=Karl%20Johans%20gate%201')
+  })
+
+  it('spesialtegn i adressen enkodes trygt', () => {
+    const url = googleMapsNettUrlAdresse('Café & Bar, Oslo')
+    expect(url).toContain(encodeURIComponent('Café & Bar, Oslo'))
   })
 })

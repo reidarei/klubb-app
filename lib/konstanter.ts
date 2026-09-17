@@ -450,3 +450,15 @@ export const POSISJON_KART_FALLBACK_ZOOM = 12
 // MAKS_LENGDEs 60: en timeplanlinje («Avgang fra Grønland, husk pass») har
 // ikke samme plassbegrensning som en etikett ved siden av en nål.
 export const TIMEPLAN_TEKST_MAKS_LENGDE = 120
+
+// Adresse som alternativ til å velge punkt i kartet (#732) — «Karl Johans
+// gate 1». Speiler check-constraint timeplan_post_adresse_gyldig (migrasjon
+// 149). Samme 120 som TIMEPLAN_TEKST_MAKS_LENGDE: begge er fritekst uten
+// spesiell plassbegrensning, og to ulike tall ville vært en vilkårlig
+// forskjell å huske.
+export const TIMEPLAN_ADRESSE_MAKS_LENGDE = 120
+
+// Hvor lenge «Lenke kopiert»-kvitteringen står etter et langtrykk på en
+// kartmarkering (#719). Samme rolle som POSISJON_PLING_KVITTERING_SEK —
+// lenge nok til å se den, ikke så lenge at den føles klistret fast.
+export const KART_LENKE_KOPIERT_KVITTERING_SEK = 3

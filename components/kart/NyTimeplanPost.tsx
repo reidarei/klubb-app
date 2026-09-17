@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { parseTimeplanTekst } from '@/lib/timeplan-parse'
 import { norskDag, norskDatoNaa } from '@/lib/dato'
+import { TIMEPLAN_ADRESSE_MAKS_LENGDE } from '@/lib/konstanter'
 import type { TimeplanArrangement, TimeplanUtkast } from './TimeplanPanel'
 
 type Props = {
@@ -177,6 +178,34 @@ export default function NyTimeplanPost({
           />
         )}
       </div>
+
+      {/* Adresse som alternativ til å velge punkt i kartet (#732). Samme
+          blåtur-gate som punkt-knappen under — vakten som faktisk holder er
+          triggeren i migrasjon 149 (den stripper adressen også for en klient
+          som går utenom UI-et); dette er bekvemmelighet, akkurat som for
+          punktet. */}
+      {!arrangement.blaatur && (
+        <input
+          type="text"
+          value={utkast.adresse ?? ''}
+          onChange={e => onEndreUtkast({ adresse: e.target.value || null })}
+          maxLength={TIMEPLAN_ADRESSE_MAKS_LENGDE}
+          placeholder="Adresse (valgfritt)"
+          data-testid="timeplan-adresse"
+          style={{
+            fontFamily: 'var(--font-body)',
+            // 16px og ikke mindre: iOS zoomer inn på et tekstfelt med mindre
+            // skrift.
+            fontSize: 16,
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-small)',
+            border: '0.5px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-primary)',
+            width: '100%',
+          }}
+        />
+      )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {/* Blåtur: nålen SKJULES her. Vakten som faktisk holder er triggeren

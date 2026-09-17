@@ -148,6 +148,14 @@ test.describe('timeplan på kartet (#716)', () => {
     await expect(rader.nth(0)).toContainText('Playwright frokost')
     await expect(rader.nth(1)).toContainText('Playwright lunsj')
     await expect(rader.nth(2)).toContainText('Playwright middag')
+
+    // Vent til posten faktisk ER lagret før testen slipper taket: raden er
+    // optimistisk, så assertionene over holder også mens actionen fortsatt
+    // er underveis. Fjern-knappen rendres først når sender-flagget faller
+    // (TimeplanRad), og er derfor kvitteringen på at svaret kom. Uten den
+    // kunne afterAll slette arrangementet UNDER en insert som ennå ikke var
+    // sendt — som er nøyaktig 23503-en CI fanget.
+    await expect(rader.nth(1).getByTestId('timeplan-fjern')).toBeVisible({ timeout: 20_000 })
   })
 
   test('«Vis stedet på kartet» lukker panelet', async ({ page }) => {
@@ -173,9 +181,13 @@ test.describe('timeplan på kartet (#716)', () => {
     await expect(panel).toHaveAttribute('aria-hidden', 'true')
   })
 
-  test('blåtur: databasen stripper punktet, ikke bare actionen', async () => {
-    // Migrasjon 148. Skrives med service_role — altså helt utenom UI-et og
-    // server-actionen, som er nøyaktig veien review-funnet gjaldt.
+  test('blåtur: databasen stripper punktet og adressen, ikke bare actionen', async () => {
+    // Migrasjon 148 (punktet) og 149 (adressen). Skrives med service_role —
+    // altså helt utenom UI-et og server-actionen, som er nøyaktig veien
+    // review-funnet gjaldt. ALLE stedskolonnene settes her med vilje: en
+    // regresjon som slipper gjennom adressen er like avslørende som en som
+    // slipper gjennom nåla, og neste stedskolonne skal legges til i denne
+    // lista når den kommer.
     const admin = adminKlient('kart-timeplan')
     test.skip(!admin || !blaaturId, 'Ingen admin-klient eller blåtur seedet')
 
@@ -188,16 +200,18 @@ test.describe('timeplan på kartet (#716)', () => {
         tekst: 'Playwright blåtur-punkt',
         lat: 59.9139,
         lng: 10.7522,
+        adresse: 'Karl Johans gate 1, Oslo',
       })
-      .select('lat, lng, tekst')
+      .select('lat, lng, adresse, tekst')
       .single()
 
     expect(error).toBeNull()
-    // Teksten går fint — det er nålen som skal bort, ellers ville arrangøren
+    // Teksten går fint — det er stedet som skal bort, ellers ville arrangøren
     // vært avskåret fra å lage timeplanen i det hele tatt.
     expect(data!.tekst).toBe('Playwright blåtur-punkt')
     expect(data!.lat).toBeNull()
     expect(data!.lng).toBeNull()
+    expect(data!.adresse).toBeNull()
   })
 
   test('fjerner egen post', async ({ page }) => {
@@ -224,5 +238,44 @@ test.describe('timeplan på kartet (#716)', () => {
     await expect(panel.getByTestId('timeplan-rad').filter({ hasText: 'Playwright slett meg' })).toHaveCount(0, {
       timeout: 15_000,
     })
+  })
+
+  test('rad er trykkbar med sted, ikke uten (#732)', async ({ page }) => {
+    // «Playwright frokost» (beforeAll) har verken punkt eller adresse — ren
+    // tekst, ingen knapp. «Playwright middag» har et punkt fra beforeAll.
+    // En tredje post legges inn her MED adresse, uten punkt, for å bevise at
+    // adresse alene også gjør raden trykkbar — geokodingen (ekte nettverkskall
+    // mot Nominatim) er bevisst IKKE en del av denne assertionen, den er
+    // best-effort og skal ikke gjøre testen flaky.
+    await page.goto('/kart')
+    await expect(page.getByTestId('posisjonskart')).toBeVisible()
+
+    const pille = page.getByTestId('timeplan-pille')
+    await pille.waitFor({ state: 'visible', timeout: 15_000 })
+    await pille.click()
+
+    const panel = page.getByTestId('timeplan-panel')
+    await panel.getByTestId('timeplan-tekst').fill('16:00 Playwright adresse-post')
+    await panel.getByTestId('timeplan-adresse').fill('Karl Johans gate 1')
+    await panel.getByTestId('timeplan-legg-inn').click()
+
+    const utenSted = panel.getByTestId('timeplan-rad').filter({ hasText: 'Playwright frokost' })
+    await expect(utenSted).toHaveCount(1, { timeout: 15_000 })
+    await expect(utenSted.getByTestId('timeplan-naviger')).toHaveCount(0)
+
+    const medPunkt = panel.getByTestId('timeplan-rad').filter({ hasText: 'Playwright middag' })
+    await expect(medPunkt.getByTestId('timeplan-naviger')).toHaveCount(1)
+    await expect(medPunkt.getByTestId('timeplan-vis-punkt')).toHaveCount(1)
+
+    const medAdresse = panel.getByTestId('timeplan-rad').filter({ hasText: 'Playwright adresse-post' })
+    await expect(medAdresse).toHaveCount(1, { timeout: 15_000 })
+    await expect(medAdresse.getByTestId('timeplan-naviger')).toHaveCount(1)
+
+    // Samme kvittering som i første test, og her er den viktigst: denne posten
+    // har en ADRESSE, så actionen geokoder best-effort mot Nominatim med
+    // opptil 5 s tak før den i det hele tatt insert-er. Dette er dessuten
+    // siste test i fila — uten ventingen river afterAll bort arrangementet
+    // midt i det vinduet.
+    await expect(medAdresse.getByTestId('timeplan-fjern')).toBeVisible({ timeout: 20_000 })
   })
 })

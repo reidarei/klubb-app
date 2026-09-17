@@ -786,11 +786,22 @@ test.describe('kartmarkeringer (#697)', () => {
     // verre feil enn den vi fikset.
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
-    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden')
+    // POLL, ikke et enkeltoppslag: kart-flate står i SSR-HTML-en, mens låsen
+    // settes i en useEffect i PosisjonsKart — altså først etter hydrering.
+    // Mellom de to øyeblikkene er body fortsatt på globals.css sin egen
+    // «overflow-x: clip» (computed: «clip visible»), og et oppslag rett etter
+    // toBeVisible() kappløper med hydreringen. Det er nettopp det kappløpet
+    // som slo til i CI (tyngre bundle enn lokalt), ikke en ødelagt lås.
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow), {
+      timeout: 15_000,
+    }).toBe('hidden')
 
     await page.goto('/tidligere')
     await expect(page.getByRole('heading', { name: 'Hele historikken' })).toBeVisible()
-    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden')
+    // Samme kappløp motsatt vei: opprydningen skjer i effektens cleanup.
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow), {
+      timeout: 15_000,
+    }).not.toBe('hidden')
   })
 
   test('nåla har et treffområde en finger faktisk kan treffe', async ({ page }) => {

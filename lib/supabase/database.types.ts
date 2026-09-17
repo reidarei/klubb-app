@@ -1789,6 +1789,7 @@ export type Database = {
       }
       timeplan_post: {
         Row: {
+          adresse: string | null
           arrangement_id: string
           id: string
           lat: number | null
@@ -1799,6 +1800,7 @@ export type Database = {
           tidspunkt: string
         }
         Insert: {
+          adresse?: string | null
           arrangement_id: string
           id?: string
           lat?: number | null
@@ -1809,6 +1811,7 @@ export type Database = {
           tidspunkt: string
         }
         Update: {
+          adresse?: string | null
           arrangement_id?: string
           id?: string
           lat?: number | null
