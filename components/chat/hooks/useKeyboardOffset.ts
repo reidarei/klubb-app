@@ -23,10 +23,14 @@ import { useState, useEffect } from 'react'
 // forsøk på å gjenbruke den ene til den andres formål er nøyaktig hvordan
 // denne bug-klassen har kommet tilbake fire ganger (#222, #236, #712, #713).
 
-// Tastatur-høyde via visualViewport. Når iOS-tastaturet åpner med
-// interactiveWidget='overlays-content' (jf. app/layout.tsx, valgt for å
-// unngå dock-bug-klassen) endrer ikke window.innerHeight seg, men
-// visualViewport.height krymper. Differansen er omtrent tastatur-høyden.
+// Tastatur-høyde via visualViewport. Begge hookene forutsetter
+// 'resizes-visual'-oppførselen (default på iOS og Android, jf. app/layout.tsx):
+// window.innerHeight står stille, mens visualViewport.height krymper når
+// tastaturet åpner. Safari støtter aldri interactive-widget uansett verdi,
+// men på Android Chromium slår 'overlays-content' krympingen helt av og
+// 'resizes-content' krymper innerHeight i tillegg — begge nuller formelen
+// under. Nøkkelen må derfor ALDRI settes til noe annet enn 'resizes-visual'.
+// Se #731. Differansen er omtrent tastatur-høyden.
 // keyboardOffset brukes KUN til layout: løfter input-pillen (sticky-pill
 // bottom) og vokser paddingBottom på meldingslisten. Ingen scroll-side-
 // effekter — terskel-basert auto-scroll fjernet fordi bounce-quirk (#222)

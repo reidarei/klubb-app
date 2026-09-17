@@ -41,11 +41,18 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   maximumScale: 1,
   userScalable: false,
-  // iOS 16.4+: tastaturet overlapper viewport istedenfor å krympe det.
-  // Effekt: position:fixed-elementer (dock) blir naturlig dekket av tastatur
-  // når det er oppe, kommer tilbake når det går ned — uten JS-deteksjon.
-  // Forsøk på å løse dock-bug-klassen (#99, #104, #147, #151, #153).
-  interactiveWidget: 'overlays-content',
+  // Safari støtter ikke `interactive-widget` i noen versjon — direktivet har
+  // ALDRI hatt effekt på iPhone, uansett hvilken verdi som står her. På
+  // Android Chromium derimot gjør 'overlays-content' nøyaktig det spec-en
+  // sier: slår av visualViewport-krympingen som ALLE tastatur-hooks i
+  // components/chat/hooks/useKeyboardOffset.ts hviler på — det var årsaken
+  // til #731. Dock-begrunnelsen falt uansett bort da bottom-nav ble fjernet.
+  // 'resizes-content' er heller ikke et alternativ: den krymper layout
+  // viewport i tillegg, så innerHeight−vv.height blir 0 og formelen brekker
+  // fra den andre siden. Sett eksplisitt (ikke fjern linja) — 'resizes-visual'
+  // er default, men verdien er dokumentasjon for neste mann som fristes til
+  // å prøve 'overlays-content' igjen.
+  interactiveWidget: 'resizes-visual',
 }
 
 export const metadata: Metadata = {
