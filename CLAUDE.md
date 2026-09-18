@@ -223,16 +223,25 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 
 All tidshåndtering skal gå gjennom `lib/dato.ts`. **Aldri** bruk `new Date()` for å bestemme "hvilken dag er det" — bruk `norskDatoNaa()`.
 
+**To Date-betydninger som ser like ut i koden, men ikke er det:**
+1. **«Oslo-kalenderdag som lokal Date»** — det `norskDatoNaa()`/`norskDag()` returnerer (`new Date(y, m-1, d)`, lokal midnatt). Lokale gettere (`getFullYear/getMonth/getDate`) og date-fns kalender-aritmetikk er *riktig* på disse.
+2. **«Instant»** — `new Date(iso)`. `toISOString()` er riktig her.
+
+**En Date fra `norskDatoNaa()`/`norskDag()` skal ALDRI gjennom `toISOString()`.** Det gir UTC-instantet for LOKAL midnatt — riktig kun når prosessen tilfeldigvis står i UTC. Samme felle med et null-argument `new Date()` brukt som om det var en Oslo-kalenderdag (mutert med `setDate`/`setHours` o.l., eller sluttet med `.toISOString().slice(0, 10)`).
+
 **Regler:**
 - **Visning av dato/tid:** Bruk `formaterDato(iso, format)` — konverterer automatisk fra UTC til `Europe/Oslo`
 - **"Er dette i dag/fortid?":** Bruk `norskDatoNaa()` og `norskDag(iso)` for sammenligning
 - **Hvilket år er det?:** Bruk `norskAar()`
 - **Lagring i database:** Alltid UTC. Bruk `naa()` fra `lib/dato.ts` for "nå"-tidsstempler i timestamp-kolonner (`oppdatert`, `besluttet_paa` osv.) i stedet for `new Date().toISOString()` direkte
-- **Cron/datoberegning:** Bruk `norskDatoNaa()` som utgangspunkt, `addDays()` for å beregne fremtidige datoer
+- **Dagstreng ± N dager (norsk kalenderdag):** Bruk `osloDagPluss(n)` — `"YYYY-MM-DD"`, TZ-uavhengig og DST-trygt
+- **Spørringsgrense ± N dager (en `timestamptz`-kolonne):** Bruk `osloDagStartIso(n)` — UTC-instantet for norsk midnatt den dagen. Ikke bygg en bar tidsstempel-literal uten sone (`${dag}T00:00:00`) — PostgREST/Postgres tolker den i SESJONENS tidssone (UTC hos Supabase), ikke Oslo sin.
+- **Kalenderdag-sammenligning:** `osloDagNokkel(dag: Date)` (kun for en Oslo-kalenderdag-Date) eller `erPaaOsloDag(iso, osloDag)` (instant mot Oslo-kalenderdag).
 - **`new Date()` er OK for:** elapsed time-beregninger, unike ID-er, og når du trenger en `Date`-instans (ikke ISO-streng)
 
 **Tidssone:** `Europe/Oslo` (eksportert som `TIDSSONE` fra `lib/dato.ts`). Håndterer automatisk sommertid/vintertid via `date-fns-tz`.
 
+**Vakt:** ESLint-regelen `hk/dato-tidssone-uavhengig` (inline i `eslint.config.mjs`, samme mønster som `hk/supabase-feil-maa-hentes`) håndhever dette på `'error'`. Den sporer taint *ett hopp* gjennom en lokal hjelpers parameter — hvis du skriver en lokal `function dagStreng(d) { return d.toISOString().slice(0, 10) }` som kalles fra prod-koden, flagges KALLSTEDET, ikke hjelperen (det er der rettingen skal gjøres; hjelperen er ikke gal for alle argumenter). Regelen sjekker **argumentene** når den avgjør om en `toISOString()` kappes til en kalenderdag: `slice(0, N)` med N ≤ 10 og `split('T')[0]` er daguttrekk (flagges), `slice(11, 19)` (UTC-klokkeslettet) og `split('.')` (strippe millisekunder) er legitime instant-operasjoner (tillatt).
 ## Policy: Konfig
 
 Miljø-avhengige verdier samles i `lib/config.ts`. **Aldri** hardkode domenet eller lese `process.env.NEXT_PUBLIC_BASE_URL` direkte i actions/route handlers/komponenter — importér fra `lib/config`.
