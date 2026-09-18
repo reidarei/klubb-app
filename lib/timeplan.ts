@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { naa } from '@/lib/dato'
-import { ARRANGEMENT_ANTATT_TIMER } from '@/lib/posisjon'
+import { ARRANGEMENT_ANTATT_TIMER, PAAGAAENDE_MAKS_DAGER } from '@/lib/posisjon'
 
 export type AktueltArrangement = {
   id: string
@@ -49,6 +49,9 @@ export async function finnAktuellArrangement(
   const tidligstStart = new Date(
     Date.now() - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000,
   ).toISOString()
+  const eldsteAktuelle = new Date(
+    Date.now() - PAAGAAENDE_MAKS_DAGER * 24 * 60 * 60 * 1000,
+  ).toISOString()
 
   const FELTER = 'id, tittel, start_tidspunkt, slutt_tidspunkt, sensurerte_felt'
 
@@ -61,16 +64,22 @@ export async function finnAktuellArrangement(
     { data: paagaaendeData, error: paagaaendeFeil },
     { data: fremtidigData, error: fremtidigFeil },
   ] = await Promise.all([
-    // Samme vindu som finnPaagaaendeArrangement(): startet innen de siste
-    // ARRANGEMENT_ANTATT_TIMER timene. Et arrangement UTEN sluttid regnes
-    // som «over» utenfor dette vinduet.
+    // Bred nedre grense, kun for å holde spørringen bounded — den ekte
+    // avgrensningen gjøres i filteret under. Fram til #735 lå
+    // ARRANGEMENT_ANTATT_TIMER her, og gjaldt da BEGGE grener: en flerdagstur
+    // falt ut av kandidatsettet 12 timer etter start, og helperen hoppet til
+    // nærmeste FRAMTIDIGE arrangement. På turen 17.–20. september ville
+    // timeplan-panelet fra og med kl. 21 UTC dag 1 vist et tomt program for
+    // julebordet, mens «Sporer Reisekomiteen»-pilla sto ved siden av — nøyaktig
+    // det denne helperens egen doc-kommentar lover at ikke skal skje.
+    // finnPaagaaendeArrangement() fikk rettelsen i #736; denne ble glemt.
     supabase
       .from('arrangementer')
       .select(FELTER)
       .lte('start_tidspunkt', naaIso)
-      .gte('start_tidspunkt', tidligstStart)
+      .gte('start_tidspunkt', eldsteAktuelle)
       .order('start_tidspunkt', { ascending: false })
-      .limit(5),
+      .limit(20),
     supabase
       .from('arrangementer')
       .select(FELTER)
@@ -91,8 +100,15 @@ export async function finnAktuellArrangement(
   // sammenligning av ISO-tidsstempler (…+00:00 vs …Z er ikke det samme
   // sortert leksikalsk, se finnPaagaaendeArrangement()-historikken).
   const naaMs = Date.now()
-  const paagaaende = ((paagaaendeData ?? []) as ArrangementRad[]).filter(
-    a => !a.slutt_tidspunkt || new Date(a.slutt_tidspunkt).getTime() >= naaMs,
+  // Med sluttid: pågår til sluttiden, uansett hvor lenge siden det startet.
+  // Uten sluttid: antatt varighet fra start — den grenen MÅ ha en cap, ellers
+  // ville et gammelt arrangement uten sluttid pågått for alltid. Speiler
+  // finnPaagaaendeArrangement() nøyaktig (#735/#736).
+  const tidligstStartMs = new Date(tidligstStart).getTime()
+  const paagaaende = ((paagaaendeData ?? []) as ArrangementRad[]).filter(a =>
+    a.slutt_tidspunkt
+      ? new Date(a.slutt_tidspunkt).getTime() >= naaMs
+      : new Date(a.start_tidspunkt).getTime() >= tidligstStartMs,
   )
 
   // Listen er sortert desc på start_tidspunkt, så første element er den som

@@ -12,7 +12,14 @@ export default function BursdagsgratulasjonToggle({ aktiv }: { aktiv: boolean })
   const [isPending, startTransition] = useTransition()
 
   function toggle() {
-    startTransition(() => oppdaterBursdagsgratulasjon(!aktiv))
+    // MÅ awaites inne i transitionen. Som løs promise avsluttes transitionen
+    // med én gang, isPending faller tilbake til false før serveren har svart,
+    // og React tegner på nytt med den GAMLE verdien — bryteren ser død ut selv
+    // om skrivingen gikk fint. Reidar traff dette på reisemodus-bryteren og
+    // trykket flere ganger (#742); den skrev hver gang.
+    startTransition(async () => {
+      await oppdaterBursdagsgratulasjon(!aktiv)
+    })
   }
 
   return (

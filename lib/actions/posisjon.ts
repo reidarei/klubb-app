@@ -57,7 +57,18 @@ export async function delPosisjon(
       ? Math.max(0, Math.min(100_000, Math.round(noeyaktighetM)))
       : null
 
-  const delerTil = new Date(Date.now() + POSISJON_DELING_TIMER * 60 * 60 * 1000).toISOString()
+  // Pågår en tur, varer delingen UT TUREN — ikke i åtte timer av gangen.
+  // «Mange klager over at du må dele lokasjonen hele tiden» (Reidar, #729):
+  // åtte timer betyr at man må trykke på nytt midt på dagen, og gjør man ikke
+  // det, forsvinner man fra kartet mens de andre fortsatt leter etter én.
+  // Math.max slik at en tur som snart er over aldri gir KORTERE deling enn de
+  // åtte timene man ville fått uten tur.
+  const paagaaende = await finnPaagaaendeArrangement(supabase)
+  const standardSlutt = Date.now() + POSISJON_DELING_TIMER * 60 * 60 * 1000
+  const turSlutt = paagaaende?.sluttTidspunkt
+    ? new Date(paagaaende.sluttTidspunkt).getTime()
+    : 0
+  const delerTil = new Date(Math.max(standardSlutt, turSlutt)).toISOString()
 
   const { error: delingFeil } = await supabase.from('posisjon_deling').upsert(
     { profil_id: user.id, deler_til: delerTil, oppdatert: naa() },
@@ -68,8 +79,6 @@ export async function delPosisjon(
     await logg.feil('posisjon.deling.feilet', delingFeil).catch(() => {})
     return { ok: false, melding: 'Klarte ikke lagre posisjonen. Prøv igjen.' }
   }
-
-  const paagaaende = await finnPaagaaendeArrangement(supabase)
 
   // Står mannen stille, skal ikke sporet fylles med prikker oppå hverandre.
   // Vi oppdaterer da TIDEN på det siste punktet i stedet for å legge til et

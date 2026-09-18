@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
+import { iDagOslo, datetimeLocalTilIso } from '../lib/dato'
 
 /**
  * Timeplan på kartet (#716).
@@ -66,13 +67,18 @@ test.describe('timeplan på kartet (#716)', () => {
       {
         arrangement_id: arrangementId,
         opprettet_av: PETTER,
-        tidspunkt: new Date().toISOString().slice(0, 10) + 'T09:00:00Z',
+        // NORSK dato, ikke UTC (#740). Skjemaet daterer nye poster med
+        // norskDatoNaa(), så en seed på UTC-dato havner et døgn feil i
+        // vinduet 22:00-24:00 UTC — da sorterer lunsjen seg etter middagen
+        // og rekkefølge-assertionen under brekker. Samme rot som #735 sin
+        // flake i avreise-blokk.spec.ts.
+        tidspunkt: datetimeLocalTilIso(`${iDagOslo()}T09:00`),
         tekst: 'Playwright frokost',
       },
       {
         arrangement_id: arrangementId,
         opprettet_av: PETTER,
-        tidspunkt: new Date().toISOString().slice(0, 10) + 'T20:00:00Z',
+        tidspunkt: datetimeLocalTilIso(`${iDagOslo()}T20:00`),
         tekst: 'Playwright middag',
         // Punkt, slik at raden får «Vis stedet på kartet»-knappen.
         lat: 59.9139,

@@ -1,6 +1,5 @@
-import { addDays } from 'date-fns'
 import { ensureAdmin } from '@/lib/auth'
-import { norskAar, norskDatoNaa } from '@/lib/dato'
+import { norskAar, osloDagStartIso } from '@/lib/dato'
 import OpprettSkjema from './OpprettSkjema'
 
 // Hvor langt tilbake i tid vi henter arrangementer som kan kobles til en
@@ -16,9 +15,8 @@ export default async function NyKaaringspoll() {
   const { supabase } = await ensureAdmin()
   const aar = norskAar()
   // Vinduet starter sju dager før norsk dato — dekker arrangementer som
-  // nettopp er ferdig (typisk julebord kvelden før). Vi caster Date til
-  // ISO via toISOString() for Postgres-sammenligning.
-  const tidligsteArrIso = addDays(norskDatoNaa(), -ARRANGEMENT_TILBAKE_DAGER).toISOString()
+  // nettopp er ferdig (typisk julebord kvelden før).
+  const tidligsteArrIso = osloDagStartIso(-ARRANGEMENT_TILBAKE_DAGER)
 
   const [
     { data: maler, error: malerFeil },

@@ -1,6 +1,8 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
+import { hentReisemodus } from '@/lib/reisemodus'
 import { formaterDato, norskAar, norskDatoNaa, norskDatoNokkel, iDagOslo } from '@/lib/dato'
 import { subMonths } from 'date-fns'
 import SectionLabel from '@/components/ui/SectionLabel'
@@ -25,10 +27,17 @@ import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 // og delegerer all sortering/gruppering til lib/agenda-sortering.ts. Denne
 // filen skal holdes tynn — kun fetch + render.
 export default async function Forside() {
-  const [user, supabase] = await Promise.all([
+  // «/» er reisemodusens forside mens en tur pågår (#723) — omdirigeres
+  // server-side FØR resten av agenda-spørringene kjøres, ikke etterpå:
+  // hentReisemodus() er cache()-wrappet og delt med AppLayout, så dette
+  // koster ingenting ekstra, men agenda-dataene ville vært bortkastet arbeid
+  // på de dagene turen faktisk pågår.
+  const [user, supabase, reisemodus] = await Promise.all([
     getInnloggetBruker(),
     createServerClient(),
+    hentReisemodus(),
   ])
+  if (reisemodus.paa) redirect('/kart')
 
   const naa = norskDatoNaa()
   // Felles cutoff for alle element-typer på forsiden: AGENDA_VINDU_MND måneder

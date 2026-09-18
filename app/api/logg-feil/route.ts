@@ -9,7 +9,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
-import { scrubKontekst, kontekstForStor } from '@/lib/logg-sanitering'
+import {
+  scrubKontekst,
+  kontekstForStor,
+  utdragNoekkelnavn,
+} from '@/lib/logg-sanitering'
 import { logg } from '@/lib/logg'
 import {
   LOGG_FEIL_RATE_LIMIT_PER_MIN,
@@ -81,22 +85,11 @@ function sjekkRateLimit(ip: string, profilId: string | null, event: string): boo
 
 const GYLDIGE_NIVAA = ['warn', 'error', 'fatal'] as const
 
-// Hvor mye av en strippet kontekst logg-varselet gjengir. Begge grensene
-// gjelder klientkontrollert tekst — se kallstedet lenger ned.
+// Hvor mange strippede nøkkelnavn logg-varselet gjengir. Grensen gjelder
+// klientkontrollert tekst — se kallstedet lenger ned. Selve formvakten og
+// lengdekappingen ligger i utdragNoekkelnavn() (lib/logg-sanitering.ts), delt
+// med lib/logg.ts siden #711-reviewen.
 const STRIPPET_SAMPLE_MAKS = 5
-const STRIPPET_NOEKKEL_MAKS_TEGN = 40
-
-// Formvakt på nøkkelnavnene vi gjengir i loggen (#681-reviewen). Kapping
-// begrenser VOLUM, ikke PII: en klient kan sende «{"ola@example.com": 1}» og
-// få adressen inn i Vercel-loggen. Et feltnavn fra VÅR kildekode er alltid en
-// JS-identifikator, mens en epostadresse, en setning eller en URL aldri er
-// det — så denne regexen beholder hele diagnoseverdien (utvikleren skal kunne
-// lese HVILKET felt som ble strippet) og lukker PII-flaten. Digest eller
-// allowlist ble vurdert og forkastet: en digest er uleselig, og en allowlist
-// er selvmotsigende når eventet finnes nettopp for å fange ukjente felter.
-// Lengden (40) er med vilje den samme som kappet over — regexen erstatter den
-// ikke, den kommer i tillegg.
-const STRIPPET_NOEKKEL_FORM = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/
 
 export async function POST(req: NextRequest) {
   const ip =
@@ -176,9 +169,12 @@ export async function POST(req: NextRequest) {
     )
     if (strippet.length > 0) {
       // Kun navn som SER UT som felter fra vår egen kode gjengis; resten
-      // telles. Se STRIPPET_NOEKKEL_FORM for hvorfor formen, ikke innholdet,
-      // er kriteriet.
-      const lesbare = strippet.filter((k) => STRIPPET_NOEKKEL_FORM.test(k))
+      // telles. Se NOEKKELNAVN_FORM for hvorfor formen, ikke innholdet, er
+      // kriteriet.
+      const { lesbare, ugyldige } = utdragNoekkelnavn(
+        strippet,
+        STRIPPET_SAMPLE_MAKS,
+      )
       logg.warn('logg-feil.kontekst.strippet', {
         // `fingerprint` og ikke `event`: logg.warn() spreder konteksten OVER
         // sine egne felter, så en `event`-nøkkel her ville overskrevet selve
@@ -187,17 +183,14 @@ export async function POST(req: NextRequest) {
         // fra «ny regresjon» når flere klienter støyer samtidig.
         fingerprint: event,
         count: strippet.length,
-        // Klientkontrollert tekst: formvaktet over, og antall/lengde kappet
-        // her, ellers kan hvem som helst skrive vilkårlig lang tekst inn i
-        // Vercel-loggen.
-        sample: lesbare
-          .slice(0, STRIPPET_SAMPLE_MAKS)
-          .map((k) => k.slice(0, STRIPPET_NOEKKEL_MAKS_TEGN))
-          .join(','),
+        // Klientkontrollert tekst: formvaktet, antalls- og lengdekappet av
+        // utdragNoekkelnavn() — ellers kan hvem som helst skrive vilkårlig
+        // lang tekst inn i Vercel-loggen.
+        sample: lesbare.join(','),
         // Antall strippede nøkler som IKKE er identifikator-formede. Et tall
         // > 0 her betyr «noen sender oss noe som ikke ligner våre felter» —
         // like nyttig et signal som navnene selv, og uten PII-flaten.
-        ugyldige: strippet.length - lesbare.length,
+        ugyldige,
       })
     }
   }

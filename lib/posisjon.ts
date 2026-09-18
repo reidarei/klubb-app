@@ -1,5 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { unstable_rethrow } from 'next/navigation'
 import { naa } from '@/lib/dato'
+import { DbFeil, logg } from '@/lib/logg'
+
+export type PaagaaendeArrangement = {
+  id: string
+  tittel: string
+  type: string
+  sluttTidspunkt: string | null
+}
 
 /**
  * Arrangementet som pågår akkurat nå, hvis noe gjør det.
@@ -24,12 +33,27 @@ export const ARRANGEMENT_ANTATT_TIMER = 12
 // flerdagstur fanges uten at vi drar inn hele historikken (#735).
 export const PAAGAAENDE_MAKS_DAGER = 30
 
-export async function finnPaagaaendeArrangement(
+/**
+ * FAIL-CLOSED-varianten: en spørringsfeil KASTES (DbFeil, så PostgREST-koden
+ * overlever innpakkingen) i stedet for å bli til `null`.
+ *
+ * Finnes fordi `null` fra fail-open-varianten under betyr to vidt forskjellige
+ * ting — «ingen tur pågår» og «oppslaget feilet» — og reisemodus (#723) må
+ * kunne skille dem: uten skillet kan prod ikke se forskjell på en rolig dag og
+ * en database som er nede (#723-review). Posisjonsdeling og kartmarkeringer
+ * skal fortsatt fail-ope og bruker wrapperen under.
+ */
+export async function finnPaagaaendeArrangementStrengt(
   supabase: SupabaseClient,
   // sluttTidspunkt er med fordi kartmarkeringer (#697) lar utløpstiden sin
   // følge arrangementets slutt. null betyr «ingen sluttid oppgitt», ikke
   // «varer evig» — kallstedet må da bestemme selv hva som er rimelig.
-): Promise<{ id: string; tittel: string; sluttTidspunkt: string | null } | null> {
+  //
+  // type er med fordi reisemodus (#723) trenger å skille en tur fra et møte
+  // — predikatet (type === 'tur' && sluttTidspunkt !== null) skrives
+  // eksplisitt i lib/reisemodus.ts, ikke her: denne helperen definerer
+  // «pågår», ikke «utløser reisemodus».
+): Promise<PaagaaendeArrangement | null> {
   const naaIso = naa()
   const tidligstStart = new Date(
     Date.now() - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000,
@@ -48,7 +72,7 @@ export async function finnPaagaaendeArrangement(
 
   const { data, error } = await supabase
     .from('arrangementer')
-    .select('id, tittel, start_tidspunkt, slutt_tidspunkt')
+    .select('id, tittel, type, start_tidspunkt, slutt_tidspunkt')
     .lte('start_tidspunkt', naaIso)
     // Bred nedre grense, kun for å holde spørringen bounded. Den ekte
     // avgrensningen gjøres per gren i .find() under.
@@ -56,10 +80,15 @@ export async function finnPaagaaendeArrangement(
     .order('start_tidspunkt', { ascending: false })
     .limit(20)
 
-  // Fail-open med vilje: klarer vi ikke slå opp arrangementet, skal posisjonen
-  // fortsatt kunne lagres — den blir bare et løst punkt uten spor-tilhørighet.
-  // Å kaste her ville gjort en treg spørring til «du får ikke dele posisjon».
-  if (error || !data) return null
+  // Kaster: «ingen rader» og «spørringen feilet» må være to ulike utfall for
+  // kalleren. Fail-open-oversettelsen skjer ÉTT sted — i wrapperen under.
+  if (error) {
+    throw new DbFeil(
+      `Oppslag av pågående arrangement feilet: ${error.message}`,
+      error.code,
+    )
+  }
+  if (!data) return null
 
   // Med sluttid: pågår til sluttiden. Uten sluttid: antatt varighet fra start —
   // den grenen MÅ ha en cap, ellers ville et gammelt arrangement uten sluttid
@@ -70,6 +99,33 @@ export async function finnPaagaaendeArrangement(
       : a.start_tidspunkt >= tidligstStart,
   )
   return kandidat
-    ? { id: kandidat.id, tittel: kandidat.tittel, sluttTidspunkt: kandidat.slutt_tidspunkt }
+    ? { id: kandidat.id, tittel: kandidat.tittel, type: kandidat.type, sluttTidspunkt: kandidat.slutt_tidspunkt }
     : null
+}
+
+/**
+ * FAIL-OPEN-varianten, brukt av posisjonsdeling (#693/#695) og kartmarkeringer
+ * (#697): klarer vi ikke slå opp arrangementet, skal posisjonen fortsatt kunne
+ * lagres — den blir bare et løst punkt uten spor-tilhørighet. Å kaste her ville
+ * gjort en treg spørring til «du får ikke dele posisjon».
+ *
+ * Feilen logges likevel (warn, ikke feil) slik at en feilet spørring ikke ser
+ * ut som en rolig dag i observability. Oppførselen er bit-for-bit den samme som
+ * før #723-reviewen — kun feilkanalen er flyttet inn hit fra spørringen selv.
+ */
+export async function finnPaagaaendeArrangement(
+  supabase: SupabaseClient,
+): Promise<PaagaaendeArrangement | null> {
+  try {
+    return await finnPaagaaendeArrangementStrengt(supabase)
+  } catch (err) {
+    // Next signaliserer «denne ruten må rendres dynamisk» med en throw under
+    // `next build`. Svelges den her, logges hvert sideoppslag i bygget som en
+    // ekte spørringsfeil — samme grep som i lib/reisemodus.ts.
+    unstable_rethrow(err)
+    logg.warn('posisjon.paagaaende.feilet', {
+      code: err instanceof DbFeil ? (err.code ?? 'ukjent') : 'ukjent',
+    })
+    return null
+  }
 }

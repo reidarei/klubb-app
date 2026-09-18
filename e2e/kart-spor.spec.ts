@@ -140,9 +140,9 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
-    // Pilla skal si HVILKET arrangement som spores — uten den vet ikke mannen
-    // hvorfor prikkene plutselig er der.
-    await expect(page.getByTestId('arrangement-pille')).toContainText(`${MERKE} — pågår`)
+    // «Sporer {tittel}»-pilla er fjernet (#749, Reidars ønske om mindre støy
+    // i knapperaden). Det specen egentlig vokter er at sporet tegnes mens
+    // arrangementet pågår — det asserteres rett under.
 
     // Petters siste punkt får den store markøren, de to andre blir små
     // spor-prikker. Tallene gjelder KUN sporet denne specen seedet: den
@@ -184,9 +184,8 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
       await page.goto('/kart')
       await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
-      // Ingen arrangement-overskrift …
-      await expect(page.getByTestId('arrangement-pille')).toHaveCount(0)
-      // … men ruta står. Dette er #698: at sporet forsvant her var bugen.
+      // Ruta står selv uten pågående arrangement. Dette er #698: at sporet
+      // forsvant her var bugen.
       await expect(page.locator('.kart-spor-prikk')).toHaveCount(RUTE.length - 1, {
         timeout: 15_000,
       })

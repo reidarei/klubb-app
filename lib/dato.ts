@@ -58,15 +58,58 @@ export function iDagOslo(): string {
 }
 
 /**
+ * Norsk kalenderdag i dag ± `dager`, som "YYYY-MM-DD"-streng. Bygges av ren
+ * UTC-aritmetikk på iDagOslo()-strengen (samme knep som iMorgenOslo/
+ * osloUkestart) — ingen lokal Date involvert, derfor tidssone-uavhengig og
+ * DST-trygt. Erstatter mønsteret `dagStreng(addDays(norskDatoNaa(), n))`
+ * som var tredje gang samme feilklasse slo til (#675): addDays() på en
+ * norskDatoNaa()-Date + toISOString() regner riktig kun når PROSESSEN står
+ * i UTC.
+ *
+ * `anker` er dagen aritmetikken går ut fra ("YYYY-MM-DD", default iDagOslo()).
+ * Oppgi den eksplisitt når FLERE grenser må hvile på SAMME kalenderdag — to
+ * uavhengige kall sampler hver sin `iDagOslo()`, og en kjøring som krysser
+ * norsk midnatt mellom dem får to ulike dager. Se review av #755.
+ */
+export function osloDagPluss(dager: number, anker: string = iDagOslo()): string {
+  const [y, m, d] = anker.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + dager)).toISOString().slice(0, 10)
+}
+
+/**
  * Morgendagens dato (norsk tidssone) som "YYYY-MM-DD"-streng — søsteren til
  * iDagOslo(). Brukt av bursdagsbilde-cronet (#641), som genererer bildet
- * dagen FØR bursdagen. UTC-aritmetikk på iDagOslo()-strengen (samme knep som
- * osloUkestart) ruller måned/år korrekt over ved månedsskifte og nyttår, og
- * unngår DST-fellen ved å aldri legge 24 timer til en lokal Date.
+ * dagen FØR bursdagen.
  */
 export function iMorgenOslo(): string {
-  const [y, m, d] = iDagOslo().split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+  return osloDagPluss(1)
+}
+
+/**
+ * UTC-instantet for NORSK MIDNATT på dagen i dag ± `dager`, som ISO-streng.
+ * Brukt der en spørring trenger en tidsgrense (f.eks. .gte('start_tidspunkt',
+ * ...)) — ikke en dagstreng, det er osloDagPluss() sin jobb. fromZonedTime
+ * tolker "YYYY-MM-DDT00:00:00" som veggklokke-tid i TIDSSONE og håndterer
+ * sommer-/vintertid selv. Se #675.
+ *
+ * `anker` videreføres til osloDagPluss() — bruk den når de to endene av et
+ * halvåpent døgnvindu skal forankres til samme dag (se review av #755).
+ */
+export function osloDagStartIso(dager = 0, anker: string = iDagOslo()): string {
+  return fromZonedTime(`${osloDagPluss(dager, anker)}T00:00:00`, TIDSSONE).toISOString()
+}
+
+/**
+ * Dag-nøkkel ("YYYY-MM-DD") fra en Dates *lokale* gettere. KUN riktig for en
+ * Date som allerede ER en Oslo-kalenderdag (fra norskDatoNaa()/norskDag()) —
+ * gir feil svar på et instant (en Date bygget av `new Date(iso)`). Bruk
+ * norskDatoNokkel() for et instant. Se #675.
+ */
+export function osloDagNokkel(dag: Date): string {
+  const y = dag.getFullYear()
+  const m = String(dag.getMonth() + 1).padStart(2, '0')
+  const d = String(dag.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 /**
@@ -136,6 +179,17 @@ export function norskDatoNokkel(iso: string): string {
 export function erSammeNorskeDag(isoA: string, isoB: string): boolean {
   // Delegerer til norskDatoNokkel — unngår duplisert formatInTimeZone-kall.
   return norskDatoNokkel(isoA) === norskDatoNokkel(isoB)
+}
+
+/**
+ * Sammenligner et ISO-instant mot en Oslo-kalenderdag (fra norskDatoNaa()/
+ * norskDag()). Flyttet hit fra lib/agenda-sortering.ts (#675), som hadde sin
+ * egen `erSammeNorskeDag(iso, referanse: Date)` — samme navn som funksjonen
+ * over men annen signatur og betydning, en felle for neste leser. Erstatter
+ * et rått Intl.DateTimeFormat-kall.
+ */
+export function erPaaOsloDag(iso: string, osloDag: Date): boolean {
+  return norskDatoNokkel(iso) === osloDagNokkel(osloDag)
 }
 
 /**

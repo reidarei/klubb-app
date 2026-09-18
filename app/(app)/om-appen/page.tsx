@@ -102,14 +102,17 @@ export default function OmAppen() {
          * uten spor. Teksten speiler koden — sletting ved «slutt å dele» er
          * en ekte DELETE, ikke bare en RLS-effekt (se migrasjon 143). */}
         <Avsnitt overskrift="Posisjon på kartet">
-          Kartet under Klubb viser bare dem som selv har trykket «Del
-          posisjonen min». Delingen slutter av seg selv etter {POSISJON_DELING_TIMER}{' '}
-          timer, og du kan skru den av når som helst.
+          Kartet viser bare dem som selv har trykket «Del
+          posisjonen min». Pågår en tur, varer delingen ut turen; ellers slutter den av seg selv
+          etter {POSISJON_DELING_TIMER} timer. Du kan skru den av når som helst.
           {' '}
           Mens du deler lagres hver posisjon du melder inn, slik at ruta di
           vises på kartet — det siste døgnet til vanlig, og hele turen hvis et
           arrangement pågår. Ruta slettes når arrangementet er over, og med én
           gang hvis du skrur av delingen selv.
+          {' '}
+          Under en tur med reisemodus er kartet appens forside — det endrer
+          ikke hvem som er synlig der, bare hvor du lander når du åpner appen.
         </Avsnitt>
         <Avsnitt overskrift="Ingen tracking">
           Vi har ingen annonser, ingen Google Analytics, ingen Facebook-

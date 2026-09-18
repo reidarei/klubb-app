@@ -24,6 +24,7 @@ import {
 import { formaterDato } from '@/lib/dato'
 import { useKeyboardOffset } from '@/components/chat/hooks/useKeyboardOffset'
 import { trengerNyttUtsnitt } from '@/lib/kart-utsnitt'
+import { velgKlyngeUtsnitt } from '@/lib/kart-klynge'
 import { byggStedLenke } from '@/lib/kart-lenke'
 import type { PingKandidat } from '@/lib/kart-deltakere'
 import {
@@ -45,6 +46,7 @@ import TimeplanPanel, { type TimeplanArrangement, type TimeplanPost } from './Ti
 import { beregnDefaultTimeplanDato } from './NyTimeplanPost'
 import KartListePanel from './KartListePanel'
 import MarkeringDetalj from './MarkeringDetalj'
+import ReisemodusBar, { KART_TOPP_MARGIN, REISEMODUS_BAR_SONE } from './ReisemodusBar'
 // Re-eksportert slik at page.tsx kan importere ALLE kart-typene fra ett sted
 // (samme mønster som Mann/Markering/Punkt under).
 export type { TimeplanArrangement, TimeplanPost }
@@ -88,8 +90,6 @@ type Props = {
   markeringer: Markering[]
   /** Innlogget brukers profil-id — skiller «meg» fra «de andre» på kartet. */
   megId: string
-  /** Senter når ingen deler. Klubbens egen bydel, fra lib/klubb-config.ts. */
-  fallbackSenter: { lat: number; lng: number }
   /**
    * Sant når et arrangement rammer inn sporet. Sporet VISES uansett (#698) —
    * dette styrer bare hvor lenge ruta lever, og hva vi lover brukeren om det.
@@ -97,8 +97,8 @@ type Props = {
   underArrangement: boolean
   /** Admin kan fjerne andres markeringer — RLS tillater det allerede. */
   erAdmin: boolean
-  /** Tittelen på arrangementet som pågår, til den lille status-pilla. */
-  arrangementTittel: string | null
+  /** Senter når ingen deler. Klubbens egen bydel, fra lib/klubb-config.ts. */
+  fallbackSenter: { lat: number; lng: number }
   /** Av når admin har skrudd av chat-fanen (admin beholder tilgang selv). */
   visChat: boolean
   chatMeldinger: React.ComponentProps<typeof Chat>['initialMeldinger']
@@ -123,6 +123,14 @@ type Props = {
   deltSted: { lat: number; lng: number; tekst: string | null } | null
   /** «Ping en herre» (#725) — påmeldte (eller alle aktive) minus dem som allerede deler. */
   pingKandidater: PingKandidat[]
+  /**
+   * Reisemodus PÅ (#723) — TopHeader er ikke montert, så flaten fyller HELE
+   * viewporten (ikke bare det som er igjen under headeren) og en egen,
+   * flytende bar (ReisemodusBar) overtar avatar+togglejobben headeren
+   * ellers gjorde. Styrer også `--kart-panel-safe-top` — se stilen på
+   * kart-flaten under.
+   */
+  reisemodus: boolean
 }
 
 function relativTid(iso: string): string {
@@ -217,7 +225,6 @@ export default function PosisjonsKart({
   fallbackSenter,
   underArrangement,
   erAdmin,
-  arrangementTittel,
   visChat,
   chatMeldinger,
   chatProfiler,
@@ -226,6 +233,7 @@ export default function PosisjonsKart({
   timeplanFeil,
   deltSted,
   pingKandidater,
+  reisemodus,
 }: Props) {
   const kartRef = useRef<HTMLDivElement>(null)
   const kartetRef = useRef<LeafletMap | null>(null)
@@ -608,19 +616,29 @@ export default function PosisjonsKart({
       if (avbrutt || kartetRef.current) return
       const L = mod.default
 
-      // Startutsnittet rammer inn ALT som finnes — hver manns siste posisjon OG
-      // hver markering. Tidligere sentrerte kartet på første manns siste punkt,
-      // og markeringer telte ikke med: setter noen en markering i sentrum mens
-      // ingen deler posisjon, åpnet kartet på klubbens bydel med nåla langt
-      // utenfor skjermen. Man så den aldri, og kunne dermed heller ikke trykke
-      // på den (#699).
-      const punkterIUtsnittet: [number, number][] = [
-        ...menn.flatMap(m => {
-          const siste = m.spor[m.spor.length - 1]
-          return siste ? [[siste.lat, siste.lng] as [number, number]] : []
-        }),
-        ...markeringer.map(mk => [mk.lat, mk.lng] as [number, number]),
-      ]
+      // Startutsnittet rammer inn HOVEDTYNGDEN av punktene, ikke automatisk
+      // ALT som finnes (#735). Uten dette drar én mann som fortsatt står på
+      // avreisestedet (flyet ikke landet, eller bare ikke delt posisjon siden)
+      // utsnittet over et helt hav — kartet må da spenne fra Gardermoen til
+      // Lisboa i stedet for å vise byen turen faktisk foregår i.
+      //
+      // Posisjoner og markeringer sendes inn HVER FOR SEG: kun mennene stemmer
+      // over hvor utsnittet havner, mens markeringene blir med hvis de ligger
+      // der gjengen er. En markering langt unna skal verken dra utsnittet dit
+      // eller kunne stemme ned mennene (se lib/kart-klynge.ts). Finnes det
+      // ingen posisjoner i det hele tatt, rammes samtlige markeringer inn som
+      // før denne funksjonen fantes (#699) — det håndterer funksjonen selv.
+      const posisjonspunkter: [number, number][] = menn.flatMap(m => {
+        const siste = m.spor[m.spor.length - 1]
+        return siste ? [[siste.lat, siste.lng] as [number, number]] : []
+      })
+      const markeringspunkter: [number, number][] = markeringer.map(
+        mk => [mk.lat, mk.lng] as [number, number],
+      )
+      const punkterIUtsnittet: [number, number][] = velgKlyngeUtsnitt(
+        posisjonspunkter,
+        markeringspunkter,
+      )
 
       // Et delt sted (#719) vinner startutsnittet: mannen trykket på nettopp
       // DEN lenken for å se DET stedet, ikke gjennomsnittet av alt annet på
@@ -683,6 +701,15 @@ export default function PosisjonsKart({
     // senere endringer tegnes av effekten under i stedet for å bygge kartet på nytt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Reisemodus-toggelen endrer FLATENS høyde (header borte/tilbake) uten at
+  // kartet remountes. Leaflet måler kun containeren ved init og reagerer ikke
+  // selv på en ren CSS-høydeendring — uten denne sto kartet med feil utsnitt
+  // (stripe uten fliser i bunnen) til neste resize eller rotasjon.
+  useEffect(() => {
+    if (!kartetRef.current) return
+    requestAnimationFrame(() => kartetRef.current?.invalidateSize())
+  }, [reisemodus])
 
   // Tegner spor og markører på nytt når dataene endrer seg.
   useEffect(() => {
@@ -1137,12 +1164,17 @@ export default function PosisjonsKart({
         // da er `absolute`-overlays inne i en `relative` flate like faste som
         // fixed ville vært.
         position: 'relative',
-        // TopHeader er `--top-header-h` HØY PLUSS `env(safe-area-inset-top)` i
+        // TopHeader er `--top-header-h` HØY PLUSS iOS' topp-innsett i
         // padding (se components/TopHeader.tsx). Trakk vi bare fra høyden, ble
         // kartflaten for høy med hele notch-innsettet og stakk forbi bunnen av
         // skjermen — alt inni, inkludert bunn-knappene, ble skjøvet tilsvarende
         // ned og delvis ut av syne (#707).
-        height: 'calc(100dvh - var(--top-header-h) - env(safe-area-inset-top, 0px))',
+        //
+        // I reisemodus (#723) er TopHeader ikke montert i det hele tatt — flaten
+        // fyller da HELE viewporten i stedet for det som er igjen under headeren.
+        height: reisemodus
+          ? '100dvh'
+          : 'calc(100dvh - var(--top-header-h) - var(--safe-top, 0px))',
         width: '100%',
         overflow: 'hidden',
         // Stopper iOS' rubber-band: uten denne drar et kart-sveip hele siden
@@ -1150,9 +1182,33 @@ export default function PosisjonsKart({
         // ikke egentlig kan scrolle.
         overscrollBehavior: 'none',
         background: 'var(--bg-elevated)',
-      }}
+        // Custom property KONSUMERT av kart-panelene (knapperad, chat-panel,
+        // listepanel, TimeplanPanel) i stedet for at hver av dem leser
+        // iOS' egen topp-innsett-variabel selv. Med headeren har flaten
+        // allerede rykket seg ned under notchen (se height over) — et panel
+        // som DA også la på innsettet talte notchen dobbelt (~59 px død luft
+        // på en iPhone med notch, se arkitekturstyrets uttalelse i #723).
+        // Uten headeren (reisemodus) har flaten IKKE gjort det selv, og
+        // panelene MÅ da legge inn innsettet. Ingen kart-panel skal
+        // noensinne lese iOS' topp-innsett-variabel direkte — det er
+        // invarianten (se grep-kommandoen i CLAUDE.md § Policy: Navigasjon).
+        '--kart-panel-safe-top': reisemodus ? 'var(--safe-top, 0px)' : '0px',
+        // Høyden på toppkontroll-sonen i hjørnet (ReisemodusBar). 0 uten
+        // reisemodus, siden baren ikke finnes da. Verdien eies av
+        // ReisemodusBar — se konstantene der (#723-review).
+        '--kart-topp-sone': reisemodus ? `${REISEMODUS_BAR_SONE}px` : '0px',
+      } as React.CSSProperties}
     >
       <div ref={kartRef} data-testid="posisjonskart" style={{ position: 'absolute', inset: 0 }} />
+
+      {/* ── Reisemodus-bar ───────────────────────────────────────────────────
+          Erstatter TopHeader (som ikke er montert i reisemodus, se
+          app/(app)/layout.tsx): egen avatar + ulest-prikk + toggle, flytende
+          over kartet øverst til høyre — «samme sted i begge moduser»
+          (Reidars avgjørelse, #723). */}
+      {reisemodus && (
+        <ReisemodusBar zIndex={Z.KNAPPER} />
+      )}
 
       {/* ── Knapperad, oppå kartet ───────────────────────────────────────────
           Små piller med liten skrift (#704): kartet er innholdet, knappene er
@@ -1161,12 +1217,21 @@ export default function PosisjonsKart({
       <div
         style={{
           position: 'absolute',
-          // INGEN safe-area her: flaten starter allerede under headeren, som
-          // selv har tatt hensyn til notchen. Å legge den på igjen var å telle
-          // innsettet to ganger, og knappene havnet for langt ned (#707).
-          top: 10,
-          left: 10,
-          right: 10,
+          // I NORMAL modus starter flaten allerede under headeren, som selv
+          // har tatt hensyn til notchen — --kart-panel-safe-top er da 0px, og
+          // dette er nøyaktig `top: 10` som før (#707). I reisemodus (#723) er
+          // headeren borte, og variabelen bærer innsettet i stedet.
+          //
+          // I reisemodus deler denne raden hjørnet med ReisemodusBar (avatar +
+          // toggle, øverst til høyre) — uten et ekstra offset flexWrap-et en
+          // pille (typisk «Timeplan», siden den bare vises når det FAKTISK er
+          // en aktuell tur — nøyaktig når reisemodus også er aktuelt) rett oppå
+          // ReisemodusBar og blokkerte klikk på togglen. --kart-topp-sone er
+          // barens reserverte høyde, satt fra ReisemodusBar sine egne mål
+          // (0px uten reisemodus) — ikke et tall gjettet her (#723-review).
+          top: `calc(${KART_TOPP_MARGIN}px + var(--kart-topp-sone, 0px) + var(--kart-panel-safe-top, 0px))`,
+          left: KART_TOPP_MARGIN,
+          right: KART_TOPP_MARGIN,
           display: 'flex',
           flexWrap: 'wrap',
           gap: 6,
@@ -1237,17 +1302,6 @@ export default function PosisjonsKart({
           </button>
         )}
 
-        {/* «Sporer» foran tittelen: en naken arrangementstittel i en pille
-            forklarer ikke hvorfor den står der. Ordet er det som gjør at man
-            skjønner at rutene på kartet hører til akkurat denne turen. */}
-        {arrangementTittel && (
-          <span
-            data-testid="arrangement-pille"
-            style={{ ...PILLE, pointerEvents: 'none', color: 'var(--kart-hav)' }}
-          >
-            Sporer {arrangementTittel}
-          </span>
-        )}
       </div>
 
       {/* ── Siktet ───────────────────────────────────────────────────────── */}
@@ -1665,7 +1719,7 @@ export default function PosisjonsKart({
               overscrollBehaviorY: 'contain',
               pointerEvents: chatAapent ? 'auto' : 'none',
               zIndex: Z.PANEL,
-              padding: `calc(10px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
+              padding: `calc(10px + var(--kart-panel-safe-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px))`,
             }}
           >
             <div style={{ ...SEKSJON, marginBottom: 10 }}>Klubbchat</div>

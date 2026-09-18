@@ -82,13 +82,21 @@ export default function MarkeringDetalj({
         padding: '14px 16px',
         boxShadow: 'var(--shadow-popover)',
         backdropFilter: 'var(--blur-card)',
+        // KOLONNE, ikke rad (#749). Med teksten og fire knapper på samme rad
+        // hadde knappegruppa flexShrink: 0 og nowrap, mens tekstblokka hadde
+        // flex: 1 + minWidth: 0 — altså var det teksten som måtte gi etter.
+        // På 390 px ble den presset ned til én bokstavs bredde og brutt per
+        // tegn, siden overflowWrap: 'anywhere' tillater nettopp det. Raden ble
+        // for bred da «Kopier lenke» kom til i #719; før det var det tre
+        // knapper og det gikk akkurat.
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 12,
         zIndex,
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ minWidth: 0 }}>
         <div
           style={{
             fontFamily: 'var(--font-body)',
@@ -115,7 +123,9 @@ export default function MarkeringDetalj({
           <div style={{ ...HJELPETEKST, marginTop: 2 }}>Del posisjonen din for å se avstand.</div>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+      {/* Egen rad, og den får lov å wrappe: fire piller går ikke opp på
+          390 px uansett hvor mye vi krymper dem. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {/* Veibeskrivelse i Google Maps (#708). Michael spurte om dette
             allerede da kartet var nytt: «er det en gå til funksjon der eller
             naviger til? Ellers må man jo inn i Google Maps å finne det

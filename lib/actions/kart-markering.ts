@@ -7,6 +7,9 @@ import { KART_MARKERING_MAKS_LENGDE, KART_MARKERING_TIMER } from '@/lib/konstant
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
 import { erGyldigSymbol, STANDARD_SYMBOL } from '@/lib/markering-symboler'
 import { logg } from '@/lib/logg'
+import { sendVarsel } from '@/lib/varsler'
+import { byggStedLenke } from '@/lib/kart-lenke'
+import { BASE_URL } from '@/lib/config'
 
 // Samme resultat-form som posisjons-actionene: knappen står i en
 // klientkomponent som må kunne skille «teksten var tom» fra «det gikk ikke».
@@ -69,6 +72,40 @@ export async function settMarkering(
   if (error) {
     await logg.feil('kart.markering.feilet', error).catch(() => {})
     return { ok: false, melding: 'Klarte ikke lagre markeringen. Prøv igjen.' }
+  }
+
+  // MILF alert (#747). Kun for 💋-symbolet — de andre markeringene er
+  // «møt meg her»-beskjeder som ikke skal pinge tolv telefoner.
+  //
+  // .catch() er ufravikelig: markeringen ER lagret på dette punktet, og en
+  // varsel-feil skal ikke få brukeren til å tro at markeringen ikke ble satt
+  // (CLAUDE.md § Policy: Varsler — regel for nye kallsteder).
+  if (valgtSymbol === 'milf') {
+    // Alle aktive UNNTATT den som markerte — han vet jo at han gjorde det,
+    // og et pling om sin egen markering leses som at noen andre fant noe.
+    const { data: mottakere, error: mottakerFeil } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('aktiv', true)
+      .neq('id', user.id)
+
+    if (mottakerFeil) {
+      // Fail-open: markeringen står, varselet uteblir. Å kaste her ville
+      // gjort en vellykket markering til en feilmelding.
+      await logg.feil('kart.milf.mottakere.feilet', mottakerFeil).catch(() => {})
+    } else {
+      await sendVarsel({
+        mottakere: (mottakere ?? []).map(m => m.id),
+        tittel: 'MILF ALERT!',
+        melding: rentekst,
+        url: byggStedLenke(BASE_URL, lat, lng, rentekst),
+        knappTekst: 'Vis på kartet',
+        type: 'milf_alert',
+        // Hver sighting er sin egen begivenhet. Uten dette ville den andre
+        // av kvelden blitt dedupet bort som «allerede varslet».
+        tillatDuplikat: true,
+      }).catch((err: unknown) => logg.feil('kart.milf.varsel.feilet', err))
+    }
   }
 
   revalidatePath('/kart')

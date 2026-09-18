@@ -11,7 +11,15 @@ import { erMeldingLevende, byggAgenda, MELDING_LEVENDE_DAGER, type MeldingRaad }
 
 const DAG_MS = 24 * 60 * 60 * 1000
 
-const NAA_FAST = new Date('2026-04-25T12:00:00Z')
+// byggAgenda sin `naa`-parameter er kontraktsmessig en OSLO-KALENDERDAG som
+// lokal Date (det norskDatoNaa() gir) — ikke et instant. Med en Z-literal her
+// leste erFestet()/erPaaOsloDag() kalenderdagen ut av prosessens tidssone, og
+// 12:00Z ble 26. april så snart runneren sto mer enn 12 timer øst for UTC
+// (Pacific/Kiritimati, UTC+14). Testene var derfor grønne i UTC og Oslo, men
+// røde lenger øst — samme klasse som #675, funnet i review-en av den. Alle
+// andre bruk av NAA_FAST i fila er relative (getTime()-differanser), så den
+// lokale konstruksjonen er den eneste endringen som trengs.
+const NAA_FAST = new Date(2026, 3, 25, 12, 0, 0)
 
 function lagMelding(
   opprettetDagerSiden: number,
@@ -105,7 +113,7 @@ describe('byggAgenda — arkivering', () => {
 })
 
 describe('byggAgenda — festede meldinger (#419)', () => {
-  // NAA_FAST = 2026-04-25T12:00:00Z; dagensDate = '2026-04-25'
+  // NAA_FAST = 25. april 2026 kl. 12 LOKAL tid; dagensDate = '2026-04-25'
 
   it('festet innlegg med gammel aktivitet vises i levende meldinger', () => {
     // sist_aktivitet 8 dager gammel (over MELDING_LEVENDE_DAGER = 3.5), men

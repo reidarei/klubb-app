@@ -50,6 +50,12 @@ type VarselTekst = {
  *      eller hvilken knapp som utløser det når det er manuelt.
  */
 export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
+  // ── Kartet ───────────────────────────────────────────────────────────────
+  milf_alert: {
+    panel: 'MILF alert (når noen setter en 💋-markering på kartet)',
+    kort: 'MILF alert',
+  },
+
   // ── Arrangementer ────────────────────────────────────────────────────────
   nytt_arrangement: { panel: 'Nytt arrangement lagt ut', kort: 'Nytt arrangement' },
   oppdatert: {

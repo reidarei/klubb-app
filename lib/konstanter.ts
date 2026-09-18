@@ -167,6 +167,20 @@ export const LOGG_KONTEKST_MAKS_KB = 4
 // Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
 
+// Grenser for rå nøkkelNAVN som gjengis i logg og feil_logg (#681, #711).
+// Et feltnavn fra vår egen kode er alltid en kort JS-identifikator; er navnet
+// lengre enn dette, er det per definisjon ikke et vi har skrevet, og skal
+// kappes framfor å blåse opp raden. Verdien er samtidig lengdegrensen i
+// NOEKKELNAVN_FORM (lib/logg-sanitering.ts) — regexen bygges AV konstanten, så
+// de to kan ikke drifte fra hverandre.
+export const LOGG_NOEKKEL_MAKS_TEGN = 40
+
+// Maks antall nøkkelnavn vi gjengir fra ETT feilobjekt i feil_logg.kontekst
+// (#711-review). En supabase-feil har fire; en fremmed feilstruktur kan ha
+// hundrevis, og poenget med feltet er formen på feilen, ikke en full
+// opptelling. Resten telles som «+N_flere» slik at kappingen aldri blir stille.
+export const LOGG_NOEKLER_MAKS_ANTALL = 12
+
 // Sperrevindu mellom to automatiske reloads etter en chunk-feil (#575).
 // Klienten reloader for å hente fersk HTML når den mangler en kodebit, men
 // hvis den ferske HTML-en OGSÅ feiler ville vi reloadet i evig løkke. Andre
@@ -399,6 +413,13 @@ export const POSISJON_DELING_TIMER = 8
 // isteden, og en tur over flere dager skal vises i sin helhet.
 export const POSISJON_SPOR_TIMER = 24
 
+// Maks antall posisjonspunkter kartet henter i én spørring. Speiler PostgREST
+// sin max_rows (supabase/config.toml) — ber vi om mer, kapper den likevel der,
+// og gjør det STILLE. Spørringen må derfor sortere synkende og snu i JS, ellers
+// er det de ELDSTE punktene som overlever avkortingen og kartet viser alle
+// frosset på gamle posisjoner uten en eneste feilmelding (#717).
+export const POSISJON_PUNKT_MAKS = 1000
+
 // Over denne alderen regnes et punkt som gammelt, og kartet demper prikken.
 // Poenget er ikke å skjule punktet, men å hindre at det leses som «her er han
 // NÅ»: uten bakgrunnsposisjon på iOS er et punkt bare like ferskt som forrige
@@ -462,3 +483,18 @@ export const TIMEPLAN_ADRESSE_MAKS_LENGDE = 120
 // kartmarkering (#719). Samme rolle som POSISJON_PLING_KVITTERING_SEK —
 // lenge nok til å se den, ikke så lenge at den føles klistret fast.
 export const KART_LENKE_KOPIERT_KVITTERING_SEK = 3
+
+// Kartets startutsnitt (#735) — hvor nært to punkter må være for å regnes
+// som samme «sted» når velgKlyngeUtsnitt() (lib/kart-klynge.ts) avgjør hvem
+// startutsnittet skal ramme inn. 50 km: en mann på Gardermoen mens resten
+// er i Oslo (37 km) skal fortsatt telle med i utsnittet før avreise, mens en
+// splitt over et helt hav (fly-avstand) er godt utenfor.
+export const KART_KLYNGE_AVSTAND_M = 50_000
+
+// Hvor stor andel av POSISJONENE hovedklyngen må utgjøre for at startutsnittet
+// skal ramme inn KUN den (markeringer stemmer ikke — se lib/kart-klynge.ts).
+// STRENGT flertall (mer enn halvparten) — en klynge på akkurat halvparten
+// vinner ikke alene, og ved en 5/4/3-splitt (42 %) viser kartet fortsatt alt
+// i stedet for å gjemme to tredjedeler av gjengen bak den største
+// enkeltgruppa (#735).
+export const KART_KLYNGE_MIN_ANDEL = 0.5

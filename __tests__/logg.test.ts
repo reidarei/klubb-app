@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 import { logg, DbFeil } from '@/lib/logg'
+import { LOGG_NOEKLER_MAKS_ANTALL, LOGG_NOEKKEL_MAKS_TEGN } from '@/lib/konstanter'
 import { IkkeInnloggetFeil } from '@/lib/auth'
 
 beforeEach(() => {
@@ -69,8 +70,10 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
     expect(rad.event).toBe('test.event')
     expect(rad.nivaa).toBe('error')
     expect(rad.profil_id).toBe('user-1')
-    // arrangement_id og count skal IKKE følge med i kontekst — kun code/tabell.
-    expect(rad.kontekst).toEqual({ code: '23505', tabell: 'profiles_epost_key' })
+    // arrangement_id og count skal IKKE følge med i kontekst — kun code/tabell/noekler.
+    // noekler: 'code,message' fordi pgFeil() returnerer et rått objekt med
+    // nøyaktig disse to nøklene (#711).
+    expect(rad.kontekst).toEqual({ code: '23505', tabell: 'profiles_epost_key', noekler: 'code,message' })
   })
 
   it('persisterer aldri melding-feltet (kan bære radverdier)', async () => {
@@ -241,6 +244,146 @@ describe('logg.feil() – feilklassens navn persisteres (tom kontekst-fella)', (
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(JSON.stringify(rad)).not.toContain('hemmelig@test.no')
     expect((rad.kontekst as Record<string, unknown>).navn).toBe('Error')
+  })
+})
+
+describe('logg.feil() – kontekst er aldri {} (#711)', () => {
+  // Rotårsak: normaliserFeil() satte `navn` kun for Error-instanser, og en
+  // supabase-feil er et vanlig objekt. Manglet den i tillegg `code`
+  // (transport-/nettverksfeil), falt den til else-grenen som kun ga
+  // { melding }, og melding persisteres aldri i feil_logg. Resultatet var
+  // kontekst: {} — udiagnostiserbart. Se lib/logg.ts § normaliserFeil().
+  function fangInsert() {
+    const spion = vi.fn()
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.insert = vi.fn((rad: unknown) => {
+        spion(rad)
+        return chain
+      })
+      chain.abortSignal = vi.fn().mockReturnValue(chain)
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+    return spion
+  }
+
+  it('den faktiske repro-saken: en supabase-lignende feil UTEN code gir nøkkelnavn, ikke {}', async () => {
+    // vitals.insert.feilet (#711): objektet er verken en Error-instans eller
+    // har `code` — akkurat kombinasjonen som ga en tom rad før fiksen.
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('vitals.insert.feilet', { message: 'fetch failed' })
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(rad.kontekst).not.toEqual({})
+    expect((rad.kontekst as Record<string, unknown>).noekler).toBe('message')
+  })
+
+  it('et objekt uten egne nøkler (f.eks. et bokstavelig throw {}) faller ikke tilbake til {}', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', {})
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(rad.kontekst).not.toEqual({})
+    expect((rad.kontekst as Record<string, unknown>).navn).toBe('objekt-uten-egne-nokler')
+  })
+
+  it.each([
+    ['streng', 'noe gikk galt'],
+    ['tall', 42],
+    ['null', null],
+    ['undefined', undefined],
+  ])('en kastet primitiv (%s) faller ikke tilbake til {}', async (_label, verdi) => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', verdi)
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(rad.kontekst).not.toEqual({})
+    expect(typeof (rad.kontekst as Record<string, unknown>).navn).toBe('string')
+  })
+
+  // ── Formvakt på nøkkelnavnene (#711-review) ───────────────────────────────
+  //
+  // normaliserFeil() tar `unknown`. Nøkkelnavnene i en kastet struktur er
+  // derfor IKKE garantert kodekontrollerte — de kan være en epostadresse, en
+  // URL eller flere tusen tegn. Testene under pinner at raden aldri gjengir
+  // slike navn rått, og at den likevel aldri blir tom.
+
+  function kontekstFra(spion: ReturnType<typeof vi.fn>) {
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    return rad.kontekst as Record<string, unknown>
+  }
+
+  it('gjengir aldri nøkkelnavn som ser ut som PII — men teller dem', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', {
+      'ola@example.com': 1,
+      'https://example.com/side?token=hemmelig': 2,
+      melding: 'fetch failed',
+    })
+
+    const noekler = kontekstFra(spion).noekler as string
+    expect(noekler).not.toContain('@')
+    expect(noekler).not.toContain('example.com')
+    expect(noekler).not.toContain('token')
+    // Det gjengibare navnet står igjen, resten telles: signalet «strukturen
+    // hadde tre felter» går ikke tapt selv om to av dem ikke kan skrives.
+    expect(noekler).toBe('melding,+2_ukjent_form')
+  })
+
+  it('filtreres ALLE nøkkelnavnene bort, bærer raden fortsatt et diagnostisk spor', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    await logg.feil('test.event', {
+      'ola@example.com': 1,
+      'fornavn etternavn': 2,
+    })
+
+    const kontekst = kontekstFra(spion)
+    // Invarianten fra #711 må overleve formvakten.
+    expect(kontekst).not.toEqual({})
+    expect(kontekst.noekler).toBe('+2_ukjent_form')
+    // «objekt-uten-egne-nokler» skal IKKE slå inn: objektet HADDE nøkler, de
+    // var bare ikke gjengibare. De to markørene betyr ulike ting.
+    expect(kontekst.navn).toBeUndefined()
+  })
+
+  it('kapper antall nøkler — og sier fra om at det ble kappet', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    const mange: Record<string, unknown> = {}
+    for (let i = 0; i < 40; i++) mange[`felt_${String(i).padStart(2, '0')}`] = i
+
+    await logg.feil('test.event', mange)
+
+    const deler = (kontekstFra(spion).noekler as string).split(',')
+    expect(deler).toHaveLength(LOGG_NOEKLER_MAKS_ANTALL + 1)
+    expect(deler.at(-1)).toBe(`+${40 - LOGG_NOEKLER_MAKS_ANTALL}_flere`)
+  })
+
+  it('gjengir aldri et svært langt nøkkelnavn — heller ikke kappet', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const spion = fangInsert()
+
+    // Identifikator-formet, men 5000 tegn: en feilstruktur skal ikke kunne
+    // blåse opp feil_logg-raden via et nøkkelNAVN.
+    const langt = 'a'.repeat(5000)
+    await logg.feil('test.event', { [langt]: 1, kort: 2 })
+
+    const noekler = kontekstFra(spion).noekler as string
+    expect(noekler).toBe('kort,+1_ukjent_form')
+    expect(noekler.length).toBeLessThan(LOGG_NOEKKEL_MAKS_TEGN * 2)
   })
 })
 

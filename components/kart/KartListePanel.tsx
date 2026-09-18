@@ -177,7 +177,10 @@ export default function KartListePanel({
           overflowY: 'auto',
           pointerEvents: panelAapent ? 'auto' : 'none',
           zIndex: panelZIndex,
-          padding: `calc(12px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px))`,
+          // --kart-panel-safe-top, IKKE iOS' egen topp-innsett-variabel
+          // direkte — se regnestykket i PosisjonsKart.tsx (kart-flatens
+          // stil). Invariant: ingen kart-panel leser den variabelen selv (#723).
+          padding: `calc(12px + var(--kart-panel-safe-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px))`,
         }}
       >
         {meg ? (
@@ -203,8 +206,8 @@ export default function KartListePanel({
               marginBottom: 12,
             }}
           >
-            Du deler ikke posisjon. Deler du, varer det {POSISJON_DELING_TIMER} timer og slutter
-            av seg selv.
+            Du deler ikke posisjon. Deler du, varer det ut turen — eller{' '}
+            {POSISJON_DELING_TIMER} timer utenom turer. Slutter av seg selv.
           </div>
         )}
 

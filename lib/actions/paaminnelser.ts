@@ -1,6 +1,5 @@
-import { addDays } from 'date-fns'
 import { createHash } from 'crypto'
-import { norskDatoNaa, naa } from '@/lib/dato'
+import { iDagOslo, osloDagPluss, osloDagStartIso, naa } from '@/lib/dato'
 import {
   sendPaaminneVarsler,
   sendPurringVarsler,
@@ -20,10 +19,6 @@ import type { Database } from '@/lib/supabase/database.types'
 
 type Admin = SupabaseClient<Database>
 
-function dagStreng(dato: Date): string {
-  return dato.toISOString().slice(0, 10)
-}
-
 // Fail closed (#504): en svelget feil her ga tidligere `[]`, bit-identisk med
 // «ingen arrangementer denne dagen» — cronen ville stille hoppet over en hel
 // dags påminnelser i stedet for å synliggjøre en DB-feil.
@@ -34,15 +29,29 @@ function dagStreng(dato: Date): string {
 // HVEM som har svart hva, ikke bare hvor mange.
 // Både 7- og 1-dagers bruker embeddet; kun 3-dagers-purringen drar det med ubrukt,
 // og den gjør uansett sitt eget påmeldings-oppslag for å finne hvem som ikke har svart.
-async function hentForDag(admin: Admin, dag: string) {
+//
+// `dag` er dagoffset fra i dag (0 = i dag), ikke en dato-streng — vinduet
+// bygges av osloDagStartIso(), som gir UTC-instantet for NORSK midnatt. Før
+// #675 filtrerte spørringen på en bar tidsstempel-literal («2026-09-18T00:00:00»
+// uten sone), som Postgres tolker i SESJONENS tidssone (UTC hos Supabase) — et
+// arrangement kl. 00:30 norsk tid ble da hentet på UTC-dagen FØR. Samme
+// feilklasse ett lag lenger ned enn dagStreng()-buggen selv.
+//
+// `anker` er norsk «i dag» samplet ÉN gang for hele kjøringen (se
+// kjorPaaminnelser). Uten den ville de to grensene under kalt iDagOslo() hver
+// for seg, og en kjøring som krysset norsk midnatt mellom dem ville fått nedre
+// grense på én kalenderdag og øvre på den neste — et vindu over to døgn i
+// stedet for ett. Ekstremt sjeldent, men det er samme form som feilen #675
+// handler om: riktighet som hviler på NÅR koden tilfeldigvis kjører.
+async function hentForDag(admin: Admin, dag: number, anker: string) {
   const { data, error } = await admin
     .from('arrangementer')
     .select('id, tittel, start_tidspunkt, oppmoetested, paameldinger (profil_id, status)')
-    .gte('start_tidspunkt', `${dag}T00:00:00`)
-    .lt('start_tidspunkt', `${dag}T23:59:59`)
+    .gte('start_tidspunkt', osloDagStartIso(dag, anker))
+    .lt('start_tidspunkt', osloDagStartIso(dag + 1, anker))
   if (error) {
     await logg.feil('cron.paaminne.hentForDag.feilet', error, { ctx: { sample: dag } })
-    throw new Error(`Kunne ikke hente arrangementer for ${dag}: ${error.message}`)
+    throw new Error(`Kunne ikke hente arrangementer for dag-offset ${dag}: ${error.message}`)
   }
   return data ?? []
 }
@@ -62,16 +71,20 @@ async function hentArrangorPurringer(admin: Admin, dag: string) {
 }
 
 export async function kjorPaaminnelser(admin: Admin) {
-  const idag = norskDatoNaa()
-  const idagStr = dagStreng(idag)
-  const dag7 = dagStreng(addDays(idag, PAAMINNELSE_DAGER.LANG))
-  const dag3 = dagStreng(addDays(idag, PAAMINNELSE_DAGER.PURRING))
-  const dag1 = dagStreng(addDays(idag, PAAMINNELSE_DAGER.KORT))
+  // Ett anker for hele kjøringen: hver dato cronet regner på utledes av SAMME
+  // norske kalenderdag, ikke av et nytt «nå» per kallsted. Ellers kan en
+  // kjøring som krysser norsk midnatt blande to døgn — se hentForDag.
+  const anker = iDagOslo()
+
+  // hentArrangorPurringer sammenligner mot `purredato`, en ren `date`-kolonne
+  // uten klokkeslett — osloDagPluss(0) (norsk «i dag» som streng) er riktig
+  // nøkkel der, ingen instant-grense involvert.
+  const idagStr = osloDagPluss(0, anker)
 
   const [arr_7, arr_1, arr_3, arrangorPurringer] = await Promise.all([
-    hentForDag(admin, dag7),
-    hentForDag(admin, dag1),
-    hentForDag(admin, dag3),
+    hentForDag(admin, PAAMINNELSE_DAGER.LANG, anker),
+    hentForDag(admin, PAAMINNELSE_DAGER.KORT, anker),
+    hentForDag(admin, PAAMINNELSE_DAGER.PURRING, anker),
     hentArrangorPurringer(admin, idagStr),
   ])
 
@@ -164,7 +177,7 @@ export async function kjorPaaminnelser(admin: Admin) {
   let lukketKaaringer = 0
   let sendteVarsler = 0
   try {
-    const resultat = await behandleKaaringspoller(admin)
+    const resultat = await behandleKaaringspoller(admin, anker)
     lukketKaaringer = resultat.lukketKaaringer
     sendteVarsler = resultat.sendteVarsler
     feil += resultat.kaaringFeil
@@ -176,7 +189,7 @@ export async function kjorPaaminnelser(admin: Admin) {
   return { behandlet, feil, lukketKaaringer, sendteVarsler }
 }
 
-async function behandleKaaringspoller(admin: Admin) {
+async function behandleKaaringspoller(admin: Admin, anker: string) {
   let lukketKaaringer = 0
   let sendteVarsler = 0
   let kaaringFeil = 0
@@ -185,7 +198,9 @@ async function behandleKaaringspoller(admin: Admin) {
   // poller. Uten et vindu ville en permanent uvarslebar poll (f.eks. en som
   // alltid får relevanteProfiler-feil) retryes for alltid — vinduet lar den
   // falle ut av køen av seg selv, jf. CLAUDE.md § Policy: Varsler.
-  const vinduStart = addDays(norskDatoNaa(), -KAARING_VARSEL_RETRY_DAGER).toISOString()
+  // Samme anker som resten av kjøringen (se kjorPaaminnelser) — én grense her,
+  // så ingen skjevhet å få, men kjøringen skal ha én kilde til «hvilken dag».
+  const vinduStart = osloDagStartIso(-KAARING_VARSEL_RETRY_DAGER, anker)
 
   // To SEPARATE spørringer i stedet for én `.or()` (#495/#504): testmocken
   // (__tests__/helpers/supabase-mock.ts) lister metodene eksplisitt og har

@@ -382,6 +382,346 @@ const supabaseFeilMaaHentes = {
   },
 }
 
+
+// ---------------------------------------------------------------------------
+// Egendefinert regel: dato-tidssone-uavhengig (#675)
+// ---------------------------------------------------------------------------
+// Tredje gang samme bug-klasse slo til (#674, PR #736, PR #741/#740, se
+// CLAUDE.md § Arbeidsmåter) — en Date-verdi som er riktig i lokal tid blir
+// bare tilfeldigvis riktig når PROSESSEN står i UTC. Ligger inline av samme
+// grunn som supabaseFeilMaaHentes over (speiles til klubb-app, se
+// kommentaren der).
+//
+// Kodebasen har to ulike Date-betydninger som ser identiske ut i koden:
+//   1. «Oslo-kalenderdag som lokal Date» — det norskDatoNaa()/norskDag()
+//      returnerer (new Date(y, m-1, d), lokal midnatt). Lokale gettere og
+//      date-fns kalender-aritmetikk er RIKTIG på disse. toISOString() er
+//      FEIL — den gir UTC-instantet for LOKAL midnatt, som bare tilfeldigvis
+//      stemmer når prosessen kjører i UTC.
+//   2. «Instant» — new Date(iso). toISOString() riktig, lokale gettere feil.
+// Hele bug-klassen er én operasjon fra gruppe 2 brukt på en verdi fra
+// gruppe 1 (eller et null-argument new Date() brukt som om det var gruppe 1).
+//
+// Fire sjekker, bygget på én felles taint-hjelper (finnKilde) med enkel lokal
+// propagering: én-definisjons-variabler, new Date(<tainted>)-wrapping (ett
+// argument), og første argument til et lite sett date-fns-funksjoner som
+// bevarer Date-identiteten (addDays/subDays/startOfDay/endOfDay/addMonths/
+// subMonths). Samme besokt-løkkevakt som i supabaseFeilMaaHentes over —
+// nødvendig av samme grunn (gjensidig selvrefererende deklarasjoner).
+//
+//   Sjekk 1 — toISOString() på en Oslo-kalenderdag. Kilde: kall til
+//     norskDatoNaa()/norskDag() (kjenner kun callee-navn, som i regelen over).
+//   Sjekk 2 — dagstreng fra UTC. Kilde: null-argument new Date(). Flagges KUN
+//     når resultatet av toISOString() umiddelbart kappes til en KALENDERDAG:
+//     slice/substring(0, N) med N <= 10, eller split('T')[0]. Argumentene
+//     sjekkes, ikke bare metodenavnet — .slice(11, 19) er UTC-klokkeslettet og
+//     .split('.') stripper millisekunder, begge legitime instant-operasjoner.
+//     Et rent tidsstempel uten kapping (naa()-mønsteret) flagges heller ikke.
+//     Regelen står på «error»: ett falskt treff blir slått av, ikke rettet.
+//   Sjekk 3 — «nå» mutert i lokal tid. Kilde: null-argument new Date(), fulgt
+//     av setHours/setDate/setMonth/setFullYear/setMinutes. new Date(x) MED
+//     argument er aldri en kilde her — det er nettopp det som gjør
+//     «cursor = new Date(start); cursor.setDate(...)» trygt.
+//   Sjekk 4 — ÉN-HOPPS taint gjennom en lokal hjelpers parameter. Dette er
+//     selve #674-formen: dagStreng(addDays(norskDatoNaa(), n)) der
+//     function dagStreng(d) { return d.toISOString().slice(0, 10) }. Kallet og
+//     feilen står i hver sin funksjon, så sjekk 1–3 ser ingenting. Pass 1
+//     noterer under traverseringen hvilke PARAMETERE en funksjon behandler som
+//     instant (toISOString på dem, eller lokal mutering av dem); Program:exit
+//     sjekker så om et kallsted mater nettopp den parameteren med en
+//     Oslo-kalenderdag eller et null-argument new Date(). To passeringer, ikke
+//     én, slik at en hjelper definert NEDENFOR sitt eget kallsted også fanges.
+//     Treffet rapporteres på KALLSTEDET — det er der rettingen skal gjøres, og
+//     hjelperen selv er ikke gal for alle argumenter.
+//
+// HVA REGELEN FORTSATT IKKE SER (presist — ikke «taint gjennom parametere»,
+// det er sjekk 4 nå):
+//   a) Mer enn ETT hopp: hjelper A som sender parameteren sin videre til
+//      hjelper B som gjør toISOString(). Ingen interprosedyral fixpoint.
+//   b) Hjelpere på tvers av filer — en importert dagStreng er usynlig for
+//      ESLint uten typeinfo.
+//   c) Parametere som skrives om i kroppen (d = ...) hoppes bevisst over:
+//      verdien er da ikke lenger den kallstedet sendte inn.
+//   d) Destrukturerte og rest-parametere ({ dato }, ...datoer) — ingen stabil
+//      posisjon å knytte kallstedets argument til.
+//   e) Kilder utenfor de tre kjente (norskDatoNaa/norskDag/null-argument
+//      new Date), f.eks. en Date lest ut av et objekt eller returnert fra en
+//      annen fil.
+// Svaret på et treff er uansett «ikke skriv en lokal dato-hjelper — bruk
+// lib/dato.ts», ikke «ikke skriv toISOString()». Se CLAUDE.md § Policy:
+// Tidshåndtering.
+const datoTidssoneUavhengig = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Forby tidssone-avhengige Date-mønstre (#675)' },
+    schema: [],
+    messages: {
+      isoPaaOsloDag:
+        'norskDatoNaa()/norskDag() gir en Date på LOKAL midnatt for en norsk kalenderdag. toISOString() på den gir UTC-instantet for lokal midnatt — riktig kun når prosessen står i UTC. Bruk osloDagPluss() eller osloDagStartIso() fra lib/dato.ts. Se CLAUDE.md § Policy: Tidshåndtering.',
+      utcDagstreng:
+        'new Date().toISOString() gir UTC-datoen, ikke den norske. Bruk iDagOslo() fra lib/dato.ts.',
+      naaMutertLokalt:
+        'Å bygge en kalenderdag ved å mutere new Date() regner i prosessens tidssone. Bruk osloDagPluss(n) fra lib/dato.ts (+ datetimeLocalTilIso() hvis du trenger et tidspunkt).',
+      hjelperTaintet:
+        'Hjelperen du kaller behandler dette argumentet som et INSTANT (toISOString() eller lokal mutering i kroppen), men du sender inn en norsk kalenderdag eller new Date(). Dette er #674-formen: dagStreng(addDays(norskDatoNaa(), n)). Ikke skriv en lokal dato-hjelper — bruk osloDagPluss()/osloDagStartIso() fra lib/dato.ts. Se CLAUDE.md § Policy: Tidshåndtering.',
+    },
+  },
+  create(context) {
+    const sourceCode = context.sourceCode
+
+    // Samme oppslags-hjelper som i supabaseFeilMaaHentes over.
+    function finnVariabel(scope, navn) {
+      let s = scope
+      while (s) {
+        const v = s.variables.find(v => v.name === navn)
+        if (v) return v
+        s = s.upper
+      }
+      return null
+    }
+
+    // date-fns-funksjoner som bevarer «hvilken Date er dette»-identiteten på
+    // sitt FØRSTE argument — addDays(x, n) er tainted nøyaktig som x.
+    const DATO_PROPAGERENDE = new Set([
+      'addDays', 'subDays', 'startOfDay', 'endOfDay', 'addMonths', 'subMonths',
+    ])
+
+    // Generisk kilde-søk: følger `node` bakover via single-def-variabler,
+    // new Date(<tainted>)-wrapping (ETT argument — null-argument new Date()
+    // er alltid en KILDE, aldri en wrapper) og første argument til
+    // DATO_PROPAGERENDE, og spør `kildeAv` ved hvert steg. Returnerer det
+    // FØRSTE ikke-null svaret fra `kildeAv`, ellers null — sjekk 4 trenger å
+    // vite HVILKEN kilde som traff (hvilken funksjon, hvilken parameter-
+    // posisjon), ikke bare at det finnes en. `besokt` er løkke-vakten — se
+    // kommentaren på samme sted i supabaseFeilMaaHentes.
+    function finnKilde(node, kildeAv, besokt = new Set()) {
+      let n = node
+      while (n) {
+        if (besokt.has(n)) return null
+        besokt.add(n)
+        const treff = kildeAv(n)
+        if (treff) return treff
+        if (n.type === 'Identifier') {
+          const variable = finnVariabel(sourceCode.getScope(n), n.name)
+          if (!variable || variable.defs.length !== 1) return null
+          const def = variable.defs[0]
+          if (def.type !== 'Variable' || !def.node.init) return null
+          n = def.node.init
+        } else if (
+          n.type === 'NewExpression' &&
+          n.callee.type === 'Identifier' &&
+          n.callee.name === 'Date' &&
+          n.arguments.length === 1
+        ) {
+          n = n.arguments[0]
+        } else if (
+          n.type === 'CallExpression' &&
+          n.callee.type === 'Identifier' &&
+          DATO_PROPAGERENDE.has(n.callee.name) &&
+          n.arguments.length > 0
+        ) {
+          n = n.arguments[0]
+        } else {
+          return null
+        }
+      }
+      return null
+    }
+
+    // Boolsk form for sjekk 1–3, som kun trenger ja/nei.
+    function erTaintet(node, erKilde) {
+      return finnKilde(node, n => (erKilde(n) ? true : null)) === true
+    }
+
+    // Kilde 1: et kall til norskDatoNaa()/norskDag(...). Kjenner kun
+    // callee-navnet — samme grensesnitt-antagelse som supabaseFeilMaaHentes.
+    function erOsloKalenderdagKilde(node) {
+      return (
+        node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        (node.callee.name === 'norskDatoNaa' || node.callee.name === 'norskDag')
+      )
+    }
+
+    // Kilde 2: et null-argument new Date() — «nå», regnet i prosessens
+    // LOKALE tidssone. new Date(<noe>) MED argument matcher aldri dette.
+    function erNullArgNewDateKilde(node) {
+      return (
+        node.type === 'NewExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'Date' &&
+        node.arguments.length === 0
+      )
+    }
+
+    // Sjekk 2-hjelper: er DENNE toISOString()-kall-noden umiddelbart fulgt av
+    // et kall som plukker ut KALENDERDAGEN? ARGUMENTENE må sjekkes, ikke bare
+    // metodenavnet: .slice(11, 19) er UTC-KLOKKESLETTET og .split('.') er
+    // «strip millisekunder» — begge legitime instant-operasjoner som aldri
+    // skal flagges. Godtatt som daguttrekk er slice/substring(0, N) med
+    // 1 <= N <= 10 (dag, måned eller år — alle er UTC-kalenderfelt og like
+    // tidssone-følsomme) og split('T')[0]. naa()s rene tidsstempel (ingen
+    // kapping i det hele tatt) fyrer heller ikke.
+    const DAG_KAPPE_METODER = new Set(['slice', 'substring', 'split'])
+
+    function erTallLiteral(node, godtar) {
+      return !!node && node.type === 'Literal' && typeof node.value === 'number' && godtar(node.value)
+    }
+
+    function erDagKapping(metode, kall) {
+      const args = kall.arguments
+      if (metode === 'slice' || metode === 'substring') {
+        return (
+          args.length === 2 &&
+          erTallLiteral(args[0], v => v === 0) &&
+          erTallLiteral(args[1], v => v >= 1 && v <= 10)
+        )
+      }
+      // split: separatoren må være 'T', OG resultatet må indekseres med [0].
+      // split('T')[1] er klokkeslettet, split('.') er millisekund-strippingen.
+      if (args.length < 1 || args[0].type !== 'Literal' || args[0].value !== 'T') return false
+      const indeks = kall.parent
+      return (
+        !!indeks &&
+        indeks.type === 'MemberExpression' &&
+        indeks.object === kall &&
+        indeks.computed &&
+        erTallLiteral(indeks.property, v => v === 0)
+      )
+    }
+
+    function harDagKappingEtterpaa(toISOStringKallNode) {
+      const parent = toISOStringKallNode.parent
+      if (!parent || parent.type !== 'MemberExpression') return false
+      if (parent.object !== toISOStringKallNode || parent.computed) return false
+      if (parent.property.type !== 'Identifier' || !DAG_KAPPE_METODER.has(parent.property.name)) return false
+      const kall = parent.parent
+      if (!kall || kall.type !== 'CallExpression' || kall.callee !== parent) return false
+      return erDagKapping(parent.property.name, kall)
+    }
+
+    const MUTASJONS_METODER = new Set(['setHours', 'setDate', 'setMonth', 'setFullYear', 'setMinutes'])
+
+    // ── Sjekk 4: én-hopps taint gjennom en lokal hjelpers parameter ─────────
+    // Pass 1 (under traverseringen) fyller paramBruk: funksjonsnode → hvilke
+    // parameter-POSISJONER kroppen behandler som et instant. Pass 2
+    // (Program:exit) matcher kallstedene mot den. Se filhode-kommentaren for
+    // hvorfor to passeringer, og for blindsonene a–e.
+    const paramBruk = new Map()
+    const kallsteder = []
+
+    // Kilde for pass 1: en identifikator som refererer en PARAMETER i en
+    // funksjon i denne fila. Returnerer funksjonen og posisjonen, så pass 2
+    // vet hvilket argument på kallstedet som er det farlige.
+    function parameterKilde(n) {
+      if (n.type !== 'Identifier') return null
+      const variable = finnVariabel(sourceCode.getScope(n), n.name)
+      if (!variable || variable.defs.length !== 1) return null
+      const def = variable.defs[0]
+      if (def.type !== 'Parameter') return null
+      // Skrives parameteren om i kroppen, er verdien ikke lenger den
+      // kallstedet sendte inn — da tør vi ikke konkludere (blindsone c).
+      if (variable.references.some(r => r.isWrite())) return null
+      // indexOf gir -1 for destrukturerte og rest-parametere (blindsone d).
+      const posisjon = def.node.params.indexOf(def.name)
+      if (posisjon < 0) return null
+      return { fn: def.node, posisjon }
+    }
+
+    function noterParamBruk(objektNode, slag) {
+      const treff = finnKilde(objektNode, parameterKilde)
+      if (!treff) return
+      let bruk = paramBruk.get(treff.fn)
+      if (!bruk) {
+        bruk = { iso: new Set(), isoDag: new Set(), mutert: new Set() }
+        paramBruk.set(treff.fn, bruk)
+      }
+      bruk[slag].add(treff.posisjon)
+    }
+
+    // Kallstedets callee → funksjonsnoden, for LOKALE hjelpere (deklarasjon
+    // eller arrow/function-uttrykk bundet til én const). Et importert navn har
+    // def.type 'ImportBinding' og faller ut her (blindsone b).
+    function lokalFunksjon(kall) {
+      const variable = finnVariabel(sourceCode.getScope(kall), kall.callee.name)
+      if (!variable || variable.defs.length !== 1) return null
+      const def = variable.defs[0]
+      if (def.type === 'FunctionName') return def.node
+      if (
+        def.type === 'Variable' &&
+        def.node.init &&
+        (def.node.init.type === 'ArrowFunctionExpression' || def.node.init.type === 'FunctionExpression')
+      ) {
+        return def.node.init
+      }
+      return null
+    }
+
+    return {
+      CallExpression(node) {
+        // Kall på en bar identifikator er potensielle hjelper-kallsteder og
+        // samles til pass 2. De kan aldri være x.toISOString() selv.
+        if (node.callee.type === 'Identifier') {
+          kallsteder.push(node)
+          return
+        }
+        if (node.callee.type !== 'MemberExpression' || node.callee.computed) return
+        if (node.callee.property.type !== 'Identifier') return
+        const metode = node.callee.property.name
+
+        if (metode === 'toISOString') {
+          const dagKapping = harDagKappingEtterpaa(node)
+          // Pass 1 for sjekk 4 — noteres uansett om vi rapporterer her: en
+          // hjelper er ikke gal i seg selv, bare for feil argument.
+          noterParamBruk(node.callee.object, 'iso')
+          if (dagKapping) noterParamBruk(node.callee.object, 'isoDag')
+          // Sjekk 1
+          if (erTaintet(node.callee.object, erOsloKalenderdagKilde)) {
+            context.report({ node, messageId: 'isoPaaOsloDag' })
+            return
+          }
+          // Sjekk 2 — kun når resultatet faktisk kappes til en dagstreng.
+          if (dagKapping && erTaintet(node.callee.object, erNullArgNewDateKilde)) {
+            context.report({ node, messageId: 'utcDagstreng' })
+          }
+          return
+        }
+
+        if (MUTASJONS_METODER.has(metode)) {
+          noterParamBruk(node.callee.object, 'mutert')
+          if (erTaintet(node.callee.object, erNullArgNewDateKilde)) {
+            context.report({ node, messageId: 'naaMutertLokalt' })
+          }
+        }
+      },
+
+      // Pass 2 for sjekk 4. Først her kjenner vi alle funksjonene i fila, så
+      // en hjelper som er definert NEDENFOR sitt eget kallsted fanges også.
+      'Program:exit'() {
+        for (const kall of kallsteder) {
+          const fn = lokalFunksjon(kall)
+          if (!fn) continue
+          const bruk = paramBruk.get(fn)
+          if (!bruk) continue
+          for (let i = 0; i < kall.arguments.length; i++) {
+            const arg = kall.arguments[i]
+            // Et spread flytter alle posisjoner etter seg — da vet vi ikke
+            // lenger hvilket argument som treffer hvilken parameter.
+            if (arg.type === 'SpreadElement') break
+            const farlig =
+              (bruk.iso.has(i) && erTaintet(arg, erOsloKalenderdagKilde)) ||
+              ((bruk.isoDag.has(i) || bruk.mutert.has(i)) && erTaintet(arg, erNullArgNewDateKilde))
+            if (farlig) {
+              context.report({ node: kall, messageId: 'hjelperTaintet' })
+              break
+            }
+          }
+        }
+      },
+    }
+  },
+}
+
 const config = [
   {
     ignores: [
@@ -396,13 +736,25 @@ const config = [
   },
   ...compat.extends('next/core-web-vitals'),
   {
-    plugins: { hk: { rules: { 'supabase-feil-maa-hentes': supabaseFeilMaaHentes } } },
+    plugins: {
+      hk: {
+        rules: {
+          'supabase-feil-maa-hentes': supabaseFeilMaaHentes,
+          'dato-tidssone-uavhengig': datoTidssoneUavhengig,
+        },
+      },
+    },
     rules: {
       // Gjeret er lukket (pulje C): 0 kjente forekomster gjenstår, og
       // regelen dekker nå bruk (ikke bare destruktureringssyntaks) — se
       // kommentaren over for hvilke skjemaer som er dekket. Står på «error»:
       // en ny svelget feil skal blokkere build, ikke bare varsle.
       'hk/supabase-feil-maa-hentes': 'error',
+      // Vakten mot tidssone-avhengige Date-mønstre (#675) — tredje gang samme
+      // bug-klasse slo til (#674, PR #736, PR #741/#740). 0 kjente forekomster
+      // etter fiksene i samme PR. Se filhode-kommentaren over regel-
+      // definisjonen for hva den bevisst ikke kan se.
+      'hk/dato-tidssone-uavhengig': 'error',
       // Død kode akkumulerte usett: eslint-config-next slår ikke på
       // no-unused-vars, så en import som mistet sin siste bruker ble stående.
       // Fanget først da en ubrukt norskAar-import ble oppdaget manuelt (#566).
@@ -418,4 +770,4 @@ const config = [
 
 export default config
 
-export { supabaseFeilMaaHentes }
+export { supabaseFeilMaaHentes, datoTidssoneUavhengig }

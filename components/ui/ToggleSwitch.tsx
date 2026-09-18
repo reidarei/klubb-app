@@ -9,6 +9,8 @@ type Props = {
   /** Bred (40×22, default) eller smal (38×22) variant */
   variant?: 'default' | 'rad'
   ariaLabel?: string
+  /** Test-krok på selve bryteren — der role="switch" og aria-checked sitter. */
+  testId?: string
 }
 
 export default function ToggleSwitch({
@@ -17,6 +19,7 @@ export default function ToggleSwitch({
   disabled,
   variant = 'default',
   ariaLabel,
+  testId,
 }: Props) {
   const width = variant === 'rad' ? 38 : 40
   const containerStyle: CSSProperties = {
@@ -47,6 +50,7 @@ export default function ToggleSwitch({
     <button
       type="button"
       role="switch"
+      data-testid={testId}
       aria-checked={on}
       aria-label={ariaLabel}
       disabled={disabled}

@@ -289,7 +289,10 @@ export default function TimeplanPanel({
         overscrollBehaviorY: 'contain',
         pointerEvents: erAapent ? 'auto' : 'none',
         zIndex: Z_PANEL,
-        paddingTop: `calc(10px + env(safe-area-inset-top, 0px))`,
+        // --kart-panel-safe-top, IKKE iOS' egen topp-innsett-variabel
+        // direkte — se regnestykket i PosisjonsKart.tsx (kart-flatens
+        // stil). Invariant: ingen kart-panel leser den variabelen selv (#723).
+        paddingTop: `calc(10px + var(--kart-panel-safe-top, 0px))`,
         paddingRight: 10,
         paddingLeft: 10,
         // Luft over tastaturet når det er åpent (samme konstant som

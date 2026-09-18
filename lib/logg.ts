@@ -119,6 +119,7 @@
 //   posisjon.siste_punkt.feilet     — warn: oppslag av forrige punkt feiler; vi legger inn et nytt punkt i stedet for å nekte deling (#695)
 //   posisjon.punkt.slett.feilet     — sletting av eget spor ved «slutt å dele» feiler; delingen står fortsatt på (#695)
 //   posisjon.stopp.feilet           — sletting av egen delingsrad feiler; brukeren får beskjed om å prøve igjen (#693)
+//   posisjon.paagaaende.feilet      — warn: oppslaget av «hvilket arrangement pågår nå» feiler i den FAIL-OPEN varianten (finnPaagaaendeArrangement); posisjonen lagres videre, bare som et løst punkt uten spor-tilhørighet. Den STRENGE varianten kaster i stedet, og feilen dukker da opp som reisemodus.oppslag.feilet (#695/#723)
 //   posisjon.pling.avsender.feilet  — warn: navneoppslag for pling-teksten feiler; varselet sendes med «Noen» som avsender (#695)
 //   cron.posisjon.rydd.feilet       — opprydding av utgåtte posisjonsspor feiler i påminnelses-cronet; de andre jobbene kjører videre (#695)
 //   cron.posisjon.jobb.feilet       — ryddPosisjonsspor() kastet ut av sin egen try/catch; påminnelsene kjørte likevel (#695)
@@ -127,17 +128,25 @@
 //   kart.chat.hent.feilet           — warn: klubbchat-meldingene kunne ikke hentes til kartets chat-panel; kartet rendres videre med tomt panel (#709)
 //   kart.chat.profiler.feilet       — warn: profil-oppslaget for chat-panelet feilet; navn og avatarer mangler i panelet (#709)
 //   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
+//   kart.milf.mottakere.feilet      — feil: mottakeroppslaget for MILF alert feilet. Markeringen står, varselet uteblir (#747)
+//   kart.milf.varsel.feilet         — feil: sendVarsel() kastet for MILF alert. Markeringen er allerede lagret (#747)
 //   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
 //   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
 //   kart.timeplan.opprett.arrangement_borte — warn: inserten fikk 23503 på arrangement_id, altså ble turen slettet mellom vakten og inserten (geokodingen kan ligge inntil 5 s imellom). Normal samtidighet, ikke serverfeil — mannen får samme «finnes ikke lenger» som vakten gir
 //   kart.timeplan.opprett.retry_les_feilet — «Prøv igjen» traff 23505 (raden er lagret), men den lagrede raden kunne ikke leses tilbake; posten svares ut uten sted framfor med et punkt vi ikke har dekning for
 //   kart.timeplan.opprett.uten_kvittering  — warn: inserten gikk fint, men PostgREST ga ingen rad tilbake; svaret faller tilbake på verdiene vi selv skrev. Bærer sample = postens id
 //   kart.timeplan.slett.feilet      — sletting av en timeplan-post feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#716)
+//   reisemodus.paa                  — warn: et medlem slo reisemodus PÅ (for seg selv, på denne enheten). Bærer arrangement_id. Ikke en feil — halvparten av produktsignalet arkitekturstyret ba om i #723
+//   tema.lagre.feilet             — feil: serverskriving av tema-valget feilet. Valget ligger allerede i localStorage, så brukeren merker ingenting — det følger bare ikke med til neste enhet (#742)
+//   reisemodus.av                   — warn: et medlem slo reisemodus AV for turen. Bærer arrangement_id. DEN andre halvparten: slår 14 av 18 den av dag én, er funksjonen feil, og da må tallet finnes (#723)
+//   reisemodus.oppslag.feilet       — arrangement- eller flagg-oppslaget bak reisemodus feiler; modusen faller til AV (fail-open mot VANLIG APP — aldri til fullskjermkart ved en feiltakelse). hentReisemodus() bruker de strenge helper-variantene nettopp for at en DB-feil ikke skal se ut som «ingen tur» eller «kill-switch av» (#723)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
 import { maskerRadverdier } from '@/lib/sentry-scrub'
 import type { Json } from '@/lib/supabase/database.types'
+import { utdragNoekkelnavn } from '@/lib/logg-sanitering'
+import { LOGG_NOEKLER_MAKS_ANTALL } from '@/lib/konstanter'
 
 // ─── PII-SCRUBBING ──────────────────────────────────────────────────────────
 
@@ -165,7 +174,8 @@ export const KONTEKST_WHITELIST = new Set([
   // Rent tall (GitHub-issuenummer) — ingen PII. Gjør en tapt kobling (#632)
   // sporbar til riktig issue i stdout-linja og i Sentry-konteksten. Merk at
   // det IKKE når feil_logg.kontekst: persisterFeilLogg() skriver kun
-  // { code, tabell, navn }, og den kontrakten utvides ikke her.
+  // { code, tabell, navn, noekler }, og den kontrakten utvides ikke her utover
+  // disse fire.
   'issue_nummer',
   // Den deployede app-versjonen (f.eks. «V3.5.60») — en konstant fra
   // lib/versjon.json, aldri en radverdi. Uten den kan ikke
@@ -215,6 +225,18 @@ export const KONTEKST_WHITELIST = new Set([
   // neste kallsted med et helt annet verdirom (og kollidert i navn med
   // VarselUtfall i lib/varsler.ts).
   'url_utfall',
+  // Sorterte, kommaseparerte EGNE nøkkelnavn fra et normalisert feilobjekt
+  // (f.eks. «code,details,hint,message») — struktur, ikke data. Lagt til av
+  // normaliserFeil() (#711) for å hindre at feil_logg.kontekst blir {} for en
+  // supabase-feil som verken er en Error-instans eller har `code` (typisk en
+  // transport-/nettverksfeil). Verdiene bak nøklene skrives aldri. NAVNENE er
+  // derimot IKKE garantert kodekontrollerte — normaliserFeil() tar `unknown`,
+  // og en kastet struktur kan ha en epostadresse eller en URL som nøkkel — så
+  // de går gjennom formvakten utdragNoekkelnavn() først (#711-review). Som
+  // «navn» skrives feltet direkte inn i feil_logg.kontekst fra
+  // persisterFeilLogg(), utenom scrubbet(ctx) — det står her for å dekke
+  // tilfellet en fremtidig kaller sender det eksplisitt via ctx.
+  'noekler',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
@@ -244,10 +266,48 @@ function normaliserFeil(err: unknown): {
   // en programfeil eller en vi selv hadde kastet. Navnet er en konstant fra
   // koden, aldri en radverdi, så det er trygt å lagre.
   navn?: string
+  // Sorterte, kommaseparerte EGNE nøkkelnavn fra feilobjektet (f.eks.
+  // «code,details,hint,message») — struktur, ikke data (#711). Dekker
+  // objekter som verken er Error-instanser eller har en streng `code`
+  // (typisk supabase-js-transportfeil, f.eks. `{ message: 'fetch failed' }`),
+  // der `navn` alene ikke er nok til å unngå en tom kontekst-rad. Navnene er
+  // formvaktet og kappet; det som ble filtrert bort står som «+N_ukjent_form»
+  // / «+N_flere» i stedet for å forsvinne stille.
+  noekler?: string
 } {
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
-    const navn = err instanceof Error ? err.name : undefined
+    let navn = err instanceof Error ? err.name : undefined
+    // Formvakt og kapping FØR noe skrives (#711-review): et feilobjekt kan
+    // like gjerne ha «ola@example.com», en URL eller tusen nøkler som de fire
+    // fra supabase-js. Samme vakt som klientruta bruker på strippede nøkler —
+    // delt i lib/logg-sanitering.ts, ikke duplisert.
+    const { lesbare, ugyldige, utelatt } = utdragNoekkelnavn(
+      Object.keys(e).sort(),
+      LOGG_NOEKLER_MAKS_ANTALL,
+    )
+    // Markørene bærer det vakten fjernet. Uten dem ville et objekt med bare
+    // PII-formede nøkler gitt et tomt felt, og vi hadde vært like blinde som
+    // før #711 — bare med en pen begrunnelse. «+» kan aldri forveksles med et
+    // ekte navn: NOEKKELNAVN_FORM krever bokstav som første tegn.
+    const deler = [...lesbare]
+    if (utelatt > 0) deler.push(`+${utelatt}_flere`)
+    if (ugyldige > 0) deler.push(`+${ugyldige}_ukjent_form`)
+    // Tom for en vanlig Error — message/stack ligger ikke som egne enumerable
+    // felt på instansen — så vi lar feltet være undefined der. `navn` dekker
+    // det tilfellet allerede, og feltet skal ikke bli støy på hver eneste rad.
+    const noekler = deler.length > 0 ? deler.join(',') : undefined
+    // INVARIANT (#711): en kastet verdi skal ALDRI kunne gi kontekst {} i
+    // feil_logg — det gjorde raden umulig å feilsøke (vitals.insert.feilet).
+    // navn og noekler dekker til sammen alle grener under, MEN et objekt UTEN
+    // egne nøkler som heller ikke er en Error-instans (f.eks. et bokstavelig
+    // `throw {}`) ville gitt begge undefined. Denne eksplisitte markøren
+    // lukker akkurat det hullet uten å legge støy på de vanlige radene.
+    // Formvakten over kan IKKE gjenåpne hullet: filtrerer den bort alt, står
+    // «+N_ukjent_form» igjen, så noekler er fortsatt satt.
+    if (navn === undefined && noekler === undefined) {
+      navn = 'objekt-uten-egne-nokler'
+    }
     if (typeof e.code === 'string' && typeof e.message === 'string') {
       // Forsøk å ekstrahere en identifikator (tabell eller constraint) fra
       // PostgREST-meldingen. Typisk format:
@@ -261,13 +321,18 @@ function normaliserFeil(err: unknown): {
         tabell: identMatch?.[1],
         melding: e.message,
         navn,
+        noekler,
       }
     }
     // Ikke-PostgREST-feil: meldingsformen holdes uendret (String(err) gir
-    // «Error: …»), kun navnet kommer i tillegg.
-    return { melding: String(err), navn }
+    // «Error: …»), kun navn/noekler kommer i tillegg.
+    return { melding: String(err), navn, noekler }
   }
-  return { melding: String(err) }
+  // err er ikke et objekt (streng, tall, boolean, null, undefined) — kastet
+  // uten Error-innpakking. navn bærer typeof (typeof null er «object», så den
+  // grenen treffes aldri av null) slik at raden fortsatt sier noe strukturelt
+  // i stedet for å falle tilbake til en tom kontekst (#711).
+  return { melding: String(err), navn: `primitiv:${typeof err}` }
 }
 
 /**
@@ -412,6 +477,7 @@ async function persisterFeilLogg(
   code: string | undefined,
   tabell: string | undefined,
   navn: string | undefined,
+  noekler: string | undefined,
   ctx?: Record<string, unknown>,
 ): Promise<void> {
   // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
@@ -423,9 +489,15 @@ async function persisterFeilLogg(
   const ctxScrubbet = scrubbet(ctx)
   const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
 
-  // navn (feilklassen) er med fordi code/tabell begge er undefined for en
-  // vanlig Error — raden ble da skrevet som `{}` og var verdiløs å lese.
-  await skrivFeilLoggRad(event, { code, tabell, navn }, { profilId })
+  // navn (feilklassen) og noekler (feilobjektets egne nøkkelnavn) er begge med
+  // fordi code/tabell er undefined for alt som ikke er en PostgREST-feil med
+  // code+message som strenger — uten dem ble raden skrevet som `{}` og var
+  // verdiløs å lese (#711, samme fella #496 opprinnelig rettet med navn alene,
+  // men som ikke dekket en supabase-feil uten `code` — se normaliserFeil()).
+  // INVARIANT: normaliserFeil() garanterer at minst ett av
+  // {code, tabell, navn, noekler} alltid er satt for enhver kastet verdi, så
+  // denne linjen skal aldri kunne skrive en tom kontekst.
+  await skrivFeilLoggRad(event, { code, tabell, navn, noekler }, { profilId })
 }
 
 // ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
@@ -479,7 +551,7 @@ export const logg = {
       ctx?: Record<string, unknown>
     },
   ) {
-    const { code, tabell, melding, navn } = normaliserFeil(error)
+    const { code, tabell, melding, navn, noekler } = normaliserFeil(error)
 
     const tilgangsklasse = klassifiserTilgangsfeil(melding, code)
     if (tilgangsklasse === 'warn') {
@@ -508,7 +580,7 @@ export const logg = {
     // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
     // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
     // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
-    await persisterFeilLogg(event, code, tabell, navn, opts?.ctx)
+    await persisterFeilLogg(event, code, tabell, navn, noekler, opts?.ctx)
 
     const Sentry = await getSentry()
     if (!Sentry) return

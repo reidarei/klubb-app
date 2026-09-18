@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { finnPaagaaendeArrangement, ARRANGEMENT_ANTATT_TIMER } from '@/lib/posisjon'
+import {
+  finnPaagaaendeArrangement,
+  finnPaagaaendeArrangementStrengt,
+  ARRANGEMENT_ANTATT_TIMER,
+} from '@/lib/posisjon'
+import { DbFeil } from '@/lib/logg'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Pinner regelen #735 rettet: et arrangement MED sluttid pågår til sluttiden,
@@ -17,6 +22,19 @@ function stubKlient(rader: Array<Record<string, unknown>>) {
     gte: () => kjede,
     order: () => kjede,
     limit: () => Promise.resolve({ data: rader, error: null }),
+  }
+  return { from: () => kjede } as unknown as SupabaseClient
+}
+
+// Samme kjede, men spørringen feiler. Brukes til å pinne skillet mellom de to
+// variantene (#723-review).
+function stubKlientMedFeil(code = 'PGRST000') {
+  const kjede = {
+    select: () => kjede,
+    lte: () => kjede,
+    gte: () => kjede,
+    order: () => kjede,
+    limit: () => Promise.resolve({ data: null, error: { code, message: 'nede' } }),
   }
   return { from: () => kjede } as unknown as SupabaseClient
 }
@@ -78,5 +96,34 @@ describe('finnPaagaaendeArrangement — varighet (#735)', () => {
       ]),
     )
     expect(tur?.tittel).toBe('Sist startet')
+  })
+})
+
+// «Ingen tur pågår» og «oppslaget feilet» så identiske ut i returverdien `null`
+// fram til #723-reviewen. Reisemodus må kunne skille dem for å kunne logge
+// reisemodus.oppslag.feilet; posisjonsdeling må FORTSATT fail-ope. Testen
+// pinner begge halvdelene, så en fremtidig forenkling til én variant feiler her
+// i stedet for å bli oppdaget i prod som stillhet.
+describe('finnPaagaaendeArrangement — feil vs. ingen tur (#723)', () => {
+  it('den strenge varianten kaster DbFeil med PostgREST-koden i behold', async () => {
+    await expect(finnPaagaaendeArrangementStrengt(stubKlientMedFeil('42501'))).rejects.toMatchObject({
+      name: 'DbFeil',
+      code: '42501',
+    })
+  })
+
+  it('den vanlige varianten er uendret fail-open: null, men logget', async () => {
+    const logglinjer = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      expect(await finnPaagaaendeArrangement(stubKlientMedFeil('42501'))).toBeNull()
+      const events = logglinjer.mock.calls.map(([linje]) => String(linje))
+      expect(events.some(l => l.includes('posisjon.paagaaende.feilet') && l.includes('42501'))).toBe(true)
+    } finally {
+      logglinjer.mockRestore()
+    }
+  })
+
+  it('DbFeil er klassen, ikke en naken Error — koden må overleve innpakkingen', () => {
+    expect(new DbFeil('x', 'PGRST116').code).toBe('PGRST116')
   })
 })

@@ -7,7 +7,7 @@ import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Segment from '@/components/ui/Segment'
 import Icon from '@/components/ui/Icon'
-import { formaterDato, datetimeLocalTilIso } from '@/lib/dato'
+import { datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -54,10 +54,7 @@ function Rad({ last, children }: { last?: boolean; children: React.ReactNode }) 
 // Default svarfrist: én uke frem kl 20:00. Gir brukeren et fornuftig
 // utgangspunkt i stedet for tom datoinput.
 function defaultFrist(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 7)
-  const iso = d.toISOString()
-  return `${formaterDato(iso, 'yyyy-MM-dd')}T20:00`
+  return `${osloDagPluss(7)}T20:00`
 }
 
 export default function LagPollSkjema() {

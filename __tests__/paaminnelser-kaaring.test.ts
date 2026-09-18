@@ -1,10 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagChain } from './helpers/supabase-mock'
 
-vi.mock('@/lib/dato', () => ({
-  norskDatoNaa: () => new Date(2026, 5, 10),
-  naa: () => '2026-06-10T00:00:00.000Z',
-}))
+// Forankret til «10. juni 2026» som fast «i dag». Aritmetikken går via Date.UTC,
+// samme hjelper som __tests__/paaminnelser.test.ts — ikke strengaritmetikk på
+// dagtallet. Strengformen så uskyldig ut her (ingen assert leser verdien), men
+// den koder en ANDRE dato-algoritme inn i testene: offsets som krysser en
+// måned eller et år ga ugyldige datoer (10. juni + 21 → «2026-06-31»), og en
+// mock som kan lyve om kalenderen er ikke et trygt sted å spare tegn.
+// osloDagStartIso tar samme `anker`-argument som den ekte hjelperen; mocken
+// ignorerer det, fordi datoen her uansett er frosset.
+//
+// Verken vinduStart eller idagStr asserteres noe sted i denne fila — stubbene
+// trenger bare å eksistere og være internt konsistente. Se
+// __tests__/paaminnelser-tidssone.test.ts for den ekte TZ-matrisen.
+vi.mock('@/lib/dato', () => {
+  // Defineres inne i factoryen: vi.mock hoistes over modulkroppen, så en
+  // hjelper deklarert utenfor ville stått i TDZ når mocken først brukes.
+  const dagStreng = (n: number) => new Date(Date.UTC(2026, 5, 10 + n)).toISOString().slice(0, 10)
+  return {
+    naa: () => '2026-06-10T00:00:00.000Z',
+    iDagOslo: () => dagStreng(0),
+    osloDagPluss: (n = 0) => dagStreng(n),
+    osloDagStartIso: (n = 0) => `${dagStreng(n)}T00:00:00.000Z`,
+  }
+})
 
 const mockSendPaaminne = vi.fn().mockResolvedValue(undefined)
 const mockSendPurring = vi.fn().mockResolvedValue(undefined)

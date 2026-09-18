@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import ReisemodusToggle from '@/components/reisemodus/ReisemodusToggle'
 import { harGulGloed, kanAdministrere } from '@/lib/roller'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
 
@@ -52,6 +53,10 @@ type Props = {
   /** False hvis Chat-fanen er skrudd av for vanlige medlemmer (app_innstillinger.chat_fane).
       Default true — chat skal aldri forsvinne pga. manglende prop (f.eks. SSR-fallback). */
   visChat?: boolean
+  /** True når en tur med sluttid pågår OG klubb-flagget `reisemodus` er på (#723) — styrer om toggelen vises. */
+  reisemodusTilgjengelig?: boolean
+  /** True når reisemodus faktisk er PÅ for denne brukeren (ikke slått av for turen). Styrer om headeren skjuler seg selv på /kart. */
+  reisemodusPaa?: boolean
 }
 
 /**
@@ -65,7 +70,7 @@ type Props = {
  * #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Se
  * Policy: Navigasjon i CLAUDE.md.
  */
-export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true }: Props) {
+export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true, reisemodusTilgjengelig = false, reisemodusPaa = false }: Props) {
   const pathname = usePathname()
 
   // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
@@ -77,6 +82,25 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     return !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond)
   })
   const fondSynlig = synligeTabs.some(t => t.nokkel === 'fond')
+
+  // ── Mobilgeometri (#723-review) ───────────────────────────────────────────
+  // Innerbredden på målplattformen er 358 px (390 px iPhone, app-skallet maks
+  // 480, 16 px padding på hver side). Fire faner i normalskala pluss avataren
+  // ligger allerede på ~344 px; legger «Reise»-pillen seg oppå, sprenger raden
+  // linja — og tabs-containeren har verken wrap, overflow eller krymping å ta
+  // det igjen på, så innhold havner utenfor viewporten på hver ikke-kart-rute.
+  //
+  // Terskelen teller ELEMENTER, ikke skjermbredde: målplattformen ER én bredde
+  // (jf. CLAUDE.md § Målplattform), og det som varierer er hvor mange faner
+  // brukeren ser og om toggelen finnes. En media query ville svart på feil
+  // spørsmål.
+  const kompakt = synligeTabs.length + (reisemodusTilgjengelig ? 1 : 0) >= 5
+
+  // Alle målene som endrer seg mellom de to skalaene, samlet ett sted — ikke
+  // fem ternærer spredt nedover render-treet.
+  const MAAL = kompakt
+    ? { ytrePadding: 10, ytreGap: 6, faneGap: 2, faneXPadding: 9, faneSkrift: 15, hoeyreGap: 6 }
+    : { ytrePadding: 16, ytreGap: 8, faneGap: 6, faneXPadding: 14, faneSkrift: 17, hoeyreGap: 8 }
 
   // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
   // deretter aldri igjen (per enhet). Settes i effect — localStorage finnes ikke
@@ -139,10 +163,13 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // synligeTabs.length i deps: når Fond-taben dukker opp/forsvinner (visFond
   // endres uten navigasjon) skifter tab-bredden, så pill må re-måles selv om
   // pathname er uendret. #447-review.
+  // kompakt i deps: skalabyttet endrer hver tabs bredde uten at pathname eller
+  // antallet faner nødvendigvis gjør det (reisemodusTilgjengelig kan slå om
+  // alene), og pill-en ville ellers blitt stående på gammel bredde (#723-review).
   useLayoutEffect(() => {
     maalPill()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, synligeTabs.length])
+  }, [pathname, synligeTabs.length, kompakt])
 
   // Re-mål ved resize (f.eks. rotering av telefon). rAF-throttles så vi ikke
   // gjør getBoundingClientRect 60+ ganger i sekundet under desktop-window-drag.
@@ -182,8 +209,8 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 16px',
-    gap: 8,
+    padding: `0 ${MAAL.ytrePadding}px`,
+    gap: MAAL.ytreGap,
   }
 
   const profilAktiv = pathname === '/profil'
@@ -194,13 +221,31 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // Prikken vises kun når profil-siden ikke er aktiv (samme logikk som chat-prikken)
   const visProfilPrikk = ulestVarsler && !profilAktiv
 
+  // Reisemodus (#723): /kart er fullskjerm uten header mens reisemodus er
+  // PÅ. PosisjonsKart rendrer sin egen flytende bar (ReisemodusBar) med
+  // avatar+toggle i samme hjørne headeren ellers ville brukt. Må stå ETTER
+  // alle hooks over — en tidlig return øverst i komponenten ville brutt
+  // rules-of-hooks.
+  if (reisemodusPaa && pathname.startsWith('/kart')) return null
+
   return (
     <nav style={headerStyle} aria-label="Hovednavigasjon">
       <div style={innerStyle}>
         {/* Tabs */}
         <div
           ref={tabsRef}
-          style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: MAAL.faneGap,
+            // minWidth: 0 gjør raden krympbar i det hele tatt (flex-items har
+            // min-width: auto by default). Fanene selv har whiteSpace: nowrap,
+            // så dette gir ingen tekstbryting — det er en siste skanse som
+            // holder eventuell overflod INNENFOR containeren i stedet for å la
+            // den dytte avataren ut av viewporten.
+            minWidth: 0,
+          }}
         >
           {/* Delt pill-bakgrunn — glir mellom tabs via translateX i stedet for
               at hver tab crossfader sin egen bakgrunn. aria-hidden fordi det
@@ -236,10 +281,11 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             const tabStil: CSSProperties = {
               position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk og z-index over pill
               zIndex: 1, // løft tekst over pill-bakgrunnen
-              padding: '8px 14px',
+              padding: `8px ${MAAL.faneXPadding}px`,
               borderRadius: 999,
               fontFamily: 'var(--font-body)',
-              fontSize: 17,
+              fontSize: MAAL.faneSkrift,
+              whiteSpace: 'nowrap',
               fontWeight: aktiv ? 600 : 400,
               color: aktiv ? 'var(--accent)' : 'var(--text-tertiary)',
               opacity: aktiv ? 1 : 0.6,
@@ -297,62 +343,78 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
           })}
         </div>
 
-        {/* Profil-snarvei */}
-        <Link
-          href="/profil"
-          aria-label="Min profil"
-          aria-current={profilAktiv ? 'page' : undefined}
-          style={{
-            position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk
-            display: 'block',
-            borderRadius: '50%',
-            outline: visAktivOutline ? '1.5px solid var(--accent)' : 'none',
-            outlineOffset: 2,
-            flexShrink: 0,
-          }}
-        >
-          <Avatar
-            name={brukerNavn ?? KLUBB_KORTNAVN}
-            src={bildeUrl ?? null}
-            rolle={rolle ?? null}
-            size={38}
-          />
-          {visProfilPrikk && (
-            <>
-              {/* Visuell prikk — større og mer "stikker ut" enn chat-tab-prikken
-                  fordi avataren er rundt og prikken må konkurrere mot bilde-innholdet.
-                  Se #205 — admin ba om mer tydelig versjon. */}
-              <span
-                aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  // 0.95 i original — marginalt mørkere enn 0.85 i tab-prikken,
-                  // men avatar-plassering trenger ikke skille seg; bruker samme token.
-                  boxShadow: '0 0 0 2.5px var(--bg-header)',
-                }}
-              />
-              {/* Sr-only — behold "Min profil" som accessible name */}
-              <span
-                style={{
-                  position: 'absolute',
-                  width: 1,
-                  height: 1,
-                  overflow: 'hidden',
-                  clip: 'rect(0 0 0 0)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                (ulest)
-              </span>
-            </>
+        {/* Reisemodus-toggle + profil-snarvei, gruppert sammen — uten denne
+            wrapperen ville justifyContent: space-between på innerStyle spredt
+            tre barn (tabs / toggle / avatar) ut over hele bredden i stedet for
+            å holde toggle og avatar samlet «øverst til høyre» (Reidars
+            avgjørelse, #723). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: MAAL.hoeyreGap, flexShrink: 0 }}>
+          {/* Kun når en tur med sluttid pågår og klubb-flagget er på. Samme
+              hjørne i begge moduser — her, til venstre for profil-snarveien,
+              når headeren i det hele tatt vises (dvs. reisemodus AV, eller
+              vi er på en annen rute enn /kart — se ReisemodusBar for
+              fullskjerm-varianten). */}
+          {reisemodusTilgjengelig && (
+            <ReisemodusToggle paa={reisemodusPaa} variant="header" />
           )}
-        </Link>
+
+          {/* Profil-snarvei */}
+          <Link
+            href="/profil"
+            aria-label="Min profil"
+            aria-current={profilAktiv ? 'page' : undefined}
+            style={{
+              position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk
+              display: 'block',
+              borderRadius: '50%',
+              outline: visAktivOutline ? '1.5px solid var(--accent)' : 'none',
+              outlineOffset: 2,
+              flexShrink: 0,
+            }}
+          >
+            <Avatar
+              name={brukerNavn ?? KLUBB_KORTNAVN}
+              src={bildeUrl ?? null}
+              rolle={rolle ?? null}
+              size={38}
+            />
+            {visProfilPrikk && (
+              <>
+                {/* Visuell prikk — større og mer "stikker ut" enn chat-tab-prikken
+                    fordi avataren er rundt og prikken må konkurrere mot bilde-innholdet.
+                    Se #205 — admin ba om mer tydelig versjon. */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -2,
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    // 0.95 i original — marginalt mørkere enn 0.85 i tab-prikken,
+                    // men avatar-plassering trenger ikke skille seg; bruker samme token.
+                    boxShadow: '0 0 0 2.5px var(--bg-header)',
+                  }}
+                />
+                {/* Sr-only — behold "Min profil" som accessible name */}
+                <span
+                  style={{
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    overflow: 'hidden',
+                    clip: 'rect(0 0 0 0)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  (ulest)
+                </span>
+              </>
+            )}
+          </Link>
+        </div>
       </div>
     </nav>
   )

@@ -101,6 +101,13 @@
    * stikke seg riktig under headeren i stedet for å havne bak. */
   --top-header-h: 60px;
 
+  /* Toppinnsettet på en iPhone med notch/Dynamic Island, som CSS-variabel
+   * (ikke lest direkte flere steder — se CLAUDE.md § Policy: Navigasjon,
+   * reisemodus-avsnittet, #723). Kart-komponentene KONSUMERER denne via
+   * --kart-panel-safe-top i stedet for å lese iOS-variabelen hver for seg —
+   * det var nettopp den spredningen som dobbelttalte innsettet før #723. */
+  --safe-top: env(safe-area-inset-top, 0px);
+
   /* Form */
   --radius: 18px;
   --radius-card: 14px;

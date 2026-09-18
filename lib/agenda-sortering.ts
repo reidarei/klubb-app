@@ -42,7 +42,7 @@
 //   - melding     : sist_aktivitet (driver både live-sortering og
 //                   tidligere-sortering)
 //
-// «Samme norske dag»-sjekk gjøres eksplisitt via Intl.DateTimeFormat med
+// «Samme norske dag»-sjekk gjøres via erPaaOsloDag() (lib/dato.ts) med
 // Europe/Oslo for å håndtere at et arrangement klokka 00:30 UTC fortsatt
 // tilhører «i kveld» norsk tid hvis det er samme dato etter konvertering.
 
@@ -56,7 +56,7 @@ import type { MeldingKortData } from '@/components/agenda/MeldingKort'
 import type { AlbumKort } from '@/lib/melding-album'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
 import { AVREISE_VINDU_DAGER } from '@/lib/konstanter'
-import { norskDag } from '@/lib/dato'
+import { norskDag, erPaaOsloDag, osloDagNokkel } from '@/lib/dato'
 import { differenceInCalendarDays } from 'date-fns'
 
 // Stiftelsesdato — brukes til å beregne neste jubileumsdag på agendaen.
@@ -216,25 +216,6 @@ export type Agenda = {
 
 // === Helpers (eksportert for test og gjenbruk) ====================
 
-// Returnerer true hvis ISO-tidspunktet faller på samme kalenderdag som
-// `referanse`, tolket i Europe/Oslo. Brukes til å plassere arrangementer
-// i «I kveld» selv om UTC-tidspunktet krysser midnatt.
-export function erSammeNorskeDag(iso: string, referanse: Date): boolean {
-  const d = new Date(iso)
-  const parts = new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Europe/Oslo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d)
-  const get = (t: string) => parts.find(p => p.type === t)?.value
-  return (
-    get('year') === String(referanse.getFullYear()) &&
-    get('month') === String(referanse.getMonth() + 1).padStart(2, '0') &&
-    get('day') === String(referanse.getDate()).padStart(2, '0')
-  )
-}
-
 // Mapper et ArrangementRaad til HighlightKortData — brukes for «I kveld»-
 // seksjonen som viser stor hero-stil med forhåndsvisning av ja-deltakere.
 export function tilHighlight(arr: ArrangementRaad, meg: string): HighlightKortData {
@@ -295,11 +276,7 @@ export function erMeldingLevende(m: MeldingRaad, naa: Date): boolean {
 // Mig. 109 / #419.
 export function erFestet(m: MeldingRaad, naa: Date): boolean {
   if (!m.aktuell_dato || m.arkivert_tidspunkt) return false
-  const y = naa.getFullYear()
-  const mo = String(naa.getMonth() + 1).padStart(2, '0')
-  const d = String(naa.getDate()).padStart(2, '0')
-  const dagensDate = `${y}-${mo}-${d}`
-  return m.aktuell_dato >= dagensDate
+  return m.aktuell_dato >= osloDagNokkel(naa)
 }
 
 // Mapper et PollRaad til PollKortData. `avsluttet` styrer visningen —
@@ -339,7 +316,7 @@ function byggAvreise(
   // Begge sider er lokale Date-er på midnatt for sin norske kalenderdag:
   // norskDag() bygger en slik, og `naa` kommer fra norskDatoNaa() som gjør
   // nøyaktig det samme. Å kjøre `naa` gjennom norskDag() igjen ville vært en
-  // dobbeltkonvertering — samme antagelse som erSammeNorskeDag() bygger på.
+  // dobbeltkonvertering — samme antagelse som erPaaOsloDag() bygger på.
   const dagerIgjen = differenceInCalendarDays(norskDag(arr.start_tidspunkt), naa)
   if (dagerIgjen < 0 || dagerIgjen > AVREISE_VINDU_DAGER) return null
 
@@ -556,7 +533,7 @@ export function byggAgenda(input: {
   // hindrer at et arrangement klokka 17:00 norsk tid havner under «Tidligere»
   // senere samme kveld.
   const tidligereArr: TidligereItem[] = arrangementer
-    .filter(a => !erSammeNorskeDag(a.start_tidspunkt, naa) && a.start_tidspunkt < nowIso)
+    .filter(a => !erPaaOsloDag(a.start_tidspunkt, naa) && a.start_tidspunkt < nowIso)
     .sort((a, b) => b.start_tidspunkt.localeCompare(a.start_tidspunkt))
     .map(a => ({
       kind: 'arrangement' as const,
@@ -621,10 +598,10 @@ export function byggAgenda(input: {
   const arrItems: AgendaItem[] = arrangementer
     .filter(a => {
       if (ubesvarteIds.has(a.id)) return false // allerede i ubesvart
-      return a.start_tidspunkt >= nowIso || erSammeNorskeDag(a.start_tidspunkt, naa)
+      return a.start_tidspunkt >= nowIso || erPaaOsloDag(a.start_tidspunkt, naa)
     })
     .map(a => {
-      const erIdag = erSammeNorskeDag(a.start_tidspunkt, naa)
+      const erIdag = erPaaOsloDag(a.start_tidspunkt, naa)
       // I kveld → highlight-variant, ellers kompakt kort
       return erIdag
         ? { kind: 'highlight', sortIso: a.start_tidspunkt, data: tilHighlight(a, meg) }
@@ -668,7 +645,7 @@ export function byggAgenda(input: {
   // Aktive polls (svarfrist i fremtid eller samme norske dag) vises i
   // «i kveld»/«kommende». sortIso = svarfrist.
   const pollItems: AgendaItem[] = poller
-    .filter(p => p.svarfrist >= nowIso || erSammeNorskeDag(p.svarfrist, naa))
+    .filter(p => p.svarfrist >= nowIso || erPaaOsloDag(p.svarfrist, naa))
     .map(p => ({
       kind: 'poll',
       sortIso: p.svarfrist,
@@ -684,7 +661,7 @@ export function byggAgenda(input: {
   ]
 
   // Regel 1: I kveld = items med sortIso som ligger på samme norske dag.
-  const idagAlle = alleItems.filter(i => i.sortIso && erSammeNorskeDag(i.sortIso, naa))
+  const idagAlle = alleItems.filter(i => i.sortIso && erPaaOsloDag(i.sortIso, naa))
 
   // Regel 0: bursdager i dag løftes ut av «I dag» og rendres separat, helt
   // øverst på agendaen (#640) — se seksjons-regel-kommentaren i filhodet.
@@ -694,7 +671,7 @@ export function byggAgenda(input: {
   // Regel 2: Kommende = resten, sortert stigende. Items uten sortIso (utkast
   // uten gyldig purredato) sorteres til enden via null-dytt-regelen.
   const kommende = alleItems
-    .filter(i => !(i.sortIso && erSammeNorskeDag(i.sortIso, naa)))
+    .filter(i => !(i.sortIso && erPaaOsloDag(i.sortIso, naa)))
     .sort((a, b) => {
       if (!a.sortIso) return 1
       if (!b.sortIso) return -1

@@ -11,8 +11,9 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { harUlestChat, harUlestVarsler } from '@/lib/ulest'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
+import { hentReisemodus, type ReisemodusStatus } from '@/lib/reisemodus'
 
-async function HeaderMedProfil() {
+async function HeaderMedProfil({ reisemodus }: { reisemodus: ReisemodusStatus }) {
   // getProfil() kaster ved DB-feil (fail-closed, se lib/auth-cache.ts) — riktig
   // for ensureAdmin()/ensureLoeserTiebreak(), som er brukerinitierte handlinger
   // der en feilmelding er det riktige utfallet. Her er den gal: headeren
@@ -47,12 +48,22 @@ async function HeaderMedProfil() {
       ulestVarsler={ulestVarsler}
       visFond={visFond}
       visChat={visChat}
+      reisemodusTilgjengelig={reisemodus.tilgjengelig}
+      reisemodusPaa={reisemodus.paa}
     />
   )
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getInnloggetBruker()
+  // Resolves FØR Suspense-grensen, parallelt med getInnloggetBruker() — ikke
+  // inne i HeaderMedProfil-fallbacken. Uten det tegnes full header over
+  // fullskjermkartet ved hver kaldstart mens HeaderMedProfil fortsatt laster
+  // (nøyaktig #707-symptomet), fordi Suspense-fallbacken da ikke kunne vite
+  // om reisemodus var på (#723).
+  const [user, reisemodus] = await Promise.all([
+    getInnloggetBruker(),
+    hentReisemodus(),
+  ])
   if (!user) redirect('/login')
 
   return (
@@ -68,8 +79,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AktivitetTeller />
       <DraNedForOppdater />
       <InstallVeiledning />
-      <Suspense fallback={<TopHeader />}>
-        <HeaderMedProfil />
+      <Suspense
+        fallback={
+          <TopHeader
+            reisemodusTilgjengelig={reisemodus.tilgjengelig}
+            reisemodusPaa={reisemodus.paa}
+          />
+        }
+      >
+        <HeaderMedProfil reisemodus={reisemodus} />
       </Suspense>
       <main className="flex-1 relative z-10">
         <PageTransition>{children}</PageTransition>

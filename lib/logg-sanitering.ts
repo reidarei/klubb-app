@@ -3,9 +3,11 @@
 // Lå tidligere inline i app/api/logg-feil/route.ts. Flyttet ut fordi Next
 // begrenser hva en route-fil kan eksportere — saniteringen var dermed umulig å
 // pinne i test, og det var nettopp der blob:-bugen under fikk ligge i fred.
-// Route-handleren er eneste kaller; modulen er server-side (bruker Buffer).
+// Route-handleren er hovedkalleren; modulen er server-side (bruker Buffer).
+// Formvakten på nøkkelNAVN nederst (utdragNoekkelnavn) deles i tillegg med
+// lib/logg.ts — se #711-reviewen: samme lekkasjeflate, to inngangsdører.
 
-import { LOGG_KONTEKST_MAKS_KB } from '@/lib/konstanter'
+import { LOGG_KONTEKST_MAKS_KB, LOGG_NOEKKEL_MAKS_TEGN } from '@/lib/konstanter'
 
 // Felter vi tillater fra klienten. Alt annet strippes stille.
 // Speiler KONTEKST_WHITELIST i lib/logg.ts, med klient-spesifikke tillegg.
@@ -176,4 +178,58 @@ export function scrubKontekst(data: unknown): Record<string, unknown> {
  */
 export function kontekstForStor(kontekstStr: string): boolean {
   return Buffer.byteLength(kontekstStr, 'utf8') > LOGG_KONTEKST_MAKS_KB * 1024
+}
+
+// ─── FORMVAKT PÅ RÅ NØKKELNAVN ───────────────────────────────────────────────
+
+/**
+ * Nøkkelnavn vi er villige til å gjengi ordrett i en logglinje eller i
+ * feil_logg.kontekst (#681, generalisert i #711-reviewen).
+ *
+ * Kapping begrenser VOLUM, ikke PII: både en klient og et fremmed feilobjekt
+ * kan ha «ola@example.com» eller en hel URL som nøkkelNAVN. Et feltnavn fra VÅR
+ * kildekode er alltid en JS-identifikator, mens en epostadresse, en setning
+ * eller en URL aldri er det — derfor er formen, ikke innholdet, kriteriet. Den
+ * beholder hele diagnoseverdien (utvikleren skal kunne lese HVILKET felt det
+ * gjelder) og lukker PII-flaten. Digest og allowlist ble vurdert og forkastet:
+ * en digest er uleselig, og en allowlist er selvmotsigende når feltet finnes
+ * nettopp for å fange strukturer vi ikke kjenner.
+ *
+ * Bygges AV LOGG_NOEKKEL_MAKS_TEGN slik at lengdegrensen står ett sted.
+ */
+export const NOEKKELNAVN_FORM = new RegExp(
+  '^[a-zA-Z][a-zA-Z0-9_]{0,' + (LOGG_NOEKKEL_MAKS_TEGN - 1) + '}$',
+)
+
+export type NoekkelUtdrag = {
+  /** Form-godkjente navn, kappet i antall og i lengde. */
+  lesbare: string[]
+  /** Navn som ikke besto formvakten — telles, gjengis aldri. */
+  ugyldige: number
+  /** Form-godkjente navn som falt utenfor maksAntall. */
+  utelatt: number
+}
+
+/**
+ * Formvaliderer og kapper en liste rå nøkkelnavn før de logges.
+ *
+ * Tellerne returneres ved siden av navnene med vilje: en kaller som filtrerer
+ * bort ALT skal fortsatt kunne skrive noe diagnostisk («+3_ukjent_form») i
+ * stedet for et tomt felt. Stille filtrering er nøyaktig blindsonen #676/#711
+ * handlet om — en rad som ser tom ut forteller ingenting om hvorfor.
+ */
+export function utdragNoekkelnavn(
+  noekler: string[],
+  maksAntall: number,
+): NoekkelUtdrag {
+  const gyldige = noekler.filter((k) => NOEKKELNAVN_FORM.test(k))
+  return {
+    // slice() på tegn kommer I TILLEGG til lengdegrensen i regexen, ikke i
+    // stedet for: endrer noen formen en dag, står volumgrensen fortsatt.
+    lesbare: gyldige
+      .slice(0, maksAntall)
+      .map((k) => k.slice(0, LOGG_NOEKKEL_MAKS_TEGN)),
+    ugyldige: noekler.length - gyldige.length,
+    utelatt: Math.max(0, gyldige.length - maksAntall),
+  }
 }

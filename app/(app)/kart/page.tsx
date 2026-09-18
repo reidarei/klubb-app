@@ -5,7 +5,8 @@ import { hentAppFlagg, CHAT_FANE } from '@/lib/app-innstillinger'
 import { KLUBB_KART_SENTER } from '@/lib/klubb-config'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
 import { finnAktuellArrangement } from '@/lib/timeplan'
-import { POSISJON_SPOR_TIMER } from '@/lib/konstanter'
+import { hentReisemodus } from '@/lib/reisemodus'
+import { POSISJON_SPOR_TIMER, POSISJON_PUNKT_MAKS } from '@/lib/konstanter'
 import { parseStedParam } from '@/lib/kart-lenke'
 import { beregnPingKandidater } from '@/lib/kart-deltakere'
 import PosisjonsKart, {
@@ -47,11 +48,15 @@ type Props = {
 }
 
 export default async function Kart({ searchParams }: Props) {
-  const [supabase, bruker, profil, sp] = await Promise.all([
+  // hentReisemodus() er cache()-wrappet (React cache) og lager sin egen
+  // klient internt — samme instans som AppLayout allerede kalte i denne
+  // requesten, så dette blir ÉN spørring, ikke to (#723).
+  const [supabase, bruker, profil, sp, reisemodus] = await Promise.all([
     createServerClient(),
     getInnloggetBruker(),
     getProfil(),
     searchParams,
+    hentReisemodus(),
   ])
   const deltSted = parseStedParam(sp)
 
@@ -65,10 +70,17 @@ export default async function Kart({ searchParams }: Props) {
     supabase
       .from('posisjon_deling')
       .select('profil_id, deler_til, profiles!posisjon_deling_profil_id_fkey ( navn, visningsnavn, bilde_url, rolle )'),
+    // SYNKENDE + limit, ikke stigende uten grense (#717). PostgREST kapper på
+    // max_rows (1000) uansett, og gjør det stille: med stigende sortering er
+    // det da de ELDSTE punktene som overlever, mens koden under leser siste
+    // element som «ferskest». Resultatet ville vært et kart der alle står
+    // frosset på gamle posisjoner, uten feil noe sted. Rekkefølgen snus i JS
+    // rett under, så resten av siden ser stigende rekkefølge som før.
     supabase
       .from('posisjon_punkt')
       .select('id, profil_id, lat, lng, noeyaktighet_m, registrert, arrangement_id')
-      .order('registrert', { ascending: true }),
+      .order('registrert', { ascending: false })
+      .limit(POSISJON_PUNKT_MAKS),
     supabase
       .from('kart_markering')
       .select('id, lat, lng, tekst, symbol, opprettet, utloper, opprettet_av, profiles!kart_markering_opprettet_av_fkey ( navn, visningsnavn )')
@@ -270,7 +282,10 @@ export default async function Kart({ searchParams }: Props) {
   // det ut som appen ikke lagret noe — men punktene lå der hele tiden, det var
   // bare visningen som skjulte dem.
   const sporGrense = Date.now() - POSISJON_SPOR_TIMER * 60 * 60 * 1000
-  const relevante = ((punkter ?? []) as PunktRad[]).filter(p => {
+  // Spørringen henter synkende (nyeste først) for å overleve max_rows-
+  // avkortingen; resten av siden forventer stigende, så vi snur her.
+  const punkterStigende = [...((punkter ?? []) as PunktRad[])].reverse()
+  const relevante = punkterStigende.filter(p => {
     if (!aktiveIder.has(p.profil_id)) return false
     if (paagaaende) return p.arrangement_id === paagaaende.id
     return new Date(p.registrert).getTime() > sporGrense
@@ -325,7 +340,6 @@ export default async function Kart({ searchParams }: Props) {
       // hele tatt, som det nå alltid gjør. Styrer kun teksten om hvor lenge
       // ruta lever.
       underArrangement={paagaaende !== null}
-      arrangementTittel={paagaaende?.tittel ?? null}
       // Admin kan fjerne andres markeringer. RLS har tillatt det siden
       // migrasjon 145; fram til nå skjulte UI-et muligheten, slik at
       // policyen og skjermen sa to forskjellige ting.
@@ -340,6 +354,7 @@ export default async function Kart({ searchParams }: Props) {
       timeplanFeil={timeplanHentFeil !== null}
       deltSted={deltSted}
       pingKandidater={pingKandidater}
+      reisemodus={reisemodus.paa}
     />
   )
 }

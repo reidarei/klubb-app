@@ -6,7 +6,7 @@ import { opprettKaaringspoll } from '@/lib/actions/kaaringspoll'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
-import { formaterDato, datetimeLocalTilIso } from '@/lib/dato'
+import { formaterDato, datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
 
 type Mal = {
   id: string
@@ -56,10 +56,7 @@ function Rad({ last, children }: { last?: boolean; children: React.ReactNode }) 
 
 // Default svarfrist: én uke frem kl 20:00.
 function defaultFrist(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 7)
-  const iso = d.toISOString()
-  return `${formaterDato(iso, 'yyyy-MM-dd')}T20:00`
+  return `${osloDagPluss(7)}T20:00`
 }
 
 type Props = {
