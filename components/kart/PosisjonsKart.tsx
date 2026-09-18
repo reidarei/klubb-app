@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import type { Map as LeafletMap, LayerGroup, Marker as LeafletMarker } from 'leaflet'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -18,6 +19,7 @@ import {
   POSISJON_PLING_KVITTERING_SEK,
   KART_MARKERING_MAKS_LENGDE,
   KART_LENKE_KOPIERT_KVITTERING_SEK,
+  KART_DELT_STED_FLY_VENT_MS,
   LONG_PRESS_MS,
   LONG_PRESS_BEVEGELSE_PX,
 } from '@/lib/konstanter'
@@ -25,6 +27,7 @@ import { formaterDato } from '@/lib/dato'
 import { useKeyboardOffset } from '@/components/chat/hooks/useKeyboardOffset'
 import { trengerNyttUtsnitt } from '@/lib/kart-utsnitt'
 import { velgKlyngeUtsnitt } from '@/lib/kart-klynge'
+import { planleggAnkomst, foretrekkerRedusertBevegelse } from '@/lib/kart-ankomst'
 import { byggStedLenke } from '@/lib/kart-lenke'
 import type { PingKandidat } from '@/lib/kart-deltakere'
 import {
@@ -504,6 +507,26 @@ export default function PosisjonsKart({
     }
   }, [visLenkeKvittering])
 
+  const router = useRouter()
+  const [friskerOpp, startFriskOpp] = useTransition()
+
+  // Erstatningen for pull-to-refresh på kartsiden (#718): siden er
+  // scroll-låst (#706), så en dra-ned-gest der alltid leses som panorering —
+  // `draNedForOppdaterAv()` i lib/navigasjon.ts slår derfor av gesten helt
+  // her, og «friskt kart» må hentes eksplisitt i stedet.
+  const friskOppKartet = useCallback(() => {
+    startFriskOpp(() => {
+      router.refresh()
+    })
+  }, [router])
+
+  // Pillene som trigger hentOgLagre må låses av BEGGE ventetidene, ikke bare
+  // GPS-hentingen: flere av feilgrenene under nullstiller `jobber` FØR
+  // friskOppKartet() starter, og «ingen Geolocation API»-grenen setter `jobber`
+  // aldri. Med bare `jobber` i disabled ble knappen klikkbar igjen — eller
+  // aldri låst i det hele tatt — mens RSC-refreshen fortsatt pågikk (#718).
+  const opptatt = jobber || friskerOpp
+
   // Kjernen i innmeldingen. `stille` skiller den automatiske oppdateringen ved
   // sidelast fra et bevisst knappetrykk: den automatiske skal aldri vise en
   // feilmelding eller flytte kartet under føttene på deg — den bare fyller på
@@ -512,7 +535,13 @@ export default function PosisjonsKart({
     (stille: boolean) => {
       if (!stille) setFeil(null)
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        if (!stille) setFeil('Denne telefonen gir ikke appen tilgang til posisjon.')
+        if (!stille) {
+          setFeil('Denne telefonen gir ikke appen tilgang til posisjon.')
+          // Ingen GPS i det hele tatt — vi får aldri en delPosisjon-kvittering
+          // (og dermed aldri revalidatePath('/kart')) for denne mannen, så
+          // kartet friskes opp eksplisitt her i stedet (#718).
+          friskOppKartet()
+        }
         return
       }
       if (!stille) setJobber(true)
@@ -532,6 +561,10 @@ export default function PosisjonsKart({
               setJobber(false)
               if (!svar.ok) {
                 setFeil(svar.melding)
+                // delPosisjon feilet før den nådde revalidatePath('/kart') —
+                // uten dette blir kartet stående med gamle data selv om han
+                // trykte «Oppdater» (#718).
+                friskOppKartet()
                 return
               }
               taMedPosisjon(pos.coords.latitude, pos.coords.longitude)
@@ -540,6 +573,9 @@ export default function PosisjonsKart({
             if (!stille) {
               setJobber(false)
               setFeil('Klarte ikke lagre posisjonen. Prøv igjen.')
+              // Samme begrunnelse som svar.ok-grenen over: delPosisjon kastet
+              // før revalideringen, så kartet må friskes opp eksplisitt.
+              friskOppKartet()
             }
           }
         },
@@ -576,6 +612,11 @@ export default function PosisjonsKart({
             { fingerprint: stille ? `auto-${klasse}` : klasse },
             'warn',
           )
+          // Nektet, timeout eller utilgjengelig — GPS ga aldri en posisjon å
+          // sende til delPosisjon, så ingen revalidatePath('/kart') skjer.
+          // Kartet friskes opp likevel her, slik at «Oppdater» også henter
+          // inn andres bevegelser selv når din egen posisjon feiler (#718).
+          if (!stille) friskOppKartet()
         },
         // enableHighAccuracy slår på GPS i stedet for mast/wifi. Det koster
         // batteri og noen sekunder, men et punkt med ±1500 m er ubrukelig til
@@ -583,7 +624,7 @@ export default function PosisjonsKart({
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       )
     },
-    [taMedPosisjon],
+    [taMedPosisjon, friskOppKartet],
   )
 
   // Automatisk oppdatering ved sidelast for den som ALLEREDE deler.
@@ -609,6 +650,9 @@ export default function PosisjonsKart({
   // grunnen til at resten av appen ikke blir tyngre av Leaflet (jf. ytelseskravet).
   useEffect(() => {
     let avbrutt = false
+    // Deklarert her (ikke inni .then()) slik at cleanup-funksjonen under
+    // kan rydde den selv om Leaflet-modulen ikke er ferdig lastet ennå.
+    let ventId: number | undefined
     const node = kartRef.current
     if (!node) return
 
@@ -635,10 +679,21 @@ export default function PosisjonsKart({
       const markeringspunkter: [number, number][] = markeringer.map(
         mk => [mk.lat, mk.lng] as [number, number],
       )
-      const punkterIUtsnittet: [number, number][] = velgKlyngeUtsnitt(
-        posisjonspunkter,
-        markeringspunkter,
-      )
+      // Et delt sted (#753) trenger ingen klynge-vurdering — utsnittet skal
+      // treffe PRESIS det koordinatet, ikke et snitt av annet på kartet.
+      // Regnestykket i velgKlyngeUtsnitt() hopper vi derfor over når det uansett
+      // ikke skal brukes.
+      const punkterIUtsnittet: [number, number][] = deltSted
+        ? []
+        : velgKlyngeUtsnitt(posisjonspunkter, markeringspunkter)
+
+      // Ankomsten via en delt lenke (#753): kartet skal FØDES vidt og flys
+      // synlig inn mot koordinatet, ikke stå der ferdig innzoomet. Planlagt
+      // FØR kartet konstrueres, slik at startZoom kan brukes i options under.
+      const ankomst = deltSted ? planleggAnkomst(foretrekkerRedusertBevegelse()) : null
+      // Nøkkelen denne ankomsten er planlagt FOR. Post-mount-effekten lenger
+      // nede stempler samme ref når den overtar med et nytt mål (#753).
+      const ankomstKey = deltStedKey
 
       // Et delt sted (#719) vinner startutsnittet: mannen trykket på nettopp
       // DEN lenken for å se DET stedet, ikke gjennomsnittet av alt annet på
@@ -647,7 +702,7 @@ export default function PosisjonsKart({
       const kart = L.map(node, {
         center: deltSted ? [deltSted.lat, deltSted.lng] : (punkterIUtsnittet[0] ?? [fallbackSenter.lat, fallbackSenter.lng]),
         zoom: deltSted
-          ? POSISJON_KART_ZOOM
+          ? ankomst!.startZoom
           : punkterIUtsnittet.length > 0
             ? POSISJON_KART_ZOOM
             : POSISJON_KART_FALLBACK_ZOOM,
@@ -667,7 +722,9 @@ export default function PosisjonsKart({
         })
       }
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Referansen tas vare på: ankomstflyvningen venter på at DENNE
+      // flisrunden er tegnet (#753) før den zoomer videre inn.
+      const flisLag = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         // Attribusjon er et VILKÅR for å bruke OSMs fliser, ikke en høflighet.
         attribution: '&copy; OpenStreetMap',
@@ -688,10 +745,39 @@ export default function PosisjonsKart({
       // setter seg (fonter, safe-area), blir målingen for liten og flisene
       // dekker bare deler av ruta. invalidateSize etter første paint retter opp.
       requestAnimationFrame(() => kart.invalidateSize())
+
+      // Innzoomingen mot et delt sted (#753). To triggere, én guard:
+      // 'load' er den normale veien (flisene som dekker STARTutsnittet er
+      // tegnet — å zoome inn over en grå flate hadde mistet halve poenget),
+      // timeout-en er fail-open hvis en flis feiler eller nettet henger —
+      // ankomsten må aldri kunne bli hengende for godt.
+      let harFlydd = false
+      if (ankomst?.animer) {
+        const start = () => {
+          if (avbrutt || harFlydd || !kartetRef.current) return
+          // Han kan ha trykket en NY steds-lenke i chat-panelet mens vi ventet
+          // på fliser (#753). Post-mount-effekten har da alt flydd til det nye
+          // målet og stemplet nøkkelen — denne planlagte flyvningen ville dratt
+          // ham tilbake til det gamle stedet.
+          if (forrigeDeltStedKey.current !== ankomstKey) return
+          harFlydd = true
+          window.clearTimeout(ventId)
+          // Containeren kan ha fått endelig størrelse først etter at
+          // startutsnittet ble tegnet (samme grunn som invalidateSize over) —
+          // uten denne kan flyTo regne på feil dimensjoner.
+          kart.invalidateSize()
+          kart.flyTo([deltSted!.lat, deltSted!.lng], ankomst.sluttZoom, {
+            duration: ankomst.varighetSek,
+          })
+        }
+        flisLag.once('load', start)
+        ventId = window.setTimeout(start, KART_DELT_STED_FLY_VENT_MS)
+      }
     })
 
     return () => {
       avbrutt = true
+      window.clearTimeout(ventId)
       kartetRef.current?.remove()
       kartetRef.current = null
       lagRef.current = null
@@ -941,12 +1027,42 @@ export default function PosisjonsKart({
   // dekkes allerede av init-effekten over. Refen holder unna den samme
   // objektidentitets-fellen som -Key-forklaringen over: kun en ekte
   // verdiendring skal utløse en flyTo, ikke en vilkårlig RSC-revalidering.
+  //
+  // Samme ankomst som init-effekten (#753) — dette er den ANDRE av de to
+  // ankomstveiene: lenken trykket fra chat-PANELET mens man allerede står
+  // på /kart (komponenten remountes ikke, kun søkeparametrene endres).
+  // Ingen ventetid på fliser her: kartet er allerede tegnet i sitt nåværende
+  // utsnitt, det er kun MÅLET som er nytt.
   const forrigeDeltStedKey = useRef<string | null>(deltStedKey)
   useEffect(() => {
     if (deltStedKey === forrigeDeltStedKey.current) return
+
+    // Lenken er FJERNET (?lat/?lng borte): ingen flyvning å gjøre, men
+    // tilstanden er terminal — nøkkelen stemples, slik at det samme stedet
+    // delt på nytt senere fortsatt teller som en ekte endring.
+    if (!deltStedKey || !deltSted) {
+      forrigeDeltStedKey.current = deltStedKey
+      return
+    }
+
+    // Kartet er ikke bygget ennå (Leaflet importeres dynamisk, og en lenke i
+    // chat-panelet kan fint trykkes i det vinduet): IKKE stemple nøkkelen her.
+    // Effekten kjøres på nytt når `kartKlar` slår om, og flyr da. Samme regel
+    // som § Policy: Navigasjon setter for push-overleveringen — markøren
+    // konsumeres når handlingen har LYKTES, ikke når den leses.
+    if (!kartKlar) return
+    const kart = kartetRef.current
+    if (!kart) return
+
     forrigeDeltStedKey.current = deltStedKey
-    if (!kartKlar || !deltSted) return
-    kartetRef.current?.flyTo([deltSted.lat, deltSted.lng], POSISJON_KART_ZOOM)
+    const ankomst = planleggAnkomst(foretrekkerRedusertBevegelse())
+    if (ankomst.animer) {
+      kart.flyTo([deltSted.lat, deltSted.lng], ankomst.sluttZoom, {
+        duration: ankomst.varighetSek,
+      })
+    } else {
+      kart.setView([deltSted.lat, deltSted.lng], ankomst.sluttZoom, { animate: false })
+    }
   }, [deltStedKey, kartKlar, deltSted])
 
   const stoppNaa = useCallback(async () => {
@@ -1244,32 +1360,61 @@ export default function PosisjonsKart({
             <button
               type="button"
               onClick={() => hentOgLagre(false)}
-              disabled={jobber}
+              disabled={opptatt}
               data-testid="del-knapp"
-              style={{ ...PILLE_PRIMAER, opacity: jobber ? 0.6 : 1 }}
+              style={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
             >
-              {jobber ? 'Henter …' : 'Oppdater'}
+              {/* Tre tilstander, ikke to: teksten skal si hvilken av de to
+                  ventetidene som pågår. `jobber` sjekkes først fordi
+                  GPS-hentingen kommer først i flyten — refreshen er det som
+                  står igjen etterpå. */}
+              {jobber ? 'Henter …' : friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
             </button>
             <button
               type="button"
               onClick={stoppNaa}
-              disabled={jobber}
+              disabled={opptatt}
               data-testid="stopp-knapp"
-              style={{ ...PILLE, opacity: jobber ? 0.6 : 1 }}
+              style={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
             >
               Slutt å dele
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={() => hentOgLagre(false)}
-            disabled={jobber}
-            data-testid="del-knapp"
-            style={{ ...PILLE_PRIMAER, opacity: jobber ? 0.6 : 1 }}
-          >
-            {jobber ? 'Henter posisjon …' : 'Del posisjonen min'}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => hentOgLagre(false)}
+              disabled={opptatt}
+              data-testid="del-knapp"
+              style={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
+            >
+              {jobber ? 'Henter posisjon …' : 'Del posisjonen min'}
+            </button>
+            {/* Uten denne har den som følger turen uten å dele egen posisjon
+                ingen vei til friske data etter at pull-to-refresh ble
+                slått av på kartet (#718) — verst i reisemodus, der
+                TopHeader ikke finnes og «naviger bort og tilbake» ikke er
+                et reelt alternativ. Vises kun her: har `meg` verdi, gjør
+                «Oppdater»-pilla i `if (meg)`-grenen over allerede jobben. */}
+            <button
+              type="button"
+              onClick={friskOppKartet}
+              disabled={opptatt}
+              data-testid="oppdater-kart-knapp"
+              style={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
+            >
+              {/* LÅSEN følger `opptatt`, ikke `friskerOpp`: mens GPS-hentingen
+                  fra pilla ved siden av pågår er `meg` fortsatt null, så denne
+                  grenen står montert og pilla ville vært klikkbar — og hvert
+                  trykk et `router.refresh()` i kappløp med refreshen
+                  `hentOgLagre` selv ender i. TEKSTEN følger bare `friskerOpp`
+                  (bevisst): «Henter …» hører til posisjons-pilla, og to piller
+                  som samtidig annonserer samme ventetid er støy. Felles lås,
+                  egen tekst — ikke «rett» det til én av delene (#718-review). */}
+              {friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
+            </button>
+          </>
         )}
 
         {steg === 'av' && (

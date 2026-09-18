@@ -484,6 +484,37 @@ export const TIMEPLAN_ADRESSE_MAKS_LENGDE = 120
 // lenge nok til å se den, ikke så lenge at den føles klistret fast.
 export const KART_LENKE_KOPIERT_KVITTERING_SEK = 3
 
+// Ankomst via en delt steds-lenke (#753) — kartet skal FØDES vidt og zoome
+// synlig inn på koordinatet, i stedet for å bare stå der ferdig innzoomet.
+//
+// Sluttzoom: på 390 px bredde spenner z14 (POSISJON_KART_ZOOM) ≈ 2,9 km —
+// et helt nabolag, nettopp det som ble klaget på. z17 ≈ 360 m: kvartalet,
+// gatenavn og bygningsomriss leselig. z18 ≈ 180 m — fristende enda nærmere,
+// men koordinatet er siktet inn for hånd av et menneske på et kart i moderat
+// zoom, og en siktefeil på 30–50 m er da en fjerdedel av skjermen på z18.
+// 17 og ikke 18.
+export const KART_DELT_STED_ZOOM = 17
+
+// Utsnittet kartet FØDES i før det flyr inn mot KART_DELT_STED_ZOOM. Fem
+// nivåer lavere enn sluttzoomen = 32× skalaendring — umulig å overse at
+// kartet beveger seg. Samme tall som POSISJON_KART_FALLBACK_ZOOM, men egen
+// konstant fordi betydningen her er en annen (startpunkt for en flyvning,
+// ikke et hvilenivå uten data).
+export const KART_DELT_STED_START_ZOOM = 12
+
+// Eksplisitt varighet på innzoomingen. Uten den regner Leaflet selv ut en
+// varighet fra panoreringsavstanden — som her er null (kartet flyr rett inn,
+// flytter seg ikke sidelengs) — og lander på under et sekund, raskt nok til
+// at bevegelsen blir oversett.
+export const KART_DELT_STED_FLY_SEK = 1.2
+
+// Maks ventetid på at startutsnittets fliser er tegnet før innzoomingen
+// starter. Å zoome inn over en grå, utegnet flate river bort halve poenget
+// (å SE hvor det bærer), men et flislag som feiler eller et nett som henger
+// skal aldri kunne holde ankomsten hengende for godt — derfor en fail-open
+// timeout ved siden av 'load'-eventet.
+export const KART_DELT_STED_FLY_VENT_MS = 1200
+
 // Kartets startutsnitt (#735) — hvor nært to punkter må være for å regnes
 // som samme «sted» når velgKlyngeUtsnitt() (lib/kart-klynge.ts) avgjør hvem
 // startutsnittet skal ramme inn. 50 km: en mann på Gardermoen mens resten

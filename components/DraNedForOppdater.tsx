@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { erChatTab } from '@/lib/navigasjon'
+import { draNedForOppdaterAv } from '@/lib/navigasjon'
 import { DRA_NED_PING_TIMEOUT_MS } from '@/lib/konstanter'
 
 const TERSKEL = 80
@@ -67,10 +67,9 @@ export default function DraNedForOppdater() {
   }, [router])
 
   useEffect(() => {
-    // Chat-sidene har egen visibilitychange-refetch og realtime-subscription
-    // som holder meldingslisten ajour — pull-to-refresh trengs ikke der, og
-    // en uventet router.refresh() forårsaket scroll-til-bunn-bug (#222).
-    if (erChatTab(pathname)) return
+    // Begrunnelse per rute (chat, kart) står samlet i draNedForOppdaterAv()
+    // i lib/navigasjon.ts — se der for #222/#706/#718.
+    if (draNedForOppdaterAv(pathname)) return
     // Sjekker om brukeren skriver i et tekstfelt (chat-input, kommentar,
     // tittel-redigering osv). Da skal dra-ned ikke aktiveres — én gest
     // mindre som kan kollidere med tastatur og forskyve input-pillen

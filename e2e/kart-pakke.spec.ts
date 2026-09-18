@@ -189,12 +189,17 @@ test.describe('kart-pakken (#719, #721, #722, #725, #726)', () => {
     await expect(page.getByTestId('panel-handtak')).toHaveAttribute('aria-expanded', 'true')
   })
 
-  test('delt stedslenke sentrerer kartet og viser markøren, ugyldig lenke krasjer ikke (#719)', async ({ page }) => {
+  test('delt stedslenke sentrerer kartet og viser markøren, ugyldig lenke krasjer ikke (#719, #753)', async ({ page }) => {
     await page.goto('/kart?lat=59.91387&lng=10.75225&tekst=Vi%20sitter%20her')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
     await page.locator('.leaflet-tile-pane img').first().waitFor({ state: 'visible', timeout: 15_000 })
 
     await expect(page.getByTestId('delt-sted')).toBeVisible({ timeout: 15_000 })
+    // Beviser at ankomsten ENDER på KART_DELT_STED_ZOOM (17) i en ekte
+    // nettleser — ikke at den ble animert dit: en implementasjon som hopper
+    // rett til 17 ville gitt nøyaktig samme flis. Selve flyvningen (kallet,
+    // varigheten og at kartet fødes vidt) pinnes i __tests__/kart-delt-sted.test.tsx.
+    await expect(page.locator('.leaflet-tile-pane img[src*="/17/"]').first()).toBeVisible({ timeout: 15_000 })
 
     // Fail-closed (lib/kart-lenke.ts): et ugyldig koordinat skal falle
     // tilbake til vanlig kartoppførsel, ALDRI krasje siden.
