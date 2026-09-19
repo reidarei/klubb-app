@@ -130,6 +130,8 @@
 //   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
 //   kart.milf.mottakere.feilet      — feil: mottakeroppslaget for MILF alert feilet. Markeringen står, varselet uteblir (#747)
 //   kart.milf.varsel.feilet         — feil: sendVarsel() kastet for MILF alert. Markeringen er allerede lagret (#747)
+//   kart.babe.mottakere.feilet      — feil: mottakeroppslaget for BABE alert feilet. Markeringen står, varselet uteblir (#759)
+//   kart.babe.varsel.feilet         — feil: sendVarsel() kastet for BABE alert. Markeringen er allerede lagret (#759)
 //   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
 //   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
 //   kart.timeplan.opprett.arrangement_borte — warn: inserten fikk 23503 på arrangement_id, altså ble turen slettet mellom vakten og inserten (geokodingen kan ligge inntil 5 s imellom). Normal samtidighet, ikke serverfeil — mannen får samme «finnes ikke lenger» som vakten gir

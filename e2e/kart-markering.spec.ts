@@ -345,10 +345,11 @@ test.describe('kartmarkeringer (#697)', () => {
     if (admin) await admin.from('kart_markering').delete().eq('tekst', 'Playwright — med symbol')
   })
 
-  test('alle tre symbolene finnes og har hvert sitt ikon', async ({ page }) => {
+  test('alle symbolene finnes og har hvert sitt ikon', async ({ page }) => {
     // Listen i lib/markering-symboler.ts speiles av en check-constraint i
-    // migrasjon 146. Denne testen fanger at UI-et og listen kommer i utakt —
-    // legges et symbol til i koden uten at knappen finnes, eller omvendt.
+    // migrasjon 146 (utvidet i 151). Denne testen fanger at UI-et og listen
+    // kommer i utakt — legges et symbol til i koden uten at knappen finnes,
+    // eller omvendt.
     await page.goto('/kart')
     await page.getByTestId('markering-start').click()
     // Vent til kartet er initialisert: «Her er det» leser kartsenteret, og er
@@ -364,8 +365,50 @@ test.describe('kartmarkeringer (#697)', () => {
       await expect(knapp).toContainText(sym.emoji)
       emojier.add(sym.emoji)
     }
-    // Tre distinkte ikoner: to like ville gjort symbolet verdiløst på kartet.
+    // Distinkte ikoner for hvert symbol: to like ville gjort symbolet
+    // verdiløst på kartet — forveksling er nøyaktig det 😍/💋 må unngå.
     expect(emojier.size).toBe(MARKERING_SYMBOLER.length)
+  })
+
+  test('databasen godtar hvert symbol i registeret', async () => {
+    // Dette er testen som faktisk fanger en glemt migrasjon (#759): UI-testen
+    // over beviser bare at UI-et og MARKERING_SYMBOLER stemmer overens med
+    // hverandre — den sier ingenting om check-constrainten i databasen, som er
+    // en TREDJE, uavhengig kilde til sannhet. Legges et symbol til i
+    // registeret uten at migrasjonen følger, ville UI-testen fortsatt vært
+    // grønn mens en ekte insert feiler i produksjon.
+    //
+    // Ingen `page` — testen inserter direkte mot databasen via adminKlient,
+    // så den koster ingen nettleser-/browser-tid, kun en spørring.
+    const admin = adminKlient('kart-markering')
+    test.skip(!admin, 'Ingen admin-klient')
+
+    const tidsstempel = Date.now()
+    const rader = MARKERING_SYMBOLER.map((sym, i) => ({
+      opprettet_av: megId!,
+      lat: 59.9139,
+      lng: 10.7522,
+      tekst: `Playwright — symbolgodkjenning ${tidsstempel}-${i}`,
+      symbol: sym.id,
+      utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    }))
+
+    const { error } = await admin!.from('kart_markering').insert(rader)
+    // Den ekte assertion-en: en glemt migrasjon gir 23514 (check-constraint
+    // violation) her, ikke et UI-symptom lenger nede i kjeden.
+    expect(error).toBeNull()
+
+    // Oppryddingen står ETTER assertion-en over med vilje: en feilet insert
+    // er atomisk (ingen rader å rydde), så rekkefølgen gjør at en feil her
+    // aldri kan maskere den ekte testfeilen. Men den skal være SYNLIG — en
+    // svelget feil etterlater rader neste kjøring arver uten å vite om, og
+    // da er testen grønn på falskt grunnlag (CLAUDE.md § Policy:
+    // Databasespørringer — `error` skal alltid hentes ut OG leses).
+    const { error: oppryddingFeil } = await admin!
+      .from('kart_markering')
+      .delete()
+      .like('tekst', `Playwright — symbolgodkjenning ${tidsstempel}-%`)
+    expect(oppryddingFeil, 'oppryddingen etterlot testrader i basen').toBeNull()
   })
 
   test('symbolet står ÉN gang, i bobla', async ({ page }) => {

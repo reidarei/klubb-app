@@ -55,6 +55,10 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
     panel: 'MILF alert (når noen setter en 💋-markering på kartet)',
     kort: 'MILF alert',
   },
+  babe_alert: {
+    panel: 'Babe alert (når noen setter en 😍-markering på kartet)',
+    kort: 'Babe alert',
+  },
 
   // ── Arrangementer ────────────────────────────────────────────────────────
   nytt_arrangement: { panel: 'Nytt arrangement lagt ut', kort: 'Nytt arrangement' },

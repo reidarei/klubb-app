@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import type { Map as LeafletMap, LayerGroup, Marker as LeafletMarker } from 'leaflet'
+import type { Map as LeafletMap, LayerGroup, Marker as LeafletMarker, LatLng } from 'leaflet'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { hueAv } from '@/components/ui/Avatar'
@@ -277,6 +277,23 @@ export default function PosisjonsKart({
   //                      sikte-tilstand for hele kartet, aldri to parallelle
   //                      sikte-flagg. Panelet glir helt ut mens dette står på.
   const [steg, setSteg] = useState<'av' | 'sted' | 'tekst' | 'timeplan-punkt'>('av')
+  // Lytterne i langtrykk-effekten under (#762) registreres ÉN gang (deps
+  // [kartKlar]), og leser derfor steg via en REF, ikke via closure over
+  // React-state: leste de `steg` direkte, måtte de re-bindes ved hvert
+  // stegskifte, og en gest som pågår akkurat idet steget endres ville miste
+  // timeren sin i cleanup.
+  const stegRef = useRef(steg)
+  useEffect(() => {
+    stegRef.current = steg
+  }, [steg])
+  // Punktet ringen under et pågående langtrykk tegnes på (#762), relativt
+  // til kartcontainerens rect. null = ingen gest pågår.
+  const [presseRing, setPresseRing] = useState<{ x: number; y: number } | null>(null)
+  // Styrer hjelpeteksten i steg 'sted' (#762): kom man dit via langtrykk,
+  // står krysset allerede over stedet man pekte på, og «Flytt kartet» er da
+  // feil oppfordring. Nullstilles i bekreftSted og avbrytMarkering — begge
+  // avslutter steget.
+  const [stedFraLangtrykk, setStedFraLangtrykk] = useState(false)
   const [markeringTekst, setMarkeringTekst] = useState('')
   const [markeringSymbol, setMarkeringSymbol] = useState<MarkeringSymbol>(STANDARD_SYMBOL)
   // Koordinatet låses når man bekrefter stedet, slik at en utilsiktet
@@ -788,6 +805,131 @@ export default function PosisjonsKart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Langtrykk på kartflaten (#762): holder man fingeren et sted, panoreres
+  // det punktet inn under siktet og steg 'sted' startes — eller, er siktet
+  // allerede oppe, panoreres det bare, uten å endre steg (regissørens
+  // beslutninger #1 og #2 for #762).
+  //
+  // Native DOM-lyttere på Leaflet-containeren, ikke React og ikke
+  // map.on('contextmenu'): Leaflets egen tapHold har tapHoldDelay hardkodet
+  // som en modul-lokal variabel — ikke en option, kan ikke settes til
+  // LONG_PRESS_MS — og handleren er som default kun på for iOS Safari.
+  // Android ville dermed fått en annen (fraværende) gest. Egne lyttere med
+  // de samme terskelkonstantene boble-gesten (#719, lenger ned i fila) bruker
+  // gir lik oppførsel på begge plattformer.
+  //
+  // deps [kartKlar], ikke [steg]: se stegRef over for hvorfor.
+  useEffect(() => {
+    if (!kartKlar) return
+    const node = kartRef.current
+    const kart = kartetRef.current
+    if (!node || !kart) return
+
+    let holdTimer: number | null = null
+    let klar = false
+    let start = { x: 0, y: 0 }
+    // Aktive pekere telles selv, IKKE via e.isPrimary — jsdom setter
+    // isPrimary til false som default på et syntetisk PointerEvent, så en
+    // isPrimary-vakt ville gjort hele testfila «grønn» uten å bevise noe.
+    let aktivPeker: number | null = null
+
+    const avbrytHold = () => {
+      if (holdTimer !== null) {
+        window.clearTimeout(holdTimer)
+        holdTimer = null
+      }
+      klar = false
+      setPresseRing(null)
+    }
+
+    const pointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return
+      if (aktivPeker !== null) {
+        // Pinch-vakt: en ANDRE peker ned mens den første holder er en
+        // knipe-gest, ikke et langtrykk.
+        avbrytHold()
+        return
+      }
+      // Koordinatet er låst i steg 'tekst' (#702) — hele poenget med
+      // to-stegs-flyten er at teksten ikke skal kunne flytte nåla.
+      if (stegRef.current === 'tekst') return
+      // Kollisjonsvakten mot boble-gesten (#719): et langtrykk på en
+      // eksisterende markering/kontroll skal IKKE i tillegg starte en ny
+      // markering. Eksplisitt target-sil — ikke avhengig av at boblas egen
+      // stopPropagation() i pointerup rekker først (den lytteren rører vi
+      // ikke — se boble-gesten lenger ned i denne effekten som tegner
+      // markørene, merket #719).
+      const target = e.target as HTMLElement
+      if (
+        target.closest(
+          '.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup, .leaflet-control, .leaflet-interactive',
+        )
+      ) {
+        return
+      }
+      aktivPeker = e.pointerId
+      start = { x: e.clientX, y: e.clientY }
+      klar = false
+      holdTimer = window.setTimeout(() => {
+        klar = true
+        const rect = node.getBoundingClientRect()
+        setPresseRing({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+      }, LONG_PRESS_MS)
+    }
+
+    const pointerMove = (e: PointerEvent) => {
+      // Samme mønster som boble-gesten (#719, lenger ned i fila): under
+      // panorering ryddes timeren bort etter de første ~10 pikslene — hele
+      // ytelsessvaret.
+      if (holdTimer === null) return
+      const dx = e.clientX - start.x
+      const dy = e.clientY - start.y
+      if (dx * dx + dy * dy > LONG_PRESS_BEVEGELSE_PX ** 2) avbrytHold()
+    }
+
+    const pointerUp = (e: PointerEvent) => {
+      const varKlar = klar
+      avbrytHold()
+      aktivPeker = null
+      if (!varKlar) return
+      // PointerEvent arver MouseEvent, så Leaflets egen hjelper kan brukes
+      // direkte — ingen manuell omregning av koordinater.
+      startMarkeringFraLangtrykk(kart.mouseEventToLatLng(e))
+    }
+
+    const pointerCancel = () => {
+      avbrytHold()
+      aktivPeker = null
+    }
+
+    // Android Chrome åpner sin egen bilde-kontekstmeny på langtrykk over en
+    // flis (<img>) — Android-benet av samme problem -webkit-touch-callout
+    // løser på iOS (se kart.css).
+    const kontekstmeny = (e: Event) => e.preventDefault()
+
+    // Touch-pekere har IMPLISITT pointer capture på noden som fikk
+    // pointerdown, så pointerup kommer tilbake hit selv om fingeren dras
+    // utenfor containeren — ingen document-lyttere, ingen pointerleave.
+    node.addEventListener('pointerdown', pointerDown, { passive: true })
+    node.addEventListener('pointermove', pointerMove, { passive: true })
+    node.addEventListener('pointerup', pointerUp, { passive: true })
+    node.addEventListener('pointercancel', pointerCancel, { passive: true })
+    node.addEventListener('contextmenu', kontekstmeny)
+
+    return () => {
+      node.removeEventListener('pointerdown', pointerDown)
+      node.removeEventListener('pointermove', pointerMove)
+      node.removeEventListener('pointerup', pointerUp)
+      node.removeEventListener('pointercancel', pointerCancel)
+      node.removeEventListener('contextmenu', kontekstmeny)
+      if (holdTimer !== null) window.clearTimeout(holdTimer)
+      setPresseRing(null)
+    }
+    // Lytterne skal registreres ÉN gang; steg leses via stegRef (se over), og
+    // startMarkeringFraLangtrykk er stabil (useCallback med tomme deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kartKlar])
+
   // Reisemodus-toggelen endrer FLATENS høyde (header borte/tilbake) uten at
   // kartet remountes. Leaflet måler kun containeren ved init og reagerer ikke
   // selv på en ren CSS-høydeendring — uten denne sto kartet med feil utsnitt
@@ -1125,7 +1267,41 @@ export default function PosisjonsKart({
     const senter = kart.getCenter()
     setValgtSted({ lat: senter.lat, lng: senter.lng })
     setFeil(null)
+    setStedFraLangtrykk(false)
     setSteg('tekst')
+  }, [])
+
+  // Committen fra langtrykk-gesten (#762, effekten over): panorerer punktet
+  // man holdt på inn under siktet, i stedet for å plassere et sikte der
+  // fingeren var. Siktet er alltid i sentrum og bekreftSted() leser
+  // getCenter() — panorering lar langtrykket arve HELE #700-maskineriet uten
+  // én ny sannhetskilde for koordinatet, og punktet kommer samtidig ut fra
+  // under fingeren, som er svaret på «hvordan ser man hvor det havner».
+  //
+  // Forflytningen er SYNKRON (animate: false), ikke animert. Var den animert,
+  // sto kartsenteret et sted mellom gammelt senter og punktet så lenge
+  // animasjonen løp — mens «Her er det» var trykkbar fra første frame, og
+  // bekreftSted() leser getCenter(). Et raskt trykk låste da et koordinat
+  // fingeren aldri pekte på, altså nøyaktig den upresisheten gesten skulle
+  // fjerne. Alternativet (holde knappen død til 'moveend') gjør en knapp
+  // ubrukelig i et kvart sekund for å redde en animasjon som uansett er kort:
+  // avstanden er aldri mer enn et halvt kartutsnitt, og gesten committer på
+  // pointerup — fingeren er allerede på vei opp når kartet flytter seg.
+  // Vaktet av «bekreft umiddelbart etter slipp» i __tests__/kart-langtrykk.test.tsx.
+  const startMarkeringFraLangtrykk = useCallback((latlng: LatLng) => {
+    const kart = kartetRef.current
+    if (!kart) return
+    setPresseRing(null)
+    setAapentPanel('ingen')
+    setValgtMarkering(null)
+    kart.panTo(latlng, { animate: false })
+    setFeil(null)
+    setStedFraLangtrykk(true)
+    // Steg 'av' → gå til 'sted' (start flyten). Steg 'sted'/'timeplan-punkt' →
+    // bare panorer, la steget stå (regissørens beslutning #2). 'tekst' nås
+    // aldri hit — koordinatet er låst der, og pointerdown-lytteren silte det
+    // bort før vi kom så langt.
+    setSteg(gjeldende => (gjeldende === 'av' ? 'sted' : gjeldende))
   }, [])
 
   const avbrytMarkering = useCallback(() => {
@@ -1134,6 +1310,7 @@ export default function PosisjonsKart({
     setMarkeringSymbol(STANDARD_SYMBOL)
     setValgtSted(null)
     setFeil(null)
+    setStedFraLangtrykk(false)
   }, [])
 
   // Punktvalg for en timeplan-post (#716) — samme sikte som markeringsflyten
@@ -1156,12 +1333,18 @@ export default function PosisjonsKart({
     const senter = kart.getCenter()
     setTimeplanPunkt({ lat: senter.lat, lng: senter.lng })
     setFeil(null)
+    // Et langtrykk under punktvalget setter stedFraLangtrykk (samme gest,
+    // begge steg). Uten nullstilling her ville neste ordinære «Sett
+    // markering» møtt hjelpeteksten «Krysset står der du holdt» selv om den
+    // ble startet med knappen.
+    setStedFraLangtrykk(false)
     setSteg('av')
     setAapentPanel('timeplan')
   }, [])
 
   const avbrytTimeplanPunkt = useCallback(() => {
     setFeil(null)
+    setStedFraLangtrykk(false)
     setSteg('av')
     setAapentPanel('timeplan')
   }, [])
@@ -1449,6 +1632,31 @@ export default function PosisjonsKart({
 
       </div>
 
+      {/* ── Ringen under et pågående langtrykk (#762) ───────────────────────
+          Wrapperen er søsken av kartdiven over, som selv er inset:0 i flaten
+          — container-rect og flate-rect er derfor samme boks, og regnestykket
+          i pointerdown-lytteren (over) holder MED og UTEN TopHeader/
+          reisemodus. Ingen kart-panel skal noensinne lese iOS sin egen
+          topp-innsett-variabel direkte (Policy: Navigasjon), og denne ringen
+          er intet unntak. */}
+      {presseRing && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: Z.SIKTE,
+          }}
+        >
+          <span
+            className="kart-presse-ring"
+            data-testid="kart-presse-ring"
+            style={{ position: 'absolute', left: presseRing.x, top: presseRing.y }}
+          />
+        </div>
+      )}
+
       {/* ── Siktet ───────────────────────────────────────────────────────── */}
       {(steg === 'sted' || steg === 'timeplan-punkt') && (
         <div
@@ -1495,7 +1703,11 @@ export default function PosisjonsKart({
         >
           {steg === 'sted' && (
             <>
-              <div style={HJELPETEKST}>Flytt kartet så krysset står der markeringen skal.</div>
+              <div style={HJELPETEKST}>
+                {stedFraLangtrykk
+                  ? 'Krysset står der du holdt. Flytt kartet hvis det skal justeres.'
+                  : 'Flytt kartet så krysset står der markeringen skal.'}
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
@@ -1563,8 +1775,8 @@ export default function PosisjonsKart({
               <div style={HJELPETEKST}>Stedet er valgt. Hva er det som er der?</div>
               {/* Symbolet velges FØR teksten: det er symbolet man ser på
                   kartet på avstand, og teksten er detaljen man leser ved å
-                  trykke. Tre store trykkflater, ikke en nedtrekksliste — med
-                  tre valg er en liste flere trykk enn valget er verdt. */}
+                  trykke. Store trykkflater, ikke en nedtrekksliste — med fire
+                  valg er en liste flere trykk enn valget er verdt. */}
               <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="Symbol">
                 {MARKERING_SYMBOLER.map(sym => {
                   const valgt = markeringSymbol === sym.id

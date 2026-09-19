@@ -39,6 +39,24 @@ describe('varsel-typer', () => {
     expect(utenEtikett).toEqual([])
   })
 
+  // Motsatt retning (#759): en panel-etikett uten seed-rad er en bryter som
+  // lyver — admin ser den i kontrollpanelet, men erVarselAktiv() faller
+  // uansett til aktiv = true fordi ingen rad finnes å lese fra. milf_alert
+  // slapp gjennom udekket helt til denne vakten kom (#747 ga den aldri en
+  // seed-rad); testen fanger neste varseltype som gjør samme feil.
+  it('hver panel-etikett har en seed-rad i en migrasjon', () => {
+    const noekler = noeklerFraMigrasjoner()
+    const utenSeed = Object.entries(VARSEL_TEKSTER)
+      .filter(([, t]) => t.panel)
+      // test_modus er ingen varseltype (se kommentaren i lib/varsel-typer.ts) —
+      // den slår av utsending til alle andre enn test-eposten, og raden er
+      // satt manuelt i drift, ikke seedet av en migrasjon. Eneste bevisste unntak.
+      .filter(([n]) => n !== 'test_modus')
+      .filter(([n]) => !noekler.includes(n))
+      .map(([n]) => n)
+    expect(utenSeed).toEqual([])
+  })
+
   it('finner faktisk nøklene i migrasjonene (så testen over ikke er tom)', () => {
     // Uten denne ville en regex-endring som slutter å matche gjort testen over
     // grønn på et tomt utvalg — verdiløs vakt som ser ut som dekning.

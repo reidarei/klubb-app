@@ -30,6 +30,28 @@
   color: var(--text-secondary);
 }
 
+/* Langtrykk på selve kartflaten (#762) — samme knep som lenger ned på
+   bobla (.kart-markering-etikett): uten dette åpner iOS sin egen
+   bilde-callout-meny på flisene (som er <img>-elementer under panseret) og
+   svelger gesten før vår egen pointer-håndtering når fram. Trolig hele
+   grunnen til at langtrykk «ikke virket» før #762. user-select er allerede
+   dekket av .leaflet-tile i leaflet.css. Egenskapen arves, så én regel her
+   dekker fliser, paner og markører under. */
+.leaflet-container {
+  -webkit-touch-callout: none;
+}
+
+/* Belte og bukseseler (#762). -webkit-touch-callout ER arvelig per spesifikasjon
+   (MDN: «Inherited: yes», gjelder alle elementer), så regelen over skal nå
+   flisene av seg selv. Vi setter den likevel eksplisitt på <img>-flisene: dette
+   er den ENE delen av langtrykk-fiksen som ikke kan verifiseres i vitest eller
+   i desktop-Chromium — den kan bare sees på en fysisk iPhone. En ekstra linje
+   er billigere enn en gest som er død på telefonen mens alle porter er grønne. */
+.leaflet-container .leaflet-tile,
+.leaflet-container img {
+  -webkit-touch-callout: none;
+}
+
 /* Markøren. Bærer enten profilbildet eller initialer; i initial-tilfellet
    arver den gradienten fra .avatar-initialer (globals.css) via --avatar-hue,
    slik at en mann har samme farge her som i lista under kartet. */
@@ -90,6 +112,11 @@
   .leaflet-container .leaflet-fade-anim .leaflet-tile,
   .leaflet-container .leaflet-zoom-anim .leaflet-zoom-animated {
     transition: none !important;
+  }
+  /* Ringen (#762) skal fortsatt vises ved terskel — det er pulsen som er
+     bevegelsen, ikke selve indikasjonen. */
+  .kart-presse-ring {
+    animation: none;
   }
 }
 
@@ -264,6 +291,32 @@
 }
 
 
+
+/* Ringen som viser HVOR fingeren holder under et langtrykk (#762) — vises
+   ved terskel (LONG_PRESS_MS), rett før panoreringen inn mot siktet.
+   Punktet settes med left/top i px i JSX; ringen selv sentreres på det. */
+.kart-presse-ring {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--kart-sol);
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  animation: kart-presse-puls 180ms ease-out;
+  pointer-events: none;
+}
+
+@keyframes kart-presse-puls {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
 
 /* Siktet som viser hvor markeringen havner (#700). Et kryss og ikke en nål:
    nåla er hva du FÅR, krysset er hvor du sikter — de skal ikke forveksles. */

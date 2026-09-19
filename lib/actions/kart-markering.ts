@@ -5,7 +5,7 @@ import { ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { KART_MARKERING_MAKS_LENGDE, KART_MARKERING_TIMER } from '@/lib/konstanter'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
-import { erGyldigSymbol, STANDARD_SYMBOL } from '@/lib/markering-symboler'
+import { erGyldigSymbol, STANDARD_SYMBOL, symbolVarsel } from '@/lib/markering-symboler'
 import { logg } from '@/lib/logg'
 import { sendVarsel } from '@/lib/varsler'
 import { byggStedLenke } from '@/lib/kart-lenke'
@@ -74,13 +74,15 @@ export async function settMarkering(
     return { ok: false, melding: 'Klarte ikke lagre markeringen. Prøv igjen.' }
   }
 
-  // MILF alert (#747). Kun for 💋-symbolet — de andre markeringene er
-  // «møt meg her»-beskjeder som ikke skal pinge tolv telefoner.
+  // Symbol-varsel (#747, generalisert til et register i #759). Kun for
+  // symboler som faktisk skal pinge alle — de andre markeringene er «møt meg
+  // her»-beskjeder som ikke skal varsle tolv telefoner.
   //
   // .catch() er ufravikelig: markeringen ER lagret på dette punktet, og en
   // varsel-feil skal ikke få brukeren til å tro at markeringen ikke ble satt
   // (CLAUDE.md § Policy: Varsler — regel for nye kallsteder).
-  if (valgtSymbol === 'milf') {
+  const varsel = symbolVarsel(valgtSymbol)
+  if (varsel) {
     // Alle aktive UNNTATT den som markerte — han vet jo at han gjorde det,
     // og et pling om sin egen markering leses som at noen andre fant noe.
     const { data: mottakere, error: mottakerFeil } = await supabase
@@ -92,19 +94,19 @@ export async function settMarkering(
     if (mottakerFeil) {
       // Fail-open: markeringen står, varselet uteblir. Å kaste her ville
       // gjort en vellykket markering til en feilmelding.
-      await logg.feil('kart.milf.mottakere.feilet', mottakerFeil).catch(() => {})
+      await logg.feil(varsel.loggMottakere, mottakerFeil).catch(() => {})
     } else {
       await sendVarsel({
         mottakere: (mottakere ?? []).map(m => m.id),
-        tittel: 'MILF ALERT!',
+        tittel: varsel.tittel,
         melding: rentekst,
         url: byggStedLenke(BASE_URL, lat, lng, rentekst),
         knappTekst: 'Vis på kartet',
-        type: 'milf_alert',
+        type: varsel.type,
         // Hver sighting er sin egen begivenhet. Uten dette ville den andre
         // av kvelden blitt dedupet bort som «allerede varslet».
         tillatDuplikat: true,
-      }).catch((err: unknown) => logg.feil('kart.milf.varsel.feilet', err))
+      }).catch((err: unknown) => logg.feil(varsel.loggVarsel, err))
     }
   }
 
