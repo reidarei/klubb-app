@@ -1,0 +1,518 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/supabase/database.types'
+import type { KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
+import {
+  type ArrangementRaad,
+  type UtkastRaad,
+  type ProfilMedBursdag,
+  type PollRaad,
+  type MeldingRaad,
+} from '@/lib/agenda-sortering'
+import { hentPollStemmerAggregatBatch } from './poll'
+import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
+import type { ChatProfil } from '@/lib/mention'
+import { iDagOslo } from '@/lib/dato'
+
+type DB = SupabaseClient<Database>
+
+// Rådata-type for chat_reaksjoner-oppslaget. Løftet til modulnivå for å matche
+// mønsteret RawMelding og de andre Raw-typene bruker. se #359.
+type RawChatReaksjon = { melding_id: string; profil_id: string; emoji: string }
+
+// Aktive profiler til @mention-forslag og rolle-oppslag for innlogget bruker.
+// Gjenbruker ChatProfil fra lib/mention.ts — samme kontrakt kort-komponentene
+// (ArrangementKort/PollKort/MeldingKort) allerede tar via `profiler`-propen.
+// se #378-review.
+
+// Alt forsiden trenger for å kalle byggAgenda + rendre kortene. Input-
+// kontrakt-typene (ArrangementRaad m.fl.) bor i lib/agenda-sortering.ts —
+// de er byggAgendas API og blir der.
+export type AgendaData = {
+  arrangementerBerikt: ArrangementRaad[]
+  ansvar: UtkastRaad[]
+  profilerMedBursdag: ProfilMedBursdag[]
+  poller: PollRaad[]
+  meldingerForAgenda: MeldingRaad[]
+  kommentarerPerArr: Map<string, KommentarKortData[]>
+  kommentarerPerPoll: Map<string, KommentarKortData[]>
+  kommentarerPerMelding: Map<string, KommentarKortData[]>
+  totaltPerArr: Map<string, number>
+  totaltPerPoll: Map<string, number>
+  chatProfiler: ChatProfil[]
+}
+
+// Henter og aggregerer all rådata til agenda-forsiden. Flyttet ut av
+// app/(app)/page.tsx (#378) — REN refaktorering, spørringene og mappingen
+// er uendret. Ytelseskritisk: de 11 elementene i Promise.all under skal
+// kjøre parallelt; ikke splitt dem opp i sekvensielle await-er.
+export async function hentAgendaData(
+  supabase: DB,
+  opts: { brukerId: string; aar: number; cutoffIso: string },
+): Promise<AgendaData> {
+  const { brukerId, aar, cutoffIso } = opts
+
+  // Poll-spørringen og den etterfølgende kåringspoll-RPC-en kjøres som én
+  // sammenhengende kjede side om side med de øvrige 10 spørringene. Tidligere
+  // måtte alle 11 fullføres før RPC-en kunne starte (waterfall). Nå er total
+  // ventetid max(de 10 andre, poll-spørring + RPC) i stedet for (alle 11) + RPC.
+  // Se #313 for bakgrunn og målinger.
+  async function hentPollerMedAggregat() {
+    // poll_chat(count) gir totalt kommentarantall per poll via PostgREST
+    // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
+    const { data: pollerRaad, error: pollerFeil } = await supabase
+      .from('poll')
+      .select(
+        `id, spoersmaal, svarfrist, flervalg, opprettet_av,
+         kaaring_mal_id, aar, avsluttet_paa, tiebreak_status,
+         poll_valg (id, tekst, rekkefoelge),
+         poll_stemme (profil_id, valg_id),
+         poll_chat (count)`,
+      )
+      .gte('svarfrist', cutoffIso)
+      .order('svarfrist', { ascending: true })
+    // Forsiden — en feilet spørring skal aldri se ut som «ingen polls»
+    // (Policy: Databasespørringer). Kastes videre gjennom Promise.all under.
+    if (pollerFeil) throw new Error(`Kunne ikke hente polls: ${pollerFeil.message}`)
+
+    // Kåringspoll-aggregater hentes via RPC (mig. 079), fordi RLS skjuler
+    // andres stemmer for vanlige medlemmer på åpne kåringspoller. For
+    // vanlige polls bruker vi poll_stemme-radene direkte slik som før.
+    const kaaringspollIder = (pollerRaad ?? [])
+      .filter(p => p.kaaring_mal_id !== null)
+      .map(p => p.id)
+    const kaaringAggregater = await hentPollStemmerAggregatBatch(supabase, kaaringspollIder)
+
+    return { pollerRaad, kaaringAggregater }
+  }
+
+  const [
+    { data: arrangementer, error: arrangementerFeil },
+    { data: profilerMedBursdag, error: profilerMedBursdagFeil },
+    { data: ansvar, error: ansvarFeil },
+    { pollerRaad, kaaringAggregater },
+    { data: arrKommentarer, error: arrKommentarerFeil },
+    { data: pollKommentarer, error: pollKommentarerFeil },
+    { data: meldingerRaad, error: meldingerRaadFeil },
+    { data: meldingReaksjoner, error: meldingReaksjonerFeil },
+    { data: meldingKommentarer, error: meldingKommentarerFeil },
+    { data: albumMedArrangement, error: albumMedArrangementFeil },
+    { data: aktiveProfiler, error: aktiveProfilerFeil },
+  ] = await Promise.all([
+    // arrangement_chat(count) gir totalt kommentarantall per arr via PostgREST
+    // embed — erstatter den separate id-only-spørringen vi hadde før (#180).
+    supabase
+      .from('arrangementer')
+      .select(
+        `id, type, tittel, start_tidspunkt, oppmoetested, bilde_url,
+         paameldinger (profil_id, status, profiles (visningsnavn, bilde_url, rolle)),
+         arrangement_chat (count)`,
+      )
+      .gte('start_tidspunkt', cutoffIso)
+      .order('start_tidspunkt', { ascending: true }),
+    // Bursdagsbilde-embedet (#641) ligger her fra dag én, uansett om
+    // BURSDAGSBILDE_PAA er på — slik testes spørringsformen i hver deploy
+    // og hver e2e-runde, ikke bare den dagen funksjonen faktisk skrus på.
+    // Er funksjonen av, finnes det aldri en 'ferdig'-rad, og embedet
+    // returnerer tomme arrays — helt normalt, ikke en feil.
+    //
+    // FK-kvalifiseringen (`bursdagsbilde!bursdagsbilde_profil_id_fkey`) er
+    // OBLIGATORISK: tabellen har to FK-er til profiles (den andre er
+    // slettet_av, migrasjon 140), og uten kvalifiseringen svarer PostgREST
+    // PGRST201 («more than one relationship found») — hele agendaen faller
+    // for ALLE 18, ikke bare bursdagskortet.
+    //
+    // ALDRI `!inner` her: et inner join på bursdagsbilde ville filtrert bort
+    // enhver profil UTEN en matchende bursdagsbilde-rad — altså 17 av 18 en
+    // vanlig dag — og tømt hele bursdagslista på agendaen, ikke bare skjult
+    // bildet.
+    //
+    // Begge fellene over er nå byggefeil, ikke prod-feil: `bursdagsbilde` er
+    // PÅKREVD i ProfilMedBursdag (se lib/agenda-sortering.ts), så både en
+    // feilstavet alias og en droppet FK-hint gir TS2322 på returen under.
+    supabase
+      .from('profiles')
+      .select(
+        `id, visningsnavn, fodselsdato, bilde_url, rolle,
+         bursdagsbilde!bursdagsbilde_profil_id_fkey (bilde_url, status)`,
+      )
+      .eq('aktiv', true)
+      .not('fodselsdato', 'is', null)
+      .eq('bursdagsbilde.feiringsdato', iDagOslo())
+      .eq('bursdagsbilde.status', 'ferdig'),
+    supabase
+      .from('arrangoransvar')
+      .select('arrangement_navn, purredato, ansvarlig_id, profiles (visningsnavn)')
+      .eq('aar', aar)
+      .is('arrangement_id', null),
+    hentPollerMedAggregat(),
+    // Siste kommentarer per arrangement og poll — vises inline på hvert kort.
+    // Henter siste 30 per tabell innenfor samme 12-mnd-vindu (cutoffIso) som
+    // arrangementer og polls. 30 rader dekker ~10 arrangementer med 3
+    // kommentarer hver — godt nok for det som er synlig på agenda.
+    supabase
+      .from('arrangement_chat')
+      .select(
+        `id, innhold, bilde_url, opprettet, arrangement_id,
+         profiles (navn, bilde_url, rolle)`,
+      )
+      .gte('opprettet', cutoffIso)
+      .order('opprettet', { ascending: false })
+      .limit(30),
+    supabase
+      .from('poll_chat')
+      .select(
+        `id, innhold, bilde_url, opprettet, poll_id,
+         profiles (navn, bilde_url, rolle)`,
+      )
+      .gte('opprettet', cutoffIso)
+      .order('opprettet', { ascending: false })
+      .limit(30),
+    // Meldinger (#90, fjerde element-type). Vi henter relativt åpent (60)
+    // for å fange både levende og de som er falt ned i Tidligere.
+    // FK-navn må spesifiseres på profiles-embed siden melding_reaksjon
+    // og melding_chat også har FK til profiles — uten det får vi
+    // «more than one relationship» fra PostgREST.
+    supabase
+      .from('meldinger')
+      .select(
+        // melding_chat(count) returnerer aggregert antall kommentarer per
+        // melding via PostgREST — billig og uavhengig av om den enkelte
+        // kommentaren faller innenfor melding_chat-limit-vinduet under.
+        // Albumkobling (#214, forenklet i #463): album embed-es via
+        // ALBUM_KORT_SELECT så samme select brukes alle steder.
+        `id, innhold, opprettet, sist_aktivitet, fra_facebook, profil_id, arkivert_tidspunkt, aktuell_dato,
+         profiles!meldinger_profil_id_fkey (navn, bilde_url, rolle),
+         melding_bilder (bilde_url, rekkefoelge),
+         melding_chat (count),
+         ${ALBUM_KORT_SELECT}`,
+      )
+      .gte('sist_aktivitet', cutoffIso)
+      .order('sist_aktivitet', { ascending: false }),
+    // Dato-filter så reaksjoner følger samme 12-mnd-vindu som resten (#180).
+    // Pragmatisk match mot agendaens 12-mnd-vindu — godt nok så lenge selve
+    // meldinger-funksjonen er nyere enn 12 mnd. Edge-case: melding med
+    // opprettet >12 mnd men sist_aktivitet <12 mnd kan miste gamle reaksjoner.
+    // Materialiseres tidligst ~mai 2027; forsiden viser kun 12-mnd uansett.
+    supabase
+      .from('melding_reaksjon')
+      .select('melding_id, profil_id, emoji')
+      .gte('opprettet', cutoffIso),
+    // Dato-filter + limit — følger samme cutoff-vindu som resten (#180).
+    supabase
+      .from('melding_chat')
+      .select(
+        'id, innhold, bilde_url, opprettet, melding_id, profiles!melding_chat_profil_id_fkey (navn, bilde_url, rolle)',
+      )
+      .gte('opprettet', cutoffIso)
+      .order('opprettet', { ascending: false })
+      .limit(60),
+    // Hvilke arrangementer har album — brukes til både kamera-ikon på
+    // agenda-kortet og som fallback-bilde når arrangementet ikke har eget
+    // bilde_url. Vi henter cover via FK-join (album_cover_fk) + bilde-antall
+    // via aggregat, ikke hele bildelista. Fallback-bilde brukes kun når
+    // cover er eksplisitt satt — uten cover får arrangementet kamera-ikon
+    // men beholder placeholder-stilen.
+    supabase
+      .from('album')
+      .select(
+        'arrangement_id, cover:album_bilde!album_cover_fk (bilde_url), antall:album_bilde!album_bilde_album_id_fkey (count)',
+      )
+      .not('arrangement_id', 'is', null),
+    // Aktive profiler — sendes til kortene for @mention-forslag i inline
+    // kommentar-felt. Samme select-form som /chat-siden bruker.
+    supabase
+      .from('profiles')
+      .select('id, navn, bilde_url, rolle')
+      .eq('aktiv', true),
+  ])
+
+  // Forsiden — driver hele agenda-feeden. En feilet delspørring skal aldri
+  // stille gi en tom/ufullstendig forside (Policy: Databasespørringer).
+  if (arrangementerFeil) throw new Error(`Kunne ikke hente arrangementer: ${arrangementerFeil.message}`)
+  if (profilerMedBursdagFeil) throw new Error(`Kunne ikke hente bursdager: ${profilerMedBursdagFeil.message}`)
+  if (ansvarFeil) throw new Error(`Kunne ikke hente arrangoransvar: ${ansvarFeil.message}`)
+  if (arrKommentarerFeil) throw new Error(`Kunne ikke hente arrangement-kommentarer: ${arrKommentarerFeil.message}`)
+  if (pollKommentarerFeil) throw new Error(`Kunne ikke hente poll-kommentarer: ${pollKommentarerFeil.message}`)
+  if (meldingerRaadFeil) throw new Error(`Kunne ikke hente meldinger: ${meldingerRaadFeil.message}`)
+  if (meldingReaksjonerFeil) throw new Error(`Kunne ikke hente meldingsreaksjoner: ${meldingReaksjonerFeil.message}`)
+  if (meldingKommentarerFeil) throw new Error(`Kunne ikke hente meldingskommentarer: ${meldingKommentarerFeil.message}`)
+  if (albumMedArrangementFeil) throw new Error(`Kunne ikke hente album: ${albumMedArrangementFeil.message}`)
+  if (aktiveProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${aktiveProfilerFeil.message}`)
+
+  // Aggreger poll-stemmer: antall unike profiler + om innlogget bruker er
+  // blant dem, + hvilke valg jeg har stemt på. Valgene sorteres etter
+  // rekkefølge så inline-knappene rendres i opprettet rekkefølge.
+  const poller: PollRaad[] = (pollerRaad ?? []).map(p => {
+    const stemmer = (p.poll_stemme ?? []) as { profil_id: string; valg_id: string }[]
+    const unike = new Set(stemmer.map(s => s.profil_id))
+    const mine = stemmer.filter(s => s.profil_id === brukerId).map(s => s.valg_id)
+    const valg = [...(p.poll_valg ?? [])]
+      .sort((a, b) => a.rekkefoelge - b.rekkefoelge)
+      .map(v => ({ id: v.id, tekst: v.tekst }))
+
+    const erKaaring = p.kaaring_mal_id !== null
+    const stemmerPerValg: Record<string, number> = {}
+    let antallStemmer = 0
+
+    if (erKaaring) {
+      // Aggregat fra RPC — totalen er sannheten siden RLS skjuler andres
+      // stemmer. harStemt utledes fortsatt fra poll_stemme: egne stemmer
+      // er synlige for kalleren.
+      const agg = kaaringAggregater.get(p.id) ?? new Map<string, number>()
+      for (const [valgId, antall] of agg) {
+        stemmerPerValg[valgId] = antall
+        antallStemmer += antall
+      }
+    } else {
+      for (const s of stemmer) {
+        stemmerPerValg[s.valg_id] = (stemmerPerValg[s.valg_id] ?? 0) + 1
+      }
+      antallStemmer = unike.size
+    }
+
+    return {
+      id: p.id,
+      spoersmaal: p.spoersmaal,
+      svarfrist: p.svarfrist,
+      flervalg: p.flervalg,
+      opprettet_av: p.opprettet_av,
+      antallStemmer,
+      harStemt: unike.has(brukerId),
+      valg,
+      mineStemmer: mine,
+      stemmerPerValg,
+    }
+  })
+
+  // Grupper kommentarer per arrangement/poll-id, ta top 3. Siden queryen
+  // allerede er sortert synkende på opprettet, tar vi bare de første 3 per
+  // gruppe — men reverserer rekkefølgen så eldste vises øverst (leser
+  // kommentarene i kronologisk rekkefølge).
+  type RawArrKomm = {
+    id: string
+    innhold: string | null
+    bilde_url: string | null
+    opprettet: string
+    arrangement_id: string
+    profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
+  }
+  function grupperKommentarer<T extends { id: string; innhold: string | null; bilde_url: string | null; opprettet: string; profiles: RawArrKomm['profiles'] }>(
+    rader: T[],
+    nokkel: (r: T) => string,
+  ): Map<string, KommentarKortData[]> {
+    const map = new Map<string, KommentarKortData[]>()
+    for (const r of rader) {
+      if (!r.profiles) continue
+      const k = nokkel(r)
+      const list = map.get(k) ?? []
+      if (list.length >= 3) continue
+      list.push({
+        id: r.id,
+        innhold: r.innhold,
+        bilde_url: r.bilde_url,
+        opprettet: r.opprettet,
+        avsender: {
+          navn: r.profiles.navn ?? 'Ukjent',
+          bilde_url: r.profiles.bilde_url,
+          rolle: r.profiles.rolle,
+        },
+      })
+      map.set(k, list)
+    }
+    // Reverser så eldste vises øverst (kronologisk lesing)
+    for (const [k, v] of map) map.set(k, v.reverse())
+    return map
+  }
+
+  const kommentarerPerArr = grupperKommentarer(
+    arrKommentarer ?? [],
+    r => r.arrangement_id,
+  )
+  const kommentarerPerPoll = grupperKommentarer(
+    pollKommentarer ?? [],
+    r => r.poll_id,
+  )
+
+  // === Meldinger: bygg MeldingRaad med reaksjoner og kommentar-antall =
+  const kommentarerPerMelding = grupperKommentarer(
+    meldingKommentarer ?? [],
+    r => r.melding_id,
+  )
+
+  // Totalt antall kommentarer per arrangement — hentet fra arrangement_chat(count)-
+  // embed på arrangementer-spørringen (#180). Samme mønster som melding_chat(count).
+  // PostgREST returnerer [{ count: N }] per rad; vi leser [0]?.count ?? 0.
+  const totaltPerArr = new Map<string, number>()
+  for (const a of arrangementer ?? []) {
+    totaltPerArr.set(a.id, a.arrangement_chat?.[0]?.count ?? 0)
+  }
+
+  // Totalt antall kommentarer per poll — hentet fra poll_chat(count)-embed
+  // på poll-spørringen (#180). Samme mønster som over.
+  const totaltPerPoll = new Map<string, number>()
+  for (const p of pollerRaad ?? []) {
+    totaltPerPoll.set(p.id, p.poll_chat?.[0]?.count ?? 0)
+  }
+
+  type RawAlbumEmbed = {
+    id: string
+    tittel: string
+    cover: { bilde_url: string; thumb_url: string | null } | { bilde_url: string; thumb_url: string | null }[] | null
+    antall: { count: number }[] | null
+  } | null
+
+  type RawMelding = {
+    id: string
+    innhold: string | null
+    opprettet: string
+    sist_aktivitet: string
+    fra_facebook: boolean | null
+    profil_id: string
+    arkivert_tidspunkt: string | null
+    aktuell_dato: string | null
+    profiles: { navn: string | null; bilde_url: string | null; rolle: string | null } | null
+    melding_bilder: { bilde_url: string; rekkefoelge: number }[] | null
+    melding_chat: { count: number }[] | null
+    album: RawAlbumEmbed | RawAlbumEmbed[]
+  }
+
+  // antallKommentarer per melding kommer nå fra count-aggregatet på selve
+  // meldinger-spørringen (melding_chat(count)), ikke fra meldingKommentarer
+  // (limit 60). Det fixer regresjonen som oppsto da vi fjernet limit(60) på
+  // meldinger: før hadde vi praktisk talt total dekning fordi begge limit'ene
+  // var 60, men med 75 historiske FB-meldinger holdt det ikke. count-aggregat
+  // er pålitelig uansett vindu.
+  const antallKommPerMelding = new Map<string, number>()
+  for (const m of meldingerRaad ?? []) {
+    antallKommPerMelding.set(m.id, m.melding_chat?.[0]?.count ?? 0)
+  }
+
+  // Aggreger reaksjoner per melding+emoji
+  type RawReaksjon = { melding_id: string; profil_id: string; emoji: string }
+  const reaksjonerPerMelding = new Map<string, Map<string, string[]>>()
+  for (const r of (meldingReaksjoner ?? []) as RawReaksjon[]) {
+    const perEmoji = reaksjonerPerMelding.get(r.melding_id) ?? new Map<string, string[]>()
+    const profilIder = perEmoji.get(r.emoji) ?? []
+    profilIder.push(r.profil_id)
+    perEmoji.set(r.emoji, profilIder)
+    reaksjonerPerMelding.set(r.melding_id, perEmoji)
+  }
+
+  // Reaksjoner på inline kommentarer (arrangement_chat/poll_chat/melding_chat).
+  // Slår opp på melding_id-listen fra kommentarene vi allerede har hentet — treffer
+  // chat_reaksjoner_melding_idx direkte i stedet for å scanne på opprettet. se #359.
+  // Denne spørringen er bevisst sekvensiell ETTER kommentar-grupperingen — den
+  // avhenger av kommentar-id-ene og kan ikke inn i Promise.all over.
+  const kommentarIderRaw: string[] = []
+  for (const liste of kommentarerPerArr.values()) for (const k of liste) kommentarIderRaw.push(k.id)
+  for (const liste of kommentarerPerPoll.values()) for (const k of liste) kommentarIderRaw.push(k.id)
+  for (const liste of kommentarerPerMelding.values()) for (const k of liste) kommentarIderRaw.push(k.id)
+  // Dedup før .in()-kallet — samme mønster som mottakerlisten i lib/varsler.ts.
+  const kommentarIder = Array.from(new Set(kommentarIderRaw))
+
+  const { data: chatReaksjoner, error: chatReaksjonerFeil } = kommentarIder.length > 0
+    ? await supabase
+        .from('chat_reaksjoner')
+        .select('melding_id, profil_id, emoji')
+        .in('melding_id', kommentarIder)
+    : { data: [] as RawChatReaksjon[], error: null }
+  if (chatReaksjonerFeil) throw new Error(`Kunne ikke hente reaksjoner: ${chatReaksjonerFeil.message}`)
+
+  // Aggreger reaksjoner per kommentar-id (arrangement_chat/poll_chat/melding_chat).
+  // Samme logikk som reaksjonerPerMelding over, men for chat_reaksjoner-tabellen. se #359.
+  const reaksjonerPerKommentar = new Map<string, Map<string, string[]>>()
+  for (const r of (chatReaksjoner ?? []) as RawChatReaksjon[]) {
+    const perEmoji = reaksjonerPerKommentar.get(r.melding_id) ?? new Map<string, string[]>()
+    const profilIder = perEmoji.get(r.emoji) ?? []
+    profilIder.push(r.profil_id)
+    perEmoji.set(r.emoji, profilIder)
+    reaksjonerPerKommentar.set(r.melding_id, perEmoji)
+  }
+
+  /** Konverter reaksjon-map til ReaksjonGruppe[]-format for én kommentar-id. */
+  function reaksjonGrupperFor(meldingId: string) {
+    const perEmoji = reaksjonerPerKommentar.get(meldingId)
+    if (!perEmoji) return []
+    return [...perEmoji.entries()].map(([emoji, profilIder]) => ({ emoji, profilIder }))
+  }
+
+  // Berik alle kommentar-maps med reaksjoner fra chat_reaksjoner-tabellen.
+  // Gjøres etter at reaksjonerPerKommentar er bygd og reaksjonGrupperFor er definert.
+  // Muterer KommentarKortData-objektene in-place (trygt — de er lokalt opprettet). se #359.
+  for (const kommentarer of [...kommentarerPerArr.values(), ...kommentarerPerPoll.values(), ...kommentarerPerMelding.values()]) {
+    for (const k of kommentarer) {
+      k.reaksjoner = reaksjonGrupperFor(k.id)
+    }
+  }
+
+  const meldingerForAgenda: MeldingRaad[] = (meldingerRaad ?? []).map((m: RawMelding) => {
+    const reaksjonMap = reaksjonerPerMelding.get(m.id) ?? new Map()
+    const reaksjoner = [...reaksjonMap.entries()].map(([emoji, profilIder]) => ({
+      emoji,
+      profilIder,
+    }))
+    // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
+    const bilder = [...(m.melding_bilder ?? [])]
+      .sort((a, b) => a.rekkefoelge - b.rekkefoelge)
+      .map(b => b.bilde_url)
+    return {
+      id: m.id,
+      innhold: m.innhold,
+      opprettet: m.opprettet,
+      sist_aktivitet: m.sist_aktivitet,
+      bilder,
+      fraFacebook: m.fra_facebook === true,
+      forfatter: {
+        id: m.profil_id,
+        navn: m.profiles?.navn ?? 'Ukjent',
+        bilde_url: m.profiles?.bilde_url ?? null,
+        rolle: m.profiles?.rolle ?? null,
+      },
+      reaksjoner,
+      antallKommentarer: antallKommPerMelding.get(m.id) ?? 0,
+      albumKort: tilAlbumKort(m.album),
+      arkivert_tidspunkt: m.arkivert_tidspunkt,
+      aktuell_dato: m.aktuell_dato,
+    }
+  })
+
+  // Album-info per arrangement: finnes album med ≥1 bilde, og er det satt
+  // cover? cover kommer som ett embedded objekt via album_cover_fk; antall
+  // som ett aggregat-objekt ([{count}]).
+  type AlbumIndikator = {
+    arrangement_id: string | null
+    cover: { bilde_url: string } | { bilde_url: string }[] | null
+    antall: { count: number }[] | null
+  }
+  const arrangementMedAlbum = new Set<string>()
+  const coverPerArrangement = new Map<string, string>()
+  for (const a of (albumMedArrangement ?? []) as AlbumIndikator[]) {
+    if (!a.arrangement_id) continue
+    const antall = a.antall?.[0]?.count ?? 0
+    if (antall === 0) continue
+    arrangementMedAlbum.add(a.arrangement_id)
+    const cover = Array.isArray(a.cover) ? a.cover[0] : a.cover
+    if (cover?.bilde_url) coverPerArrangement.set(a.arrangement_id, cover.bilde_url)
+  }
+
+  const arrangementerBerikt = (arrangementer ?? []).map(a => ({
+    ...a,
+    harAlbum: arrangementMedAlbum.has(a.id),
+    // Fall tilbake til album-cover hvis arr ikke har eget bilde
+    bilde_url: a.bilde_url ?? coverPerArrangement.get(a.id) ?? null,
+  }))
+
+  return {
+    arrangementerBerikt,
+    ansvar: ansvar ?? [],
+    profilerMedBursdag: profilerMedBursdag ?? [],
+    poller,
+    meldingerForAgenda,
+    kommentarerPerArr,
+    kommentarerPerPoll,
+    kommentarerPerMelding,
+    totaltPerArr,
+    totaltPerPoll,
+    chatProfiler: aktiveProfiler ?? [],
+  }
+}

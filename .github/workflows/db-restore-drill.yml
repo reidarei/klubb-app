@@ -1,0 +1,101 @@
+# Restore-drill: verifiserer at siste backup fra db-backup.yml faktisk
+# kan gjenopprettes. «Utestet backup = ingen backup» — kjør denne årlig
+# (og etter større skjema-endringer) via Run workflow-knappen.
+#
+# Drillen henter nyeste dump-artifact, gjenoppretter den i en fersk
+# postgres:17-container og verifiserer at kjernedataene er der. Loggen
+# skriver ut målt gjenopprettingstid (RTO). Se docs/disaster-recovery.md
+# for hvordan samme dump gjenopprettes til en ekte Supabase-instans.
+
+name: Database restore-drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read # for å hente artifact fra en annen workflow-kjøring
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Installer PostgreSQL 17-klient
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Hent nyeste backup-artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name | startswith("db-backup-")) | select(.expired == false)] | sort_by(.created_at) | last | .id')
+          if [ -z "$id" ] || [ "$id" = "null" ]; then
+            echo "::error::Fant ingen db-backup-artifact. Kjør Database-backup-workflowen først."
+            exit 1
+          fi
+          gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > dump.zip
+          unzip -o dump.zip
+          ls -lh db-backup-*.dump
+
+      - name: Gjenopprett dumpen
+        run: |
+          start=$(date +%s)
+          export PGPASSWORD=drill
+          BIN=/usr/lib/postgresql/17/bin
+          # --no-owner/--no-privileges: dumpen refererer Supabase-roller
+          # (supabase_auth_admin osv.) som ikke finnes i vanilla Postgres.
+          # pg_restore kan gi ignorerbare feil på slikt (event-triggere,
+          # grants) — drill-kriteriet er verifiseringssteget under, derfor
+          # teller vi feilene i stedet for å stoppe på dem.
+          $BIN/pg_restore \
+            --host localhost --username postgres --dbname postgres \
+            --no-owner --no-privileges \
+            db-backup-*.dump 2> restore-feil.log || true
+          slutt=$(date +%s)
+          antall_feil=$(grep -c "^pg_restore: error:" restore-feil.log || true)
+          echo "pg_restore ga $antall_feil feilmeldinger (forventet: noen få rolle/grant-relaterte):"
+          head -20 restore-feil.log
+          echo "RTO (gjenopprettingstid): $((slutt - start)) sekunder"
+
+      - name: Verifiser gjenopprettede data
+        run: |
+          export PGPASSWORD=drill
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          declare
+            profiler int; arrangementer int; brukere int; chat int; siste_kaaring int;
+          begin
+            select count(*) into profiler from public.profiles;
+            select count(*) into arrangementer from public.arrangementer;
+            select count(*) into brukere from auth.users;
+            select count(*) into chat from public.klubb_chat;
+            -- kaaring_vinnere kan være tom — kun til info
+            select max(aar) into siste_kaaring from public.kaaring_vinnere;
+            raise notice 'profiles: %, arrangementer: %, auth.users: %, klubb_chat: %, siste kåring: %',
+              profiler, arrangementer, brukere, chat, siste_kaaring;
+            -- Terskler satt lavt for template — juster opp til din klubbs
+            -- faktiske datamengde for å fange ufullstendige dumps.
+            if profiler < 1 then raise exception 'Ingen profiler — dumpen ser tom ut'; end if;
+            if brukere < 1 then raise exception 'Ingen auth-brukere — innlogging ville vært tapt'; end if;
+          end $$;
+          SQL
+          echo "✔ Drill fullført — backupen kan gjenopprettes."

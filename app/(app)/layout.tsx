@@ -1,0 +1,98 @@
+import { Suspense } from 'react'
+import TopHeader from '@/components/TopHeader'
+import PageTransition from '@/components/PageTransition'
+import ServiceWorkerRegistrering from '@/components/ServiceWorkerRegistrering'
+import AktivitetTeller from '@/components/AktivitetTeller'
+import DraNedForOppdater from '@/components/DraNedForOppdater'
+import DeployInfo from '@/components/DeployInfo'
+import InstallVeiledning from '@/components/InstallVeiledning'
+import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
+import { redirect } from 'next/navigation'
+import { createServerClient } from '@/lib/supabase/server'
+import { harUlestChat, harUlestVarsler } from '@/lib/ulest'
+import { hentAppFlagg, FOND_FANE, CHAT_FANE } from '@/lib/app-innstillinger'
+import { hentReisemodus, type ReisemodusStatus } from '@/lib/reisemodus'
+
+async function HeaderMedProfil({ reisemodus }: { reisemodus: ReisemodusStatus }) {
+  // getProfil() kaster ved DB-feil (fail-closed, se lib/auth-cache.ts) — riktig
+  // for ensureAdmin()/ensureLoeserTiebreak(), som er brukerinitierte handlinger
+  // der en feilmelding er det riktige utfallet. Her er den gal: headeren
+  // rendres på HVER side i (app), så en forbigående feil ga feilskjerm overalt
+  // der brukeren før så en normal side med navnløs avatar. Sikkerhetsgevinsten
+  // er null — headeren bruker profil.rolle kun til gul glød, og
+  // kanAdministrere(undefined) er allerede fail-closed. Degraderer derfor som
+  // naboene under.
+  const profil = await getProfil().catch(() => null)
+  const user = await getInnloggetBruker() // cachet via React cache()
+  // Ulest-prikkene og funksjonsflaggene er nice-to-have. Vi sluker feil så en
+  // forbigående DB-feil aldri kræsjer headeren — verste utfall er at prikken
+  // ikke vises, eller at Fond-taben skjules for et øyeblikk for vanlige medlemmer.
+  // Chat faller motsatt vei (true): en feil skal aldri gjemme en fane som er på.
+  // Alle spørringene kjøres parallelt for å unngå serielle DB-runder.
+  const supabase = await createServerClient()
+  const [ulestChat, ulestVarsler, visFond, visChat] = user
+    ? await Promise.all([
+        harUlestChat(supabase, user.id, profil?.chat_sist_sett ?? null).catch(() => false),
+        harUlestVarsler(supabase, user.id).catch(() => false),
+        hentAppFlagg(supabase, FOND_FANE).catch(() => false),
+        hentAppFlagg(supabase, CHAT_FANE, true).catch(() => true),
+      ])
+    : [false, false, false, true]
+
+  return (
+    <TopHeader
+      brukerNavn={profil?.navn}
+      bildeUrl={profil?.bilde_url ?? null}
+      rolle={profil?.rolle ?? null}
+      ulestChat={ulestChat}
+      ulestVarsler={ulestVarsler}
+      visFond={visFond}
+      visChat={visChat}
+      reisemodusTilgjengelig={reisemodus.tilgjengelig}
+      reisemodusPaa={reisemodus.paa}
+    />
+  )
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Resolves FØR Suspense-grensen, parallelt med getInnloggetBruker() — ikke
+  // inne i HeaderMedProfil-fallbacken. Uten det tegnes full header over
+  // fullskjermkartet ved hver kaldstart mens HeaderMedProfil fortsatt laster
+  // (nøyaktig #707-symptomet), fordi Suspense-fallbacken da ikke kunne vite
+  // om reisemodus var på (#723).
+  const [user, reisemodus] = await Promise.all([
+    getInnloggetBruker(),
+    hentReisemodus(),
+  ])
+  if (!user) redirect('/login')
+
+  return (
+    <div
+      className="flex flex-col min-h-screen relative"
+      style={{
+        maxWidth: 480,
+        margin: '0 auto',
+        boxShadow: '0 0 0 0.5px var(--border-subtle)',
+      }}
+    >
+      <ServiceWorkerRegistrering />
+      <AktivitetTeller />
+      <DraNedForOppdater />
+      <InstallVeiledning />
+      <Suspense
+        fallback={
+          <TopHeader
+            reisemodusTilgjengelig={reisemodus.tilgjengelig}
+            reisemodusPaa={reisemodus.paa}
+          />
+        }
+      >
+        <HeaderMedProfil reisemodus={reisemodus} />
+      </Suspense>
+      <main className="flex-1 relative z-10">
+        <PageTransition>{children}</PageTransition>
+        <DeployInfo />
+      </main>
+    </div>
+  )
+}

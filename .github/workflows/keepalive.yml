@@ -1,0 +1,16 @@
+name: Supabase keepalive
+
+on:
+  # schedule:
+  #   # Kjører hver fredag kl. 12:00 UTC — holder free tier aktiv.
+  #   # Aktiveres først når secreten APP_URL er satt (docs/oppsett.md §9) —
+  #   # uten den feiler jobben hver fredag og spammer eieren med feil-eposter.
+  #   - cron: '0 12 * * 5'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        run: curl -s -o /dev/null "${{ secrets.APP_URL }}"

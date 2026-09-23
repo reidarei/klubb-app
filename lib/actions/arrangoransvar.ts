@@ -1,0 +1,267 @@
+'use server'
+
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
+import { sendVarsel, formaterHilsenMelding } from '@/lib/varsler'
+import { ensureAdmin, ensureInnlogget } from '@/lib/auth'
+import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
+import { BASE_URL } from '@/lib/config'
+
+// Slå opp purredato fra arrangementmaler og sett riktig år. Mal-raden
+// har år=2000 som sentinel (kun mnd+dag teller), så vi bytter ut til aar.
+async function hentPurredato(arrangementNavn: string, aar: number): Promise<string | null> {
+  const admin = createAdminClient()
+  const { data: mal, error } = await admin
+    .from('arrangementmaler')
+    .select('purredato')
+    .eq('navn', arrangementNavn)
+    .maybeSingle()
+  // Feeder direkte inn i arrangoransvar-innsettingen i leggTilAnsvarlig — en
+  // svelget feil her ville stille lagret purredato=null i stedet for riktig
+  // dato, uten at noen fikk vite at oppslaget faktisk feilet.
+  if (error) throw new Error(`Kunne ikke hente purredato: ${error.message}`)
+  if (!mal?.purredato) return null
+  return `${aar}-${mal.purredato.slice(5)}`
+}
+
+// Idempotent batch-opprettelse av arrangoransvar-rader for ett år.
+// Oppretter én null-rad per mal som ikke allerede har en rad i (aar, navn).
+// Ansvarlig_id=null betyr "tom slot" — admin tildeler senere via
+// leggTilAnsvarlig (som UPDATE-r null-raden i stedet for å lage en ny).
+export async function leggTilArrangoransvarForAar(aar: number) {
+  const { supabase } = await ensureAdmin()
+
+  const [
+    { data: maler, error: malerFeil },
+    { data: eksisterende, error: eksisterendeFeil },
+  ] = await Promise.all([
+    supabase.from('arrangementmaler').select('navn, purredato'),
+    supabase
+      .from('arrangoransvar')
+      .select('arrangement_navn')
+      .eq('aar', aar),
+  ])
+  // Begge må lykkes: feiler «eksisterende»-oppslaget stille, tror koden at
+  // ingen maler er oppfylt ennå og forsøker å sette inn duplikater av rader
+  // som faktisk finnes fra før.
+  if (malerFeil) throw new Error(`Kunne ikke hente arrangementmaler: ${malerFeil.message}`)
+  if (eksisterendeFeil) throw new Error(`Kunne ikke hente eksisterende arrangoransvar: ${eksisterendeFeil.message}`)
+
+  const finnesNavn = new Set((eksisterende ?? []).map(r => r.arrangement_navn))
+  const nyeRader = (maler ?? [])
+    .filter(m => !finnesNavn.has(m.navn))
+    .map(m => ({
+      aar,
+      arrangement_navn: m.navn,
+      ansvarlig_id: null,
+      purredato: m.purredato ? `${aar}-${m.purredato.slice(5)}` : null,
+      arrangement_id: null,
+    }))
+
+  if (nyeRader.length === 0) {
+    revalidatePath('/arrangoransvar')
+    return { opprettet: 0 }
+  }
+
+  const { error } = await supabase.from('arrangoransvar').insert(nyeRader)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/arrangoransvar')
+  revalidatePath('/')
+  return { opprettet: nyeRader.length }
+}
+
+export async function leggTilAnsvarlig(data: {
+  aar: number
+  arrangement_navn: string
+  ansvarlig_id: string
+}) {
+  const { supabase } = await ensureAdmin()
+
+  // Hvis det finnes en tom slot for (aar, navn) — UPDATE den i stedet for
+  // å lage en ny rad. Holder antall rader stabilt og er den naturlige
+  // tilstandsovergangen "ledig → tildelt". En svelget feil her ville falt
+  // gjennom til else-grenen under og laget en NY rad i stedet for å fylle
+  // den tomme sloten — dupliserer raden og bryter «én rad per (aar, navn)
+  // som er ledig»-invarianten.
+  const { data: tomSlot, error: tomSlotFeil } = await supabase
+    .from('arrangoransvar')
+    .select('id, arrangement_id')
+    .eq('aar', data.aar)
+    .eq('arrangement_navn', data.arrangement_navn)
+    .is('ansvarlig_id', null)
+    .limit(1)
+    .maybeSingle()
+  if (tomSlotFeil) throw new Error(`Kunne ikke sjekke ledig slot: ${tomSlotFeil.message}`)
+
+  if (tomSlot) {
+    const { error } = await supabase
+      .from('arrangoransvar')
+      .update({ ansvarlig_id: data.ansvarlig_id })
+      .eq('id', tomSlot.id)
+    if (error) throw new Error(error.message)
+    revalidatePath('/arrangoransvar')
+    revalidatePath('/')
+    return
+  }
+
+  // Ingen tom slot → ny ansvarlig på toppen av eksisterende. Arv
+  // arrangement_id fra søsken-rad slik at den nye ansvarlige også regnes
+  // som oppfylt hvis arrangementet allerede er opprettet.
+  const purredato = await hentPurredato(data.arrangement_navn, data.aar)
+  // Arv arrangement_id fra søsken-rad — en svelget feil her ville stille
+  // latt den nye ansvarlige mangle koblingen selv om arrangementet allerede
+  // er opprettet, og han ville da fremstå som "ikke oppfylt" på ubestemt tid
+  // (ingenting kjører retroaktivt for å rette det opp igjen, se koble()).
+  const { data: sosken, error: soskenFeil } = await supabase
+    .from('arrangoransvar')
+    .select('arrangement_id')
+    .eq('aar', data.aar)
+    .eq('arrangement_navn', data.arrangement_navn)
+    .not('arrangement_id', 'is', null)
+    .limit(1)
+    .maybeSingle()
+  if (soskenFeil) throw new Error(`Kunne ikke sjekke søsken-rader: ${soskenFeil.message}`)
+
+  const { error } = await supabase
+    .from('arrangoransvar')
+    .insert({
+      aar: data.aar,
+      arrangement_navn: data.arrangement_navn,
+      ansvarlig_id: data.ansvarlig_id,
+      purredato,
+      arrangement_id: sosken?.arrangement_id ?? null,
+    })
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/arrangoransvar')
+  revalidatePath('/')
+}
+
+export async function fjernAnsvarlig(ansvarId: string) {
+  const { supabase } = await ensureAdmin()
+
+  // Hvis dette er siste rad for (aar, navn) — behold raden som tom slot
+  // (UPDATE ansvarlig_id=null) i stedet for å slette. Ellers ville mal-raden
+  // forsvinne fra UI-en bare fordi siste ansvarlig ble tatt vekk.
+  // Feil hentes eksplisitt: uten den ville en DB-feil sett identisk ut som
+  // «raden finnes ikke» og latt funksjonen returnere stille — brukeren ville
+  // trodd fjerningen var gjennomført.
+  const { data: rad, error: radFeil } = await supabase
+    .from('arrangoransvar')
+    .select('aar, arrangement_navn')
+    .eq('id', ansvarId)
+    .maybeSingle()
+  if (radFeil) throw new Error(`Kunne ikke hente ansvar-raden: ${radFeil.message}`)
+
+  if (!rad) return
+
+  const { count } = await supabase
+    .from('arrangoransvar')
+    .select('id', { count: 'exact', head: true })
+    .eq('aar', rad.aar)
+    .eq('arrangement_navn', rad.arrangement_navn)
+
+  if ((count ?? 0) <= 1) {
+    const { error } = await supabase
+      .from('arrangoransvar')
+      .update({ ansvarlig_id: null })
+      .eq('id', ansvarId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await supabase
+      .from('arrangoransvar')
+      .delete()
+      .eq('id', ansvarId)
+    if (error) throw new Error(error.message)
+  }
+
+  revalidatePath('/arrangoransvar')
+  revalidatePath('/')
+}
+
+// Purre ansvarlig — kalles av et vanlig medlem. Sender varsel via sendVarsel
+// (som respekterer push_aktiv/epost_aktiv). hilsen er valgfri fritekst fra
+// den som purrer; uten hilsen brukes standardteksten. Se #267.
+export async function purreAnsvarlig(ansvarId: string, hilsen?: string) {
+  const { user } = await ensureInnlogget()
+  const admin = createAdminClient()
+
+  // Meldingsbygging og lengde-validering av hilsen ligger i
+  // formaterHilsenMelding lenger nede — vi sender bare rådata inn. (#289)
+  // Feil hentes eksplisitt slik at den ikke feiltolkes som «fant ikke ansvar»
+  // under.
+  const { data: ansvar, error: ansvarFeil } = await admin
+    .from('arrangoransvar')
+    .select('id, aar, arrangement_navn, ansvarlig_id, arrangement_id')
+    .eq('id', ansvarId)
+    .maybeSingle()
+  if (ansvarFeil) throw new Error(`Kunne ikke hente ansvar: ${ansvarFeil.message}`)
+
+  if (!ansvar) throw new Error('Fant ikke ansvar')
+  if (ansvar.arrangement_id) throw new Error('Arrangementet er allerede lagt inn')
+
+  // Hent ALLE søsken-rader med samme (aar, arrangement_navn) som har en
+  // ansvarlig_id — purring på arrangement-nivå treffer alle medansvarlige,
+  // ikke bare den raden man klikket på. Se #268 og Policy: Arrangøransvar-kobling.
+  // arrangement_id is null: purring gir bare mening når arrangementet ikke
+  // er opprettet. Eksplisitt filter beskytter også mot race med koble() som
+  // kan fylle arrangement_id mellom guard-sjekken over og denne spørringen.
+  const { data: soeskenRader, error: soeskenFeil } = await admin
+    .from('arrangoransvar')
+    .select('ansvarlig_id')
+    .eq('aar', ansvar.aar)
+    .eq('arrangement_navn', ansvar.arrangement_navn)
+    .is('arrangement_id', null)
+    .not('ansvarlig_id', 'is', null)
+
+  // Skill DB-feil fra tom mottakerliste — ellers ville en spørringsfeil
+  // bli feiltolket som «ingen ansvarlig å purre på» og villede brukeren.
+  if (soeskenFeil) throw new Error(`Kunne ikke hente medansvarlige: ${soeskenFeil.message}`)
+
+  // Defensiv dedup: sendVarsel dedup'er også internt, men vi gjør det
+  // eksplisitt her slik at koden er selvforklarende på kall-stedet.
+  // Typesikkert filter på null framfor `as string` — ansvarlig_id er nullable
+  // i skjemaet selv om .not('is', null) i praksis luker dem ut.
+  const mottakere = [
+    ...new Set(
+      (soeskenRader ?? [])
+        .map(r => r.ansvarlig_id)
+        .filter((id): id is string => !!id)
+    ),
+  ]
+  if (mottakere.length === 0) throw new Error('Ingen ansvarlig å purre på')
+
+  // Ingen skriving er gjort ennå her (varselet sendes lenger ned) — i
+  // motsetning til pass.ts/album.ts-oppslagene er dette ikke berikelse etter
+  // en committet mutasjon, så vi kaster på feil i stedet for stille fallback.
+  // maybeSingle så 'En gutt'-fallbacken under fortsatt er nåbar ved manglende
+  // profilrad — det er ikke en feil, bare mangel på visningsnavn.
+  const { data: purrer, error: purrerFeil } = await admin
+    .from('profiles')
+    .select('navn, visningsnavn')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (purrerFeil) throw new Error(`Kunne ikke hente ditt navn: ${purrerFeil.message}`)
+
+  const fraNavn = purrer?.visningsnavn || purrer?.navn || 'En gutt'
+
+  const melding = formaterHilsenMelding({
+    fraNavn,
+    hilsen,
+    verb: 'purrer deg på',
+    basis: `${ansvar.arrangement_navn} ${ansvar.aar}`,
+    fallback: `${fraNavn} purrer deg på ${ansvar.arrangement_navn} ${ansvar.aar}. Få arrangementet inn i kalenderen.`,
+    maksLengde: PURRING_MAKS_LENGDE,
+  })
+
+  await sendVarsel({
+    mottakere,
+    tittel: `Purring: ${ansvar.arrangement_navn}`,
+    melding,
+    url: `${BASE_URL}/arrangoransvar`,
+    knappTekst: 'Åpne arrangøransvar',
+    type: 'purring_ansvar',
+    tillatDuplikat: true,
+  })
+}

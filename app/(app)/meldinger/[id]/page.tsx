@@ -1,0 +1,292 @@
+import { notFound } from 'next/navigation'
+import Image from 'next/image'
+import Link from 'next/link'
+import { createServerClient } from '@/lib/supabase/server'
+import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
+import { kanAdministrere } from '@/lib/roller'
+import Avatar from '@/components/ui/Avatar'
+import Icon from '@/components/ui/Icon'
+import Chat from '@/components/chat/Chat'
+import MeldingReaksjoner from '@/components/agenda/MeldingReaksjoner'
+import MeldingRediger from './MeldingRediger'
+import RedigerModus, { SkjulUnderRedigering } from './RedigerModus'
+import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
+import { bildeSrc } from '@/lib/bilde-utils'
+import { AI_PAA } from '@/lib/config'
+import { formatDistanceToNowStrict } from 'date-fns'
+import { nb } from 'date-fns/locale'
+
+type CoverObj = { bilde_url: string; thumb_url: string | null }
+type RawAlbumEmbed = {
+  id: string
+  tittel: string
+  cover: CoverObj | CoverObj[] | null
+  antall: { count: number }[] | null
+} | null
+
+type MeldingRad = {
+  id: string
+  innhold: string | null
+  opprettet: string
+  aktuell_dato: string | null
+  fra_facebook: boolean | null
+  profil_id: string
+  profiles: {
+    navn: string | null
+    bilde_url: string | null
+    rolle: string | null
+  } | null
+  // Sorteres på rekkefoelge her — flat liste av bilder
+  melding_bilder: { id: string; bilde_url: string; rekkefoelge: number }[] | null
+  album: RawAlbumEmbed | RawAlbumEmbed[]
+}
+
+type ReaksjonRad = {
+  emoji: string
+  profil_id: string
+}
+
+export default async function MeldingDetalj({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const [supabase, user, profil] = await Promise.all([
+    createServerClient(),
+    getInnloggetBruker(),
+    getProfil(),
+  ])
+
+  const [
+    { data: melding, error: meldingFeil },
+    { data: reaksjoner, error: reaksjonerFeil },
+    { data: chatMeldinger, error: chatMeldingerFeil },
+    { data: chatProfiler, error: chatProfilerFeil },
+  ] = await Promise.all([
+    supabase
+      .from('meldinger')
+      .select(
+        `id, innhold, opprettet, aktuell_dato, fra_facebook, profil_id,
+         profiles!meldinger_profil_id_fkey(navn, bilde_url, rolle),
+         melding_bilder(id, bilde_url, rekkefoelge),
+         ${ALBUM_KORT_SELECT}`,
+      )
+      .eq('id', id)
+      .maybeSingle<MeldingRad>(),
+    supabase
+      .from('melding_reaksjon')
+      .select('emoji, profil_id')
+      .eq('melding_id', id),
+    supabase
+      .from('melding_chat')
+      .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
+      .eq('melding_id', id)
+      .order('opprettet', { ascending: false })
+      .limit(30),
+    supabase
+      .from('profiles')
+      .select('id, navn, bilde_url, rolle')
+      .eq('aktiv', true),
+  ])
+
+  // Detaljside — .maybeSingle() over gir data=null/error=null på 0 rader;
+  // notFound() under eier det tilfellet alene. En reell feil på noen av de
+  // fire skal vises som feil, ikke som et tomt innlegg/tom chat.
+  if (meldingFeil) throw new Error(`Kunne ikke hente innlegg: ${meldingFeil.message}`)
+  if (reaksjonerFeil) throw new Error(`Kunne ikke hente reaksjoner: ${reaksjonerFeil.message}`)
+  if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
+  if (chatProfilerFeil) throw new Error(`Kunne ikke hente profiler: ${chatProfilerFeil.message}`)
+  if (!melding) notFound()
+
+  const erAdmin = kanAdministrere(profil?.rolle)
+  // FB-importerte meldinger er fryst i RLS (mig 081 speiler 067 fra klubb_chat).
+  // Skjul slette-knappen så brukeren ikke møter en kryptisk RLS-feil ved klikk.
+  // Redigering (tekst, slett bilde, slett innlegg): forfatter eller admin, og
+  // ikke FB-importert (RLS fryser FB-rader — mig. 081).
+  const kanRedigere = (melding.profil_id === user!.id || erAdmin) && !melding.fra_facebook
+  // Legg til bilde er strengere: kun forfatteren selv (RLS insert-policy på
+  // melding_bilder, mig. 081 — admin har ikke insert på andres innlegg), og
+  // ikke på album-koblede innlegg (de bruker albumets bilder).
+  const kanLeggeTilBilder = melding.profil_id === user!.id && !melding.fra_facebook
+
+  // Aggreger reaksjoner per emoji
+  const grupper = new Map<string, string[]>()
+  for (const r of (reaksjoner ?? []) as ReaksjonRad[]) {
+    const profilIder = grupper.get(r.emoji) ?? []
+    profilIder.push(r.profil_id)
+    grupper.set(r.emoji, profilIder)
+  }
+  const reaksjonGrupper = [...grupper.entries()].map(([emoji, profilIder]) => ({
+    emoji,
+    profilIder,
+  }))
+
+  // Sorter bilder stigende på rekkefoelge — DB returnerer usortert
+  const bilder = [...(melding.melding_bilder ?? [])].sort(
+    (a, b) => a.rekkefoelge - b.rekkefoelge,
+  )
+
+  // Albumkobling (#214, forenklet i #463): hvis innlegget peker til et
+  // album, viser vi albumets omslagsbilde og en CTA-pille til albumet i
+  // stedet for vanlig bilde-grid. Egne bilder er ikke mulig på
+  // albumkoblede innlegg, så vi trenger ikke å vise begge.
+  const albumKort = tilAlbumKort(melding.album)
+  const albumKortBilde = albumKort ? bildeSrc(albumKort.bildeUrl) : null
+
+  return (
+    <div style={{ padding: '0 20px 20px' }}>
+      {/* RedigerModus holder «redigerer»-flagget slik at kommentarfeltet
+          under kan vike mens innlegget redigeres — chatten hører til samtalen
+          om innlegget, ikke til skjemaet. */}
+      <RedigerModus>
+      <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <Avatar
+            name={melding.profiles?.navn ?? ''}
+            size={42}
+            src={melding.profiles?.bilde_url ?? null}
+            rolle={melding.profiles?.rolle ?? null}
+          />
+          <div>
+            <div
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {melding.profiles?.navn ?? 'Ukjent'}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-tertiary)',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                marginTop: 2,
+              }}
+            >
+              {formatDistanceToNowStrict(new Date(melding.opprettet), {
+                locale: nb,
+                addSuffix: true,
+              })}
+              {melding.fra_facebook && (
+                <span
+                  title="Importert fra Facebook"
+                  style={{
+                    marginLeft: 8,
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 3,
+                    padding: '1px 5px',
+                    fontSize: 9,
+                    opacity: 0.7,
+                  }}
+                >
+                  Facebook
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Albumkort: stort bilde (albumets omslag) + CTA-pille som lenker
+            til albumet. Brukes når innlegget er en lenke til et eksisterende
+            album. */}
+        {albumKort && (
+          <div style={{ marginBottom: 16 }}>
+            {albumKortBilde && (
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  aspectRatio: '4/3',
+                  borderRadius: 'var(--radius-card)',
+                  overflow: 'hidden',
+                  marginBottom: 10,
+                }}
+              >
+                <Image
+                  src={albumKortBilde}
+                  alt=""
+                  fill
+                  sizes="(max-width: 512px) 100vw, 512px"
+                  style={{ objectFit: 'cover' }}
+                  priority
+                />
+              </div>
+            )}
+            <Link
+              href={`/album/${albumKort.albumId}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                background: 'var(--accent-soft)',
+                border: '0.5px solid var(--accent)',
+                borderRadius: 999,
+                color: 'var(--text-primary)',
+                textDecoration: 'none',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
+              <Icon name="image" size={14} color="var(--accent)" strokeWidth={1.8} />
+              <span>
+                Se hele albumet
+                <span style={{ color: 'var(--text-tertiary)' }}>
+                  {' · '}
+                  {albumKort.albumTittel}
+                  {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
+                </span>
+              </span>
+            </Link>
+          </div>
+        )}
+
+        {/* Tekst + egne bilder + redigeringsmodus samlet bak «Rediger».
+            Album-koblede innlegg har tomme `bilder` (utelukker egne bilder), så
+            komponenten viser da bare tekst + Rediger-knapp. */}
+        <MeldingRediger
+          meldingId={melding.id}
+          innhold={melding.innhold ?? ''}
+          aktuellDato={melding.aktuell_dato}
+          aiPaa={AI_PAA}
+          bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
+          erAlbum={!!albumKort}
+          kanRedigere={kanRedigere}
+          kanLeggeTilBilder={kanLeggeTilBilder}
+        />
+
+        <MeldingReaksjoner
+          meldingId={melding.id}
+          brukerId={user!.id}
+          reaksjoner={reaksjonGrupper}
+        />
+      </header>
+
+      <SkjulUnderRedigering>
+        <div id="kommentarer">
+          <Chat
+            scope={{ type: 'melding', meldingId: melding.id }}
+            brukerId={user!.id}
+            initialMeldinger={[...(chatMeldinger ?? [])].reverse()}
+            profiler={chatProfiler ?? []}
+          />
+        </div>
+      </SkjulUnderRedigering>
+      </RedigerModus>
+    </div>
+  )
+}

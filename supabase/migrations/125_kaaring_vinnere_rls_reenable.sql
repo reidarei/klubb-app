@@ -1,0 +1,21 @@
+-- FUNN under #533 (RLS-tester): kaaring_vinnere hadde RLS AV på enhver frisk
+-- instans (test-instansen, klubb-app, og trolig CI-instansen i #534) —
+-- migrasjon 023 gjorde `drop table kaaring_vinnere cascade` og gjenskapte
+-- tabellen, og migrasjon 106 gjenopprettet policyene, men INGEN migrasjon
+-- kjørte `alter table … enable row level security` etterpå. En ny tabell har
+-- RLS av som default; policies uten RLS PÅ er dekorasjon — de håndheves
+-- ikke. `e2e/rls/admin-grense.spec.ts` fanget dette direkte: Petter (vanlig
+-- medlem) fikk sette en kåringvinner uten feil, noe RLS-policyen fra
+-- migrasjon 106 skulle ha blokkert med 42501.
+--
+-- Prod hadde relrowsecurity = true likevel (verifisert direkte mot
+-- Postgres), trolig fra en manuell `alter table … enable row level
+-- security`-kjøring utenfor migrasjonshistorikken en gang i fortiden — altså
+-- ren skjema-drift mellom «det migrasjonene faktisk reproduserer» og «det
+-- prod faktisk kjører med». Denne migrasjonen lukker driften: no-op på prod
+-- (allerede på), fiks på enhver instans som er bygget fra migrasjonene alene
+-- (test-instansen etter neste `db reset`, klubb-app, en fersk CI-instans).
+--
+-- `enable row level security` er idempotent — trygt å kjøre selv om den
+-- alt er på.
+alter table public.kaaring_vinnere enable row level security;

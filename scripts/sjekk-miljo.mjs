@@ -1,0 +1,414 @@
+// Validerer miljøvariabler for klubb-appen.
+// Sjekker format og tilstedeværelse, og rapporterer mangler per nivå.
+//
+// Kjøres: npm run sjekk-miljo  (alias for node --env-file=.env.local scripts/sjekk-miljo.mjs)
+//
+// Exit-kode 0 = OK (evt. advarsler), 1 = kritisk feil.
+
+// ─── ANSI-farger (kun i TTY) ────────────────────────────────────────────────
+
+const tty = process.stdout.isTTY
+const r = (s) => tty ? `\x1b[31m${s}\x1b[0m` : s   // rød
+const g = (s) => tty ? `\x1b[32m${s}\x1b[0m` : s   // grønn
+const y = (s) => tty ? `\x1b[33m${s}\x1b[0m` : s   // gul
+const b = (s) => tty ? `\x1b[1m${s}\x1b[0m` : s    // fet
+
+// ─── TYPVALIDATORER ──────────────────────────────────────────────────────────
+
+// Hjelper: legacy Supabase-nøkkel er en JWT (eyJ + 3 deler).
+const erLegacyJwt = (v) => {
+  const deler = v.split('.')
+  return deler.length === 3 && deler[0].startsWith('eyJ')
+}
+
+// Hjelper: les `role`-claimen ut av en legacy Supabase-JWT.
+// Returnerer strengen ved suksess, eller null hvis payloaden ikke kan dekodes.
+// Vi printer ALDRI verdier herfra — kun navn på variabelen som ev. er byttet.
+const lesJwtRole = (v) => {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(v.split('.')[1], 'base64url').toString('utf8'),
+    )
+    return typeof payload?.role === 'string' ? payload.role : null
+  } catch {
+    return null
+  }
+}
+
+const typer = {
+  // Gyldig URL med https eller http
+  url: (v) => {
+    try { const u = new URL(v); return u.protocol === 'https:' || u.protocol === 'http:' }
+    catch { return false }
+  },
+  // Supabase publishable/anon-nøkkel.
+  // To formatgenerasjoner finnes side om side:
+  //   - Ny (fra ~2025): "sb_publishable_<base64>" — opaque token, ikke JWT.
+  //   - Legacy: signert JWT (eyJ...). Eksisterende prosjekter har fortsatt denne.
+  // Vi godtar begge — gamle prosjekter trenger ikke roteres. For legacy JWT
+  // sjekker vi at role-claimen i payloaden er 'anon' så vi fanger nøkkelbytte
+  // (service_role lagt i anon-variabelen) — men aksepterer udekodbar payload
+  // for å ikke være strengere enn nødvendig mot ukjente legacy-varianter.
+  'supabase-publishable': (v) => {
+    if (v.startsWith('sb_publishable_')) return true
+    if (!erLegacyJwt(v)) return false
+    const role = lesJwtRole(v)
+    return role === null || role === 'anon'
+  },
+  // Supabase secret/service-role-nøkkel.
+  //   - Ny: "sb_secret_<base64>" — opaque token.
+  //   - Legacy: JWT med role: service_role i payload. Vi sjekker claimen for
+  //     å fange byttede nøkler (anon-JWT lagt inn som service-role).
+  'supabase-secret': (v) => {
+    if (v.startsWith('sb_secret_')) return true
+    if (!erLegacyJwt(v)) return false
+    const role = lesJwtRole(v)
+    return role === null || role === 'service_role'
+  },
+  // VAPID offentlig nøkkel: ukomprimert P-256 punkt → 65 bytes → 87 base64url-tegn
+  // (uten padding). Bruker 80–100 for slingring rundt eventuelle implementasjoner
+  // som padder eller hopper et tegn.
+  'vapid-public': (v) => /^[A-Za-z0-9_-]{80,100}$/.test(v),
+  // VAPID privat nøkkel: en P-256 skalar → 32 bytes → 43 base64url-tegn (44 med padding).
+  'vapid-private': (v) => /^[A-Za-z0-9_-]{43,44}$/.test(v),
+  // E-postadresse
+  epost: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+  // Hostnavn (domene uten protokoll)
+  hostname: (v) => /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(v),
+  // GitHub-token med kjente prefikser
+  'github-token': (v) => v.startsWith('ghp_') || v.startsWith('github_pat_') || v.startsWith('gho_'),
+  // Resend API-nøkkel
+  'resend-key': (v) => v.startsWith('re_'),
+  // R2 jurisdiksjon — speiler verdiene lib/r2.ts faktisk forventer.
+  // 'default' gir tomt segment i endpointet, 'eu' gir '.eu'-segment,
+  // 'fedramp' gir '.fedramp'-segment (Cloudflares US-myndighetstilbud).
+  'r2-jurisdiction': (v) => ['default', 'eu', 'fedramp'].includes(v.toLowerCase()),
+  // Vertex AI-lokasjon — speiler VERTEX_LOKASJONER i lib/config.ts (§ Policy:
+  // AI-funksjoner). Samme mønster som r2-jurisdiction over: EU-only, fordi
+  // regionstrengen er et juridisk premiss for bursdagsbilde-funksjonen.
+  'vertex-location': (v) => ['eu', 'europe-west1', 'europe-west3', 'europe-west4', 'europe-west9'].includes(v),
+  // Base64-enkodet JSON — grov formatsjekk (vi dekoder ALDRI verdien, kun
+  // formen). lib/vertex.ts gir en tydelig feilmelding ved ugyldig innhold
+  // når funksjonen faktisk kjøres.
+  base64: (v) => /^[A-Za-z0-9+/]+=*$/.test(v),
+  // Ikke-tom streng
+  streng: (v) => v.trim().length > 0,
+  // Positivt heltall
+  'pos-int': (v) => /^\d+$/.test(v) && parseInt(v, 10) > 0,
+  // Måned 1–12
+  maaned: (v) => /^\d+$/.test(v) && parseInt(v, 10) >= 1 && parseInt(v, 10) <= 12,
+  // Dag 1–31 (vi sjekker ikke at dag faktisk finnes i måneden — overkill her)
+  dag: (v) => /^\d+$/.test(v) && parseInt(v, 10) >= 1 && parseInt(v, 10) <= 31,
+}
+
+function valider(type, verdi) {
+  const fn = typer[type]
+  if (!fn) return true // ukjent type = ingen formatsjekk
+  return fn(verdi)
+}
+
+// ─── VARIABELDEFINISJON ──────────────────────────────────────────────────────
+//
+// nivaa: 'kritisk' → ✖ + exit 1 ved feil/mangler
+//        'anbefalt' → ⚠ ved mangler, ✖ ved satt-men-feil-format
+//        'valgfri'  → ✓ kun hvis satt, ellers stille
+
+const variabler = [
+  // Supabase
+  { navn: 'NEXT_PUBLIC_SUPABASE_URL',   nivaa: 'kritisk',   type: 'url',      beskrivelse: 'Supabase prosjekt-URL' },
+  { navn: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', nivaa: 'kritisk', type: 'supabase-publishable', beskrivelse: 'Supabase anon/publishable-nøkkel (sb_publishable_... eller legacy JWT)' },
+  { navn: 'SUPABASE_SERVICE_ROLE_KEY',  nivaa: 'kritisk',   type: 'supabase-secret', beskrivelse: 'Supabase service-role-nøkkel (sb_secret_... eller legacy JWT, SECRET)' },
+
+  // R2
+  { navn: 'R2_ACCOUNT_ID',             nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'Cloudflare konto-ID' },
+  { navn: 'R2_ACCESS_KEY_ID',          nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'R2 access key ID (SECRET)' },
+  { navn: 'R2_SECRET_ACCESS_KEY',      nivaa: 'kritisk',   type: 'streng',   beskrivelse: 'R2 secret access key (SECRET)' },
+  { navn: 'R2_BUCKET',                 nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'R2 bucket-navn (default: klubb-bilder)' },
+  { navn: 'R2_JURISDICTION',           nivaa: 'valgfri',   type: 'r2-jurisdiction', beskrivelse: 'R2 jurisdiksjon: default|eu|fedramp' },
+  // R2_PUBLIC_URL og NEXT_PUBLIC_R2_PUBLIC_URL håndteres som spesialsjekk under
+
+  // VAPID
+  { navn: 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', nivaa: 'kritisk', type: 'vapid-public',  beskrivelse: 'VAPID offentlig nøkkel (base64url, ~87 tegn)' },
+  { navn: 'VAPID_PRIVATE_KEY',          nivaa: 'kritisk',   type: 'vapid-private', beskrivelse: 'VAPID privat nøkkel (base64url, 43–44 tegn, SECRET)' },
+  // Ingen default i lib/config.ts — push-utsendelse feiler med tydelig melding
+  // uten denne. Anbefalt (ikke kritisk) fordi appen ellers fungerer uten push.
+  { navn: 'VAPID_CONTACT_EMAIL',        nivaa: 'anbefalt',  type: 'epost',    beskrivelse: 'Kontakt-epost for push-tjenester — kreves for push-varsler (ingen default)' },
+
+  // Resend
+  { navn: 'RESEND_API_KEY',            nivaa: 'anbefalt',  type: 'resend-key', beskrivelse: 'Resend API-nøkkel (re_...) — e-postvarsler mangler uten' },
+  { navn: 'RESEND_FROM',               nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Avsendernavn i utgående e-post' },
+
+  // Cron
+  { navn: 'CRON_SECRET',               nivaa: 'anbefalt',  type: 'streng',   beskrivelse: 'Delt hemmelighet for cron-endepunkt — påminnelsesvarsler mangler uten' },
+
+  // GitHub
+  { navn: 'GITHUB_TOKEN',              nivaa: 'anbefalt',  type: 'github-token', beskrivelse: 'GitHub PAT (ghp_/github_pat_) — innspill-funksjon + bli-utvikler-endepunktet (/api/bli-utvikler) feiler uten' },
+  { navn: 'GITHUB_WEBHOOK_SECRET',     nivaa: 'anbefalt',  type: 'streng',   beskrivelse: 'GitHub webhook-hemmelighet — innkommende webhook-validering mangler uten' },
+  { navn: 'NEXT_PUBLIC_GITHUB_REPO',   nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'GitHub-repo for innspill (default: reidarei/klubb-app)' },
+  { navn: 'NEXT_PUBLIC_GITHUB_ONSKE_LABEL', nivaa: 'valgfri', type: 'streng', beskrivelse: 'GitHub Issues-label for ønsker (default: ønske)' },
+
+  // Anthropic — KI-funksjoner. Uten nøkkel er de av, og ingen tekst forlater
+  // instansen. Se docs/ai-act-vurdering.md før du skrur dem på.
+  { navn: 'ANTHROPIC_API_KEY',         nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Anthropic API-nøkkel — KI-dato-uttrekk er av uten den' },
+  { navn: 'ANTHROPIC_MODEL',           nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell for KI-kall (default: claude-haiku-4-5)' },
+
+  // Google Vertex AI — bursdagsbilde-generering (#641). Valgfri: uten disse
+  // er funksjonen av (BURSDAGSBILDE_PAA i lib/config.ts).
+  { navn: 'GOOGLE_VERTEX_SA_JSON_B64', nivaa: 'valgfri',   type: 'base64',   beskrivelse: 'Base64-enkodet service account-JSON — bursdagsbilde er av uten den (SECRET)' },
+  { navn: 'GOOGLE_CLOUD_PROJECT',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Google Cloud prosjekt-ID for Vertex AI' },
+  { navn: 'GOOGLE_CLOUD_LOCATION',     nivaa: 'valgfri',   type: 'vertex-location', beskrivelse: 'Vertex AI-lokasjon: eu|europe-west1|west3|west4|west9 (eu kreves for standardmodellen)' },
+  { navn: 'GOOGLE_VERTEX_MODELL',      nivaa: 'valgfri',   type: 'streng',   beskrivelse: 'Modell-ID for bursdagsbilde (default: gemini-3.1-flash-image)' },
+  { navn: 'BURSDAGSBILDE_PROMPT_BASIS', nivaa: 'valgfri',  type: 'streng',   beskrivelse: 'Scene-tekst for bursdagsbildet (default i lib/klubb-prompt.ts). Plassholdere: {navn}, {alder}' },
+
+  // Sentry — server-side feilrapportering. Valgfri: uten DSN skrives
+  // server-feil fortsatt til feil_logg (lib/logg.ts), som er den kanalen
+  // døgnalarmen leser. Sto udokumentert her og i .env.example fram til #631,
+  // og da var det umulig å svare på om prod i det hele tatt hadde den satt.
+  { navn: 'SENTRY_DSN',                nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Sentry DSN — server/edge-feil sendes dit i tillegg til feil_logg' },
+
+  // Base-URL. Nivå 'valgfri' her er bevisst: variabelen er reelt påkrevd i
+  // PRODUKSJON (se SPESIALSJEKK 4 under), men ikke i dev/preview/CI, der
+  // getBaseUrl() i lib/config.ts har trygge fallbacks (localhost hhv.
+  // VERCEL_URL — som Vercel alltid setter på et preview-bygg; gjør den mot
+  // formodning ikke det, kaster getBaseUrl() der også). Feltbasert 'kritisk'
+  // ville falsk-alarmert i alle de tre.
+  { navn: 'NEXT_PUBLIC_BASE_URL',      nivaa: 'valgfri',   type: 'url',      beskrivelse: 'Base-URL — PÅKREVD i produksjon (VERCEL_ENV=production), ellers utledes den fra VERCEL_URL (preview) eller KLUBB_DOMENE (lokalt prod-bygg)' },
+
+  // Klubbidentitet
+  { navn: 'NEXT_PUBLIC_KLUBB_NAVN',              nivaa: 'valgfri', type: 'streng', beskrivelse: 'Klubbnavn (default: Min Klubb)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_KORTNAVN',          nivaa: 'valgfri', type: 'streng', beskrivelse: 'Kortnavn (default: Klubben)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_NAVN_LINJE_1',      nivaa: 'valgfri', type: 'streng', beskrivelse: 'Visningsnavn linje 1' },
+  { navn: 'NEXT_PUBLIC_KLUBB_NAVN_LINJE_2',      nivaa: 'valgfri', type: 'streng', beskrivelse: 'Visningsnavn linje 2' },
+  { navn: 'NEXT_PUBLIC_KLUBB_BESKRIVELSE',       nivaa: 'valgfri', type: 'streng', beskrivelse: 'Beskrivelse av appen' },
+  { navn: 'NEXT_PUBLIC_KLUBB_DOMENE',            nivaa: 'valgfri', type: 'hostname', beskrivelse: 'Domenenavn (default: klubb.example.com)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_AAR',       nivaa: 'valgfri', type: 'pos-int', beskrivelse: 'Stiftelsesår' },
+  { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_MAANED',    nivaa: 'valgfri', type: 'maaned',  beskrivelse: 'Stiftelsesmåned (1–12)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_STIFTET_DAG',       nivaa: 'valgfri', type: 'dag',     beskrivelse: 'Stiftelsesdag (1–31)' },
+  { navn: 'NEXT_PUBLIC_KLUBB_STED',              nivaa: 'valgfri', type: 'streng', beskrivelse: 'Sted/bydel' },
+  { navn: 'NEXT_PUBLIC_ROLLE_TITTEL_GENERALSEKRETAER', nivaa: 'valgfri', type: 'streng', beskrivelse: 'Tittel for generalsekretær-rollen' },
+  { navn: 'NEXT_PUBLIC_R2_CUSTOM_DOMAIN',        nivaa: 'valgfri', type: 'hostname', beskrivelse: 'Custom domain for R2-bilder (kun ved eget domene)' },
+
+  // Dev-only
+  { navn: 'ALLOW_LOCAL_NOTIFICATIONS',  nivaa: 'valgfri', type: 'streng', beskrivelse: 'Aktiver ekte varsler i dev (sett true)' },
+]
+
+// ─── INNSAMLING OG SJEKK ─────────────────────────────────────────────────────
+
+let kritiskFeil = 0
+let advarsler = 0
+const meldinger = { kritisk: [], anbefalt: [], valgfri: [] }
+
+for (const { navn, nivaa, type, beskrivelse } of variabler) {
+  const verdi = process.env[navn]
+  const satt = verdi !== undefined && verdi !== ''
+
+  if (nivaa === 'valgfri') {
+    if (satt) {
+      const ok = valider(type, verdi)
+      if (ok) {
+        meldinger.valgfri.push(`  ${g('✓')} ${navn}`)
+      } else {
+        // Satt, men feil format — alltid feil uansett nivå
+        meldinger.valgfri.push(`  ${r('✖')} ${navn} — satt, men ugyldig format (${type})`)
+        kritiskFeil++
+      }
+    }
+    // Ikke satt og valgfri → stille
+    continue
+  }
+
+  if (!satt) {
+    if (nivaa === 'kritisk') {
+      meldinger.kritisk.push(`  ${r('✖')} ${navn} — mangler  (${beskrivelse})`)
+      kritiskFeil++
+    } else {
+      meldinger.anbefalt.push(`  ${y('⚠')} ${navn} — ikke satt  (${beskrivelse})`)
+      advarsler++
+    }
+    continue
+  }
+
+  // Satt — formatkontroll
+  const ok = valider(type, verdi)
+  if (!ok) {
+    // Skill mellom rent formatfeil og legacy-JWT med feil role-claim.
+    // Sistnevnte er en sterk indikator på at nøklene er byttet om mellom
+    // anon- og service-role-variabelen — vanlig feil ved kopiering.
+    let melding = `ugyldig format (forventet: ${type})`
+    if ((type === 'supabase-publishable' || type === 'supabase-secret') && erLegacyJwt(verdi)) {
+      const role = lesJwtRole(verdi)
+      const forventetRole = type === 'supabase-secret' ? 'service_role' : 'anon'
+      if (role && role !== forventetRole) {
+        melding = `legacy JWT med role='${role}', forventet '${forventetRole}' — sannsynlig nøkkel-bytte mellom anon og service-role`
+      }
+    }
+    // Satt, men feil format — alltid kritisk feil
+    const linje = `  ${r('✖')} ${navn} — ${melding}  (${beskrivelse})`
+    if (nivaa === 'kritisk') {
+      meldinger.kritisk.push(linje)
+    } else {
+      meldinger.anbefalt.push(linje)
+    }
+    kritiskFeil++
+    continue
+  }
+
+  if (nivaa === 'kritisk') {
+    meldinger.kritisk.push(`  ${g('✓')} ${navn}`)
+  } else {
+    meldinger.anbefalt.push(`  ${g('✓')} ${navn}`)
+  }
+}
+
+// ─── SPESIALSJEKK 1: R2 public URL ──────────────────────────────────────────
+// Minst én av R2_PUBLIC_URL eller NEXT_PUBLIC_R2_PUBLIC_URL må være satt.
+// Vi rapporterer som én linje for å unngå støy når begge er satt til samme verdi.
+
+const r2PubServer = process.env.R2_PUBLIC_URL
+const r2PubKlient = process.env.NEXT_PUBLIC_R2_PUBLIC_URL
+const r2ServerSatt = r2PubServer && r2PubServer !== ''
+const r2KlientSatt = r2PubKlient && r2PubKlient !== ''
+
+if (!r2ServerSatt && !r2KlientSatt) {
+  meldinger.kritisk.push(`  ${r('✖')} R2_PUBLIC_URL / NEXT_PUBLIC_R2_PUBLIC_URL — minst én må settes (bilder kan ikke vises uten)`)
+  kritiskFeil++
+} else {
+  // Valider format på de som er satt
+  const serverOk = !r2ServerSatt || typer.url(r2PubServer)
+  const klientOk = !r2KlientSatt || typer.url(r2PubKlient)
+
+  if (!serverOk) {
+    meldinger.kritisk.push(`  ${r('✖')} R2_PUBLIC_URL — ugyldig URL-format`)
+    kritiskFeil++
+  }
+  if (!klientOk) {
+    meldinger.kritisk.push(`  ${r('✖')} NEXT_PUBLIC_R2_PUBLIC_URL — ugyldig URL-format`)
+    kritiskFeil++
+  }
+  if (serverOk && klientOk) {
+    // Beskriv hvilken som faktisk er satt — gir nyttig synlighet uten å printe verdier.
+    const navn = r2ServerSatt && r2KlientSatt
+      ? 'R2_PUBLIC_URL + NEXT_PUBLIC_R2_PUBLIC_URL (begge satt)'
+      : r2ServerSatt ? 'R2_PUBLIC_URL' : 'NEXT_PUBLIC_R2_PUBLIC_URL'
+    meldinger.kritisk.push(`  ${g('✓')} R2 public URL (${navn})`)
+  }
+}
+
+// ─── SPESIALSJEKK 2: BASE_URL vs KLUBB_DOMENE drift ─────────────────────────
+// Hvis begge er satt og BASE_URL ikke stemmer med KLUBB_DOMENE, er det
+// to sannhetskilder som kan gi forskjellige URL-er i varsler og ICS.
+//
+// www-tolerant (#687): KLUBB_DOMENE er ICS-IDENTIFIKATOREN (PRODID/UID) og
+// skal ALDRI endres til www — det ville byttet identitet på eksisterende
+// kalenderoppføringer for hvert medlem. BASE_URL kan derimot legitimt være
+// www.<KLUBB_DOMENE> (den kanoniske verten appen faktisk serveres fra, jf.
+// #687-fiksen i lib/config.ts) uten at det er drift mellom kildene — vi
+// godtar derfor domenet med ELLER uten et ledende www.
+
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+const klubbDomene = process.env.NEXT_PUBLIC_KLUBB_DOMENE
+if (baseUrl && baseUrl !== '' && klubbDomene && klubbDomene !== '') {
+  const forventetApex = `https://${klubbDomene}`
+  const forventetWww = `https://www.${klubbDomene}`
+  // Samme normalisering som getBaseUrl() gjør på verdien (#687-review):
+  // «https://klubb.no/» og «https://klubb.no» er samme vert, og appen bruker
+  // uansett den strippede formen. Uten dette meldte sjekken drift på en env
+  // som er helt i orden.
+  const baseUrlNorm = baseUrl.replace(/\/$/, '')
+  if (baseUrlNorm !== forventetApex && baseUrlNorm !== forventetWww) {
+    meldinger.anbefalt.push(
+      `  ${y('⚠')} NEXT_PUBLIC_BASE_URL (${baseUrl}) stemmer ikke med NEXT_PUBLIC_KLUBB_DOMENE (${forventetApex} eller ${forventetWww}) — mulig drift mellom to sannhetskilder`
+    )
+    advarsler++
+  }
+}
+
+// ─── SPESIALSJEKK 3: Secret-lekkasje i NEXT_PUBLIC_ ─────────────────────────
+// Heuristikk: hvis verdien til en NEXT_PUBLIC_-variabel ligner et kjent
+// secret-format, er det sannsynligvis en feilkonfigurasjon.
+// VIKTIG: vi printer ALDRI verdien — kun variabelnavnet.
+
+for (const [key, val] of Object.entries(process.env)) {
+  if (!key.startsWith('NEXT_PUBLIC_') || !val) continue
+
+  let lekkasje = false
+
+  // Kjente token-prefikser — inkluderer både Supabase ny-format (sb_secret_)
+  // og GitHub/Resend.
+  if (
+    val.startsWith('ghp_') ||
+    val.startsWith('github_pat_') ||
+    val.startsWith('re_') ||
+    val.startsWith('sb_secret_')
+  ) {
+    lekkasje = true
+  }
+
+  // Legacy Supabase JWT med service_role i payload
+  // (base64-dekod midtdel, let etter "role":"service_role")
+  if (!lekkasje && val.split('.').length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(val.split('.')[1], 'base64url').toString('utf8'))
+      if (payload?.role === 'service_role') lekkasje = true
+    } catch { /* ugyldig base64 eller JSON — ikke en JWT */ }
+  }
+
+  if (lekkasje) {
+    meldinger.kritisk.push(
+      `  ${r('✖')} ${key} — verdien ser ut som et secret (token/nøkkel) og skal IKKE ha NEXT_PUBLIC_-prefiks (inlines i browser-bundle)`
+    )
+    kritiskFeil++
+  }
+}
+
+// ─── SPESIALSJEKK 4: NEXT_PUBLIC_BASE_URL påkrevd i produksjon (#687) ───────
+// getBaseUrl() i lib/config.ts kaster selv ved bygg-tid i denne situasjonen
+// (byggegaten), men denne sjekken kjøres FØR bygget og gir en tidligere,
+// mer forståelig melding samme sted som resten av miljøsjekken. Bevisst IKKE
+// koblet til `prebuild` — sjekk-miljo er et frittstående verktøy man kjører
+// manuelt eller i CI, ikke en obligatorisk del av `next build`.
+if (process.env.VERCEL_ENV === 'production' && !(baseUrl && baseUrl !== '')) {
+  meldinger.kritisk.push(
+    `  ${r('✖')} NEXT_PUBLIC_BASE_URL — mangler, men VERCEL_ENV=production. getBaseUrl() i lib/config.ts kaster i denne situasjonen, så bygget stopper: det finnes ingen pålitelig kilde til verten appen faktisk serveres fra (f.eks. et www-subdomene), og en gjettet URL ville fått push-varsler avvist som kryss-origin av service workeren (#687). Sett variabelen eksplisitt.`
+  )
+  kritiskFeil++
+}
+
+// ─── UTSKRIFT ────────────────────────────────────────────────────────────────
+
+console.log('')
+console.log(b('=== Klubb-app — miljøsjekk ==='))
+console.log('')
+
+if (meldinger.kritisk.length > 0) {
+  console.log(b('Kritiske (app starter ikke uten):'))
+  meldinger.kritisk.forEach((m) => console.log(m))
+  console.log('')
+}
+
+if (meldinger.anbefalt.length > 0) {
+  console.log(b('Anbefalte (mangler gir redusert funksjonalitet):'))
+  meldinger.anbefalt.forEach((m) => console.log(m))
+  console.log('')
+}
+
+if (meldinger.valgfri.length > 0) {
+  console.log(b('Valgfrie (satt, med defaults):'))
+  meldinger.valgfri.forEach((m) => console.log(m))
+  console.log('')
+}
+
+// Oppsummering
+const kritiskOk = meldinger.kritisk.filter((m) => m.includes('✓')).length
+const anbefaltOk = meldinger.anbefalt.filter((m) => m.includes('✓')).length
+
+if (kritiskFeil === 0 && advarsler === 0) {
+  console.log(g(`✓ Alt OK — ${kritiskOk} kritiske og ${anbefaltOk} anbefalte variabler er satt og gyldige.`))
+} else if (kritiskFeil === 0) {
+  console.log(y(`⚠ ${advarsler} advarsel(er) — ${kritiskOk} kritiske OK. Appen starter, men noen funksjoner mangler.`))
+} else {
+  console.log(r(`✖ ${kritiskFeil} kritisk feil — ${advarsler} advarsel(er). Fiks feil markert med ✖ før deploy.`))
+}
+console.log('')
+
+process.exit(kritiskFeil > 0 ? 1 : 0)

@@ -1,0 +1,167 @@
+import { createServerClient } from '@/lib/supabase/server'
+import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import AlbumDetalj from '@/components/album/AlbumDetalj'
+import AlbumOpplaster from '@/components/album/AlbumOpplaster'
+import AlbumTittel from '@/components/album/AlbumTittel'
+import TillatLandskap from '@/components/album/TillatLandskap'
+import { kanAdministrere } from '@/lib/roller'
+import { logg } from '@/lib/logg'
+
+export default async function AlbumSide({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ bilde?: string }>
+}) {
+  const { id } = await params
+  const { bilde } = await searchParams
+  const [supabase, user, profil] = await Promise.all([
+    createServerClient(),
+    getInnloggetBruker(),
+    getProfil(),
+  ])
+
+  // Album og profiler (til mention-forslag i bilde-kommentarer, #481) hentes
+  // parallelt — samme profil-form (ChatProfil) som resten av chat-flaten.
+  const [
+    { data: album, error: albumFeil },
+    { data: profiler, error: profilerFeil },
+  ] = await Promise.all([
+    supabase
+      .from('album')
+      .select(
+        `id, tittel, arrangement_id, opprettet_av, cover_bilde_id,
+         arrangement:arrangementer (id, tittel),
+         album_bilde!album_bilde_album_id_fkey (
+           id, bilde_url, thumb_url, bredde, hoyde, opprettet, rekkefolge,
+           album_bilde_reaksjon (profil_id, emoji),
+           album_bilde_chat (count)
+         )`,
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    supabase.from('profiles').select('id, navn, bilde_url, rolle').eq('aktiv', true),
+  ])
+
+  if (albumFeil) throw new Error(`Kunne ikke hente album: ${albumFeil.message}`)
+  if (!album) notFound()
+
+  // profiler brukes kun til @mention-forslag i bilde-kommentarer — ren
+  // berikelse, ikke kritisk nok til å ta ned hele albumsiden. Logges så
+  // feilen ikke drukner stille.
+  if (profilerFeil) {
+    await logg.feil('album.profiler.oppslag.feilet', profilerFeil, { ctx: { album_id: id } })
+  }
+
+  const arrangement = Array.isArray(album.arrangement) ? album.arrangement[0] : album.arrangement
+  const bilder = ((album.album_bilde ?? []) as Array<{
+    id: string
+    bilde_url: string
+    thumb_url: string | null
+    bredde: number | null
+    hoyde: number | null
+    opprettet: string
+    rekkefolge: number
+    album_bilde_reaksjon: Array<{ profil_id: string; emoji: string }> | null
+    album_bilde_chat: { count: number }[] | null
+  }>)
+    .slice()
+    .sort((a, b) => a.rekkefolge - b.rekkefolge || a.opprettet.localeCompare(b.opprettet))
+
+  // Grupper reaksjoner per bilde til ReaksjonGruppe[]-format (samme teknikk
+  // som lib/queries/agenda.ts brukes for meldinger/kommentarer). se #480.
+  function reaksjonGrupperFor(rader: Array<{ profil_id: string; emoji: string }> | null) {
+    const perEmoji = new Map<string, string[]>()
+    for (const r of rader ?? []) {
+      const profilIder = perEmoji.get(r.emoji) ?? []
+      profilIder.push(r.profil_id)
+      perEmoji.set(r.emoji, profilIder)
+    }
+    return [...perEmoji.entries()].map(([emoji, profilIder]) => ({ emoji, profilIder }))
+  }
+
+  const erEier = album.opprettet_av === user!.id
+  const erAdmin = kanAdministrere(profil?.rolle)
+  const kanRedigere = erEier || erAdmin
+
+  return (
+    <div style={{ padding: '0 20px 20px' }}>
+      <TillatLandskap />
+      <div style={{ paddingTop: 20, marginBottom: 16 }}>
+        {arrangement ? (
+          <Link
+            href={`/arrangementer/${arrangement.id}`}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '1.4px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+            }}
+          >
+            ← {arrangement.tittel}
+          </Link>
+        ) : (
+          <Link
+            href="/album"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '1.4px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+            }}
+          >
+            ← Album
+          </Link>
+        )}
+        <AlbumTittel albumId={album.id} initialTittel={album.tittel} kanRedigere={kanRedigere} />
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '1.4px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            marginTop: 4,
+          }}
+        >
+          {bilder.length} {bilder.length === 1 ? 'bilde' : 'bilder'}
+        </div>
+      </div>
+
+      <AlbumDetalj
+        bilder={bilder.map(b => ({
+          id: b.id,
+          bilde_url: b.bilde_url,
+          thumb_url: b.thumb_url,
+          bredde: b.bredde,
+          hoyde: b.hoyde,
+          reaksjoner: reaksjonGrupperFor(b.album_bilde_reaksjon),
+          kommentarAntall: b.album_bilde_chat?.[0]?.count ?? 0,
+        }))}
+        albumId={album.id}
+        brukerId={user!.id}
+        kanRedigere={kanRedigere}
+        coverBildeId={album.cover_bilde_id}
+        profiler={profiler ?? []}
+        erAdmin={erAdmin}
+        initialBildeId={bilde ?? null}
+      />
+
+      {/* Alle medlemmer kan bidra med bilder — ikke bare eier/admin. Det er
+          hele poenget med delte album (RLS tillater det allerede). */}
+      <div style={{ marginTop: 12 }}>
+        <AlbumOpplaster albumId={album.id} />
+      </div>
+    </div>
+  )
+}

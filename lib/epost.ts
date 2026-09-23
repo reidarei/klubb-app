@@ -1,0 +1,190 @@
+// Krever verifisert domene i Resend — sett RESEND_FROM til f.eks. "Klubben <noreply@dittdomene.no>"
+import { KLUBB_NAVN } from './klubb-config'
+import { EPOST_FARGER } from './tema'
+import { logg } from './logg'
+const RESEND_API_KEY = process.env.RESEND_API_KEY!
+// Avsender er server-only-konfig (Resend-spesifikk) og holdes derfor her,
+// ikke i klient-trygg klubb-config. Ingen NEXT_PUBLIC_-prefiks.
+const RESEND_FROM = process.env.RESEND_FROM ?? 'Klubben <onboarding@resend.dev>'
+
+export async function sendEpost({ til, emne, html }: { til: string; emne: string; html: string }) {
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: RESEND_FROM, to: til, subject: emne, html }),
+    })
+    if (!res.ok) {
+      const tekst = await res.text()
+      await logg.feil('varsel.epost.feilet', new Error(tekst))
+    }
+  } catch (err) {
+    await logg.feil('varsel.epost.feilet', err)
+  }
+}
+
+// Resend sin batch-grense — maks antall meldinger per kall til /emails/batch.
+// Resend-spesifikk detalj, hører hjemme her og ikke i lib/konstanter.ts.
+const RESEND_BATCH_MAKS = 100
+
+// Batch-sending mot Resend. Valgt fordi enkelt-sending per mottaker (N kall til
+// /emails) traff Resends rate-limit på 10 req/s når sendVarsel sendte til alle 15–20
+// medlemmer parallelt (se #478) — batch-endepunktet lar N e-poster telle som ett
+// request. Merk: attachments og scheduled_at støttes ikke i batch (ikke i bruk hos
+// oss i dag), og Resend kan avvise HELE batchen hvis ett element er ugyldig — det
+// øker blast-radius sammenlignet med enkelt-sending, men akseptert for våre 15–20
+// admin-opprettede adresser.
+export async function sendEpostBatch(eposter: { til: string; emne: string; html: string }[]) {
+  if (eposter.length === 0) return
+  try {
+    for (let i = 0; i < eposter.length; i += RESEND_BATCH_MAKS) {
+      const del = eposter.slice(i, i + RESEND_BATCH_MAKS)
+      const res = await fetch('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          del.map(e => ({ from: RESEND_FROM, to: e.til, subject: e.emne, html: e.html })),
+        ),
+      })
+      if (!res.ok) {
+        const tekst = await res.text()
+        // Ta med antall mottakere i batchen: siden hele batchen kan avvises på ett
+        // ugyldig element (se blast-radius-kommentaren over), forteller count-en hvor
+        // mange e-poster som gikk tapt i denne feilen. count er whitelistet i lib/logg.ts.
+        await logg.feil('varsel.epost.feilet', new Error(tekst), { ctx: { count: del.length } })
+      }
+    }
+  } catch (err) {
+    await logg.feil('varsel.epost.feilet', err)
+  }
+}
+
+// E-postmaler bruker EPOST_FARGER fra lib/tema.ts (sand-aksent #e8d9b5).
+// CSS-variabler er ikke tilgjengelig i e-postklienter, så farger må hardkodes
+// som inline styles — derfor går vi via tema.ts i stedet for globals.css.
+// Knapptekst (#0a0a0a) er bevisst nesten-svart for kontrast mot aksent — ikke en del av tema-paletten, derfor ikke i EPOST_FARGER.
+
+// Escaper brukerinput før den interpoleres i HTML. Sentral i e-postmalene
+// så vi ikke risikerer at en hilsen som «<a href=…>klikk</a>» rendres som
+// HTML i innboksen. Push- og in-app-varsler bruker ren tekst og trenger
+// ikke escaping — derfor gjøres dette her, ikke i sendVarsel.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+export function arrangementEpostHtml({
+  tittel,
+  tekst,
+  url,
+  knappTekst,
+}: {
+  tittel: string
+  tekst: string
+  url: string
+  knappTekst: string
+}) {
+  // Tittel, tekst og knappetekst kan inneholde brukerinput (f.eks. hilsen i
+  // purring) — escapes her. URL-en konstrueres alltid av oss fra trygge kilder
+  // (BASE_URL + varsel-id), men vi escaper attribute-konteksten for sikkerhets skyld.
+  const tittelEsc = escapeHtml(tittel)
+  const tekstEsc = escapeHtml(tekst)
+  const urlEsc = escapeHtml(url)
+  const knappTekstEsc = escapeHtml(knappTekst)
+  // KLUBB_NAVN kommer fra env-var (NEXT_PUBLIC_KLUBB_NAVN) — escapes som
+  // forsvar i dybden selv om kilden i praksis kontrolleres av deployer.
+  return `
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:32px 0;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">${escapeHtml(KLUBB_NAVN)}</p>
+          <h1 style="margin:0 0 16px;font-size:20px;font-weight:700;">${tittelEsc}</h1>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;white-space:pre-wrap;">${tekstEsc}</p>
+          <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:separate;">
+            <tr><td bgcolor="${EPOST_FARGER.aksent}" style="background:${EPOST_FARGER.aksent};border-radius:8px;">
+              <a href="${urlEsc}" style="display:inline-block;padding:12px 24px;color:#0a0a0a;text-decoration:none;font-weight:600;font-size:14px;">${knappTekstEsc}</a>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export function velkommenEpostHtml({
+  navn,
+  epost,
+  passord,
+  loggInnUrl,
+}: {
+  navn: string
+  epost: string
+  passord: string
+  loggInnUrl: string
+}) {
+  const deler = navn.trim().split(/\s+/)
+  const etternavn = deler.length > 1 ? deler[deler.length - 1] : deler[0]
+  // Navn settes av admin og er lavrisiko, men vi escaper konsekvent slik at
+  // en bokstavelig «<» i navnet ikke ender opp som markup.
+  const etternavnEsc = escapeHtml(etternavn)
+  const epostEsc = escapeHtml(epost)
+  const passordEsc = escapeHtml(passord)
+  const loggInnUrlEsc = escapeHtml(loggInnUrl)
+  return `
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:32px 0;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;">${escapeHtml(KLUBB_NAVN)}</p>
+          <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;">Velkommen herr ${etternavnEsc}!</h1>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">Du er lagt til som medlem i ${escapeHtml(KLUBB_NAVN)}. Under finner du innloggingsinfoen din.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+            <tr><td style="padding:6px 0;">
+              <p style="margin:0 0 2px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;">Brukernavn</p>
+              <p style="margin:0;font-size:14px;font-family:Menlo,Consolas,monospace;word-break:break-all;">${epostEsc}</p>
+            </td></tr>
+            <tr><td style="padding:6px 0;">
+              <p style="margin:0 0 2px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.7;">Midlertidig passord</p>
+              <p style="margin:0;font-size:14px;font-family:Menlo,Consolas,monospace;font-weight:700;">${passordEsc}</p>
+            </td></tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:separate;">
+            <tr><td bgcolor="${EPOST_FARGER.aksent}" style="background:${EPOST_FARGER.aksent};border-radius:8px;">
+              <a href="${loggInnUrlEsc}" style="display:inline-block;padding:12px 24px;color:#0a0a0a;text-decoration:none;font-weight:600;font-size:14px;">Logg inn</a>
+            </td></tr>
+          </table>
+          <p style="margin:24px 0 0;font-size:13px;line-height:1.6;opacity:0.7;">Når du er logget inn kan du sette ditt eget passord under <strong>Profil</strong>. Installer gjerne appen på mobilen via «Legg til på Hjem-skjerm».</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}

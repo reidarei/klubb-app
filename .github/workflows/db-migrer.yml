@@ -1,0 +1,84 @@
+# Kjør ventende migrasjoner mot prod-databasen.
+#
+# BAKGRUNN: migrasjoner ble tidligere kjørt fra utviklermaskinen med
+# `npx supabase db push`, som krever `SUPABASE_DB_PASSWORD` i .env.local. Det
+# gjør deploy avhengig av at én maskin har én hemmelighet — og av at eieren
+# sitter foran den. Denne workflowen bruker i stedet den secreten repoet
+# allerede har for databasetilgang (`SUPABASE_DB_URL`, samme som
+# db-backup.yml), så migrasjoner kan kjøres fra hvor som helst.
+#
+# Trigger er BEVISST manuell (workflow_dispatch), ikke `push` til main:
+# skjemaendringer mot en database uten automatiske backups hos leverandøren
+# skal ha et eksplisitt «kjør nå»-øyeblikk. Den daglige dumpen i db-backup.yml
+# er nettet under, men den er opptil et døgn gammel.
+#
+# Kjør fra CLI:  gh workflow run db-migrer.yml -f dry_run=true
+#          så:  gh workflow run db-migrer.yml
+
+name: Kjør databasemigrasjoner
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Bare vis hvilke migrasjoner som ville kjørt (ingen endring)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Aldri to samtidige pushes mot samme database — migrasjoner er sekvensielle,
+# og to parallelle kjøringer kan låse hverandre midt i en transaksjon.
+concurrency:
+  group: db-migrer
+  cancel-in-progress: false
+
+jobs:
+  migrer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sett opp Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Vis ventende migrasjoner
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "::error::Secret SUPABASE_DB_URL mangler — se kommentar øverst i workflowen."
+            exit 1
+          fi
+          # --dry-run lister det som ville blitt kjørt uten å endre noe. Kjøres
+          # ALLTID først, også når vi skal pushe: da står listen i loggen ved
+          # siden av resultatet, og en uventet migrasjon er synlig i ettertid.
+          supabase db push --db-url "$DB_URL" --dry-run
+
+      - name: Kjør migrasjonene
+        if: ${{ !inputs.dry_run }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$DB_URL"
+
+      - name: Verifiser at migrasjonshistorikken er à jour
+        if: ${{ !inputs.dry_run }}
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # Etter en vellykket push skal --dry-run melde at ingenting gjenstår.
+          # Uten denne sjekken kunne en delvis anvendt push sett ut som suksess:
+          # `db push` avbryter på første feilende migrasjon, og exit-koden alene
+          # sier ikke om KØEN er tom — bare at det som ble forsøkt gikk bra.
+          UT=$(supabase db push --db-url "$DB_URL" --dry-run 2>&1)
+          echo "$UT"
+          if echo "$UT" | grep -qiE "would (be )?(applied|push)|Would push"; then
+            echo "::error::Det gjenstår ventende migrasjoner etter push — køen ble ikke tømt."
+            exit 1
+          fi
+          echo "Migrasjonskøen er tom."

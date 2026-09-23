@@ -1,0 +1,2296 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
+  public: {
+    Tables: {
+      aktivitet_dag: {
+        Row: {
+          dag: string
+          treff: number
+          unike: number
+        }
+        Insert: {
+          dag: string
+          treff?: number
+          unike?: number
+        }
+        Update: {
+          dag?: string
+          treff?: number
+          unike?: number
+        }
+        Relationships: []
+      }
+      aktivitet_uke: {
+        Row: {
+          uke_start: string
+          unike: number
+        }
+        Insert: {
+          uke_start: string
+          unike?: number
+        }
+        Update: {
+          uke_start?: string
+          unike?: number
+        }
+        Relationships: []
+      }
+      album: {
+        Row: {
+          arrangement_id: string | null
+          cover_bilde_id: string | null
+          id: string
+          oppdatert: string
+          opprettet: string
+          opprettet_av: string
+          tittel: string
+        }
+        Insert: {
+          arrangement_id?: string | null
+          cover_bilde_id?: string | null
+          id?: string
+          oppdatert?: string
+          opprettet?: string
+          opprettet_av: string
+          tittel: string
+        }
+        Update: {
+          arrangement_id?: string | null
+          cover_bilde_id?: string | null
+          id?: string
+          oppdatert?: string
+          opprettet?: string
+          opprettet_av?: string
+          tittel?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_cover_fk"
+            columns: ["cover_bilde_id"]
+            isOneToOne: false
+            referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      album_bilde: {
+        Row: {
+          album_id: string
+          bilde_url: string
+          bredde: number | null
+          hoyde: number | null
+          id: string
+          lastet_opp_av: string
+          opprettet: string
+          rekkefolge: number
+          thumb_url: string | null
+        }
+        Insert: {
+          album_id: string
+          bilde_url: string
+          bredde?: number | null
+          hoyde?: number | null
+          id?: string
+          lastet_opp_av: string
+          opprettet?: string
+          rekkefolge?: number
+          thumb_url?: string | null
+        }
+        Update: {
+          album_id?: string
+          bilde_url?: string
+          bredde?: number | null
+          hoyde?: number | null
+          id?: string
+          lastet_opp_av?: string
+          opprettet?: string
+          rekkefolge?: number
+          thumb_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_bilde_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "album"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_lastet_opp_av_fkey"
+            columns: ["lastet_opp_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      album_bilde_chat: {
+        Row: {
+          album_bilde_id: string
+          bilde_url: string | null
+          id: string
+          innhold: string
+          opprettet: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          album_bilde_id: string
+          bilde_url?: string | null
+          id?: string
+          innhold: string
+          opprettet?: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          album_bilde_id?: string
+          bilde_url?: string | null
+          id?: string
+          innhold?: string
+          opprettet?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_bilde_chat_album_bilde_id_fkey"
+            columns: ["album_bilde_id"]
+            isOneToOne: false
+            referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      album_bilde_reaksjon: {
+        Row: {
+          bilde_id: string
+          emoji: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          bilde_id: string
+          emoji: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          bilde_id?: string
+          emoji?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "album_bilde_reaksjon_bilde_id_fkey"
+            columns: ["bilde_id"]
+            isOneToOne: false
+            referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_reaksjon_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      app_innstillinger: {
+        Row: {
+          aktiv: boolean
+          beskrivelse: string | null
+          noekkel: string
+          oppdatert: string
+        }
+        Insert: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          noekkel: string
+          oppdatert?: string
+        }
+        Update: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          noekkel?: string
+          oppdatert?: string
+        }
+        Relationships: []
+      }
+      arrangement_chat: {
+        Row: {
+          arrangement_id: string
+          bilde_url: string | null
+          id: string
+          innhold: string | null
+          opprettet: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          arrangement_id: string
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          opprettet?: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          arrangement_id?: string
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          opprettet?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arrangement_chat_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrangement_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arrangementer: {
+        Row: {
+          beskrivelse: string | null
+          bilde_url: string | null
+          destinasjon: string | null
+          fra_facebook: boolean
+          id: string
+          lat: number | null
+          lng: number | null
+          oppdatert: string
+          oppmoetested: string | null
+          opprettet: string
+          opprettet_av: string | null
+          pris_per_person: number | null
+          sensurerte_felt: Json
+          slutt_tidspunkt: string | null
+          start_tidspunkt: string
+          tittel: string
+          type: Database["public"]["Enums"]["arrangementstype"]
+        }
+        Insert: {
+          beskrivelse?: string | null
+          bilde_url?: string | null
+          destinasjon?: string | null
+          fra_facebook?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          oppdatert?: string
+          oppmoetested?: string | null
+          opprettet?: string
+          opprettet_av?: string | null
+          pris_per_person?: number | null
+          sensurerte_felt?: Json
+          slutt_tidspunkt?: string | null
+          start_tidspunkt: string
+          tittel: string
+          type: Database["public"]["Enums"]["arrangementstype"]
+        }
+        Update: {
+          beskrivelse?: string | null
+          bilde_url?: string | null
+          destinasjon?: string | null
+          fra_facebook?: boolean
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          oppdatert?: string
+          oppmoetested?: string | null
+          opprettet?: string
+          opprettet_av?: string | null
+          pris_per_person?: number | null
+          sensurerte_felt?: Json
+          slutt_tidspunkt?: string | null
+          start_tidspunkt?: string
+          tittel?: string
+          type?: Database["public"]["Enums"]["arrangementstype"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arrangementer_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      arrangementmaler: {
+        Row: {
+          id: string
+          navn: string
+          opprettet: string | null
+          purredato: string | null
+          rekkefølge: number
+          type: string | null
+        }
+        Insert: {
+          id?: string
+          navn: string
+          opprettet?: string | null
+          purredato?: string | null
+          rekkefølge?: number
+          type?: string | null
+        }
+        Update: {
+          id?: string
+          navn?: string
+          opprettet?: string | null
+          purredato?: string | null
+          rekkefølge?: number
+          type?: string | null
+        }
+        Relationships: []
+      }
+      arrangoransvar: {
+        Row: {
+          aar: number
+          ansvarlig_id: string | null
+          arrangement_id: string | null
+          arrangement_navn: string
+          id: string
+          oppdatert: string
+          opprettet: string
+          purredato: string | null
+        }
+        Insert: {
+          aar: number
+          ansvarlig_id?: string | null
+          arrangement_id?: string | null
+          arrangement_navn: string
+          id?: string
+          oppdatert?: string
+          opprettet?: string
+          purredato?: string | null
+        }
+        Update: {
+          aar?: number
+          ansvarlig_id?: string | null
+          arrangement_id?: string | null
+          arrangement_navn?: string
+          id?: string
+          oppdatert?: string
+          opprettet?: string
+          purredato?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arrangoransvar_ansvarlig_id_fkey"
+            columns: ["ansvarlig_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrangoransvar_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bursdagsbilde: {
+        Row: {
+          aar: number | null
+          bilde_url: string | null
+          feiringsdato: string
+          forsok: number
+          modell: string | null
+          paabegynt: string | null
+          profil_id: string
+          prompt: string | null
+          siste_feil: string | null
+          slettet_av: string | null
+          slettet_paa: string | null
+          status: string
+        }
+        Insert: {
+          aar?: number | null
+          bilde_url?: string | null
+          feiringsdato: string
+          forsok?: number
+          modell?: string | null
+          paabegynt?: string | null
+          profil_id: string
+          prompt?: string | null
+          siste_feil?: string | null
+          slettet_av?: string | null
+          slettet_paa?: string | null
+          status?: string
+        }
+        Update: {
+          aar?: number | null
+          bilde_url?: string | null
+          feiringsdato?: string
+          forsok?: number
+          modell?: string | null
+          paabegynt?: string | null
+          profil_id?: string
+          prompt?: string | null
+          siste_feil?: string | null
+          slettet_av?: string | null
+          slettet_paa?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bursdagsbilde_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bursdagsbilde_slettet_av_fkey"
+            columns: ["slettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_reaksjoner: {
+        Row: {
+          emoji: string
+          melding_id: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          emoji: string
+          melding_id: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          emoji?: string
+          melding_id?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_reaksjoner_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feil_logg: {
+        Row: {
+          event: string
+          id: number
+          kontekst: Json | null
+          nivaa: string
+          opprettet: string
+          profil_id: string | null
+          url: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          event: string
+          id?: number
+          kontekst?: Json | null
+          nivaa: string
+          opprettet?: string
+          profil_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          event?: string
+          id?: number
+          kontekst?: Json | null
+          nivaa?: string
+          opprettet?: string
+          profil_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feil_logg_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_bevegelse: {
+        Row: {
+          belop: number
+          dato: string
+          id: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          belop: number
+          dato: string
+          id?: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          belop?: number
+          dato?: string
+          id?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_bevegelse_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_eiendom: {
+        Row: {
+          anskaffelsesverdi: number
+          driftskostnader_i_aar: number
+          husleie_i_aar: number
+          id: string
+          markedsverdi: number
+          navn: string
+          oppdatert: string
+        }
+        Insert: {
+          anskaffelsesverdi: number
+          driftskostnader_i_aar?: number
+          husleie_i_aar?: number
+          id?: string
+          markedsverdi: number
+          navn: string
+          oppdatert?: string
+        }
+        Update: {
+          anskaffelsesverdi?: number
+          driftskostnader_i_aar?: number
+          husleie_i_aar?: number
+          id?: string
+          markedsverdi?: number
+          navn?: string
+          oppdatert?: string
+        }
+        Relationships: []
+      }
+      fond_innskudd: {
+        Row: {
+          belop: number
+          dato: string
+          id: string
+          opprettet: string
+          oppspart_akkumulert: number
+          profil_id: string
+          renteandel_i_fjor: number
+        }
+        Insert: {
+          belop: number
+          dato: string
+          id?: string
+          opprettet?: string
+          oppspart_akkumulert?: number
+          profil_id: string
+          renteandel_i_fjor?: number
+        }
+        Update: {
+          belop?: number
+          dato?: string
+          id?: string
+          opprettet?: string
+          oppspart_akkumulert?: number
+          profil_id?: string
+          renteandel_i_fjor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_innskudd_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_kontant: {
+        Row: {
+          id: number
+          oppdatert: string
+          saldo: number
+        }
+        Insert: {
+          id?: number
+          oppdatert?: string
+          saldo?: number
+        }
+        Update: {
+          id?: number
+          oppdatert?: string
+          saldo?: number
+        }
+        Relationships: []
+      }
+      fond_navn_alias: {
+        Row: {
+          api_navn: string
+          opprettet: string
+          opprettet_av: string
+          profil_id: string
+        }
+        Insert: {
+          api_navn: string
+          opprettet?: string
+          opprettet_av: string
+          profil_id: string
+        }
+        Update: {
+          api_navn?: string
+          opprettet?: string
+          opprettet_av?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_navn_alias_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fond_navn_alias_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_verdi_historikk: {
+        Row: {
+          endret_av: string | null
+          gammel_verdi: number
+          id: number
+          kilde: string
+          kilde_id: string | null
+          ny_verdi: number
+          tidspunkt: string
+        }
+        Insert: {
+          endret_av?: string | null
+          gammel_verdi: number
+          id?: number
+          kilde: string
+          kilde_id?: string | null
+          ny_verdi: number
+          tidspunkt?: string
+        }
+        Update: {
+          endret_av?: string | null
+          gammel_verdi?: number
+          id?: number
+          kilde?: string
+          kilde_id?: string | null
+          ny_verdi?: number
+          tidspunkt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fond_verdi_historikk_endret_av_fkey"
+            columns: ["endret_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fond_verdipapir: {
+        Row: {
+          anskaffelsesverdi: number
+          id: string
+          navn: string
+          oppdatert: string
+          type: string
+          utbytte_i_aar: number
+          verdi: number
+        }
+        Insert: {
+          anskaffelsesverdi: number
+          id?: string
+          navn: string
+          oppdatert?: string
+          type: string
+          utbytte_i_aar?: number
+          verdi: number
+        }
+        Update: {
+          anskaffelsesverdi?: number
+          id?: string
+          navn?: string
+          oppdatert?: string
+          type?: string
+          utbytte_i_aar?: number
+          verdi?: number
+        }
+        Relationships: []
+      }
+      innspill_kobling: {
+        Row: {
+          issue_nummer: number
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          issue_nummer: number
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          issue_nummer?: number
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "innspill_kobling_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kaaring_vinnere: {
+        Row: {
+          aar: number
+          arrangement_id: string | null
+          begrunnelse: string | null
+          id: string
+          mal_id: string | null
+          oppdatert: string
+          opprettet: string
+          opprettet_av: string
+          poll_id: string | null
+          profil_id: string | null
+        }
+        Insert: {
+          aar: number
+          arrangement_id?: string | null
+          begrunnelse?: string | null
+          id?: string
+          mal_id?: string | null
+          oppdatert?: string
+          opprettet?: string
+          opprettet_av: string
+          poll_id?: string | null
+          profil_id?: string | null
+        }
+        Update: {
+          aar?: number
+          arrangement_id?: string | null
+          begrunnelse?: string | null
+          id?: string
+          mal_id?: string | null
+          oppdatert?: string
+          opprettet?: string
+          opprettet_av?: string
+          poll_id?: string | null
+          profil_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kaaring_vinnere_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_mal_id_fkey"
+            columns: ["mal_id"]
+            isOneToOne: false
+            referencedRelation: "kaaringmaler"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "poll"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kaaringmaler: {
+        Row: {
+          id: string
+          kandidat_kilde: string
+          navn: string
+          opprettet: string
+          rekkefolge: number
+        }
+        Insert: {
+          id?: string
+          kandidat_kilde?: string
+          navn: string
+          opprettet?: string
+          rekkefolge?: number
+        }
+        Update: {
+          id?: string
+          kandidat_kilde?: string
+          navn?: string
+          opprettet?: string
+          rekkefolge?: number
+        }
+        Relationships: []
+      }
+      kart_markering: {
+        Row: {
+          arrangement_id: string | null
+          id: string
+          lat: number
+          lng: number
+          opprettet: string
+          opprettet_av: string
+          symbol: string
+          tekst: string
+          utloper: string
+        }
+        Insert: {
+          arrangement_id?: string | null
+          id?: string
+          lat: number
+          lng: number
+          opprettet?: string
+          opprettet_av: string
+          symbol?: string
+          tekst: string
+          utloper: string
+        }
+        Update: {
+          arrangement_id?: string | null
+          id?: string
+          lat?: number
+          lng?: number
+          opprettet?: string
+          opprettet_av?: string
+          symbol?: string
+          tekst?: string
+          utloper?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kart_markering_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kart_markering_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      klubb_chat: {
+        Row: {
+          bilde_url: string | null
+          fra_facebook: boolean
+          id: string
+          innhold: string | null
+          kilde_ekstern_id: string | null
+          opprettet: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          bilde_url?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          opprettet?: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          bilde_url?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          opprettet?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "klubb_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      melding_bilder: {
+        Row: {
+          bilde_url: string
+          id: string
+          melding_id: string
+          opprettet: string
+          rekkefoelge: number
+        }
+        Insert: {
+          bilde_url: string
+          id?: string
+          melding_id: string
+          opprettet?: string
+          rekkefoelge?: number
+        }
+        Update: {
+          bilde_url?: string
+          id?: string
+          melding_id?: string
+          opprettet?: string
+          rekkefoelge?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "melding_bilder_melding_id_fkey"
+            columns: ["melding_id"]
+            isOneToOne: false
+            referencedRelation: "meldinger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      melding_chat: {
+        Row: {
+          bilde_url: string | null
+          fra_facebook: boolean
+          id: string
+          innhold: string | null
+          kilde_ekstern_id: string | null
+          melding_id: string
+          opprettet: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          bilde_url?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          melding_id: string
+          opprettet?: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          bilde_url?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          melding_id?: string
+          opprettet?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "melding_chat_melding_id_fkey"
+            columns: ["melding_id"]
+            isOneToOne: false
+            referencedRelation: "meldinger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "melding_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      melding_reaksjon: {
+        Row: {
+          emoji: string
+          melding_id: string
+          opprettet: string
+          profil_id: string
+        }
+        Insert: {
+          emoji: string
+          melding_id: string
+          opprettet?: string
+          profil_id: string
+        }
+        Update: {
+          emoji?: string
+          melding_id?: string
+          opprettet?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "melding_reaksjon_melding_id_fkey"
+            columns: ["melding_id"]
+            isOneToOne: false
+            referencedRelation: "meldinger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "melding_reaksjon_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meldinger: {
+        Row: {
+          aktuell_dato: string | null
+          album_id: string | null
+          arkivert_tidspunkt: string | null
+          fra_facebook: boolean
+          id: string
+          innhold: string | null
+          kilde_ekstern_id: string | null
+          opprettet: string
+          profil_id: string
+          sist_aktivitet: string
+          sorterings_tidspunkt: string
+        }
+        Insert: {
+          aktuell_dato?: string | null
+          album_id?: string | null
+          arkivert_tidspunkt?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          opprettet?: string
+          profil_id: string
+          sist_aktivitet?: string
+          sorterings_tidspunkt?: string
+        }
+        Update: {
+          aktuell_dato?: string | null
+          album_id?: string | null
+          arkivert_tidspunkt?: string | null
+          fra_facebook?: boolean
+          id?: string
+          innhold?: string | null
+          kilde_ekstern_id?: string | null
+          opprettet?: string
+          profil_id?: string
+          sist_aktivitet?: string
+          sorterings_tidspunkt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meldinger_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "album"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meldinger_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paameldinger: {
+        Row: {
+          arrangement_id: string
+          oppdatert: string
+          profil_id: string
+          status: Database["public"]["Enums"]["paameldingsstatus"]
+        }
+        Insert: {
+          arrangement_id: string
+          oppdatert?: string
+          profil_id: string
+          status: Database["public"]["Enums"]["paameldingsstatus"]
+        }
+        Update: {
+          arrangement_id?: string
+          oppdatert?: string
+          profil_id?: string
+          status?: Database["public"]["Enums"]["paameldingsstatus"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paameldinger_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paameldinger_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pass_info: {
+        Row: {
+          nummer: string | null
+          oppdatert: string
+          profil_id: string
+          utloper: string | null
+        }
+        Insert: {
+          nummer?: string | null
+          oppdatert?: string
+          profil_id: string
+          utloper?: string | null
+        }
+        Update: {
+          nummer?: string | null
+          oppdatert?: string
+          profil_id?: string
+          utloper?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pass_info_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pass_tilgang_forespørsel: {
+        Row: {
+          arrangement_id: string
+          besluttet_av: string | null
+          besluttet_paa: string | null
+          eier_id: string
+          gyldig_til: string | null
+          id: string
+          opprettet: string
+          soker_id: string
+          status: string
+          varslet_paa: string | null
+        }
+        Insert: {
+          arrangement_id: string
+          besluttet_av?: string | null
+          besluttet_paa?: string | null
+          eier_id: string
+          gyldig_til?: string | null
+          id?: string
+          opprettet?: string
+          soker_id: string
+          status?: string
+          varslet_paa?: string | null
+        }
+        Update: {
+          arrangement_id?: string
+          besluttet_av?: string | null
+          besluttet_paa?: string | null
+          eier_id?: string
+          gyldig_til?: string | null
+          id?: string
+          opprettet?: string
+          soker_id?: string
+          status?: string
+          varslet_paa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pass_tilgang_forespørsel_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pass_tilgang_forespørsel_besluttet_av_fkey"
+            columns: ["besluttet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pass_tilgang_forespørsel_eier_id_fkey"
+            columns: ["eier_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pass_tilgang_forespørsel_soker_id_fkey"
+            columns: ["soker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll: {
+        Row: {
+          aar: number | null
+          arrangement_id: string | null
+          avsluttet_paa: string | null
+          flervalg: boolean
+          id: string
+          kaaring_mal_id: string | null
+          kontekst: string | null
+          kontekst_data: Json | null
+          opprettet: string
+          opprettet_av: string
+          spoersmaal: string
+          svarfrist: string
+          tiebreak_status: string | null
+          tiebreak_varslet_paa: string | null
+          vinner_varslet_paa: string | null
+        }
+        Insert: {
+          aar?: number | null
+          arrangement_id?: string | null
+          avsluttet_paa?: string | null
+          flervalg?: boolean
+          id?: string
+          kaaring_mal_id?: string | null
+          kontekst?: string | null
+          kontekst_data?: Json | null
+          opprettet?: string
+          opprettet_av: string
+          spoersmaal: string
+          svarfrist: string
+          tiebreak_status?: string | null
+          tiebreak_varslet_paa?: string | null
+          vinner_varslet_paa?: string | null
+        }
+        Update: {
+          aar?: number | null
+          arrangement_id?: string | null
+          avsluttet_paa?: string | null
+          flervalg?: boolean
+          id?: string
+          kaaring_mal_id?: string | null
+          kontekst?: string | null
+          kontekst_data?: Json | null
+          opprettet?: string
+          opprettet_av?: string
+          spoersmaal?: string
+          svarfrist?: string
+          tiebreak_status?: string | null
+          tiebreak_varslet_paa?: string | null
+          vinner_varslet_paa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_kaaring_mal_id_fkey"
+            columns: ["kaaring_mal_id"]
+            isOneToOne: false
+            referencedRelation: "kaaringmaler"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_chat: {
+        Row: {
+          bilde_url: string | null
+          id: string
+          innhold: string | null
+          opprettet: string
+          poll_id: string
+          profil_id: string
+          video_url: string | null
+        }
+        Insert: {
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          opprettet?: string
+          poll_id: string
+          profil_id: string
+          video_url?: string | null
+        }
+        Update: {
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          opprettet?: string
+          poll_id?: string
+          profil_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_chat_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "poll"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_stemme: {
+        Row: {
+          opprettet: string
+          poll_id: string
+          profil_id: string
+          valg_id: string
+        }
+        Insert: {
+          opprettet?: string
+          poll_id: string
+          profil_id: string
+          valg_id: string
+        }
+        Update: {
+          opprettet?: string
+          poll_id?: string
+          profil_id?: string
+          valg_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_stemme_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "poll"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_stemme_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_stemme_valg_id_fkey"
+            columns: ["valg_id"]
+            isOneToOne: false
+            referencedRelation: "poll_valg"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_valg: {
+        Row: {
+          id: string
+          opprettet: string
+          poll_id: string
+          referanse_arrangement_id: string | null
+          referanse_profil_id: string | null
+          rekkefoelge: number
+          tekst: string
+        }
+        Insert: {
+          id?: string
+          opprettet?: string
+          poll_id: string
+          referanse_arrangement_id?: string | null
+          referanse_profil_id?: string | null
+          rekkefoelge?: number
+          tekst: string
+        }
+        Update: {
+          id?: string
+          opprettet?: string
+          poll_id?: string
+          referanse_arrangement_id?: string | null
+          referanse_profil_id?: string | null
+          rekkefoelge?: number
+          tekst?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_valg_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "poll"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_valg_referanse_arrangement_id_fkey"
+            columns: ["referanse_arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_valg_referanse_profil_id_fkey"
+            columns: ["referanse_profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posisjon_deling: {
+        Row: {
+          deler_til: string
+          oppdatert: string
+          profil_id: string
+        }
+        Insert: {
+          deler_til: string
+          oppdatert?: string
+          profil_id: string
+        }
+        Update: {
+          deler_til?: string
+          oppdatert?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posisjon_deling_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posisjon_punkt: {
+        Row: {
+          arrangement_id: string | null
+          id: string
+          lat: number
+          lng: number
+          noeyaktighet_m: number | null
+          profil_id: string
+          registrert: string
+        }
+        Insert: {
+          arrangement_id?: string | null
+          id?: string
+          lat: number
+          lng: number
+          noeyaktighet_m?: number | null
+          profil_id: string
+          registrert?: string
+        }
+        Update: {
+          arrangement_id?: string | null
+          id?: string
+          lat?: number
+          lng?: number
+          noeyaktighet_m?: number | null
+          profil_id?: string
+          registrert?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posisjon_punkt_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posisjon_punkt_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          aktiv: boolean
+          bilde_url: string | null
+          bursdagsgratulasjon_aktiv: boolean
+          chat_sist_sett: string | null
+          epost: string
+          faar_feilvarsler: boolean
+          faar_issue_varsler: boolean
+          fodselsdato: string | null
+          id: string
+          matallergier: string | null
+          navn: string
+          oppdatert: string
+          opprettet: string
+          rolle: string
+          stikkord: string | null
+          telefon: string | null
+          visningsnavn: string
+        }
+        Insert: {
+          aktiv?: boolean
+          bilde_url?: string | null
+          bursdagsgratulasjon_aktiv?: boolean
+          chat_sist_sett?: string | null
+          epost: string
+          faar_feilvarsler?: boolean
+          faar_issue_varsler?: boolean
+          fodselsdato?: string | null
+          id: string
+          matallergier?: string | null
+          navn: string
+          oppdatert?: string
+          opprettet?: string
+          rolle?: string
+          stikkord?: string | null
+          telefon?: string | null
+          visningsnavn: string
+        }
+        Update: {
+          aktiv?: boolean
+          bilde_url?: string | null
+          bursdagsgratulasjon_aktiv?: boolean
+          chat_sist_sett?: string | null
+          epost?: string
+          faar_feilvarsler?: boolean
+          faar_issue_varsler?: boolean
+          fodselsdato?: string | null
+          id?: string
+          matallergier?: string | null
+          navn?: string
+          oppdatert?: string
+          opprettet?: string
+          rolle?: string
+          stikkord?: string | null
+          telefon?: string | null
+          visningsnavn?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          endpoint: string
+          id: string
+          opprettet: string
+          p256dh: string
+          profil_id: string
+        }
+        Insert: {
+          auth: string
+          endpoint: string
+          id?: string
+          opprettet?: string
+          p256dh: string
+          profil_id: string
+        }
+        Update: {
+          auth?: string
+          endpoint?: string
+          id?: string
+          opprettet?: string
+          p256dh?: string
+          profil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      samtale: {
+        Row: {
+          id: string
+          opprettet: string
+          profil_a: string
+          profil_b: string
+          sist_aktivitet: string
+        }
+        Insert: {
+          id?: string
+          opprettet?: string
+          profil_a: string
+          profil_b: string
+          sist_aktivitet?: string
+        }
+        Update: {
+          id?: string
+          opprettet?: string
+          profil_a?: string
+          profil_b?: string
+          sist_aktivitet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "samtale_profil_a_fkey"
+            columns: ["profil_a"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "samtale_profil_b_fkey"
+            columns: ["profil_b"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      samtale_chat: {
+        Row: {
+          bilde_url: string | null
+          id: string
+          innhold: string | null
+          lest: boolean
+          opprettet: string
+          profil_id: string
+          samtale_id: string
+          video_url: string | null
+        }
+        Insert: {
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          lest?: boolean
+          opprettet?: string
+          profil_id: string
+          samtale_id: string
+          video_url?: string | null
+        }
+        Update: {
+          bilde_url?: string | null
+          id?: string
+          innhold?: string | null
+          lest?: boolean
+          opprettet?: string
+          profil_id?: string
+          samtale_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "samtale_chat_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "samtale_chat_samtale_id_fkey"
+            columns: ["samtale_id"]
+            isOneToOne: false
+            referencedRelation: "samtale"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timeplan_post: {
+        Row: {
+          adresse: string | null
+          arrangement_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          opprettet: string
+          opprettet_av: string
+          tekst: string
+          tidspunkt: string
+        }
+        Insert: {
+          adresse?: string | null
+          arrangement_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          opprettet?: string
+          opprettet_av: string
+          tekst: string
+          tidspunkt: string
+        }
+        Update: {
+          adresse?: string | null
+          arrangement_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          opprettet?: string
+          opprettet_av?: string
+          tekst?: string
+          tidspunkt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timeplan_post_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeplan_post_opprettet_av_fkey"
+            columns: ["opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      varsel_innstillinger: {
+        Row: {
+          aktiv: boolean
+          beskrivelse: string | null
+          dager_foer: number | null
+          id: string
+          noekkel: string
+          oppdatert: string
+        }
+        Insert: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          dager_foer?: number | null
+          id?: string
+          noekkel: string
+          oppdatert?: string
+        }
+        Update: {
+          aktiv?: boolean
+          beskrivelse?: string | null
+          dager_foer?: number | null
+          id?: string
+          noekkel?: string
+          oppdatert?: string
+        }
+        Relationships: []
+      }
+      varsel_logg: {
+        Row: {
+          arrangement_id: string | null
+          dedup_noekkel: string | null
+          id: string
+          kanal: string | null
+          lest: boolean
+          melding: string
+          opprettet: string | null
+          poll_id: string | null
+          profil_id: string
+          teller_ulest: boolean
+          tittel: string
+          type: string | null
+          url: string | null
+        }
+        Insert: {
+          arrangement_id?: string | null
+          dedup_noekkel?: string | null
+          id?: string
+          kanal?: string | null
+          lest?: boolean
+          melding: string
+          opprettet?: string | null
+          poll_id?: string | null
+          profil_id: string
+          teller_ulest?: boolean
+          tittel: string
+          type?: string | null
+          url?: string | null
+        }
+        Update: {
+          arrangement_id?: string | null
+          dedup_noekkel?: string | null
+          id?: string
+          kanal?: string | null
+          lest?: boolean
+          melding?: string
+          opprettet?: string | null
+          poll_id?: string | null
+          profil_id?: string
+          teller_ulest?: boolean
+          tittel?: string
+          type?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personlige_varsler_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "varsel_logg_arrangement_id_fkey"
+            columns: ["arrangement_id"]
+            isOneToOne: false
+            referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "varsel_logg_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "poll"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      varsel_preferanser: {
+        Row: {
+          epost_aktiv: boolean
+          oppdatert: string | null
+          profil_id: string
+          push_aktiv: boolean
+          varsel_nivaa: string
+        }
+        Insert: {
+          epost_aktiv?: boolean
+          oppdatert?: string | null
+          profil_id: string
+          push_aktiv?: boolean
+          varsel_nivaa?: string
+        }
+        Update: {
+          epost_aktiv?: boolean
+          oppdatert?: string | null
+          profil_id?: string
+          push_aktiv?: boolean
+          varsel_nivaa?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "varsel_preferanser_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vedtekter: {
+        Row: {
+          id: string
+          innhold: string
+          oppdatert: string
+          slug: string
+          tittel: string
+        }
+        Insert: {
+          id?: string
+          innhold: string
+          oppdatert?: string
+          slug: string
+          tittel: string
+        }
+        Update: {
+          id?: string
+          innhold?: string
+          oppdatert?: string
+          slug?: string
+          tittel?: string
+        }
+        Relationships: []
+      }
+      vedtekter_versjoner: {
+        Row: {
+          endret_av: string | null
+          endringsnotat: string
+          id: string
+          innhold: string
+          opprettet: string
+          vedtaksdato: string
+          vedtekt_id: string
+        }
+        Insert: {
+          endret_av?: string | null
+          endringsnotat: string
+          id?: string
+          innhold: string
+          opprettet?: string
+          vedtaksdato: string
+          vedtekt_id: string
+        }
+        Update: {
+          endret_av?: string | null
+          endringsnotat?: string
+          id?: string
+          innhold?: string
+          opprettet?: string
+          vedtaksdato?: string
+          vedtekt_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vedtekter_versjoner_endret_av_fkey"
+            columns: ["endret_av"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vedtekter_versjoner_vedtekt_id_fkey"
+            columns: ["vedtekt_id"]
+            isOneToOne: false
+            referencedRelation: "vedtekter"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vitals_logg: {
+        Row: {
+          device_type: string | null
+          id: string
+          metric: string
+          nav_type: string | null
+          opprettet: string
+          rating: string | null
+          rute: string
+          transfer_size: number | null
+          verdi: number
+        }
+        Insert: {
+          device_type?: string | null
+          id?: string
+          metric: string
+          nav_type?: string | null
+          opprettet?: string
+          rating?: string | null
+          rute: string
+          transfer_size?: number | null
+          verdi: number
+        }
+        Update: {
+          device_type?: string | null
+          id?: string
+          metric?: string
+          nav_type?: string | null
+          opprettet?: string
+          rating?: string | null
+          rute?: string
+          transfer_size?: number | null
+          verdi?: number
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      avslutt_kaaringspoll: {
+        Args: { p_poll_id: string }
+        Returns: {
+          status: string
+          var_ny: boolean
+          vinner_arrangement_id: string
+          vinner_profil_id: string
+        }[]
+      }
+      er_admin: { Args: never; Returns: boolean }
+      er_generalsekretaer: { Args: never; Returns: boolean }
+      feil_logg_bucket: { Args: { ts: string }; Returns: string }
+      fjern_generalsekretaer: {
+        Args: { forventet_profil?: string }
+        Returns: {
+          forrige_navn: string
+          forrige_profil: string
+        }[]
+      }
+      get_statistikk: { Args: never; Returns: Json }
+      har_pass_tilgang: { Args: { eier: string }; Returns: boolean }
+      krev_bursdagsbilde: {
+        Args: {
+          p_feiringsdato: string
+          p_profil_id: string
+          p_tvungen?: boolean
+        }
+        Returns: {
+          aar: number | null
+          bilde_url: string | null
+          feiringsdato: string
+          forsok: number
+          modell: string | null
+          paabegynt: string | null
+          profil_id: string
+          prompt: string | null
+          siste_feil: string | null
+          slettet_av: string | null
+          slettet_paa: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bursdagsbilde"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      lukk_kaaringspoll_naa: {
+        Args: { p_poll_id: string }
+        Returns: {
+          status: string
+          var_ny: boolean
+          vinner_arrangement_id: string
+          vinner_profil_id: string
+        }[]
+      }
+      marker_chat_sett: { Args: never; Returns: undefined }
+      sett_generalsekretaer: {
+        Args: { ny_profil: string }
+        Returns: {
+          forrige_navn: string
+          forrige_profil: string
+        }[]
+      }
+      skriv_fond_bevegelser: {
+        Args: { p_aar: number; p_data: Json }
+        Returns: undefined
+      }
+      stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
+      tell_aktivitet: {
+        Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
+        Returns: undefined
+      }
+      tell_poll_stemmer: {
+        Args: { p_poll_id: string }
+        Returns: {
+          antall: number
+          valg_id: string
+        }[]
+      }
+    }
+    Enums: {
+      arrangementstype: "moete" | "tur"
+      paameldingsstatus: "ja" | "nei" | "kanskje"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      arrangementstype: ["moete", "tur"],
+      paameldingsstatus: ["ja", "nei", "kanskje"],
+    },
+  },
+} as const

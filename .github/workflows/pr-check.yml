@@ -1,0 +1,488 @@
+# CI-sjekk for endringer mot main. `pull_request` har nå TO mulige omfang, og
+# `push` har to til:
+#
+#   pull_request, risiko funnet     → FULL   (~14,5 min): kjerneport + Playwright-e2e
+#   pull_request, lav risiko (#663) → KJERNE (~5,5 min):  ingen fil kan påvirke en flyt
+#   push, direkte til main          → KJERNE (~5,5 min):  lint, typecheck, vitest, bygg
+#   push, merget PR                 → INGEN  (~15 sek):   alt portet på PR-en alt
+#
+# E2e hoppes over av tre, uavhengige grunner (se `steps.omfang.outputs.aarsak`
+# under «Avgjør e2e-omfang»):
+#   - hendelse: `push` — kjørte allerede på PR-en (se lenger ned).
+#   - lav_risiko: ingen endret fil kan påvirke en kjørende flyt (#663,
+#     .github/scripts/e2e-risiko.mjs) — normalt, ingen dekning tapt.
+#   - budsjett: budsjettvakten kuttet fordi månedskvoten er stram
+#     (.github/scripts/ci-minuttbudsjett.mjs) — PR-en ER ikke e2e-dekket,
+#     behandle som «ukjent», ikke «grønt».
+#
+# Kjerneporten er ubetinget i alle tilfeller og skal aldri ofres. E2e ligger i
+# SAMME job som resten (ikke et eget) fordi et eget job ville vært usynlig for
+# merge-loopens vente-sjekk — se .claude/commands/agentic.md steg 10.
+#
+# Build-steget bruker dummy-env slik at ingen ekte secrets trengs. E2e-instansen
+# startes fra bunn i selve jobben (fersk `supabase start`) — se e2e/README.md
+# § Sikkerhetsmodellen for hvorfor det er trygt, og docs/ci-minuttbudsjett.md
+# for hvorfor e2e kan bli kuttet eller hoppet over også på en PR.
+# E2e-steget inkluderer også e2e/rls/ (#533) — RLS-policyene verifiseres her
+# med ekte anon/authenticated-klienter, ikke bare service_role.
+
+name: PR-sjekk
+
+on:
+  pull_request:
+    branches: [main]
+  # Push til main kjører KJERNEPORTEN (lint/typecheck/vitest/bygg), aldri e2e.
+  # Bakgrunn: workflowen kjørte tidligere kun på pull_request, og 7 av de siste
+  # 30 commitene på main var direkte pushes — de fikk null porter. Pipelinen har
+  # dessuten en legitim direkte-push-sti (agentic steg 10.5, typeregenerering
+  # etter migrasjon), så hullet var strukturelt og ikke bare slurv.
+  #
+  # Hvorfor ikke e2e her: kom endringen via PR, var e2e allerede grønt der, og
+  # en ny full kjøring per merge ville doblet forbruket (~290 min/mnd) og spist
+  # mesteparten av driftsreserven på 700. Kjerneporten koster ~5,5 min mot
+  # ~14,5 for full — vi kjøper mesteparten av verdien for en tredjedel.
+  #
+  # …men på en MERGE-commit kjøper vi ingenting: den koden ble nettopp testet på
+  # PR-en. Augusts tall: 56 push-kjøringer, 242 min, 0 funn — 19 % av
+  # månedskvoten brukt på å re-teste kode som var grønn minutter før, mens
+  # budsjettvakten samtidig kuttet e2e på PR-ene (#609). Kjerneporten hoppes
+  # derfor over når commiten har en merget PR; direkte pushes — hullet denne
+  # triggeren finnes for — får den fortsatt. Se «Avgjør omfang» under.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# actions:read kreves av budsjettvakten (leser egne workflow-runs for å måle
+# forbrukte CI-minutter denne måneden), samme mønster som db-restore-drill.yml.
+# pull-requests:read lar «Avgjør omfang» slå opp om en push-commit kom fra en
+# merget PR.
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+# Avbryt pågående run for samme branch ved nytt push — sparer CI-tid.
+# Gruppen inkluderer workflow-navn slik at fremtidige workflows ikke
+# kolliderer med denne på samme ref.
+#
+# cancel-in-progress KUN på pull_request: der er en ny push til branchen et
+# signal om at forrige kjøring er uinteressant. På main er hver kjøring knyttet
+# til en commit som allerede ER historikk — kansellerer vi den, står commiten
+# igjen uten port, som er nøyaktig hullet push-triggeren over skulle lukke.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sjekk:
+    runs-on: ubuntu-latest
+    # Målt på PR #538: kjerneport 5,5 min (npm ci 29 s, lint 21 s, typecheck
+    # 34 s, vitest 2 min 6 s, bygg 1 min 46 s), e2e-tillegg 8,5 min ⇒ 14,5 min
+    # totalt. 25 gir slingring uten å maskere en jobb som faktisk henger.
+    # Push-kjøringer bruker bare kjerneporten og lander på ~5,5.
+    timeout-minutes: 25
+    env:
+      # kaaring-varsel-retry.spec.ts (linje ~34) skipper hele specen uten denne —
+      # den kjører den ekte /api/cron/paaminne-cronen og krever CRON_SECRET-auth.
+      # Verdien er en dummy: cronen kjører kun mot den ferske, isolerte
+      # test-instansen i denne jobben (se e2e/README.md § Sikkerhetsmodellen).
+      CRON_SECRET: ci-dummy-hemmelighet
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Er denne main-commiten allerede portet? En squash-merge er bit-identisk
+      # med koden PR-en nettopp kjørte lint/typecheck/vitest/bygg på, så en ny
+      # runde kjøper ingenting. Vi slår opp mot API-et i stedet for å lete etter
+      # «(#123)» i commit-meldingen — meldingsformatet er en konvensjon, ikke en
+      # garanti, og en direkte push med den formen i teksten ville sluppet unna
+      # porten stille. Det er nøyaktig feilretningen vi ikke tåler her.
+      #
+      # Fail-open er med vilje: svarer API-et ikke, kjører vi kjerneporten. Å
+      # betale 5,5 min unødvendig er mildere enn å slippe en utestet commit
+      # gjennom på en nettverksfeil.
+      - name: Avgjør om commiten alt er portet
+        id: portet
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          antall=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" \
+            --jq '[.[] | select(.merged_at != null)] | length' 2>/dev/null) || antall=""
+
+          if [ -z "$antall" ]; then
+            echo "::warning::Kunne ikke slå opp PR for commiten — kjører kjerneporten for sikkerhets skyld."
+            echo "hopp=false" >> "$GITHUB_OUTPUT"
+          elif [ "$antall" -gt 0 ]; then
+            echo "::notice::Commiten kom fra en merget PR og ble portet der — kjerneporten hoppes over."
+            echo "hopp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Direkte push til main uten PR — kjerneporten kjøres."
+            echo "hopp=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.portet.outputs.hopp != 'true'
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      # Budsjettvakt (#534) — kjøres FØR npm ci med vilje: den er ren Node uten
+      # avhengigheter, og et kutt her skal ikke betale for docker-pull/npm
+      # install vi likevel ikke trenger. Se .github/scripts/ci-minuttbudsjett.mjs
+      # og docs/ci-minuttbudsjett.md.
+      - name: CI-minuttbudsjett
+        id: budsjett
+        if: steps.portet.outputs.hopp != 'true'
+        env:
+          REPO_PRIVAT: ${{ github.event.repository.private }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/ci-minuttbudsjett.mjs
+
+      # Risiko-gating av e2e (#663) — kjøres ETTER budsjettvakten (så
+      # forbrukstabellen fortsatt skrives på HVER PR, trendgrunnlag for #664)
+      # og FØR «Avgjør e2e-omfang». Kun relevant for pull_request — push-
+      # kjøringer kjører aldri e2e uansett (se «Avgjør e2e-omfang» under), så
+      # å måle risiko der ville vært et bortkastet API-kall.
+      - name: Risiko-gating av e2e
+        id: risiko
+        if: steps.portet.outputs.hopp != 'true' && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMMER: ${{ github.event.pull_request.number }}
+          ENDREDE_FILER: ${{ github.event.pull_request.changed_files }}
+        run: node .github/scripts/e2e-risiko.mjs
+
+      # Ett sted å resonnere om «skal e2e kjøre». Tre uavhengige grunner til å
+      # hoppe over, samlet her i stedet for duplisert på seks steg-betingelser
+      # (der ett glemt ledd ville gitt en jobb som starter Supabase den ikke
+      # bruker — eller verre, kjører e2e vi trodde var av).
+      #
+      # MERK: risiko-STEGET kjører etter budsjett-steget over — bevisst, så
+      # forbrukstabellen skrives på hver PR (trendgrunnlag for #664). Det er
+      # PRIORITETEN i if-kjeden under som setter risiko foran budsjett, ikke
+      # stegrekkefølgen. De to må ikke forveksles.
+      #
+      # RISIKO PRIORITERES FORAN BUDSJETT, bevisst: en dok-PR i en stram måned skal
+      # få `aarsak=lav_risiko` (normalt, forventet), ikke `aarsak=budsjett`
+      # (som eskaleres som «ukjent dekning», se docs/ci-minuttbudsjett.md).
+      # Snur du rekkefølgen, eskalerer pipelinen på noe helt normalt hver
+      # gang budsjettet er stramt samtidig som noen pusher en README-fiks.
+      - name: Avgjør e2e-omfang
+        id: omfang
+        if: steps.portet.outputs.hopp != 'true'
+        env:
+          HENDELSE: ${{ github.event_name }}
+          RISIKO: ${{ steps.risiko.outputs.risiko }}
+          BUDSJETT_OK: ${{ steps.budsjett.outputs.kjor_e2e }}
+        run: |
+          if [ "$HENDELSE" != "pull_request" ]; then
+            echo "::notice::$HENDELSE mot main — kjerneporten kjøres, e2e hoppes over (kjørte allerede på PR-en)."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=hendelse" >> "$GITHUB_OUTPUT"
+          # `= "false"`, ikke `!= "true"`: en TOM eller ukjent verdi (steget
+          # ble hoppet over, skriptet døde før den skrev output) er «ikke
+          # målt», ikke «lav risiko». Den skal falle videre til budsjett/kjorer
+          # slik at e2e KJØRER. Skriptet feiler åpent internt — denne ene linja
+          # er stedet hele den polariteten kan snus ved et uhell.
+          elif [ "$RISIKO" = "false" ]; then
+            echo "::notice::Ingen endret fil kan påvirke en kjørende flyt — e2e hoppes over (#663)."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=lav_risiko" >> "$GITHUB_OUTPUT"
+          elif [ "$BUDSJETT_OK" != "true" ]; then
+            echo "::notice::Budsjettvakten kuttet e2e — se docs/ci-minuttbudsjett.md."
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "aarsak=budsjett" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "aarsak=kjorer" >> "$GITHUB_OUTPUT"
+          fi
+
+      # To markørsteg — gjør årsaken maskinlesbar via
+      # `gh run view --json jobs` uten å måtte parse::notice-tekst. Se
+      # docs/ci-minuttbudsjett.md § Slik ser du om e2e faktisk kjørte.
+      #
+      # Navnene under (og «E2e (Playwright)» lenger ned) leses bokstavelig av
+      # .github/scripts/ci-tidsbruk.mjs (#664) og er pinnet av en test
+      # (__tests__/ci-tidsbruk.test.ts) — endrer du et av dem, oppdater
+      # konstantene STEG_E2E/MARKOER_LAV_RISIKO/MARKOER_BUDSJETT der også.
+      - name: E2e hoppet over — lav risiko
+        if: steps.omfang.outputs.aarsak == 'lav_risiko'
+        run: echo "Ingen endret fil kan påvirke en kjørende flyt. Se docs/ci-minuttbudsjett.md."
+
+      - name: E2e hoppet over — budsjettvakten kuttet
+        if: steps.omfang.outputs.aarsak == 'budsjett'
+        run: echo "::warning::PR-en er IKKE e2e-dekket. Behandle som ukjent, ikke grønt."
+
+      - name: Installer avhengigheter
+        if: steps.portet.outputs.hopp != 'true'
+        run: npm ci
+
+      # Bakgrunnsstart: supabase start tar 1-2 min (docker-pull + containere).
+      # Startes her, FØR de raske stegene (lint/typecheck/vitest/build), slik at
+      # oppstarten skjer parallelt med dem i stedet for sekvensielt etterpå.
+      # -x utelater tjenester e2e-suiten ikke bruker (studio, postgres-meta,
+      # mailpit, imgproxy, edge-runtime, logflare, vector, supavisor) — færre
+      # containere å starte og vedlikeholde i loggen.
+      - name: Start Supabase (bakgrunn)
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          # Exit-koden til en bakgrunnsprosess er utilgjengelig for et SENERE
+          # steg (`wait` virker kun på egne barn, og hvert run:-steg er sin egen
+          # shell). Vi skriver den derfor til en sentinel-fil som ventesteget
+          # poller. Uten dette forsvant exit-koden helt — en feilende seed.sql
+          # (raise exception-vakten, #534) ville vært usynlig.
+          nohup bash -c 'npx supabase start -x studio,postgres-meta,mailpit,imgproxy,edge-runtime,logflare,vector,supavisor > supabase-start.log 2>&1; echo $? > supabase-start.exit' > /dev/null 2>&1 &
+          echo "supabase start kjører i bakgrunnen (pid $!)."
+
+      # Flyttet hit (#659) fra rett før «E2e (Playwright)»: der lå de etter
+      # «Vent på Supabase», altså ren serietid OPPÅ ventingen på bakgrunns-
+      # prosessen over. Her kjører nedlasting/installasjon av Chromium PARALLELT
+      # med at `supabase start` jobber i bakgrunnen i stedet for etter den.
+      - name: Cache Playwright-browsere
+        if: steps.omfang.outputs.e2e == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          # Uten restore-keys ga ENHVER package-lock.json-endring (også en som
+          # ikke rører Playwright) full Chromium-nedlasting på nytt. Prefikset
+          # treffer forrige cache; `playwright install` legger bare til det som
+          # faktisk mangler hvis versjonen har endret seg.
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Installer Chromium
+        if: steps.omfang.outputs.e2e == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Kjerneporten — ubetinget uansett budsjettvaktens verdikt. Billig, og
+      # skal aldri ofres. Den ENE betingelsen er en main-commit som allerede ble
+      # portet på PR-en sin (se «Avgjør om commiten alt er portet»); der er det
+      # ikke en ofring, men samme sjekk to ganger på samme kode.
+      - name: Lint
+        if: steps.portet.outputs.hopp != 'true'
+        run: npm run lint
+
+      - name: Typesjekk
+        if: steps.portet.outputs.hopp != 'true'
+        run: npm run typecheck
+
+      - name: Test
+        if: steps.portet.outputs.hopp != 'true'
+        run: npm test
+
+      - name: Vent på Supabase
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          # Vi venter på at `supabase start` er FERDIG — ikke på at
+          # `supabase status` svarer. status sjekker kun at db-containeren er
+          # frisk (assertContainerHealthy(ctx, utils.DbId)) og lister stoppede
+          # tjenester til stderr uten å feile, så den kan bli grønn MENS de 123
+          # migrasjonene og seed.sql fortsatt kjører — hvorpå migrasjons-
+          # tellingen under leser et delvis antall og gir falsk rødt.
+          for i in $(seq 1 60); do
+            if [ -f supabase-start.exit ]; then
+              echo "supabase start ferdig etter ~$((i * 5)) s."
+              break
+            fi
+            sleep 5
+          done
+
+          if [ ! -f supabase-start.exit ]; then
+            echo "::error::supabase start ble ikke ferdig innen ~5 minutter. Logg:"
+            cat supabase-start.log || true
+            exit 1
+          fi
+
+          kode=$(tr -d '[:space:]' < supabase-start.exit)
+          if [ "$kode" != "0" ]; then
+            # Ubetinget logg-dump ved feil: seed.sql-vakten (#534) rapporterer
+            # via `raise exception`, og den meldingen finnes KUN her.
+            echo "::error::supabase start feilet med exit $kode. Logg:"
+            cat supabase-start.log || true
+            exit 1
+          fi
+
+          # --override-name mapper fra CLI-ens interne feltnavn
+          # (api.url / auth.publishable_key / auth.secret_key) til navnene
+          # playwright.config.ts og e2e/README.md allerede bruker.
+          npx supabase status -o env \
+            --override-name api.url=E2E_SUPABASE_URL \
+            --override-name auth.publishable_key=E2E_SUPABASE_ANON_KEY \
+            --override-name auth.secret_key=E2E_SUPABASE_SERVICE_KEY \
+            > supabase-status.env
+
+          # CLI-en formaterer med godotenv.Marshal, som skriver KEY="value" MED
+          # hermetegn. $GITHUB_ENV stripper dem IKKE, så uten strippingen her
+          # ble NEXT_PUBLIC_SUPABASE_URL bokstavelig talt
+          # '"http://127.0.0.1:54321"' — en ugyldig URL, og hele suiten falt.
+          sed -E 's/^([A-Z0-9_]+)="(.*)"$/\1=\2/' supabase-status.env > status-strippet.env
+
+          verdi_for() { sed -n "s/^$1=//p" status-strippet.env | tail -n1; }
+
+          # Fallback til de eldre feltnavnene: publishable/secret key er den nye
+          # nøkkelgenerasjonen, og en CLI-versjon som ikke fyller dem ville gitt
+          # tomme verdier. Da er ANON_KEY/SERVICE_ROLE_KEY fortsatt riktig svar,
+          # og vi slipper en rød CI-runde på ren navnedrift.
+          url=$(verdi_for E2E_SUPABASE_URL);            [ -n "$url" ]    || url=$(verdi_for API_URL)
+          anon=$(verdi_for E2E_SUPABASE_ANON_KEY);      [ -n "$anon" ]   || anon=$(verdi_for ANON_KEY)
+          secret=$(verdi_for E2E_SUPABASE_SERVICE_KEY); [ -n "$secret" ] || secret=$(verdi_for SERVICE_ROLE_KEY)
+
+          # Lås 1 mot «grønn på tom luft»: er en av variablene tom (endret
+          # feltnavn i en fremtidig CLI, en tjeneste som ikke kom opp), ville
+          # HAR_TEST_INSTANS i playwright.config.ts blitt false, hver spec
+          # skippet og jobben blitt grønn med NULL dekning. Vi validerer lokale
+          # variabler og ikke $E2E_SUPABASE_URL: $GITHUB_ENV slår først inn i
+          # NESTE steg, så en `[ -n "$E2E_SUPABASE_URL" ]` her ville alltid vært
+          # tom og alltid feilet. Lås 2 er testen i e2e/sikkerhetsvakt.spec.ts.
+          feil=0
+          sjekk() {
+            if [ -z "$2" ]; then
+              echo "::error::$1 er tom etter «supabase status -o env» — e2e ville skippet stille og gitt grønn CI uten dekning."
+              feil=1
+            else
+              case "$2" in
+                *'"'*|*"'"*)
+                  echo "::error::$1 inneholder hermetegn — strippingen traff ikke formatet CLI-en skrev."
+                  feil=1
+                  ;;
+              esac
+            fi
+          }
+          sjekk E2E_SUPABASE_URL "$url"
+          sjekk E2E_SUPABASE_ANON_KEY "$anon"
+          sjekk E2E_SUPABASE_SERVICE_KEY "$secret"
+          if [ "$feil" -ne 0 ]; then
+            echo "Feltnavn CLI-en faktisk ga (verdier utelatt med vilje):"
+            cut -d= -f1 supabase-status.env
+            exit 1
+          fi
+
+          # Skriver KUN disse tre til $GITHUB_ENV. Bevisst ALDRI
+          # NEXT_PUBLIC_SUPABASE_*/SUPABASE_SERVICE_ROLE_KEY her — pinningen i
+          # playwright.config.ts (config-vakten, se e2e/README.md §
+          # Sikkerhetsmodellen) skal være det som setter dem. Setter vi
+          # NEXT_PUBLIC_*-variablene direkte i workflow-env, omgår vi den vakten
+          # og sikkerhetsvakt.spec.ts mister sin betydning i CI. At vi plukker
+          # tre navngitte verdier — i stedet for å appende hele stdout — er også
+          # det som holder DB_URL/JWT_SECRET/S3_PROTOCOL_* ute av jobb-env.
+          {
+            echo "E2E_SUPABASE_URL=$url"
+            echo "E2E_SUPABASE_ANON_KEY=$anon"
+            echo "E2E_SUPABASE_SERVICE_KEY=$secret"
+          } >> "$GITHUB_ENV"
+
+      # Fanger «grønn på tom luft»: en migrasjon som feiler stille (eller aldri
+      # ble lagt til supabase/migrations/) skal gjøre jobben rød, ikke la
+      # e2e kjøre mot et ufullstendig skjema. psql er forhåndsinstallert på
+      # ubuntu-latest.
+      - name: Verifiser at alle migrasjoner kjørte
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          kjort=$(psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -tAc \
+            "select count(*) from supabase_migrations.schema_migrations")
+          kjort=$(echo "$kjort" | tr -d '[:space:]')
+          # Tom output med exit 0 fra psql ville sluppet gjennom stille:
+          # `[ "" -ne "123" ]` returnerer 2 (syntaksfeil), og `if` leser 2 som
+          # usant — altså «ingen avvik». Sjekk derfor at vi faktisk fikk et tall.
+          if [ -z "$kjort" ]; then
+            echo "::error::psql ga tom migrasjonstelling — kunne ikke verifisere skjemaet."
+            exit 1
+          fi
+          pa_disk=$(ls -1 supabase/migrations/*.sql | wc -l)
+          echo "Migrasjoner kjørt i DB: $kjort — filer i supabase/migrations/: $pa_disk"
+          if [ "$kjort" -ne "$pa_disk" ]; then
+            echo "::error::Migrasjonsavvik — $kjort kjørt mot $pa_disk filer på disk. En migrasjon feilet stille eller mangler."
+            exit 1
+          fi
+
+      # Flyttet hit (#659), ETTER «Vent på Supabase» og migrasjonsverifiseringen
+      # — se styrets uttalelse på #659. `next start` (playwright.config.ts sitt
+      # `webServer.command` i CI) skal ALDRI bygge selv: RLS-suiten
+      # (e2e/rls/) har ingen `dependencies` på setup/chromium og skal få
+      # raskest mulig feedback, og ville ellers ventet på et fullt Next-bygg
+      # for en sikkerhetsgrense den ikke trenger. Ett bygg her — ikke to
+      # betingede steg (dummy-env / test-instans-env) — er et bevisst valg:
+      # to steg med identiske env-blokker er en stille drift-felle, og
+      # navnet «Bygg» leses bokstavelig av .github/scripts/ci-tidsbruk.mjs
+      # (pinnet i __tests__/ci-tidsbruk.test.ts). Uten «Bygg» ETT sted blir
+      # tidsmålingen blind for halvparten av eksperimentet.
+      #
+      # Fallback-uttrykket (`||`) er BETINGET av den positive artefaktvakten i
+      # e2e/global-setup.ts: slår fallbacken inn ubemerket (E2E_SUPABASE_URL
+      # tom av en eller annen grunn mens e2e likevel kjøres), bygger vi mot
+      # dummy-Supabase — og DA skal artefaktvakten gjøre det høylytt rødt,
+      # ikke stille servere en app uten data. Ett byggesteg uten den vakten
+      # er ikke det styret sa ja til.
+      #
+      # Serialiseringen bak «Vent på Supabase» koster i praksis ~0: lint +
+      # typecheck + vitest (~3 min) dekker det meste av `supabase start`-tiden
+      # allerede (kjørt i bakgrunnen fra steget over), så bygget venter uansett
+      # ikke lenge. IKKE flytt bygget tilbake foran «Vent på Supabase» for å
+      # "spare tid" — det var nøyaktig det som ga dummy-env i artefaktet appen
+      # faktisk serverer, se drift-drøftingen i #659.
+      - name: Bygg
+        if: steps.portet.outputs.hopp != 'true'
+        env:
+          # E2E_SUPABASE_*-variablene settes av «Vent på Supabase» KUN når
+          # e2e faktisk kjører (steps.omfang.outputs.e2e == 'true') — i alle
+          # andre løp (kjerneport-only, lav_risiko, budsjett, push) er de
+          # tomme, og fallbacken til dummy-verdier brukes. Supabase-klienten
+          # (lib/supabase/server.ts + client.ts) og push-modulen leser disse
+          # ved modulinnlasting; bygget kaller aldri faktisk ut mot dem.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.E2E_SUPABASE_URL || 'https://dummy.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.E2E_SUPABASE_ANON_KEY || 'dummy' }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: dummy
+          # Sikkerhetskritisk (#659): uten denne blir BLOKKER_UTSENDING false
+          # i artefaktet (lib/varsler.ts) fordi BASE_URL ikke lenger ser lokal
+          # ut for den SERVERTE appen — `next start` baker NEXT_PUBLIC_*-verdier
+          # inn ved byggetid, webServer.env i playwright.config.ts er for den
+          # kjørende dev-server-prosessen som ikke lenger finnes i CI.
+          NEXT_PUBLIC_BASE_URL: http://localhost:3100
+        run: npm run build
+
+      # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
+      # ingen egen env-linje trengs for at playwright.config.ts sine
+      # CI-betingede justeringer (retries, forbidOnly, testIgnore av
+      # visuell/readme-skjermbilder osv.) skal slå inn.
+      - name: E2e (Playwright)
+        if: steps.omfang.outputs.e2e == 'true'
+        run: npx playwright test
+
+      # Diagnostisk, ikke en port (#659). always() + continue-on-error: sier
+      # ALDRI noe om hvorvidt kjøringen var grønn eller rød — den skal svare
+      # på ETT spørsmål: rev runneren en prosess i minnekrise underveis?
+      # ::warning:: (IKKE ::error::) med vilje: et OOM-spor på en GRØNN
+      # kjøring er det farligste utfallet (et symptom som ikke slo ut som
+      # rødt ENDA), og en error her ville skapt falsk rødt på noe dette steget
+      # ikke skal ha makt til å felle jobben på.
+      - name: Diagnose etter e2e (OOM-spor)
+        if: always() && steps.omfang.outputs.e2e == 'true'
+        continue-on-error: true
+        run: |
+          echo "### Minne (free -m)"
+          free -m || true
+
+          echo "### dmesg — søk etter OOM/killed process"
+          funn=$(sudo dmesg -T 2>/dev/null | grep -iE 'oom|killed process|out of memory' || true)
+          if [ -n "$funn" ]; then
+            echo "::warning::Mulig OOM-spor funnet i dmesg under denne kjøringen — se logg under."
+            echo "$funn"
+          else
+            echo "Ingen OOM-spor."
+          fi
+
+          echo "### Docker-containere som har avsluttet (exited)"
+          docker ps -a --filter status=exited || true
+
+      - name: Last opp Playwright-rapport ved feil
+        if: failure() && steps.omfang.outputs.e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 3

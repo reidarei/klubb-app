@@ -1,0 +1,681 @@
+// Sentral observability-modul. All server-side logging skal gå gjennom
+// logg.warn() / logg.feil() — ikke console.error/warn direkte.
+//
+// Event-taksonomi (dot-separert navnerom):
+//   varsel.send.feilet          — sendPush/sendEpost-feil i lib/varsler.ts
+//   varsel.epost.feilet         — Resend API-feil i lib/epost.ts
+//   varsel.url.relativ          — url som verken er absolutt eller starter med «/» (#507)
+//   varsel.url.fremmed          — url pekte ut av appen (eller var malformert); push fikk «/varsler/{id}» når varsel-raden finnes, ellers «/» — aldri stien fra URL-en (#687)
+//   varsel.push.feilet          — web-push-feil i lib/push.ts
+//   bilde.opplast.feilet        — R2-opplasting feiler
+//   video.opplast.feilet        — video-upload feiler
+//   tema.ugyldig                — ukjent tema-verdi
+//   chat.varsler.feilet         — sendChatVarsler() kastet uventet fra sendVarslerEtterPost (chat.ts try/catch), meldingen er alt lagret (#612)
+//   kaaringspoll.varsler.feilet — varsler etter kåringspoll-hendelse feiler
+//   cron.paaminne.feilet        — enkelt-oppgave i påminnelses-cron feiler
+//   bursdagsgratulasjon.feilet  — insert-feil eller uventet exception
+//   vitals.insert.feilet        — web-vitals-rad feiler i DB
+//   github.webhook.feilet       — webhook-konfigurasjons- eller varselfeil
+//   bli-utvikler.issue.feilet   — GitHub Issue-oppretting feiler
+//   ai.datoforslag.feilet       — Anthropic dato-forslag feiler (auth/transient)
+//   aktivitet.tell.feilet       — tell_aktivitet-RPC feiler i /api/aktivitet
+//   tidligere.hent.feilet       — arrangement/melding/poll-spørring feiler på /tidligere (#492)
+//   poll.aggregat.feilet        — tell_poll_stemmer-RPC feiler i lib/queries/poll.ts (#492)
+//   varsel.innstilling.feilet   — varsel_innstillinger-oppslag (aktiv/test-modus) feiler (#503)
+//   varsel.fortidssperre.feilet — arrangementer-oppslag for fortids-sperren feiler (#503)
+//   varsel.mottakere.feilet     — mottaker-oppslag (profiles) feiler i lib/varsler.ts (#503)
+//   varsel.mottakere.tomme      — eksplisitt mottakerliste ga 0 aktive treff utenfor testmodus (#503)
+//   varsel.dedup.feilet         — dedup-select mot varsel_logg feiler, sender likevel (#503)
+//   varsel.preferanser.feilet   — varsel_preferanser/push_subscriptions-oppslag feiler (#503)
+//   varsel.logg.insert.feilet   — insert i varsel_logg feiler for én mottaker, sender likevel (#503)
+//   varsel.scope.feilet         — arrangement/poll-oppslag for @-mention-tittel feiler, sender likevel (#503)
+//   pass.varsler.feilet         — varsel etter pass-tilgang-hendelse feiler i lib/actions/pass.ts (#503)
+//   pass.stempel.feilet         — stemple_pass_varslet()-RPC feiler etter vellykket varsel (#504)
+//   cron.klientfeil.varsel.feilet — alarm-varsel i sjekk-klientfeil-cronet feiler, retention kjører videre (#503)
+//   cron.klientfeil.mottakere.tomme — warn: ingen har faar_feilvarsler, døgnalarmen fyrer aldri (#582)
+//   github.webhook.mottakere.tomme  — warn: ingen har faar_issue_varsler, innspill når bare innsenderen (#582)
+//   cron.paaminne.hentForDag.feilet          — arrangementer-oppslag for en påminnelsesdag feiler (#504)
+//   cron.paaminne.hentArrangorPurringer.feilet — arrangoransvar-oppslag for dagens purringer feiler (#504)
+//   cron.paaminne.kaaring.fersk.feilet   — «åpne kåringspoller»-spørringen feiler (#495/#504)
+//   cron.paaminne.kaaring.retry.feilet   — «uvarslede avsluttede kåringspoller»-spørringen feiler (#495/#504)
+//   cron.paaminne.kaaring.profiler.feilet — mottaker-oppslag for kåringsvarsel feiler, DEN ufravikelige (#495/#504)
+//   cron.paaminne.kaaring.feilet — behandleKaaringspoller() kastet, fanget i kjorPaaminnelser (#504)
+//   cron.paaminne.kaaring.rpc.feilet     — avslutt_kaaringspoll-RPC-en feilet for én poll (#504)
+//   cron.paaminne.kaaring.tom_rpc        — avslutt_kaaringspoll returnerte ingen rad (#504)
+//   cron.paaminne.kaaring.fersk_ikke_lukket — warn: fersk poll ble ikke lukket (ikke_moden / kappløp), utsettes til retry (#504)
+//   bursdagsgratulasjon.profiler.feilet  — profiler-med-fødselsdato-oppslag feiler (#504)
+//   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
+//   bursdagsgratulasjon.chatvarsel.feilet — sendChatVarsler for gratulasjonen kastet; retryes neste slot via dedup_noekkel (#642)
+//   bursdagsvarsel.profiler.feilet — profiler-oppslag (alle aktive) feiler i det egne bursdagsvarselet, sendes ikke til noen (#638)
+//   bursdagsvarsel.feilet          — sendVarsel for bursdagsvarselet kastet for ett bursdagsbarn; retryes neste slot via dedup_noekkel, neste bursdagsbarn er upåvirket (#638)
+//   cron.paaminne.jobb.feilet            — kjorPaaminnelser() kastet ut av handleren; de andre cron-jobbene kjørte likevel (#638-review)
+//   cron.bursdagsgratulasjon.jobb.feilet — kjorBursdagsgratulasjon() kastet; bursdagsvarselet kjørte likevel samme slot (#638-review)
+//   cron.bursdagsvarsel.jobb.feilet      — kjorBursdagsvarsel() kastet ut av sin egen try/catch (#638-review)
+//   logg.feillogg.insert.feilet — feil_logg-inserten fra logg.feil() selv feilet/timet ut (#496)
+//   pass.varsel.oppslag.feilet  — navn-/tur-berikelse for pass-varsel feiler etter committet skriving, sender likevel (pulje A)
+//   fond.eiendom.oppslag.feilet    — gammel markedsverdi-oppslag feiler før oppdatering/sletting (pulje A)
+//   fond.verdipapir.oppslag.feilet — gammel verdi-oppslag feiler før oppdatering/sletting (pulje A)
+//   fond.kontant.oppslag.feilet    — gammel kontantsaldo-oppslag feiler før oppdatering (pulje A)
+//   fond.oppgjor.profiler.feilet   — profil-oppslag for visningsnavn-matching i fond-oppgjør feiler (pulje A)
+//   fond.oppgjor.innskudd.feilet   — innskudd-rader-oppslag i fond-oppgjør feiler (pulje A)
+//   fond.oppgjor.saldo.feilet      — kontantsaldo-oppslag for diff-visning i fond-oppgjør feiler (pulje A)
+//   album.revalidering.oppslag.feilet    — arrangement_id-oppslag for revalidatePath feiler etter committet album-mutasjon (pulje A)
+//   album.slett.bilder_oppslag.feilet    — bilder-oppslag for R2-opprydding feiler før album slettes (pulje A)
+//   arrangement.slett.bilde_oppslag.feilet — bilde_url-oppslag for R2-opprydding feiler før arrangement slettes (pulje A)
+//   arrangement.kobletPoll.oppslag.feilet  — koblet kåringspoll-oppslag feiler på arrangementsiden, siden rendres uten lenken (pulje B)
+//   tidligere.minProfil.oppslag.feilet     — egen rolle-oppslag feiler på /tidligere, faller tilbake til «ikke admin» (pulje B)
+//   album.profiler.oppslag.feilet          — @mention-profiler-oppslag feiler på albumsiden (pulje C)
+//   arrangement.rediger.gjeldendeAnsvar.oppslag.feilet — forhåndsvalgt dropdown-verdi feiler på rediger-siden (pulje C)
+//   innspill.profiler.oppslag.feilet       — innsender-navn-oppslag feiler på innspill-siden (pulje C)
+//   tiebreak.profiler.oppslag.feilet       — kandidat-navn/bilde-oppslag feiler på tiebreak-siden (pulje C)
+//   medlem.rediger.generalsekretaer.oppslag.feilet — GS-confirm-dialog-oppslag feiler på medlem-rediger-siden (pulje C)
+//   bli-utvikler.profil.oppslag.feilet     — innsender-navn-oppslag feiler ved innspill-opprettelse (pulje C)
+//   cron.klientfeil.mottakere.feilet       — admin-mottaker-oppslag feiler i sjekk-klientfeil-cronet, alarm uteblir (pulje C)
+//   github.webhook.mottakere.feilet        — admin-mottaker-oppslag feiler i GitHub-webhooken, 500 så GitHub retryer (pulje C)
+//   admin.varsel_logg.hent.feilet          — varsel_logg-oppslag feiler i admin-API-et; klienten får generisk 500 (pulje C-review)
+//   klient.chat.meldinger.feilet           — chat-meldingshenting feiler i nettleseren (pulje C-review)
+//   klient.chat.reaksjoner.feilet          — reaksjonshenting feiler i nettleseren (pulje C-review)
+//   varsel.dedup.ingen_noekkel  — tillatDuplikat: false uten arrangementId/pollId/dedupNoekkel i lib/varsler.ts — ingen nøkkel å deduplisere på, sjekken under er en no-op (#518)
+//   samtaler.marker_lest.oppdatering.feilet — samtale_chat-oppdateringen til lest = true feiler ved sidelast, siden rendres videre (#539)
+//   samtaler.marker_lest.feilet — markerSamtaleLest() kastet uventet fra /samtaler/[id] (#539)
+//   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat, fire-and-forget under render (#539-review)
+//   klient.ressurs.feilet       — en <script>/<link> lastet ikke i nettleseren: appen mangler kode (#575)
+//   klient.bilde.feilet         — warn: et <img> lastet ikke. Kosmetisk og oftest transient på mobil (#603)
+//   varsel.push.timeout         — sendPush traff PUSH_TIMEOUT_MS-deadline (Promise.race), svelges som andre push-feil (#612)
+//   chat.varsler.mention.feilet   — @-mention-benet i sendChatVarsler kastet; nevnte legges tilbake i broadcast (#612)
+//   chat.varsler.broadcast.feilet — broadcast-benet i sendChatVarsler kastet, mention-benet er upåvirket (#612)
+//   varsel.chat.fanout.treg       — warn: sendChatVarsler brukte over CHAT_FANOUT_TREG_MS på mottaker-oppslag + begge sendVarsel-kall (#612)
+//   varsel.epost.budsjett.chat_hoppet — warn: e-postkanalen droppet for et chat-varsel, døgnforbruket er over EPOST_DOEGNBUDSJETT_CHAT. Push+in-app gikk (#612-review)
+//   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
+//   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
+//   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
+//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer klikk_id (#688, korrelasjons-ID generert i notificationclick — binder raden til den påfølgende push.klikk.navigert/push.klikk.innlogging), maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
+//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal/login — sistnevnte fra #688), allerede_paa_maal, synlighet, klikk_id og forsok (hvilket navigasjonsforsøk raden gjelder, #688). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
+//   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
+//   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
+//   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
+//   push.klikk.innlogging       — warn: klienten bar et push-klikk-mål GJENNOM /login (#688) — sesjonen var utløpt da varselet ble trykket, brukeren logget inn, og målet ble bevart i stedet for å falle til agendaen. Bærer klikk_id og maal (den lokale stien).
+//   klient.pushklikk.oppgitt    — warn: push-klikk-målet ble forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten at klienten landet der — oppføringen forkastes for å bryte en potensiell løkke (#688). Bærer klikk_id, maal og forsok.
+//   bli-utvikler.kobling.feilet — insert i innspill_kobling feiler etter opprettet issue, markøren i body dekker fallback (#632)
+//   github.webhook.kobling.oppslag.feilet — innspill_kobling-oppslag feiler; faller tilbake til body-markøren (#632)
+//   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)
+//   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
+//   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
+//   github.webhook.innspill.uten_endringslogg — FEIL: brukerinnspill lukket som gjennomført uten merket endringslogg-oppføring. Et innspill skal leveres og kommenteres, eller avslås — aldri noe midt imellom, så dette er kontraktbrudd, ikke en normaltilstand. Fyrer IKKE på not_planned/duplicate (legitime utfall); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
+//   server.render.feilet        — feil kastet i server component / action / route handler, fanget av onRequestError. Bærer `digest` (koblingen til raden app/error.tsx skriver fra klienten) og en MASKERT melding — eneste sted vi persisterer meldingstekst, se loggRenderFeil() (#631)
+//   server.render.sesjon_utloept — warn: render-feilen var en død sesjon (PGRST301 / AUTH_INGEN_SESJON), ikke en programfeil. Egen event så den ikke drukner i server.render.feilet og ikke vekker døgnalarmen (#631)
+//   server.render.logging.feilet — warn (stdout only): loggRenderFeil() eller den dynamiske importen av lib/logg kastet inne i onRequestError. Siste skanse — vi står i Next sin feilhåndtering, så en throw her ville maskert den ekte feilen (#631)
+//   bursdagsbilde.generering.levert — VELLYKKET generering: bytes, mime_type og modell fra Vertex-svaret. Ren observability på warn-kanalen (eneste ikke-Sentry stdout-kanal) — det man trenger å se ved «first light» (#641)
+//   bursdagsbilde.generering.feilet — Vertex-, R2- eller DB-oppdaterings-steget i genererBursdagsbilde() feilet; fingerprint = feilklasse ('auth'/'kvote'/'ugyldig'/'blokkert'/'transient'/'r2'/'db-update') (#641)
+//   bursdagsbilde.profiler.feilet   — fail-closed mottakerspørring (aktive profiler m/ fødselsdato) feiler i cron-ruta; kastes videre, IKKE tolket som «ingen har bursdag» (#641)
+//   bursdagsbilde.claim.feilet      — krev_bursdagsbilde()-RPC-en feiler (ikke 0-rader, som er normalt — en faktisk spørringsfeil) (#641)
+//   bursdagsbilde.slett.feilet      — R2-sletting feiler: enten det GAMLE bildet ved erstatning (raden peker alt på det nye), opprydding av et ferskt objekt etter feilet DB-oppdatering (fingerprint 'opprydding'), eller admin-slettingen der R2-objektet ER borte men raden ikke ble nullet (fingerprint 'db-update-etter-r2' — 'sti' i konteksten er det som gjør manuell opprydding mulig) (#641)
+//   bursdagsbilde.input.avvist      — profilbildet kunne ikke hentes/valideres server-side (HTTP-feil, ugyldig MIME, for stort) før noe Vertex-kall i det hele tatt ble forsøkt (#641)
+//   cron.bursdagsbilde.jobb.feilet  — hoved- eller nødpasset i bursdagsbilde-cronet kastet ut av sin egen try/catch; det andre passet kjørte likevel (#641)
+//   logg-feil.kontekst.strippet     — warn: scrubKontekst() droppet minst én nøkkel fra en klient-innsendt kontekst. Bærer count, sample (kommaseparerte nøkkelnavn, kappet i antall og lengde, og kun de som har form som en identifikator fra vår egen kode), ugyldige (antallet som ikke hadde den formen — nøklene er klient-kontrollerte, så formen er PII-vakten) og fingerprint = klient-eventet som mistet felter (ikke `event`: den nøkkelen ville overskrevet event-navnet i stdout-linja). Belte-og-sele mot __tests__/logg-kontekst-dekning.test.ts: fanger en gammel cachet klient-bundle som sender et felt vakten aldri så (#681)
+//   posisjon.deling.feilet          — upsert i posisjon_deling feiler; mannen får «klarte ikke lagre», ingen prikk settes på kartet (#693/#695)
+//   posisjon.punkt.feilet           — insert av et nytt sporpunkt feiler etter at delingen er lagret (#695)
+//   posisjon.punkt.oppdatering.feilet — oppdatering av tidsstempel på et eksisterende punkt feiler (mannen står stille) (#695)
+//   posisjon.siste_punkt.feilet     — warn: oppslag av forrige punkt feiler; vi legger inn et nytt punkt i stedet for å nekte deling (#695)
+//   posisjon.punkt.slett.feilet     — sletting av eget spor ved «slutt å dele» feiler; delingen står fortsatt på (#695)
+//   posisjon.stopp.feilet           — sletting av egen delingsrad feiler; brukeren får beskjed om å prøve igjen (#693)
+//   posisjon.paagaaende.feilet      — warn: oppslaget av «hvilket arrangement pågår nå» feiler i den FAIL-OPEN varianten (finnPaagaaendeArrangement); posisjonen lagres videre, bare som et løst punkt uten spor-tilhørighet. Den STRENGE varianten kaster i stedet, og feilen dukker da opp som reisemodus.oppslag.feilet (#695/#723)
+//   posisjon.pling.avsender.feilet  — warn: navneoppslag for pling-teksten feiler; varselet sendes med «Noen» som avsender (#695)
+//   cron.posisjon.rydd.feilet       — opprydding av utgåtte posisjonsspor feiler i påminnelses-cronet; de andre jobbene kjører videre (#695)
+//   cron.posisjon.jobb.feilet       — ryddPosisjonsspor() kastet ut av sin egen try/catch; påminnelsene kjørte likevel (#695)
+//   kart.markering.feilet           — insert av en kartmarkering feiler; mannen får «klarte ikke lagre», ingen nål settes (#697)
+//   kart.markering.slett.feilet     — sletting av en kartmarkering feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#697)
+//   kart.chat.hent.feilet           — warn: klubbchat-meldingene kunne ikke hentes til kartets chat-panel; kartet rendres videre med tomt panel (#709)
+//   kart.chat.profiler.feilet       — warn: profil-oppslaget for chat-panelet feilet; navn og avatarer mangler i panelet (#709)
+//   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
+//   kart.<symbol>.mottakere.feilet  — feil: mottakeroppslaget for et varslende symbols alert feilet. Markeringen står, varselet uteblir. <symbol> er id-en fra registeret (lib/markering-symboler.ts) — hvert symbol setter sin egen loggMottakere-streng i klubbens datafil (lib/klubb-symboler.ts), så navnene er literaler der, ikke her (#747, #759, #767)
+//   kart.<symbol>.varsel.feilet     — feil: sendVarsel() kastet for et varslende symbols alert. Markeringen er allerede lagret. Samme <symbol>-forklaring som over (#747, #759, #767)
+//   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
+//   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
+//   kart.timeplan.opprett.arrangement_borte — warn: inserten fikk 23503 på arrangement_id, altså ble turen slettet mellom vakten og inserten (geokodingen kan ligge inntil 5 s imellom). Normal samtidighet, ikke serverfeil — mannen får samme «finnes ikke lenger» som vakten gir
+//   kart.timeplan.opprett.retry_les_feilet — «Prøv igjen» traff 23505 (raden er lagret), men den lagrede raden kunne ikke leses tilbake; posten svares ut uten sted framfor med et punkt vi ikke har dekning for
+//   kart.timeplan.opprett.uten_kvittering  — warn: inserten gikk fint, men PostgREST ga ingen rad tilbake; svaret faller tilbake på verdiene vi selv skrev. Bærer sample = postens id
+//   kart.timeplan.slett.feilet      — sletting av en timeplan-post feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#716)
+//   reisemodus.paa                  — warn: et medlem slo reisemodus PÅ (for seg selv, på denne enheten). Bærer arrangement_id. Ikke en feil — halvparten av produktsignalet arkitekturstyret ba om i #723
+//   tema.lagre.feilet             — feil: serverskriving av tema-valget feilet. Valget ligger allerede i localStorage, så brukeren merker ingenting — det følger bare ikke med til neste enhet (#742)
+//   reisemodus.av                   — warn: et medlem slo reisemodus AV for turen. Bærer arrangement_id. DEN andre halvparten: slår 14 av 18 den av dag én, er funksjonen feil, og da må tallet finnes (#723)
+//   reisemodus.oppslag.feilet       — arrangement- eller flagg-oppslaget bak reisemodus feiler; modusen faller til AV (fail-open mot VANLIG APP — aldri til fullskjermkart ved en feiltakelse). hentReisemodus() bruker de strenge helper-variantene nettopp for at en DB-feil ikke skal se ut som «ingen tur» eller «kill-switch av» (#723)
+//   kart.symbol.ukjent                 — warn: erGyldigSymbol() koerserte et symbol utenfor registeret til STANDARD_SYMBOL. Migrasjon 152 (#767) bytter constrainten fra verdiliste til format-check, så en slik verdi ikke lenger nødvendigvis feiler i databasen — dette er signalet som erstatter den tapte 23514. Bærer sample = den avviste verdien (klient-kontrollert, men et symbol-navn, ikke fritekst)
+
+import { naa } from '@/lib/dato'
+import { SENTRY_DSN } from '@/lib/config'
+import { maskerRadverdier } from '@/lib/sentry-scrub'
+import type { Json } from '@/lib/supabase/database.types'
+import { utdragNoekkelnavn } from '@/lib/logg-sanitering'
+import { LOGG_NOEKLER_MAKS_ANTALL } from '@/lib/konstanter'
+
+// ─── PII-SCRUBBING ──────────────────────────────────────────────────────────
+
+// Felter vi tillater i kontekst sendt til Sentry og feil_logg.
+// Alt som ikke er på listen strippes ut. Formålet er å unngå at navn,
+// epostadresser, telefonnummer e.l. havner i Sentry-kvotaen.
+// Eksportert (#681) slik at __tests__/logg-kontekst-dekning.test.ts kan
+// verifisere statisk at hvert felt et logg.warn()/logg.feil()-kall sender
+// faktisk står her — samme mekanisme som strippet #676-feltene stille.
+export const KONTEKST_WHITELIST = new Set([
+  'profil_id',
+  'arrangement_id',
+  'event',
+  'code',
+  'nivaa',
+  'count',
+  'tabell',
+  'fingerprint',
+  'sample',
+  'status',
+  // Rent tall (varighet i millisekunder) — ingen PII. Lagt til for
+  // varsel.chat.fanout.treg (#612), men generisk nok til gjenbruk av
+  // fremtidige latency-målinger.
+  'ms',
+  // Rent tall (GitHub-issuenummer) — ingen PII. Gjør en tapt kobling (#632)
+  // sporbar til riktig issue i stdout-linja og i Sentry-konteksten. Merk at
+  // det IKKE når feil_logg.kontekst: persisterFeilLogg() skriver kun
+  // { code, tabell, navn, noekler }, og den kontrakten utvides ikke her utover
+  // disse fire.
+  'issue_nummer',
+  // Den deployede app-versjonen (f.eks. «V3.5.60») — en konstant fra
+  // lib/versjon.json, aldri en radverdi. Uten den kan ikke
+  // github.webhook.innspill.uten_endringslogg skilles i ettertid: dukker
+  // oppføringen senere opp i en NYERE versjon enn den som var ute, ble issuet
+  // lukket før deploy; dukker den aldri opp, ble merkelappen glemt (#633).
+  'versjon',
+  // GitHubs lukkeårsak ('completed' | 'not_planned' | 'duplicate' | null) —
+  // fast enum fra GitHub, ingen PII.
+  'state_reason',
+  // Faste enums, ingen PII — brukt av bursdagsbilde-cronet (#641):
+  // 'klasse' er VertexFeilKlasse ('auth'/'kvote'/'ugyldig'/'blokkert'/
+  // 'transient'), 'slot' er cron-vinduets 0-baserte slot-indeks, 'pass' er
+  // 'iMorgen'/'iDag' (hoved- vs. nødpass).
+  'klasse',
+  'slot',
+  'pass',
+  // R2-objektsti (f.eks. «bursdagsbilde/1757…-a1b2c3.jpg») — filnavnet er
+  // tidsstempel + UUID (nyttR2Filnavn), aldri medlemsnavn eller annet fra
+  // brukeren. Uten den er bursdagsbilde.slett.feilet ubrukelig: hele poenget
+  // med det eventet er at noen skal kunne rydde objektet manuelt (#641).
+  'sti',
+  // Uuid-er, på linje med arrangement_id/profil_id over — ingen PII i seg
+  // selv, kun en fremmednøkkel (#681, funnet i samme opprydding som #676-
+  // feltene): album_id (album.profiler.oppslag.feilet) og medgjest_id
+  // (bursdagsbilde-genereringens ctx, ved siden av profil_id for
+  // bursdagsbarnet).
+  'album_id',
+  'medgjest_id',
+  // Rent tall / konstante identifikatorer fra koden og leverandørsvaret,
+  // aldri en radverdi — brukt av bursdagsbilde.generering.levert (#641/#681):
+  // 'bytes' er byte-lengden på det genererte bildet, 'mime_type' og 'modell'
+  // er faste strenger fra Vertex-svaret hhv. GOOGLE_VERTEX_MODELL-env-en.
+  'bytes',
+  'mime_type',
+  'modell',
+  // Rent tall: hvor mange strippede kontekst-nøkler som IKKE var
+  // identifikator-formede, og derfor ikke gjengis i `sample`
+  // (logg-feil.kontekst.strippet, #681). Nøkkelnavnene der kommer rått fra en
+  // uautentisert klient, så formen er vakten mot PII — se
+  // STRIPPET_NOEKKEL_FORM i app/api/logg-feil/route.ts.
+  'ugyldige',
+  // Fast enum ('ok'/'fremmed'/'ugyldig') fra lib/config.ts sin relativUrl()
+  // — hvorfor en varsel-URL ble avvist til intern fallback (#687). Ingen PII:
+  // beskriver URL-formen, aldri innholdet i den. Prefikset «url_» er bevisst:
+  // whitelisten er global, så en naken «utfall»-nøkkel ville blitt arvet av
+  // neste kallsted med et helt annet verdirom (og kollidert i navn med
+  // VarselUtfall i lib/varsler.ts).
+  'url_utfall',
+  // Sorterte, kommaseparerte EGNE nøkkelnavn fra et normalisert feilobjekt
+  // (f.eks. «code,details,hint,message») — struktur, ikke data. Lagt til av
+  // normaliserFeil() (#711) for å hindre at feil_logg.kontekst blir {} for en
+  // supabase-feil som verken er en Error-instans eller har `code` (typisk en
+  // transport-/nettverksfeil). Verdiene bak nøklene skrives aldri. NAVNENE er
+  // derimot IKKE garantert kodekontrollerte — normaliserFeil() tar `unknown`,
+  // og en kastet struktur kan ha en epostadresse eller en URL som nøkkel — så
+  // de går gjennom formvakten utdragNoekkelnavn() først (#711-review). Som
+  // «navn» skrives feltet direkte inn i feil_logg.kontekst fra
+  // persisterFeilLogg(), utenom scrubbet(ctx) — det står her for å dekke
+  // tilfellet en fremtidig kaller sender det eksplisitt via ctx.
+  'noekler',
+])
+
+function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {
+  if (!data) return {}
+  // Tillat også felter som er nestet under «ctx» — planleggeren la ctx-støtte
+  // til for cron-aggregering (f.eks. ctx: { count: 3 }).
+  const ctx = data.ctx && typeof data.ctx === 'object' ? (data.ctx as Record<string, unknown>) : {}
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries({ ...data, ...ctx })) {
+    if (k !== 'ctx' && KONTEKST_WHITELIST.has(k)) result[k] = v
+  }
+  return result
+}
+
+// ─── POSTGREST-NORMALISERING ─────────────────────────────────────────────────
+
+// Supabase-klienten pakker DB-feil inn som { code, message, details, hint }.
+// For Sentry er det nyttigere å gruppere etter feil-kode (f.eks. «23505»)
+// enn etter den lange meldingsstrengen. Normalisering gir bedre fingerprinting.
+function normaliserFeil(err: unknown): {
+  code?: string
+  tabell?: string
+  melding: string
+  // Feilklassens navn («TypeError», «IkkeInnloggetFeil», …). Persisteres i
+  // feil_logg fordi meldingen bevisst ikke er det: uten dette ble raden for en
+  // vanlig Error skrevet med kontekst `{}`, og det var umulig å se om feilen var
+  // en programfeil eller en vi selv hadde kastet. Navnet er en konstant fra
+  // koden, aldri en radverdi, så det er trygt å lagre.
+  navn?: string
+  // Sorterte, kommaseparerte EGNE nøkkelnavn fra feilobjektet (f.eks.
+  // «code,details,hint,message») — struktur, ikke data (#711). Dekker
+  // objekter som verken er Error-instanser eller har en streng `code`
+  // (typisk supabase-js-transportfeil, f.eks. `{ message: 'fetch failed' }`),
+  // der `navn` alene ikke er nok til å unngå en tom kontekst-rad. Navnene er
+  // formvaktet og kappet; det som ble filtrert bort står som «+N_ukjent_form»
+  // / «+N_flere» i stedet for å forsvinne stille.
+  noekler?: string
+} {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    let navn = err instanceof Error ? err.name : undefined
+    // Formvakt og kapping FØR noe skrives (#711-review): et feilobjekt kan
+    // like gjerne ha «ola@example.com», en URL eller tusen nøkler som de fire
+    // fra supabase-js. Samme vakt som klientruta bruker på strippede nøkler —
+    // delt i lib/logg-sanitering.ts, ikke duplisert.
+    const { lesbare, ugyldige, utelatt } = utdragNoekkelnavn(
+      Object.keys(e).sort(),
+      LOGG_NOEKLER_MAKS_ANTALL,
+    )
+    // Markørene bærer det vakten fjernet. Uten dem ville et objekt med bare
+    // PII-formede nøkler gitt et tomt felt, og vi hadde vært like blinde som
+    // før #711 — bare med en pen begrunnelse. «+» kan aldri forveksles med et
+    // ekte navn: NOEKKELNAVN_FORM krever bokstav som første tegn.
+    const deler = [...lesbare]
+    if (utelatt > 0) deler.push(`+${utelatt}_flere`)
+    if (ugyldige > 0) deler.push(`+${ugyldige}_ukjent_form`)
+    // Tom for en vanlig Error — message/stack ligger ikke som egne enumerable
+    // felt på instansen — så vi lar feltet være undefined der. `navn` dekker
+    // det tilfellet allerede, og feltet skal ikke bli støy på hver eneste rad.
+    const noekler = deler.length > 0 ? deler.join(',') : undefined
+    // INVARIANT (#711): en kastet verdi skal ALDRI kunne gi kontekst {} i
+    // feil_logg — det gjorde raden umulig å feilsøke (vitals.insert.feilet).
+    // navn og noekler dekker til sammen alle grener under, MEN et objekt UTEN
+    // egne nøkler som heller ikke er en Error-instans (f.eks. et bokstavelig
+    // `throw {}`) ville gitt begge undefined. Denne eksplisitte markøren
+    // lukker akkurat det hullet uten å legge støy på de vanlige radene.
+    // Formvakten over kan IKKE gjenåpne hullet: filtrerer den bort alt, står
+    // «+N_ukjent_form» igjen, så noekler er fortsatt satt.
+    if (navn === undefined && noekler === undefined) {
+      navn = 'objekt-uten-egne-nokler'
+    }
+    if (typeof e.code === 'string' && typeof e.message === 'string') {
+      // Forsøk å ekstrahere en identifikator (tabell eller constraint) fra
+      // PostgREST-meldingen. Typisk format:
+      //   «duplicate key value violates unique constraint "tabell_col_key"»
+      // Regex-en grupperer konsistent på snake_case-identifikatorer, men den
+      // kan like gjerne treffe constraint-navn som selve tabell-navnet —
+      // derfor navngir vi feltet «identifikator» videre.
+      const identMatch = String(e.message).match(/"([^"]+?_[^"]+?)"/)
+      return {
+        code: e.code,
+        tabell: identMatch?.[1],
+        melding: e.message,
+        navn,
+        noekler,
+      }
+    }
+    // Ikke-PostgREST-feil: meldingsformen holdes uendret (String(err) gir
+    // «Error: …»), kun navn/noekler kommer i tillegg.
+    return { melding: String(err), navn, noekler }
+  }
+  // err er ikke et objekt (streng, tall, boolean, null, undefined) — kastet
+  // uten Error-innpakking. navn bærer typeof (typeof null er «object», så den
+  // grenen treffes aldri av null) slik at raden fortsatt sier noe strukturelt
+  // i stedet for å falle tilbake til en tom kontekst (#711).
+  return { melding: String(err), navn: `primitiv:${typeof err}` }
+}
+
+/**
+ * Feil som bærer PostgREST-koden med seg gjennom en innpakking.
+ *
+ * Pakker du en Supabase-feil inn i `new Error(\`… ${error.message}\`)`, ser
+ * normaliserFeil() over ingen `code`-property og faller til else-grenen. Da er
+ * `melding` det eneste som er igjen — og den persisteres bevisst aldri (den kan
+ * bære radverdier). Resultatet er en rad i feil_logg som bare sier
+ * `{"navn":"Error"}`: vi vet at noe feilet, ikke hva.
+ *
+ * Det var blindsonen `ulest.marker_chat_sett.feilet` lå i — fire rader over tre
+ * dager i august 2026, alle uten en eneste ledetråd. Kast DbFeil i stedet når
+ * feilen skal bobles opp til et `.catch(logg.feil)` lenger ute; koden overlever
+ * da hele veien til raden.
+ *
+ * Kaster du derimot der du selv kan logge, er `logg.feil(event, error,
+ * { ctx: { code: error.code } })` med det rå PostgREST-objektet like bra —
+ * denne klassen er for stiene der kastet ER kanalen.
+ */
+export class DbFeil extends Error {
+  readonly code?: string
+
+  constructor(melding: string, code?: string) {
+    super(melding)
+    this.name = 'DbFeil'
+    this.code = code
+  }
+}
+
+// ─── TILGANGSFEIL-KLASSIFISERING (42501) + DØD SESJON (PGRST301) ────────────
+//
+// PGRST301 er IKKE en variant av 42501 — det var en gal premiss i #497 og i
+// den opprinnelige kommentaren her. PostgREST bruker PGRST301 for utløpt eller
+// ugyldig JWT (HTTP 401, melding «JWT expired»). Den teksten matcher ingen av
+// regexene under, så den falt til error → Sentry-event + feil_logg-rad +
+// morgenalarm. En død sesjon i en iOS-PWA er rutine og brukerutløst (ITP
+// spiser cookies), ikke en programfeil — den skal være warn. Se #498-review.
+//
+// 42501 (Postgres «permission denied») beholdes UENDRET: den er tripwiren for
+// GRANT-klippen 30.10.2026 og skjuler to helt ulike årsaker bak samme kode:
+//
+//   1. «permission denied for table/view/function/sequence/schema …»
+//      → manglende GRANT. PostgREST returnerer IKKE 42501 når en RLS-policy
+//        filtrerer bort rader ved SELECT — da får du bare en tom liste og
+//        HTTP 200. Så 42501 på en SELECT kan i vårt oppsett KUN bety at en
+//        GRANT mangler, altså et ødelagt deploy. Supabase fjerner
+//        default-grants på public-schema 30. oktober 2026 (CLAUDE.md §
+//        Policy: Migrasjoner) — dette er tripwiren for akkurat den datoen,
+//        og skal derfor aldri kunne nedgraderes til warn.
+//   2. «… violates row-level security policy …»
+//      → ekte policy-avvisning, trigget av lovlig brukeradferd (f.eks. en
+//        insert avvist fordi raden ikke tilhører brukeren). Fortsatt warn.
+//   3. Alt annet med denne SQLSTATE-en → error. Før #497 falt ALT i denne
+//      koden til warn uansett meldingstekst, noe som holdt alarmen taus helt
+//      fram til 30.10.2026-fristen. Snur vi defaulten blir feilmoden «litt
+//      for mye støy» i stedet for «taus» — og endrer Postgres ordlyden sin
+//      ved en fremtidig oppgradering, blir vi støyete, ikke blinde.
+function klassifiserTilgangsfeil(melding: string, code?: string): 'error' | 'warn' | null {
+  // Død/ugyldig sesjon → warn. Både på kode og på meldingstekst: PostgREST
+  // svarer PGRST301, mens GoTrue-/PostgREST-varianter kan komme uten kode i
+  // det hele tatt, og da er teksten det eneste signalet vi har.
+  //
+  // AUTH_INGEN_SESJON er vår egen kode (IkkeInnloggetFeil i lib/auth.ts) for
+  // «getUser() ga ingen bruker». Samme rotårsak som PGRST301 — utløpt eller
+  // manglende sesjon — men den kom aldri hit som PostgREST-feil, så #498-
+  // nedgraderingen traff den ikke. Den falt derfor til error og fyrte Sentry
+  // + morgenalarm på noe som er rutine når iOS spiser cookies.
+  if (
+    code === 'PGRST301' ||
+    code === 'AUTH_INGEN_SESJON' ||
+    /JWT (expired|invalid)|JWSError/i.test(melding)
+  ) {
+    return 'warn'
+  }
+  if (code !== '42501') return null
+  if (/permission denied for (table|view|function|sequence|schema)/i.test(melding)) {
+    return 'error'
+  }
+  if (/violates row-level security policy/i.test(melding)) {
+    return 'warn'
+  }
+  return 'error'
+}
+
+// ─── FEIL_LOGG-PERSISTERING ──────────────────────────────────────────────────
+//
+// Skriver server-feil til feil_logg (#496) slik at sjekk-klientfeil-cronet —
+// som i dag kun teller rader satt inn av klienten via /api/logg-feil — også
+// fanger opp server-feil. Lukker hullet mellom de to feilkanalene beskrevet
+// i #492: Sentry er avhengig av at noen leser eposten, feil_logg driver en
+// bevist-i-drift daglig alarm.
+// Felles skrive-sti for alle feil_logg-rader fra serveren. Både
+// persisterFeilLogg() (logg.feil) og loggRenderFeil() (onRequestError) går
+// gjennom denne, slik at timeout-cappen, den tause catchen og 23505-
+// håndteringen ikke drifter fra hverandre mellom de to kanalene.
+async function skrivFeilLoggRad(
+  event: string,
+  kontekst: Record<string, unknown>,
+  opts?: { profilId?: string | null; url?: string | null },
+): Promise<void> {
+  try {
+    // Lazy import: ingen 'use client'-fil importerer @/lib/logg (verifisert),
+    // så service_role-nøkkelen havner aldri i klient-bundlen. 0 kB vekst.
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+
+    const { error } = await admin
+      .from('feil_logg')
+      .insert({
+        event,
+        nivaa: 'error',
+        kontekst: kontekst as Json,
+        profil_id: opts?.profilId ?? null,
+        // url settes kun når kallstedet faktisk har en rute. Å alltid sende
+        // `url: null` ville utvidet radformen logg.feil()-stien skriver, og
+        // den formen er pinnet i __tests__/logg.test.ts med vilje.
+        ...(opts?.url ? { url: opts.url } : {}),
+      })
+      // Hard cap: under pool-utmattelse skal ikke en logge-skriving legge
+      // seg oppå trykket ved å vente ubegrenset på en ledig tilkobling.
+      .abortSignal(AbortSignal.timeout(1000))
+
+    // 23505 er burst-dedupen i feil_logg_profil_event_minutt_uq (mig. 122),
+    // altså at vi allerede har en rad for (profil, event, minutt). Det er
+    // indeksen som gjør jobben sin, ikke en feil — logger vi den som feilet
+    // insert, blir stdout full av støy hver gang noe feiler to ganger på
+    // samme minutt.
+    if (error && error.code !== '23505') {
+      // Ren stdout — IKKE logg.feil() her, det ville vært selv-rekursivt.
+      console.log(JSON.stringify({ ts: naa(), nivaa: 'warn', event: 'logg.feillogg.insert.feilet', code: error.code }))
+    }
+  } catch {
+    // Loggingen skal ALDRI kunne kaste — en logger som velter render-stien
+    // er verre enn feilen den prøvde å logge. Fanger både nettverksfeil og
+    // AbortError fra timeouten over.
+  }
+}
+
+async function persisterFeilLogg(
+  event: string,
+  code: string | undefined,
+  tabell: string | undefined,
+  navn: string | undefined,
+  noekler: string | undefined,
+  ctx?: Record<string, unknown>,
+): Promise<void> {
+  // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
+  // (arrangement_id, count, fingerprint, sample, status) er ikke del av
+  // kontrakten for denne tabellen. melding persisteres bevisst ALDRI her:
+  // normaliserFeil() returnerer PostgREST-teksten rått, og den kan bære
+  // radverdier (f.eks. «Key (epost)=(x@y.no) already exists»).
+  // Render-feil er unntaket — se loggRenderFeil() under, som maskerer først.
+  const ctxScrubbet = scrubbet(ctx)
+  const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
+
+  // navn (feilklassen) og noekler (feilobjektets egne nøkkelnavn) er begge med
+  // fordi code/tabell er undefined for alt som ikke er en PostgREST-feil med
+  // code+message som strenger — uten dem ble raden skrevet som `{}` og var
+  // verdiløs å lese (#711, samme fella #496 opprinnelig rettet med navn alene,
+  // men som ikke dekket en supabase-feil uten `code` — se normaliserFeil()).
+  // INVARIANT: normaliserFeil() garanterer at minst ett av
+  // {code, tabell, navn, noekler} alltid er satt for enhver kastet verdi, så
+  // denne linjen skal aldri kunne skrive en tom kontekst.
+  await skrivFeilLoggRad(event, { code, tabell, navn, noekler }, { profilId })
+}
+
+// ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
+
+// Dynamisk import for å unngå hard avhengighet til @sentry/nextjs i dev
+// (appen kjøres uten DSN lokalt, og lib/logg.ts skal fungere uten Sentry).
+// Importeres kun i logg.feil() slik at Sentry aldri initialiseres i warn-sti.
+async function getSentry() {
+  if (!SENTRY_DSN) return null
+  try {
+    const Sentry = await import('@sentry/nextjs')
+    return Sentry
+  } catch {
+    return null
+  }
+}
+
+// ─── PUBLIC API ───────────────────────────────────────────────────────────────
+
+export const logg = {
+  /**
+   * Logg en forventet, ikke-kritisk hendelse til stdout. Ikke Sentry.
+   * Bruk for: validerings-avvisning, blokkert utsending, manglende konfig.
+   */
+  warn(event: string, data?: Record<string, unknown>) {
+    const ts = naa()
+    console.log(
+      JSON.stringify({ ts, nivaa: 'warn', event, ...scrubbet(data) })
+    )
+  },
+
+  /**
+   * Logg en uventet feil til stdout, feil_logg og Sentry.
+   *
+   * 42501 klassifiseres etter meldingstekst, ikke bare kode — se
+   * klassifiserTilgangsfeil() over. Kort versjon: «permission denied for
+   * table/view/…» er alltid error (manglende GRANT), «violates row-level
+   * security policy» er warn (legitim avvisning), alt annet med samme kode
+   * er også error (defaulten snudd i #497 — se kommentaren over).
+   * PGRST301 (utløpt JWT) er alltid warn — død sesjon, ikke programfeil.
+   *
+   * PostgREST-feil normaliseres til {code, tabell} for å gi Sentry og
+   * feil_logg bedre fingerprint-gruppering på tvers av instanser.
+   */
+  async feil(
+    event: string,
+    error: unknown,
+    opts?: {
+      fingerprint?: string
+      sample?: unknown   // eksempel på payload som forårsaket feilen
+      ctx?: Record<string, unknown>
+    },
+  ) {
+    const { code, tabell, melding, navn, noekler } = normaliserFeil(error)
+
+    const tilgangsklasse = klassifiserTilgangsfeil(melding, code)
+    if (tilgangsklasse === 'warn') {
+      // Ikke en programfeil — logg som warn og returner tidlig (ingen
+      // feil_logg-rad, ingen Sentry-event).
+      logg.warn(event, { code, ...opts?.ctx })
+      return
+    }
+
+    const ts = naa()
+    // stdout-logg leses av Vercel Log Drain / GitHub Actions
+    console.log(
+      JSON.stringify({
+        ts,
+        nivaa: 'error',
+        event,
+        code,
+        tabell,
+        melding,
+        fingerprint: opts?.fingerprint,
+        ...scrubbet(opts?.ctx),
+      })
+    )
+
+    // await, ikke fire-and-forget — samme grunn som CLAUDE.mds forbud mot
+    // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
+    // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
+    // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
+    await persisterFeilLogg(event, code, tabell, navn, noekler, opts?.ctx)
+
+    const Sentry = await getSentry()
+    if (!Sentry) return
+
+    Sentry.withScope((scope) => {
+      if (opts?.fingerprint) {
+        // Egendefinert fingerprint grupperer alle instanser av denne feil-typen
+        // under én Sentry-issue, uavhengig av meldingstekst.
+        scope.setFingerprint([opts.fingerprint])
+      }
+      if (code) scope.setTag('pg.code', code)
+      // Kan være tabell- eller constraint-navn — se normaliserFeil() over.
+      if (tabell) scope.setTag('pg.identifikator', tabell)
+      scope.setExtra('event', event)
+      // setContext (ikke setExtra) — kontekst-API-en går ikke gjennom
+      // beforeSend-extra-whitelisten, så cron-aggregerings-count o.l.
+      // overlever helt fram til Sentry-UI-et. Se #366 review.
+      scope.setContext('ctx', scrubbet(opts?.ctx) as Record<string, unknown>)
+      Sentry.captureException(error instanceof Error ? error : new Error(melding))
+    })
+  },
+}
+
+// ─── RENDER-FEIL (onRequestError) ────────────────────────────────────────────
+
+// Hvor mye av feilmeldingen vi tar vare på. Meldingene våre er korte
+// («Kunne ikke hente arrangementer: TypeError: fetch failed» ≈ 55 tegn), men
+// en rå PostgREST-melding med hint og details kan bli lang. Konstanten bor
+// her og ikke i lib/konstanter.ts fordi den er en ren logge-detalj — den
+// speiler ingen DB-constraint og hører ikke til domenet.
+const RENDER_MELDING_MAKS = 500
+
+/**
+ * Skriver en server-render-feil til feil_logg. Kalles fra `onRequestError` i
+ * instrumentation.ts, altså for feil kastet i server components, server
+ * actions og route handlers.
+ *
+ * **Hvorfor denne finnes:** `app/error.tsx` viser brukeren en `digest` — en
+ * djb2-hash av melding + stack — og klient-beaconen skriver den til feil_logg.
+ * Men ingenting lagret noen gang hva den hashen *var* en hash av. Serverfeilen
+ * gikk kun til Sentry, og `SENTRY_DSN` er env-styrt uten default, så en instans
+ * uten nøkkel hadde null server-side feilrapportering. Resultatet så vi i
+ * august 2026: 13 render-feil på forsiden over tre dager, med sju forskjellige
+ * digest-verdier og ingen mulighet til å lese hva som faktisk feilet. Se #631.
+ *
+ * **Meldingen persisteres her, i motsetning til i persisterFeilLogg().** Det er
+ * et bevisst unntak fra regelen over, og hviler på to ting: (1) meldingen går
+ * gjennom `maskerRadverdier()` — nøyaktig samme maske som allerede sendes til
+ * Sentry, altså til en tredjepart, så dette er strengt mindre eksponering enn
+ * det vi gjør i dag; (2) uten meldingen er raden verdiløs, for da vet vi bare
+ * at «en Error skjedde på /», som er akkurat det vi allerede visste.
+ * Utvid ALDRI dette unntaket til logg.feil()-stien uten samme vurdering —
+ * der er `melding` rå PostgREST-tekst som kan bære radverdier.
+ *
+ * Kaster aldri (skrivFeilLoggRad fanger alt): kalles fra Next sin
+ * feilhåndtering, og en logger som velter der ville skjult den ekte feilen.
+ */
+export async function loggRenderFeil(opts: {
+  error: unknown
+  /** Rute-mønsteret fra Next («/», «/arrangementer/[id]») — aldri en URL med query. */
+  rute?: string | null
+  /** Next sin `error.digest` — koblingen til raden klienten skriver fra app/error.tsx. */
+  digest?: string | null
+}): Promise<void> {
+  const { code, tabell, melding, navn } = normaliserFeil(opts.error)
+
+  // Samme klassifisering som logg.feil(): en død sesjon (PGRST301 /
+  // AUTH_INGEN_SESJON) er rutine når iOS spiser cookies, ikke en programfeil.
+  // Uten denne ville hver utløpte innlogging skrevet en error-rad og vekket
+  // døgnalarmen — nøyaktig regresjonen #602 og #604 rettet.
+  if (klassifiserTilgangsfeil(melding, code) === 'warn') {
+    logg.warn('server.render.sesjon_utloept', { code })
+    return
+  }
+
+  const maskert = maskerRadverdier(melding).slice(0, RENDER_MELDING_MAKS)
+
+  console.log(
+    JSON.stringify({
+      ts: naa(),
+      nivaa: 'error',
+      event: 'server.render.feilet',
+      code,
+      tabell,
+      navn,
+      digest: opts.digest,
+      rute: opts.rute,
+      melding: maskert,
+    }),
+  )
+
+  await skrivFeilLoggRad(
+    'server.render.feilet',
+    { code, tabell, navn, digest: opts.digest ?? null, melding: maskert },
+    { url: opts.rute ?? null },
+  )
+}

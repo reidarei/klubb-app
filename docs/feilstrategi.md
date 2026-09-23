@@ -1,0 +1,218 @@
+# Feilstrategi
+
+Dette dokumentet beskriver hvordan appen håndterer feil: hvordan vi hindrer at de oppstår, hva brukeren skal oppleve når noe likevel går galt, og hvordan feil registreres og varsles.
+
+Alt som kan justeres uten å endre selve strategien står samlet i [§ 4 Innstillinger](#4-innstillinger).
+
+**Grunnregelen er at appen aldri skal late som om noe gikk bra når det ikke gjorde det.** En tom side som egentlig skyldes en feilet spørring, en handling som ser lagret ut uten å være det, og et varsel som «ble sendt» til null personer er alle brudd på den samme regelen.
+
+---
+
+## 1. Hvordan vi unngår feil
+
+### Vi lukker feilklassen, ikke den enkelte feilen
+
+Når den samme typen feil dukker opp for tredje gang, skal vi ikke rette forekomst nummer fire. Vi skal bygge et *gjerde* — en automatisk sperre som gjør at feilen ikke lenger lar seg skrive. Sperren koster mer å bygge én gang, men fanger alle fremtidige tilfeller uten at noen må huske noe.
+
+Disse gjerdene finnes i dag:
+
+| Gjerde | Hva den stopper | Hvor den bor |
+|---|---|---|
+| ESLint-regelen `hk/supabase-feil-maa-hentes` | Databasespørringer som henter data uten å sjekke om spørringen feilet | `eslint.config.mjs` |
+| `sjekkRotFilDekning()` | Filer som ellers ville blitt ulike i de to kodebasene uten at noen merket det | `scripts/sync-klubb-app.mjs` |
+| Kvitteringsregelen for varsler (forklart under) | Varsler som går tapt uten at systemet kan prøve på nytt | `lib/varsler.ts` |
+| Fortids-sperren | At registrering av et gammelt arrangement sender varsel til alle om noe som allerede har skjedd | `lib/varsler.ts` |
+
+ESLint er verktøyet som leser gjennom koden før den bygges. Står en regel der på nivået `error`, stopper byggingen helt — koden kommer ikke i produksjon.
+
+### En vakt vi ikke har bevist, regner vi ikke som en vakt
+
+En test som ikke blir rød når du ødelegger koden den skal beskytte, kjører bare koden — den tester den ikke. Derfor skal vi *mutasjonsteste* nye vakter: fjern vakten med vilje, kjør testene, og bekreft at minst én blir rød. Sett den så tilbake.
+
+Metoden har flere ganger avdekket tester som så ut til å dekke noe, men ikke gjorde det.
+
+### Det trygge valget er standardvalget
+
+Den som skriver kode fort, lander på det som er enklest. Derfor er standarden **stopp, si fra, logg**.
+
+Å avvike fra den er lov, men begrunnelsen skal stå i koden, ikke bare i hodet til den som skrev den:
+
+```ts
+// eslint-disable-next-line hk/supabase-feil-maa-hentes -- <hvorfor det er trygt her>
+```
+
+### En handling skal aldri være sin egen kvittering på at varselet gikk ut
+
+Når appen lagrer noe i databasen og deretter sender et varsel om det, må de to registreres hver for seg. Gjør de ikke det, ser neste forsøk at handlingen allerede er utført, hopper over — og varselet blir aldri sendt. Dette kalles kvitteringsregelen, og den er grunnen til at rader har et eget felt for «varslet om».
+
+### All feilhåndtering går gjennom felles kode
+
+En regel som må følges hundrevis av steder blir ikke fulgt. Derfor er det ett sted per type:
+
+| Type | Skal gå gjennom |
+|---|---|
+| Databasefeil | Feilen hentes ut av svaret og sjekkes — aldri bare dataene |
+| Feil på serveren | `logg.feil()` eller `logg.warn()` i `lib/logg.ts` |
+| Feil i nettleseren | `meldKlientfeil()` i `lib/klient-logg.ts` |
+| Varsler | `sendVarsel()` i `lib/varsler.ts` |
+
+---
+
+## 2. Hva brukeren skal oppleve
+
+### Tre tilstander som aldri skal se like ut
+
+| Tilstand | Hva brukeren ser |
+|---|---|
+| Det finnes ingenting her | En tom liste med en forklarende tekst |
+| Dette finnes ikke | En 404-side |
+| Vi klarte ikke å hente det | En feilside |
+
+De to første er normale tilstander. Den tredje er en feil. Den vanligste og alvorligste feilen vi har gjort, er å vise den tredje som om den var den første — brukeren ser en tom side, tror det er tomt, og går videre.
+
+### Hva appen gjør, avhenger av hva som står på spill
+
+| Det som står på spill | Appen skal | Eksempel |
+|---|---|---|
+| Data eller tilgang | Stoppe. Er vi i tvil om hvem noen er eller hva de har lov til, slipper vi dem ikke inn | Innlogging, rollesjekk, tilgang til passinfo |
+| En handling brukeren nettopp gjorde | Si fra med én gang, slik at han kan prøve på nytt | Lagre et arrangement, melde seg på, endre fondsverdier |
+| En beskjed han ikke visste kom | Prøve å sende på nytt senere, og fortelle admin om det | Bursdagsvarsel, kåringsresultat, påminnelse |
+| Pynt og detaljer | Skjule det uten å si fra til brukeren, men skrive det i loggen | Profilbilde, prikken som viser uleste varsler, en lenke |
+
+Den siste raden er viktig: en detalj som feiler skal aldri ta ned noe større enn seg selv. En manglende ring rundt et profilbilde skal ikke gi feilside på hele appen.
+
+### Teksten brukeren møter
+
+Feilsiden viser alltid det samme, uansett hva som gikk galt:
+
+> **Noe gikk galt**
+> Vi klarte ikke hente dataene. Prøv igjen — hjelper det ikke, si fra til admin.
+> *Feilkode: `<kode>`*
+
+Feilkoden er en kort, tilfeldig streng som knytter det brukeren så til raden i feilloggen. Den er der kun så admin kan slå den opp.
+
+Merk at feilmeldinger som skrives i koden — for eksempel `throw new Error('Kunne ikke hente turene')` — **aldri når brukeren i produksjon**. Rammeverket erstatter dem med en standardtekst, fordi databasemeldinger kan inneholde personopplysninger. Skriv dem derfor presist for loggens skyld, men vit at brukeren ser teksten over.
+
+---
+
+## 3. Hvordan feil registreres og varsles
+
+### To alvorlighetsnivåer
+
+Når koden skriver til loggen, velger den ett av to nivåer:
+
+| Nivå | Brukes når | Hvor det havner |
+|---|---|---|
+| `warn` | Noe forventet skjedde, og det er allerede håndtert | Serverloggen. Utløser ingen alarm |
+| `feil` | Noe uventet skjedde | Serverloggen, Sentry og tabellen `feil_logg`, som utløser døgnalarmen |
+
+Er du i tvil om noe er *håndtert*, bruk `feil`. En alarm for mye koster mindre enn en tapt beskjed. Men tvil er ikke det eneste spørsmålet — se neste avsnitt.
+
+### Er det noe en admin kan gjøre med det?
+
+Regelen over sier hva du skal gjøre når du er usikker. Den sier ingenting om saker der vi er helt sikre — og det er der det erfaringsmessig går galt. Typiske eksempler som ble meldt som `feil` og vekket admin på e-post:
+
+1. En innlogging som var gått ut
+2. Samme sak gjennom en annen inngang i koden
+3. Et bilde som ikke lastet på en mobil
+
+Ingen av dem var en programfeil. De skjer fordi verden er upålitelig: iOS sletter innloggings-cookies, mobilnettet faller ut i en tunnel, brukeren blar videre før bildet er ferdig. Ingen kan gjøre noe med det, og ingenting er ødelagt.
+
+Så still ett spørsmål til når du velger nivå:
+
+> **Krever dette at et menneske gjør noe?**
+
+- **Ja** → `feil`. Ødelagt utrulling, manglende databaserettighet, et varsel som ikke kom fram, en spørring som svikter.
+- **Nei, verden er bare upålitelig** → `warn`. Utløpt innlogging, avbrutt nedlasting, forbigående nettverksglipp.
+
+Raden skrives til loggen i begge tilfeller, så ingenting går tapt for den som senere vil undersøke. Forskjellen er kun om det ringer.
+
+Dette gjelder når eventet **innføres**, ikke først når alarmen har begynt å mase. Et nytt event-navn uten et bevisst valg av nivå arver `feil` som standard, og da er det bare et spørsmål om tid før det ringer på noe rutinemessig.
+
+Grunnen til at dette har fått et eget avsnitt: en alarm som går på bagateller, slutter man å lese. Da fanger den ikke den ekte feilen når den kommer — og alarmen har gjort skade i stedet for nytte.
+
+Sentry er en ekstern tjeneste som samler feil og viser hvor i koden de oppsto, og `feil_logg` er en tabell i vår egen database. Begge beskrives nærmere nedenfor.
+
+Hver logglinje har et *event-navn* — en kort, punktdelt tekst som `varsel.send.feilet` — slik at samme type feil kan telles og grupperes. Navnene er samlet i `lib/logg.ts`.
+
+### Døgnalarmen
+
+Én gang i døgnet sjekker en automatisk jobb om det har kommet feil siste døgn. Har det det, sendes push og e-post til de medlemmene som er merket for å motta slike varsler. Meldingen inneholder de tre vanligste event-navnene med antall, slik at admin ser forskjell på at «noe skjedde» og at en bestemt side har sluttet å virke.
+
+Enkelte event-navn er unntatt fra alarmen fordi de utløses av forbigående forhold utenfor vår kontroll. Radene skrives fortsatt til loggen, men de gir ikke varsel. Å legge til et nytt navn i det settet gjør oss blinde for akkurat den feilen, og skal derfor begrunnes.
+
+### Ingen alarm som går umiddelbart
+
+Klubben er liten, og ingenting i appen er så tidskritisk at åtte timer gjør varig skade. En kanal som varsler med én gang mister dessuten betydning raskt hvis den brukes på noe annet enn det virkelig akutte. Skal noe legges der senere, må det begrunnes med et tap som ikke kan rettes opp i etterkant.
+
+### Medlemmene er en del av varslingen
+
+I en liten klubb der alle kjenner hverandre oppdages rare ting ofte raskere av et menneske enn av overvåkningen. Innspill-funksjonen i appen dekker dette behovet, og det er derfor ingen egen knapp for å melde fra om feil.
+
+### Hvem som får alarmen
+
+Det styres av bryteren **«Feilvarsler»** i medlemsredigering, som admin setter per medlem. Kolonnen heter `faar_feilvarsler` i databasen.
+
+**Bryteren er ikke knyttet til rollen.** Den som følger opp feil er ikke nødvendigvis den samme som administrerer klubben, og et vanlig medlem kan derfor motta alarmer uten å være admin.
+
+### To logger med hvert sitt formål
+
+| Tabell | Hva den inneholder | Hvor lenge |
+|---|---|---|
+| `feil_logg` | Feil fra både server og nettleser. Den er grunnlaget for døgnalarmen | 180 dager |
+| `varsel_logg` | Varsler som er sendt, og til hvem. Den er samtidig medlemmets innboks i appen | Slettes ikke |
+
+`varsel_logg` er altså ikke en feillogg. Den brukes som bevis på at et varsel faktisk gikk ut, og en opprydding der ville ødelagt muligheten til å prøve på nytt.
+
+### Hver feil skal kunne diagnostiseres alene
+
+En feilrad som ikke lar seg tolke er nesten like ille som ingen rad. Vi hadde en: teksten var `"Load failed"`, uten stakkspor og uten feilkode, og den kunne like gjerne vært et tapt nettverksøyeblikk som en app som manglet en kodebit. Det var ingen måte å avgjøre det i etterkant.
+
+Derfor følger nå disse opplysningene med på hver eneste feil fra nettleseren, uten at kallstedet må huske noe:
+
+| Felt | Hva det svarer på |
+|---|---|
+| `name` | Hvilken *type* feil det var — ofte det eneste som skiller feiltypene når stakksporet mangler |
+| `appversjon` | Hvilken utgave av appen nettleseren faktisk kjørte. En gammel verdi mot en ny server betyr at brukeren satt på utdatert kode |
+| `online` | Om enheten hadde nett i det hele tatt. Skiller nettverksfeil fra kodefeil |
+| `standalone` | Om det skjedde i den installerte appen eller i en vanlig nettleserfane |
+| `nettverk` | Forbindelsens type (4g, 3g …) der nettleseren oppgir det |
+| `ressurs` | Adressen til en fil som ikke lot seg laste |
+
+Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `lib/logg-sanitering.ts`. Et felt som ikke står der, forsvinner stille — derfor håndhever `__tests__/logg-kontekst-dekning.test.ts` det i stedet for å stole på at noen husker det: bygget feiler både når et kallsted sender et ukjent felt, og når et nytt felt legges til i `diagnostikk()` uten å nå whitelisten. Skulle et felt likevel komme inn utenfra (en gammel utgave av appen som ligger i nettleserens cache), melder serveren fra med `logg-feil.kontekst.strippet` i stedet for å kaste det bort i stillhet.
+
+`ressurs` beholder adressens vertsnavn (i motsetning til `url`, som kuttes til stien) fordi filer kan ligge på et annet domene enn appen selv, og *hvilken tjener som ikke svarte* er halve svaret. To adressetyper behandles særskilt: lokale forhåndsvisninger (`blob:`) beholder sitt eget forstavelse-ledd, ellers limes vertsnavnet på to ganger og adressen ser korrupt ut; innebygde filer (`data:`) beholder kun filtypen, siden resten av adressen *er* selve filen.
+
+**Mottaket er bevisst åpent for uinnloggede.** `/api/logg-feil` er unntatt innloggingskravet i `middleware.ts`, fordi en feil som skjer når sesjonen har gått ut er nettopp den vi trenger å se — med innloggingskrav ble meldingen sendt videre til innloggingssiden og raden aldri skrevet. Det som holder misbruk i sjakk i stedet: en egen grense per avsender per minutt, at identiske meldinger innenfor samme minutt slås sammen til én rad, streng validering av hva som slipper inn, at bare kjente felter beholdes, og at raden skrives av tjeneren selv — ikke av nettleseren. En uinnlogget rad lagres uten medlems-id.
+
+**Filer som ikke lastes, fanges særskilt.** Når en kodefil ikke lar seg hente, meldes det fra på selve HTML-elementet og ikke på siden som helhet. En vanlig feillytter ser det derfor aldri. `FeilFangst` lytter i tillegg i den fasen hvor slike meldinger passerer, slik at filnavnet havner i loggen.
+
+**Manglende kodebit retter seg selv.** Skjer det fordi appen kjører en utdatert utgave, henter den fersk versjon i stedet for å vise feilsiden — én gang, og bare når enheten har nett. Begge sperrene er der med vilje: uten dem ville vi enten sendt folk uten dekning inn i en omlasting som ikke kan lykkes, eller inn i en løkke som aldri stopper.
+
+### Sentry er sekundærkanalen
+
+Sentry viser stakksporet og grupperer like feil, og er derfor nyttig når noe skal feilsøkes. Men den forutsetter at noen leser e-post. Døgnalarmen er primærkanalen, siden den kommer som varsel på telefonen.
+
+---
+
+## 4. Innstillinger
+
+Verdiene her kan endres uten at strategien over endres. Konstanter uten oppgitt filsti ligger i `lib/konstanter.ts`.
+
+| Innstilling | Verdi i dag | Hvor | Hva som skjer om den endres |
+|---|---|---|---|
+| Alarmterskel | `0` | `KLIENT_FEIL_ALARM_TERSKEL` | `0` betyr alarm ved enhver feil. Heves den, blir feil under terskelen tause. Det er som regel bedre å unnta enkelte event-navn enn å heve terskelen |
+| Unntatte event-navn | 3 stk | `ALARM_IGNORERTE_EVENTS` | Radene skrives fortsatt til loggen, men gir ikke alarm. Vi blir blinde for akkurat de feilene |
+| Når alarmen kjøres | 05:00 UTC | `.github/workflows/sjekk-klientfeil.yml` | Flere kjøringer i døgnet gir flere varsler om den samme feilen |
+| Hvem som varsles | Per medlem | Bryteren «Feilvarsler» i medlemsredigering (`profiles.faar_feilvarsler`) | Er ingen merket, går det ingen alarm |
+| Hvor lenge feil beholdes | 180 dager | `LOGG_FEIL_RETENSJONSDAGER` | Eldre rader slettes automatisk. Kortere tid skjuler mønstre som gjentar seg sesongvis; lengre tid lagrer profil-id og nettleserinfo lenger |
+| Hvor lenge varsler beholdes | Slettes ikke | — | Sletting ville brutt muligheten til å se om et varsel allerede er sendt |
+| Antall feil i alarmteksten | 3 | `lib/feil-alarm.ts` | Hvor mange event-navn meldingen lister opp |
+| ESLint-gjerdet | `error` | `eslint.config.mjs` | På `error` stopper byggingen. Settes den til `warn`, kan feilklassen snike seg inn igjen |
+| Sentry | På i produksjon, av lokalt | Miljøvariabelen `SENTRY_DSN` | Uten verdi sendes ingenting til Sentry. Døgnalarmen virker uansett |
+| Grense for klientfeil | 10 per minutt | `LOGG_FEIL_RATE_LIMIT_PER_MIN` | Hindrer at én nettleser som står og feiler i løkke fyller loggen |
+| Grense for push-telemetri | 20 per minutt | `PUSH_TELEMETRI_RATE_LIMIT_PER_MIN` | Egen bøtte fra vanlige klientfeil — uten skillet konkurrerer push-klikk-telemetri om samme rate som klientfeil, og en droppet beacon er umulig å skille fra en tapt navigasjon |
+
+---
+
+**Utfyllende dokumentasjon:** CLAUDE.md § Policy: Databasespørringer beskriver kodereglene for databasefeil, og § Policy: Varsler beskriver kvitteringsregelen i detalj.

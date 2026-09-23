@@ -1,0 +1,277 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { createServerClient } from '@/lib/supabase/server'
+import { sendChatVarsler, sendVarsel, type ChatVarselScope } from '@/lib/varsler'
+import { BASE_URL } from '@/lib/config'
+import { CHAT_MIN_LENGDE, INNLEGG_MIN_LENGDE } from '@/lib/konstanter'
+import { konfigFor, revalideringsPaths, type ChatScope } from '@/lib/chat-konfig'
+import { ensureInnlogget } from '@/lib/auth'
+import { logg } from '@/lib/logg'
+
+// Trimmer og validerer chat-innhold for et gitt scope. Bruker scope-spesifikk
+// charLimit (privat = INNLEGG_MAKS_LENGDE = 2000, øvrige = CHAT_MAKS_LENGDE
+// = 500). Tekst kan være tom hvis bilde_url er satt — meldingen kan være
+// ren bilde. Returnerer trimmed tekst (eller null hvis tom).
+function validerInnhold(
+  innhold: string | null,
+  bildeUrl: string | null,
+  charLimit: number,
+): { tekst: string | null } {
+  const tekst = innhold?.trim() || null
+  if (!tekst && !bildeUrl) {
+    throw new Error('Meldingen må ha tekst eller bilde')
+  }
+  // Privat har egen min via INNLEGG_MIN_LENGDE; for chat er CHAT_MIN_LENGDE
+  // det riktige. Begge er 1, så vi velger basert på charLimit-størrelsen.
+  const minLengde = charLimit > 500 ? INNLEGG_MIN_LENGDE : CHAT_MIN_LENGDE
+  if (tekst && (tekst.length < minLengde || tekst.length > charLimit)) {
+    throw new Error(`Meldingen må være ${minLengde}–${charLimit} tegn`)
+  }
+  return { tekst }
+}
+
+// Etter vellykket insert: send chat-broadcast+mention- eller privat-melding-
+// varsel. For arrangement/klubb/poll/melding/albumbilde: varsler ALLE aktive
+// medlemmer minus avsender (#612), med @-mention-benet prioritert foran
+// broadcast-benet inne i sendChatVarsler. For privat: én varsel til motparten.
+async function sendVarslerEtterPost(
+  scope: ChatScope,
+  tekst: string | null,
+  avsenderId: string,
+  bildeUrl: string | null = null,
+): Promise<void> {
+  if (scope.type === 'privat') {
+    // Defensiv — validerInnhold skal ha kastet før vi når denne grenen uten
+    // tekst eller bilde, men vi beholder fallback for trygghet.
+    const varselTekst =
+      tekst ?? (bildeUrl ? '📷 Sendte deg et bilde' : 'Sendte deg en melding')
+    await sendPrivatMeldingVarsel(scope.samtaleId, varselTekst, avsenderId)
+    return
+  }
+  // Chat-varsler MÅ awaites — fire-and-forget kuttes av Vercel når server
+  // action returnerer (CLAUDE.md: «Bruk aldri after()… Bruk await direkte»).
+  // Promise.all internt i sendVarsel gjør utsendingen parallell, så latency
+  // er kort selv med mange mottakere.
+  //
+  // Exhaustive switch med never-default (i stedet for if/else-kjede) — lukker
+  // klassen av bugs der en ny ChatScope-variant stille faller gjennom uten
+  // varsel. 'privat' er allerede early-returnert over, så TS narrower scope
+  // korrekt til de resterende variantene her. Se #481.
+  //
+  // Bygger KUN scopet her (ikke selve sendVarsel-kallet) — én sending, ikke
+  // fem kopier av utsendingslogikken. Se #612 for hvorfor if (!tekst) return
+  // er borte: en ren bilde-melding skal varsle på lik linje med tekst.
+  let varselScope: ChatVarselScope
+  switch (scope.type) {
+    case 'arrangement':
+      varselScope = { type: 'arrangement', id: scope.arrangementId }
+      break
+    case 'klubb':
+      varselScope = { type: 'klubb' }
+      break
+    case 'poll':
+      varselScope = { type: 'poll', id: scope.pollId }
+      break
+    case 'melding':
+      varselScope = { type: 'melding', id: scope.meldingId }
+      break
+    case 'albumbilde':
+      varselScope = { type: 'albumbilde', bildeId: scope.bildeId, albumId: scope.albumId }
+      break
+    default: {
+      const ukjent: never = scope
+      throw new Error(`Ukjent chat-scope: ${JSON.stringify(ukjent)}`)
+    }
+  }
+  await sendChatVarsler(varselScope, tekst, avsenderId, !!bildeUrl)
+}
+
+async function sendPrivatMeldingVarsel(
+  samtaleId: string,
+  tekst: string,
+  avsenderId: string,
+): Promise<void> {
+  const supabase = await createServerClient()
+
+  // Begge oppslagene under kalles fra sendVarslerEtterPost, som igjen kalles
+  // i et try/catch i sendChatMelding (logger 'chat.varsler.feilet' og
+  // fortsetter) — meldingen er alt committet før vi når hit, så en kastet
+  // feil her stopper aldri selve chat-postingen, kun varselet. Kaster i
+  // stedet for stille fallback slik at feilen faktisk blir logget der.
+  // maybeSingle: en slettet samtale skal gi den stille `return`-en under,
+  // ikke en PGRST116-feil i varsellogg-en.
+  const { data: samtale, error: samtaleFeil } = await supabase
+    .from('samtale')
+    .select('profil_a, profil_b')
+    .eq('id', samtaleId)
+    .maybeSingle()
+  if (samtaleFeil) throw new Error(`Kunne ikke hente samtalen: ${samtaleFeil.message}`)
+
+  if (!samtale) return
+
+  const motpartId = samtale.profil_a === avsenderId ? samtale.profil_b : samtale.profil_a
+
+  // maybeSingle så 'Noen'-fallbacken under fortsatt er nåbar.
+  const { data: avsender, error: avsenderFeil } = await supabase
+    .from('profiles')
+    .select('navn, visningsnavn')
+    .eq('id', avsenderId)
+    .maybeSingle()
+  if (avsenderFeil) throw new Error(`Kunne ikke hente avsenders navn: ${avsenderFeil.message}`)
+
+  const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
+  const utdrag = tekst.length > 80 ? tekst.slice(0, 77) + '...' : tekst
+
+  // Hver privatmelding er sin egen — tillatDuplikat: true så samme avsender
+  // kan sende flere meldinger uten at de filtreres bort i dedup-laget.
+  await sendVarsel({
+    mottakere: [motpartId],
+    tittel: `${avsenderNavn} skrev`,
+    melding: utdrag,
+    url: `${BASE_URL}/samtaler/${samtaleId}`,
+    knappTekst: 'Åpne samtalen',
+    type: 'privat-melding',
+    tillatDuplikat: true,
+  })
+}
+
+// Raden sendChatMelding returnerer til klienten. Lar avsenderen bytte ut sin
+// optimistiske temp-rad med den ekte raden umiddelbart, uten å vente på
+// realtime-INSERT (som kan mangle ved abonnement-race eller droppet WebSocket).
+export type SendtChatMelding = {
+  id: string
+  profil_id: string
+  innhold: string | null
+  bilde_url: string | null
+  video_url: string | null
+  opprettet: string
+}
+
+// Generisk send for alle chat-scopes. Tabell, FK-felt og charLimit slås opp
+// i CHAT_KONFIG. RLS i Postgres er fortsatt det som faktisk håndhever
+// tilgang per scope; her gjør vi bare ergonomisk innsetting.
+export async function sendChatMelding(
+  scope: ChatScope,
+  innhold: string | null,
+  bildeUrl: string | null = null,
+): Promise<SendtChatMelding> {
+  const k = konfigFor(scope)
+  const { tekst } = validerInnhold(innhold, bildeUrl, k.charLimit)
+
+  const { supabase, user } = await ensureInnlogget()
+
+  const fkData = k.fkFelt ? { [k.fkFelt]: k.scopeId(scope) } : {}
+  // Returner den innsatte raden (.select().single) så avsenderen kan avstemme
+  // sin optimistiske rad deterministisk — ikke via realtime-rundturen.
+  const { data, error } = await supabase
+    .from(k.tabell)
+    .insert({
+      ...fkData,
+      profil_id: user.id,
+      innhold: tekst,
+      bilde_url: bildeUrl,
+    })
+    .select('id, profil_id, innhold, bilde_url, video_url, opprettet')
+    .single<SendtChatMelding>()
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Klarte ikke å lagre meldingen')
+
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
+
+  try {
+    await sendVarslerEtterPost(scope, tekst, user.id, bildeUrl)
+  } catch (err) {
+    // Varsel-svikt skal ikke feile selve meldingen — den er allerede skrevet
+    // til DB. Logg og gå videre.
+    await logg.feil('chat.varsler.feilet', err)
+  }
+
+  return data
+}
+
+export async function oppdaterChatMelding(
+  scope: ChatScope,
+  meldingId: string,
+  innhold: string,
+): Promise<void> {
+  const k = konfigFor(scope)
+  // Ved redigering kreves alltid tekst — dummy bildeUrl for å passere bilde-
+  // fallbacken i validerInnhold. Bilde kan ikke endres via redigering.
+  // Eksplisitt sjekk for tom/whitespace etter trim siden validerInnhold med
+  // bildeUrl='placeholder' ellers ville la null-tekst slippe gjennom og
+  // nulle ut innhold-kolonnen i DB.
+  const { tekst } = validerInnhold(innhold, 'placeholder', k.charLimit)
+  if (!tekst) {
+    const minLengde = k.charLimit > 500 ? INNLEGG_MIN_LENGDE : CHAT_MIN_LENGDE
+    throw new Error(`Meldingen må være ${minLengde}–${k.charLimit} tegn`)
+  }
+
+  const supabase = await createServerClient()
+  const { error } = await supabase
+    .from(k.tabell)
+    .update({ innhold: tekst })
+    .eq('id', meldingId)
+
+  if (error) throw new Error(error.message)
+
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
+}
+
+export async function slettChatMelding(
+  scope: ChatScope,
+  meldingId: string,
+): Promise<void> {
+  const k = konfigFor(scope)
+  const supabase = await createServerClient()
+  const { error } = await supabase
+    .from(k.tabell)
+    .delete()
+    .eq('id', meldingId)
+
+  if (error) throw new Error(error.message)
+
+  revalideringsPaths(scope).forEach((p) => revalidatePath(p))
+}
+
+// Reaksjoner — felles for alle scopes via chat_reaksjoner-tabellen.
+// melding_id peker til id-en i den underliggende chat-tabellen (RLS
+// håndhever at brukeren kun kan legge til/fjerne egne reaksjoner).
+// Bytte av reaksjon som delete+insert, ikke upsert (#472): realtime-hooken
+// (useChatReaksjoner) håndterer kun INSERT/DELETE, ikke UPDATE — og UPDATE er
+// verken grantet eller RLS-tillatt på tabellen. Delete UTEN emoji-filter
+// fjerner brukerens eventuelle andre emoji på meldingen, slik at ny emoji
+// faktisk bytter. Rekkefølgen delete→insert gir DELETE- så INSERT-events som
+// useChatReaksjoner allerede håndterer riktig. Unik-constrainten fra mig. 114
+// er sikkerhetsnett mot racet der to raske bytter fra samme bruker treffer
+// nesten samtidig.
+export async function leggTilReaksjon(meldingId: string, emoji: string) {
+  const { supabase, user } = await ensureInnlogget()
+
+  const { error: sletteFeil } = await supabase
+    .from('chat_reaksjoner')
+    .delete()
+    .eq('melding_id', meldingId)
+    .eq('profil_id', user.id)
+
+  if (sletteFeil) throw new Error(sletteFeil.message)
+
+  const { error: innsettingFeil } = await supabase
+    .from('chat_reaksjoner')
+    .insert({ melding_id: meldingId, profil_id: user.id, emoji })
+
+  if (innsettingFeil) throw new Error(innsettingFeil.message)
+}
+
+export async function fjernReaksjon(meldingId: string, emoji: string) {
+  const { supabase, user } = await ensureInnlogget()
+
+  const { error } = await supabase
+    .from('chat_reaksjoner')
+    .delete()
+    .eq('melding_id', meldingId)
+    .eq('profil_id', user.id)
+    .eq('emoji', emoji)
+
+  if (error) throw new Error(error.message)
+}

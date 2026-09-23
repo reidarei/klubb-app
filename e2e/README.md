@@ -1,0 +1,172 @@
+# e2e-tester (Playwright)
+
+Verifiserer at vanlige flyter (innlogging, opprette poll, kommentere, agenda-rendering) fungerer mot en lokal dev-server.
+
+## Testene kjører kun mot en lokal test-instans — aldri prod
+
+All e2e kjører mot en **dedikert lokal Supabase-instans** (startet med `supabase start`). `playwright.config.ts`
+nekter å kjøre hvis `E2E_SUPABASE_URL` peker mot sky-Supabase, og dev-serveren for testene startes på egen port (3100) 
+med env-overstyring — en vanlig `npm run dev` mot prod kan aldri gjenbrukes.
+
+**Bakgrunn:** testene må kunne mutere data fritt (opprette poller, endre RSVP-svar) uten å påvirke ekte data. En test-instans 
+isolerer disse endringene fullstendig.
+
+## Førstegangs-oppsett
+
+Start din lokale Supabase-instans:
+
+```bash
+supabase start
+```
+
+Supabase CLI vil skrive ut tilkoblings-detaljer. Legg disse inn i `.env.local`:
+
+```
+E2E_SUPABASE_URL=http://127.0.0.1:54321
+E2E_SUPABASE_ANON_KEY=<publishable-nøkkel fra supabase start-output>
+E2E_SUPABASE_SERVICE_KEY=<secret-nøkkel fra supabase start-output>
+```
+
+Innloggingsbrukeren (`e2e-admin@klubb.test`, passord `e2e-lokal-hemmelighet`) er automatisk seedet i test-instansen 
+og settes av configen — du trenger ikke å oppgi TEST_EPOST/TEST_PASSORD. Mangler E2E-variablene, skipper alle spec-er med tydelig melding.
+
+## Opprettelse og reset av test-instansen
+
+Når du har startet `supabase start`, kjør migrasjoner og seed-data:
+
+```bash
+npx supabase db reset
+```
+
+`db reset` kjører alle migrasjoner og fyller inn test-data fra `supabase/seed.sql` — den gjør altså jobben til `db push` også, og du trenger ikke begge. Seed-data inneholder:
+- Test-bruker (`e2e-admin@klubb.test`)
+- Noen vanlige medlemmer
+- Arrangement-data som spec-ene verifiserer mot
+- Historiske data (eldre arrangementer og meldinger) for testing av historikk-siden (`/tidligere`)
+
+Etter en test-kjøring kan du kjøre på nytt uten reset, eller resette hvis du vil ha garantert ren tilstand:
+
+```bash
+npx supabase db reset
+```
+
+## Kjøre testene
+
+```bash
+# Alle spec-er
+npx playwright test
+
+# Én spec
+npx playwright test e2e/poll.spec.ts
+
+# Dev-server kjører på en annen port enn 3000
+PLAYWRIGHT_BASE_URL=http://localhost:3002 npx playwright test
+```
+
+## Røyktesten — `sider-laster.spec.ts`
+
+Laster hver rute i appen (én test per rute) og krever tre ting: HTTP 200, ingen omdirigering til `/login`, og at `<main>` faktisk fikk innhold uten å havne i error-boundaryen.
+
+Dette er en **bredde**-test, ikke en dybde-test. Den beviser at siden svarer og rendrer — ikke at innholdet er riktig. Dybden hører hjemme i de øvrige spec-ene.
+
+Verdien er at en brutt databasespørring på en side ingen andre tester besøker (feil kolonnenavn etter en migrasjon, en join som ryker, en manglende `GRANT`) fanges før merge i stedet for av en bruker. Særlig relevant for `GRANT`-feil: de gir `42501` selv når RLS tillater raden, og en side som aldri lastes får aldri sin `42501` oppdaget.
+
+**Legger du til en ny rute i appen, legg den i `RUTER`-lista.** Detaljruter (`[id]`) trenger en matchende rad i `supabase/seed.sql` — uten den treffer testen `notFound()` og bekrefter 404-grenen i stedet for innholds-grenen. Seed-fixturene for dette har prefiks `9800` og er dekket av seed-vakten nederst i fila.
+
+**`feil_logg`-vakten:** Røyktesten har en egen siste test som feiler hvis en side rendret helt fint (200 + innhold), men serveren logget en feil til `feil_logg` underveis. Den fanger altså feil som *ikke* velter siden — nettopp de som ellers blir usynlige.
+
+Grensen for «hva som er nytt» settes av `e2e/global-setup.ts`, som leser høyeste `feil_logg.id` én gang ved kjøringsstart og skriver den til fil; `e2e/helpers/feil-logg-grense.ts` leser den tilbake, og vakten filtrerer på `id > grense`.
+
+To detaljer som er lette å bomme på hvis du endrer dette:
+
+- **Vakten ligger i en egen nestet `describe` med `retries: 0`** (resten av suiten har `retries: 1` i CI). Uten det blir et treff forsøkt på nytt, `beforeAll`-grensen settes på nytt *etter* rute-testene, vinduet blir tomt — og en ekte feil rapporteres som `flaky` med exit 0. Vakten ville altså vært grønn på nøyaktig det den finnes for.
+- **Grensen er en `id`, ikke et tidsstempel.** Runner-klokka og Postgres-klokka er ikke samme klokke, og et tidsfilter ville stille kastet ekte rader bort hvis DB-klokka ligger bak.
+
+Konsekvensen for deg: legger du til en server action som kalles løst under render uten `.catch(err => logg.feil(...))`, eller en server component som svelger et kast, blir det rødt på neste e2e-kjøring. Se `feil_logg`-tabellen i test-instansen for hva som traff.
+
+Merk begrensningen: dedup-indeksen på `feil_logg` gjør at samme event i samme UTC-minutt bare gir én rad. Vakten er derfor «minst én rad per event per minutt», ikke «alle feil».
+
+## CI: to omfang
+
+Suiten kjører i `.github/workflows/pr-check.yml` på **pull requests** (full port, inkludert e2e). Pushes rett til `main` kjører kun kjerneporten — lint, typecheck, vitest og bygg, uten e2e.
+
+Konsekvensen er at **kodeendringer bør gå gjennom pull request**: en direkte push til `main` får aldri e2e-dekning. Se [docs/ci-minuttbudsjett.md](../docs/ci-minuttbudsjett.md) § Two run scopes for detaljer, og for hvorfor `skipped` på e2e-steget betyr to ulike ting.
+
+## Sikkerhetsmodellen
+
+Fire lag hindrer at testene rører prod. Testprosessen og dev-server-barnet er
+to ulike prosesser med hver sin `process.env`.
+
+1. **Config-vakt (testprosessen):** `playwright.config.ts` kaster hvis
+   `E2E_SUPABASE_URL` matcher sky-Supabase — testene kan fysisk ikke pekes mot
+   prod.
+2. **Env-overstyring i testprosessen:** når test-instansen er konfigurert,
+   overskriver configen `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` og
+   `NEXT_PUBLIC_BASE_URL` i sin egen `process.env`. Uten dette ville test-kode
+   som importerer server-moduler direkte (i stedet for via HTTP mot :3100)
+   fått prod-credentials fra `.env.local`.
+3. **Egen port (dev-server-barnet):** test-dev-serveren kjører på 3100 med
+   `webServer.env` tvunget mot test-instansen; en kjørende prod-dev-server på
+   3000 gjenbrukes aldri.
+4. **Varsler-vakt (begge prosesser):** `NEXT_PUBLIC_BASE_URL` settes til
+   localhost under testing, så varsler-vakten i `lib/varsler.ts` blokkerer all
+   push/epost-utsending. I tillegg pinnes `ALLOW_LOCAL_NOTIFICATIONS: 'false'`
+   i `webServer.env`, slik at vakten ikke kan omgås av en verdi i `.env.local`.
+
+Test-speccene oppretter og sletter data fritt — det er hele poenget med
+test-isolasjonen. Cleanup går alltid mot test-instansen.
+
+### Femte lag i CI: «kjørte suiten i det hele tatt?»
+
+De fire lagene over hindrer at testene rører prod. I CI trengs et lag til, mot
+motsatt feil: at suiten *ikke kjørte* uten at noen merket det. Er
+`E2E_SUPABASE_*` tomme, skipper hver spec på sin egen guard — og Playwright
+avslutter med 0. Grønn CI, null dekning.
+
+To låser lukker dette:
+
+1. **Workflowen** plukker de tre verdiene ved navn fra `supabase status -o env`,
+   validerer at hver av dem faktisk fikk en verdi, og skriver først da til
+   `$GITHUB_ENV`. En tom variabel gjør jobben rød i stedet for tom.
+2. **`sikkerhetsvakt.spec.ts`** har én test utenfor skip-guarden som asserter det
+   samme i testprosessen. Den er armet kun når `CI` er satt — lokalt er «ingen
+   test-instans ⇒ alt skipper» et bevisst oppsett. Kjør `CI=1 npx playwright test`
+   for å arme den lokalt.
+
+Endrer du hvordan CI får tak i test-instansen, behold begge låsene.
+
+## Når Playwright IKKE er riktig verktøy
+
+Playwright kjører mot Chromium (og WebKit hvis vi aktiverer det). **Det er ikke ekte iOS Safari.** En del bug-klasser i denne appen reproduserer ikke i runneren:
+
+- `visualViewport`-håndtering (tastatur som dekker bottom-elementer)
+- iOS safe-area (notch, home-indikator, dock)
+- iOS PWA-quirks (focus/blur, scroll-restoration, momentum-scroll)
+- ITP-cookie-håndtering i standalone-modus
+
+Slike bugs må verifiseres manuelt på iPhone. Dokumenter i PR-en at automatisk verifikasjon ikke er mulig.
+
+WebKit-runneren er ikke aktivert i dag — kan vurderes senere, men selv da fanger den ikke alt av det over.
+
+## Security tests: Row Level Security (RLS) verification
+
+`e2e/rls/` contains security tests that verify your RLS policies actually block or allow access as intended. Until this test suite was added, all e2e tests ran as `service_role` (which bypasses RLS entirely), leaving your primary security boundary (RLS) unverified with a real authenticated client.
+
+**What's covered:**
+- Sensitive data visibility (pass info, private conversations) is restricted to authorized users only
+- Column-level protections prevent members from changing their own role or settings
+- Unauthenticated (`anon`) users have no read access to any table in the public schema
+- Admin operations (deleting others' posts, editing policies) are gated correctly
+
+**Why Playwright and not unit tests:** RLS can only be verified by actually querying Postgres as an authenticated user via PostgREST. Unit test mocks don't have RLS at all, so they'd give false confidence. Playwright has the full test infrastructure (`supabase start`) — adding a parallel unit-test rig would duplicate complexity without benefit.
+
+**Important:** When you read data after a blocked `update` or `delete`, Postgres returns success (`error: null`) even though 0 rows changed. Tests verify the row actually remained unchanged using an admin client. Each spec file also includes at least one positive control case that *should* succeed — to prove the authenticated client is working, not just that RLS blocks everything.
+
+**Run RLS tests only:**
+
+```bash
+npx playwright test --project=rls
+```
+
+(Full e2e: `npx playwright test` runs both RLS and the main test suite.)

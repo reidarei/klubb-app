@@ -1,0 +1,537 @@
+@import "tailwindcss";
+
+:root {
+  /* Fargeskjema for nettleserens EGNE kontroller — kalenderikonet i
+   * <input type="date">, autofyll-bakgrunn, scrollbars. Uten dette resolver
+   * `color-scheme: light dark` mot OS-preferansen, ikke mot appens tema, og
+   * et medlem med mørkt OS som har valgt lyst tema (#353) fikk et mørkt
+   * kalenderikon på lys bakgrunn (#685-review). Hører hjemme her sammen med
+   * resten av tema-tokenene, ikke som en per-input-overstyring. */
+  color-scheme: dark;
+
+  /* Bakgrunn — Obsidian, men løftet for bedre kontrast og mer pust.
+   * Endret 2026-05-01: --bg løftet fra #060608 til #0e0f13 (~3 lyshet),
+   * elevated-flatene gjort tydelig lysere og mer opake så kort separerer
+   * klart fra bakgrunnen. Bevarer kjølig blåsvart karakter. */
+  --bg: #0e0f13;
+  --bg-gradient:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(100, 80, 195, 0.09) 0%, transparent 60%),
+    linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
+  --bg-elevated: rgba(40, 42, 50, 0.95);
+  --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  /* Solid variant av elevated-flaten — for sticky inputs der gjennomskinn lar innhold lekke gjennom */
+  --bg-elevated-solid: #282a32;
+  /* Semi-transparent header-bakgrunn — backdrop-blurred variant av --bg */
+  --bg-header: rgba(14, 15, 19, 0.85);
+
+  /* Kantlinjer — boostet så kort/skiller faktisk synes mot ny base */
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.26);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  /* Tekst — kontrastløftet 2026-05-01 (runde 3). Tertiary ytterligere
+   * løftet fra #b0b4be til #c0c4cc nå som bakgrunnen er lysere; samlet
+   * hierarki holder seg pent men puster mer. */
+  --text-primary: #f5f5f7;
+  --text-secondary: #dadce2;
+  --text-tertiary: #c0c4cc;
+
+  /* Aksent — kremgul, ikke gull */
+  --accent: #e8d9b5;
+  --accent-soft: rgba(232, 217, 181, 0.16);
+  --accent-hot: #f5e8c8;
+  --accent-foreground: #1a1a10; /* mørk tekst på aksent-bakgrunn */
+
+  /* Semantisk */
+  --success: #7cc99a;
+  --success-soft: rgba(124, 201, 154, 0.14);
+  --success-border: rgba(124, 201, 154, 0.34);
+  --success-hot: #a8dbb8; /* sterkere success for hover/badge */
+  --danger: #d97a6c;
+  --danger-alt: #e87060;
+  --danger-soft: rgba(217, 122, 108, 0.14);
+  --danger-border: rgba(217, 122, 108, 0.34);
+  /* Hover/aktiv danger — OG tekstfarge på danger-lenker i hviletilstand
+   * (f.eks. «Prøv igjen» på /tidligere, #492). Bevisst utvidelse av
+   * semantikken: mot --bg gir --danger-hot 7.96:1 (mørkt) / 5.83:1 (lyst),
+   * mens --danger så vidt klarer AA i lyst tema (4.59:1). */
+  --danger-hot: #e89080;
+  --warning: #e8a96b;
+  --warning-soft: rgba(232, 169, 107, 0.14);
+  --warning-border: rgba(232, 169, 107, 0.34);
+  --warning-hot: #f0bc80; /* hover/aktiv warning */
+
+
+  /* ── Kartet (#713) ────────────────────────────────────────────────────────
+   * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
+   * uendret. Tokens er derfor KART-SPESIFIKKE og påvirker ingen annen flate.
+   * (Når «turmodus» kommer, er det disse som får farge på resten.)
+   *
+   * I mørkt tema holdes de dempet: bobler og paneler ligger oppå et kart som
+   * allerede er detaljrikt, og for mye farge her gjør kartet uleselig. */
+  --kart-flate: rgba(32, 45, 52, 0.94);
+  --kart-flate-sterk: rgba(42, 58, 66, 0.97);
+  --kart-kant: rgba(255, 255, 255, 0.14);
+  --kart-sol: #f0b464;
+  /* Mørk tekst på sol-bakgrunn (kartets primærknapper). Egen token, ikke
+   * --accent-foreground: sol er en annen farge enn sand-aksenten og skal kunne
+   * justeres uavhengig. Samme verdi i lyst tema — sol er varm og lys nok til
+   * mørk tekst i begge. */
+  --kart-sol-tekst: #241a0c;
+  --kart-hav: #5fb3bd;
+  --kart-korall: #e0806a;
+  --kart-tekst: #f2efe8;
+  /* Fliser: OSM er lyst, appen er mørk. Inverteringen beholdes, men med
+   * varmere sepia og litt lavere metning enn den rene invert-hue-rotasjonen —
+   * da blir kartet et dempet kveldskart i stedet for et kaldt nattkart. */
+  --kart-flis-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) sepia(0.18) saturate(1.1);
+  /* Skygge under emoji-nåler på kartet. Egen token og ikke --shadow-floating:
+   * de er box-shadow-LISTER, og drop-shadow() tar én enkelt skygge uten
+   * spread — en liste der gjør hele filteret ugyldig. */
+  --kart-naal-skygge: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  /* Fonter */
+  --font-display: var(--font-instrument), Georgia, serif;
+  --font-body: var(--font-inter), -apple-system, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* Layout — sticky topp-header-høyde (uten safe-area). Eksponert som
+   * CSS-variabel så andre sticky-elementer (f.eks. VinnerBanner) kan
+   * stikke seg riktig under headeren i stedet for å havne bak. */
+  --top-header-h: 60px;
+
+  /* Toppinnsettet på en iPhone med notch/Dynamic Island, som CSS-variabel
+   * (ikke lest direkte flere steder — se CLAUDE.md § Policy: Navigasjon,
+   * reisemodus-avsnittet, #723). Kart-komponentene KONSUMERER denne via
+   * --kart-panel-safe-top i stedet for å lese iOS-variabelen hver for seg —
+   * det var nettopp den spredningen som dobbelttalte innsettet før #723. */
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Form */
+  --radius: 18px;
+  --radius-card: 14px;
+  --radius-small: 12px;
+  --radius-pill: 999px;
+
+  /* Blur */
+  --blur-card: blur(24px) saturate(160%);
+  --blur-nav: blur(40px) saturate(200%) brightness(1.1);
+  --blur-glass: blur(16px);
+
+  /* Overlay (modal/lightbox-bakgrunner og kontroller på overlay) */
+  --overlay-backdrop: rgba(0, 0, 0, 0.9);
+  --overlay-control-bg: rgba(0, 0, 0, 0.65);
+  --overlay-control-ring: rgba(255, 255, 255, 0.25);
+  /* Lett overlay på bilder/flater inni innhold (f.eks. foto-grid "+N"-badge) */
+  --overlay-soft: rgba(0, 0, 0, 0.5);
+
+  /* Bildevisning (AlbumLightbox) — helt opak, bevisst tema-uavhengig: et foto
+   * skal stå alene, ikke over app-innhold som skinner igjennom (#625).
+   * Bevisst IKKE --overlay-backdrop: den deles med BildeCropper og
+   * RentefordelingBoks, der kontekst bak scrimen er poenget. */
+  --lightbox-backdrop: #000;
+  /* Kontrollene oppå backdropen (X, teller, piler, handlinger) — tema-uavhengig
+   * av samme grunn: forgrunnen må følge bakgrunnen. --text-primary er #1c1b16 i
+   * lyst tema, som gir ~1,05:1 mot #000 — glyfene forsvant nesten helt, og bare
+   * 1 px-ringen skilte X-knappen fra bakgrunnen (#625). Overstyres bevisst
+   * hverken i dark eller light. */
+  --lightbox-foreground: #f5f5f7;
+
+  /* Shadow */
+  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
+  /* Popover-skygge (kontekstmenyer, reaksjons-picker, FAB-meny) */
+  --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
+  /* Modal-skygge (bunnskuff, install-veiledning) */
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  /* Fotopapir — albumkortene rendres som en bunke fremkalte bilder.
+   * Papiret er varmt off-white, ikke rent hvitt: fremkalt fotopapir er det
+   * aldri, og ren hvit ville skåret mot den varme sand-aksenten.
+   * Kanten er kun nødvendig i lyst tema, der papiret ellers smelter inn i
+   * bakgrunnen — i mørkt tema gjør kontrasten mot underlaget jobben. */
+  --foto-papir: #f7f5f0;
+  --foto-papir-kant: transparent;
+  --foto-skygge: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --foto-skygge-ark: 0 2px 10px rgba(0, 0, 0, 0.45);
+  /* Tom bilderute (album uten bilder). Papiret er lyst i BEGGE temaer, så
+   * denne må være det samme i begge — --bg-elevated-2 er nær hvit i lyst
+   * tema og forsvant helt mot papiret. */
+  --foto-tom-bg: #e6e2d7;
+  --foto-tom-ikon: #a29d90;
+
+  /* Opacity-tokens for dempet innhold (tidligere arrangementer, leste varsler).
+   * Speiles i data-theme="dark" med identiske verdier; heves i data-theme="light"
+   * fordi lys bakgrunn gjør lavere opacity vanskeligere å lese. */
+  --tidligere-opacity: 0.62;
+  --tidligere-opacity-lav: 0.5;
+  --tidligere-opacity-dypere: 0.4;
+  --lest-opacity: 0.6;
+
+}
+
+/* Speiling for data-theme="dark" — identiske verdier som :root. Forbereder
+ * light-overlay i v2 uten at vi trenger å restrukturere CSS-en da. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e0f13;
+  --bg-gradient:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(100, 80, 195, 0.09) 0%, transparent 60%),
+    linear-gradient(180deg, #14161c 0%, #0e0f13 100%);
+  --bg-elevated: rgba(40, 42, 50, 0.95);
+  --bg-elevated-2: rgba(54, 56, 64, 0.97);
+  /* Solid variant av elevated-flaten — for sticky inputs der gjennomskinn lar innhold lekke gjennom */
+  --bg-elevated-solid: #282a32;
+  --bg-header: rgba(14, 15, 19, 0.85);
+
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.26);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  --text-primary: #f5f5f7;
+  --text-secondary: #dadce2;
+  --text-tertiary: #c0c4cc;
+
+  --accent: #e8d9b5;
+  --accent-soft: rgba(232, 217, 181, 0.16);
+  --accent-hot: #f5e8c8;
+  --accent-foreground: #1a1a10;
+
+  --success: #7cc99a;
+  --success-soft: rgba(124, 201, 154, 0.14);
+  --success-border: rgba(124, 201, 154, 0.34);
+  --success-hot: #a8dbb8;
+  --danger: #d97a6c;
+  --danger-alt: #e87060;
+  --danger-soft: rgba(217, 122, 108, 0.14);
+  --danger-border: rgba(217, 122, 108, 0.34);
+  --danger-hot: #e89080;
+  --warning: #e8a96b;
+  --warning-soft: rgba(232, 169, 107, 0.14);
+  --warning-border: rgba(232, 169, 107, 0.34);
+  --warning-hot: #f0bc80;
+
+  /* ── Kartet (#713) ────────────────────────────────────────────────────────
+   * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
+   * uendret. Tokens er derfor KART-SPESIFIKKE og påvirker ingen annen flate.
+   * (Når «turmodus» kommer, er det disse som får farge på resten.)
+   *
+   * I mørkt tema holdes de dempet: bobler og paneler ligger oppå et kart som
+   * allerede er detaljrikt, og for mye farge her gjør kartet uleselig. */
+  --kart-flate: rgba(32, 45, 52, 0.94);
+  --kart-flate-sterk: rgba(42, 58, 66, 0.97);
+  --kart-kant: rgba(255, 255, 255, 0.14);
+  --kart-sol: #f0b464;
+  /* Mørk tekst på sol-bakgrunn (kartets primærknapper). Egen token, ikke
+   * --accent-foreground: sol er en annen farge enn sand-aksenten og skal kunne
+   * justeres uavhengig. Samme verdi i lyst tema — sol er varm og lys nok til
+   * mørk tekst i begge. */
+  --kart-sol-tekst: #241a0c;
+  --kart-hav: #5fb3bd;
+  --kart-korall: #e0806a;
+  --kart-tekst: #f2efe8;
+  /* Fliser: OSM er lyst, appen er mørk. Inverteringen beholdes, men med
+   * varmere sepia og litt lavere metning enn den rene invert-hue-rotasjonen —
+   * da blir kartet et dempet kveldskart i stedet for et kaldt nattkart. */
+  --kart-flis-filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) sepia(0.18) saturate(1.1);
+  /* Skygge under emoji-nåler på kartet. Egen token og ikke --shadow-floating:
+   * de er box-shadow-LISTER, og drop-shadow() tar én enkelt skygge uten
+   * spread — en liste der gjør hele filteret ugyldig. */
+  --kart-naal-skygge: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+
+  --font-display: var(--font-instrument), Georgia, serif;
+  --font-body: var(--font-inter), -apple-system, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --top-header-h: 60px;
+
+  --radius: 18px;
+  --radius-card: 14px;
+  --radius-small: 12px;
+  --radius-pill: 999px;
+
+  --blur-card: blur(24px) saturate(160%);
+  --blur-nav: blur(40px) saturate(200%) brightness(1.1);
+  --blur-glass: blur(16px);
+
+  /* Overlay/shadow speiles identisk fra :root for konsistens — vil divergere når light-modus aktiveres i v2 */
+  --overlay-backdrop: rgba(0, 0, 0, 0.9);
+  --overlay-control-bg: rgba(0, 0, 0, 0.65);
+  --overlay-control-ring: rgba(255, 255, 255, 0.25);
+  --overlay-soft: rgba(0, 0, 0, 0.5);
+
+  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  /* Fotopapir — identisk med :root (mørk modus) */
+  --foto-papir: #f7f5f0;
+  --foto-papir-kant: transparent;
+  --foto-skygge: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --foto-skygge-ark: 0 2px 10px rgba(0, 0, 0, 0.45);
+  /* Tom bilderute (album uten bilder). Papiret er lyst i BEGGE temaer, så
+   * denne må være det samme i begge — --bg-elevated-2 er nær hvit i lyst
+   * tema og forsvant helt mot papiret. */
+  --foto-tom-bg: #e6e2d7;
+  --foto-tom-ikon: #a29d90;
+
+  /* Opacity-tokens — identiske med :root (mørk modus) */
+  --tidligere-opacity: 0.62;
+  --tidligere-opacity-lav: 0.5;
+  --tidligere-opacity-dypere: 0.4;
+  --lest-opacity: 0.6;
+
+  /* Avatar-initialer-farge — lys glyph på mørk boble */
+  --avatar-foreground: #f5f5f7;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  /* Bakgrunn — varm off-white, sand-undertone bevart */
+  --bg: #f4f2ec;
+  --bg-gradient:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(120, 145, 210, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(120, 100, 205, 0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #faf8f2 0%, #f1efe8 100%);
+  --bg-elevated: rgba(255, 255, 255, 0.86);
+  --bg-elevated-2: rgba(255, 255, 255, 0.96);
+  --bg-elevated-solid: #ffffff;
+  --bg-header: rgba(244, 242, 236, 0.85);
+
+  /* Kantlinjer — varm mørk i lav alpha */
+  --border: rgba(40, 36, 26, 0.12);
+  --border-strong: rgba(40, 36, 26, 0.22);
+  --border-subtle: rgba(40, 36, 26, 0.06);
+
+  /* Tekst — varm nær-sort */
+  --text-primary: #1c1b16;
+  --text-secondary: #54514a;
+  --text-tertiary: #86827a;
+
+  /* Aksent — cognac (kan overstyres via NEXT_PUBLIC_KLUBB_FARGE_*) */
+  --accent: #a07a39;
+  --accent-soft: rgba(160, 122, 57, 0.14);
+  --accent-hot: #876427;
+  --accent-foreground: #fffdf6;
+
+  /* Semantisk */
+  --success: #3f8f5f;
+  --success-soft: rgba(63, 143, 95, 0.13);
+  --success-border: rgba(63, 143, 95, 0.32);
+  --success-hot: #327a4e;
+  --danger: #c0432f;
+  --danger-alt: #cf4334;
+  --danger-soft: rgba(192, 67, 47, 0.12);
+  --danger-border: rgba(192, 67, 47, 0.32);
+  --danger-hot: #a83622;
+  --warning: #b9701f;
+  --warning-soft: rgba(185, 112, 31, 0.13);
+  --warning-border: rgba(185, 112, 31, 0.32);
+  --warning-hot: #9c5d14;
+
+  /* ── Kartet (#713) — lys sommer ───────────────────────────────────────────
+   * Her bærer temaet ferie-følelsen tydeligst: varme, lyse flater over et
+   * OSM-kart som allerede er lyst. Ingen invertering, bare et lite løft i
+   * metning så vann og grøntområder får farge. */
+  --kart-flate: rgba(255, 252, 245, 0.92);
+  --kart-flate-sterk: rgba(255, 253, 248, 0.97);
+  --kart-kant: rgba(120, 85, 50, 0.18);
+  --kart-sol: #d8922c;
+  --kart-sol-tekst: #241a0c;
+  --kart-hav: #2b8a99;
+  --kart-korall: #c85a3c;
+  --kart-tekst: #2a241c;
+  --kart-flis-filter: saturate(1.12) brightness(1.02);
+  /* Varm brun, ikke svart: en ren svart skygge blir en skitten flekk på det
+   * lyse sommerkartet. Samme grep som --shadow-* i denne blokka. */
+  --kart-naal-skygge: 0 1px 2px rgba(60, 42, 20, 0.30);
+
+
+  /* Overlay — lightbox holdes mørk (foto), kun varmet */
+  --overlay-backdrop: rgba(22, 20, 15, 0.92);
+  --overlay-control-bg: rgba(22, 20, 15, 0.62);
+  --overlay-control-ring: rgba(255, 255, 255, 0.30);
+  --overlay-soft: rgba(22, 20, 15, 0.45);
+  /* --lightbox-backdrop varmes bevisst IKKE opp her — den arver #000 fra
+   * :root uansett tema, se begrunnelse der (#625). */
+
+  /* Skygge — varm og mykere */
+  --shadow-floating: 0 4px 16px rgba(60, 50, 30, 0.10);
+  --shadow-popover: 0 6px 18px rgba(50, 42, 26, 0.14);
+  --shadow-modal: 0 12px 40px rgba(40, 34, 20, 0.20);
+
+  /* Fotopapir — rent hvitt med synlig kant. Papirbakgrunnen (#f4f2ec) er
+   * selv varm off-white, så et varmt papir ville forsvunnet i den; her er
+   * det kanten og den varme skyggen som skiller bildet fra underlaget. */
+  --foto-papir: #ffffff;
+  --foto-papir-kant: rgba(40, 36, 26, 0.12);
+  --foto-skygge: 0 5px 16px rgba(50, 42, 26, 0.20);
+  --foto-skygge-ark: 0 2px 8px rgba(50, 42, 26, 0.16);
+  /* Tom bilderute (album uten bilder). Papiret er lyst i BEGGE temaer, så
+   * denne må være det samme i begge — --bg-elevated-2 er nær hvit i lyst
+   * tema og forsvant helt mot papiret. */
+  --foto-tom-bg: #e6e2d7;
+  --foto-tom-ikon: #a29d90;
+
+  /* Opacity-tokens — hevet for bedre lesbarhet på lyst papir */
+  --tidligere-opacity: 0.85;
+  --tidligere-opacity-lav: 0.78;
+  --tidligere-opacity-dypere: 0.7;
+  --lest-opacity: 0.78;
+
+  /* Avatar-initialer-farge — mørk glyph på lys boble */
+  --avatar-foreground: #1c1b16;
+}
+
+/* Avatar-initialer: gradient styrt av --avatar-hue (satt inline per navn),
+   farge bytter automatisk med tema via --avatar-foreground. */
+.avatar-initialer {
+  background: linear-gradient(135deg, oklch(0.28 0.04 var(--avatar-hue)), oklch(0.18 0.03 var(--avatar-hue)));
+  color: var(--avatar-foreground);
+}
+:root[data-theme="light"] .avatar-initialer {
+  background: linear-gradient(135deg, oklch(0.82 0.06 var(--avatar-hue)), oklch(0.72 0.05 var(--avatar-hue)));
+}
+
+/* Hvite skyer er usynlige mot lyst papir — dempet til nesten null i light mode */
+:root[data-theme="light"] .sky-bakgrunn { opacity: 0.05; }
+
+/* Binder CSS-tokens til Tailwind v4-utilities via @theme inline.
+ * Gir f.eks. bg-accent, text-text-secondary, border-border som klasser. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-elevated-2: var(--bg-elevated-2);
+  --color-bg-elevated-solid: var(--bg-elevated-solid);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-hot: var(--accent-hot);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-border: var(--success-border);
+  --color-success-hot: var(--success-hot);
+  --color-danger: var(--danger);
+  --color-danger-alt: var(--danger-alt);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
+  --color-danger-hot: var(--danger-hot);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-border: var(--warning-border);
+  --color-warning-hot: var(--warning-hot);
+}
+
+html, body {
+  background: var(--bg);
+}
+/* overflow-x: clip på html + body hindrer at iOS Safari lar sidene bli
+ * bredere enn viewporten når f.eks. backdrop-filter/shadows stikker ut —
+ * uten dette oppfører `position: fixed` seg buggy og dokken "svømmer"
+ * oppover under scroll. Returrert fra commit 9064c6d etter at den falt
+ * ut i Obsidian-redesignet. */
+html {
+  overflow-x: clip;
+}
+body {
+  overflow-x: clip;
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+/* Skjul scrollbar */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+/* Sidetransisjon */
+@keyframes page-fadein {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Fullskjermsider (i dag kun /kart) setter denne klassen på <body> mens de er
+   montert. DeployInfo ligger i <main> under sideinnholdet og la 44 px ekstra
+   høyde på dokumentet — nok til at iOS' rubber-band hadde noe å dra i, og da
+   skled knappene som ligger oppå kartet ut av skjermen (#706). En fullskjermside
+   har per definisjon ikke plass til en bunnlinje. */
+body.fullskjerm-side .deploy-info {
+  display: none;
+}
+
+.page-enter {
+  animation: page-fadein 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Fokusmarkering for opplysnings-radene på /profil/rediger (#685-review).
+   OPPLYSNING_INPUT_RESET fjerner ramme, bakgrunn og outline for at feltet
+   skal se ut som verdien det erstatter — konsekvensen var at en tastaturbruker
+   ikke så hvor fokus sto, nå med fem felter i stedet for to. :focus-visible
+   (ikke :focus) gir markeringen kun til tastatur/AT, så mus og touch beholder
+   det rene uttrykket. inset box-shadow, ikke border: en ramme ville endret
+   radhøyden hver gang fokus flyttet seg. */
+.opplysning-verdi:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1px 0 0 var(--accent);
+}
+
+/* Vis slett-knapp på chat-boble ved hover/fokus */
+.chat-boble:hover .chat-slett-knapp,
+.chat-boble:focus-within .chat-slett-knapp {
+  opacity: 1 !important;
+}
+
+/* Hindre at long-press på chat-meldinger markerer tekst eller åpner iOS-
+   callout (kopier/del-meny). Gjelder hele boble-wrapperen og alle barn. */
+.chat-boble,
+.chat-boble * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Tving portrett-visning. Manifest har allerede orientation:portrait, men
+   iOS Safari i browser-modus ignorerer det. Når enheten er i landskap
+   blokkerer vi appen med et overlay som ber brukeren rotere tilbake. */
+.orientering-overlay {
+  display: none;
+}
+@media screen and (orientation: landscape) and (max-device-width: 932px) {
+  .orientering-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    text-align: center;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+  }
+  body:has(.orientering-overlay) {
+    overflow: hidden;
+  }
+  /* Album-sider og åpen lightbox tillater landskap — bilder ser bedre
+   * ut bredt enn smalt. AlbumLightbox + TillatLandskap setter
+   * `tillat-landskap` på <html>; her overstyrer vi blokkeringen. */
+  html.tillat-landskap .orientering-overlay {
+    display: none !important;
+  }
+  html.tillat-landskap body {
+    overflow: visible !important;
+  }
+}
