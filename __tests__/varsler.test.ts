@@ -1679,8 +1679,7 @@ describe('sendVarsel – feilhåndtering', () => {
 
 // #504: VarselUtfall er kontrakten kallere bygger CAS-stempling på — hver
 // tidlig-retur MÅ ha riktig diskriminant. blokkert_lokal er dekket separat
-// i __tests__/varsler-blokkert.test.ts (krever modul-reimport med overstyrt
-// VITEST-env, siden BLOKKER_UTSENDING regnes ut på modul-nivå).
+// i __tests__/varsler-blokkert.test.ts via vi.stubEnv() (#765).
 describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () => {
   it('type_deaktivert når varsel_innstillinger.aktiv er false', async () => {
     setupMock({

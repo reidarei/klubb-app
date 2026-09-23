@@ -17,7 +17,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE, FORMAT_DATO_KORT } from '@/lib/dato'
-import { BASE_URL, absoluttUrl, relativUrl } from '@/lib/config'
+import { BASE_URL, getBaseUrl, absoluttUrl, relativUrl } from '@/lib/config'
 import {
   PURRING_MAKS_LENGDE,
   VARSLE_MAKS_LENGDE,
@@ -44,13 +44,25 @@ const formaterDatoKort = (iso: string) => formaterDato(iso, FORMAT_DATO_KORT)
 //
 // Dette er en «belte og seler»-sjekk utover test_modus i varsel_innstillinger
 // — fordi test_modus er admin-konfig som kan glemmes ved utvikling.
-const ER_LOKAL_BASE =
-  BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
-const TILLAT_LOKAL = process.env.ALLOW_LOCAL_NOTIFICATIONS === 'true'
-// Unit-tester må kunne verifisere send-logikken uten å slå på miljøflagget.
-// Vitest setter VITEST=true automatisk.
-const ER_UNIT_TEST = !!process.env.VITEST
-const BLOKKER_UTSENDING = ER_LOKAL_BASE && !TILLAT_LOKAL && !ER_UNIT_TEST
+//
+// Lat med vilje (#765): regnes ut PER KALL, ikke frosset i en modulnivå-
+// konstant ved import. En modulnivå-konstant kan kun testes ved å overstyre
+// env FØR modulen lastes og deretter reimportere hele modulgrafen via
+// vi.resetModules() — det kostet ~1,6 s per test og var det som timet ut
+// full vitest-suite i #765. getBaseUrl() kan ikke innføre noe NYTT kast her:
+// BASE_URL = getBaseUrl() i lib/config.ts kaster allerede ved modulinnlasting
+// i de samme miljøene (#687), så kallet under er ikke en ny feilkilde.
+// Identisk oppførsel i prod — ingenting muterer process.env i runtime, så
+// «regnet ut per sending» og «frosset ved oppstart» gir samme svar i praksis.
+function blokkerUtsending(): boolean {
+  const ER_LOKAL_BASE =
+    getBaseUrl().includes('localhost') || getBaseUrl().includes('127.0.0.1')
+  const TILLAT_LOKAL = process.env.ALLOW_LOCAL_NOTIFICATIONS === 'true'
+  // Unit-tester må kunne verifisere send-logikken uten å slå på miljøflagget.
+  // Vitest setter VITEST=true automatisk.
+  const ER_UNIT_TEST = !!process.env.VITEST
+  return ER_LOKAL_BASE && !TILLAT_LOKAL && !ER_UNIT_TEST
+}
 
 // Sjekk om en varseltype er aktivert i admin-innstillinger
 async function erVarselAktiv(noekkel: string): Promise<boolean> {
@@ -375,7 +387,7 @@ export async function sendVarsel({
   // Vi returnerer tidlig uten å skrive varsel_logg — det er bedre å ikke
   // forurense loggen med "late som"-rader. Logg til konsoll slik at
   // utvikleren ser hva som skjedde.
-  if (BLOKKER_UTSENDING) {
+  if (blokkerUtsending()) {
     logg.warn('varsel.blokkert.lokal', { sample: type })
     return { utfall: 'blokkert_lokal', ...INGEN_UTSENDING }
   }
