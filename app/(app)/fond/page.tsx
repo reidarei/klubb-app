@@ -144,10 +144,9 @@ export default async function FondSide() {
           {KLUBB_KORTNAVN}s fond
         </div>
 
-        {/* Andel-ringen venstrestilt ved siden av totalen (#779). Skjules når
+        {/* Andel-ringen høyrestilt på samme rad som totalen (#779). Skjules når
             totalverdien er 0 — da finnes det ingen andel å regne ut. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {andelPst !== null && <AndelSirkel andelPst={andelPst} />}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <div style={{ minWidth: 0 }}>
             <div
               style={{
@@ -181,6 +180,7 @@ export default async function FondSide() {
               {kr(totalverdi)}
             </div>
           </div>
+          {andelPst !== null && <AndelSirkel andelPst={andelPst} />}
         </div>
 
         {/* Nøkkeltall per aktivaklasse */}
