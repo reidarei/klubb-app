@@ -189,8 +189,9 @@ describe('stedssøk på kartet (#757)', () => {
     expect(screen.getByTestId('markering-sikte')).toBeInTheDocument()
     expect(screen.getByTestId('markering-bekreft-sted')).toBeInTheDocument()
     const senter = sisteKart!.getCenter()
-    expect(senter.lat).toBeCloseTo(TREFF_A.lat, 6)
-    expect(senter.lng).toBeCloseTo(TREFF_A.lng, 6)
+    // getCenter() etter panTo er rundet til hele piksler — 6 desimaler (~10 cm) ga sporadisk rødt; 4 (~10 m) beviser det samme.
+    expect(senter.lat).toBeCloseTo(TREFF_A.lat, 4)
+    expect(senter.lng).toBeCloseTo(TREFF_A.lng, 4)
     // Treffnåla er PRIVAT og midlertidig — forsvinner når man går videre.
     expect(document.querySelector('[data-testid="sted-sok-naal"]')).toBeNull()
   })

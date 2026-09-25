@@ -81,8 +81,19 @@ type NominatimSokRad = {
   place_id?: number | string
   name?: string
   display_name?: string
+  address?: { road?: string; pedestrian?: string; house_number?: string }
   lat?: string
   lon?: string
+}
+
+// En adresse har ingen `name`, og første ledd i display_name er husnummeret
+// («5B, Storgata, …») — sett derfor sammen gate + nummer når de finnes (#757).
+function stedsnavn(rad: NominatimSokRad): string {
+  if (rad.name) return rad.name
+  const gate = rad.address?.road ?? rad.address?.pedestrian
+  const nr = rad.address?.house_number
+  if (gate && nr) return `${gate} ${nr}`
+  return (rad.display_name ?? '').split(',')[0].trim()
 }
 
 // Interaktivt stedssøk (#757) — søker ETT KALL per eksplisitt trykk (aldri
@@ -100,6 +111,7 @@ export async function sokSteder(q: string, naer?: Koordinat): Promise<StedSokUtf
 
   const params: Record<string, string> = {
     format: 'jsonv2',
+    addressdetails: '1',
     limit: String(STED_SOK_MAKS_TREFF),
     q: sok,
   }
@@ -131,7 +143,7 @@ export async function sokSteder(q: string, naer?: Koordinat): Promise<StedSokUtf
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
       treff.push({
         id: String(rad.place_id ?? `${lat},${lng}`),
-        navn: rad.name || rad.display_name.split(',')[0].trim(),
+        navn: stedsnavn(rad),
         beskrivelse: rad.display_name,
         lat,
         lng,

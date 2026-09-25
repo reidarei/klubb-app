@@ -5,11 +5,12 @@ import Card from '@/components/ui/Card'
 import InnskyterRad from '@/components/fond/InnskyterRad'
 import FondPostRad from '@/components/fond/FondPostRad'
 import Avkastning from '@/components/fond/Avkastning'
+import AndelSirkel from '@/components/fond/AndelSirkel'
 import { createServerClient } from '@/lib/supabase/server'
-import { getProfil } from '@/lib/auth-cache'
+import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { formaterDato } from '@/lib/dato'
-import { formaterKr, formaterBelop } from '@/lib/belop'
+import { formaterKr, formaterBelop, summerKroner } from '@/lib/belop'
 import { KLUBB_KORTNAVN, FOND_KONTONUMMER, FOND_FAST_TREKK_FORSLAG } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 
@@ -27,8 +28,11 @@ const kr = formaterKr
 export default async function FondSide() {
   const supabase = await createServerClient()
   // Hent profil og fond-flagget parallelt — unngår sekvensiell DB-runde.
-  const [profil, fondFane] = await Promise.all([
+  // getInnloggetBruker() er cache()-wrappet og kalles uansett av getProfil(),
+  // så id-en til andel-ringen (#779) koster ingen ekstra runde.
+  const [profil, bruker, fondFane] = await Promise.all([
     getProfil(),
+    getInnloggetBruker(),
     hentAppFlagg(supabase, FOND_FANE),
   ])
   // Gating: admin har alltid tilgang. Vanlige medlemmer får tilgang når
@@ -91,6 +95,14 @@ export default async function FondSide() {
   const vpAvkastning = vpVerdi - vpInngang
   const totalverdi = eiendomSum + vpVerdi + kontantSaldo
 
+  // Innloggedes andel av totalverdien (#779). Telleren er samme sum som
+  // «Min andel» på /profil (egne rader i fond_innskudd), så de to flatene
+  // aldri kan vise ulike tall. Innskuddene er allerede hentet — ingen ny spørring.
+  const minAndel = summerKroner(
+    innskuddListe.filter(inn => inn.profil_id === bruker?.id).map(inn => Number(inn.belop)),
+  )
+  const andelPst = totalverdi > 0 ? (minAndel / totalverdi) * 100 : null
+
   // «Per <dato>» — seneste oppdatert-tidsstempel på tvers av kildene
   const tidsstempler = [
     ...eiendomListe.map(e => e.oppdatert),
@@ -132,36 +144,43 @@ export default async function FondSide() {
           {KLUBB_KORTNAVN}s fond
         </div>
 
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.5px',
-            textTransform: 'uppercase',
-            marginBottom: 4,
-          }}
-        >
-          Totalverdi
-          {perDato && (
-            <>
-              <span aria-hidden="true" style={{ opacity: 0.4 }}> · </span>
-              Per {perDato}
-            </>
-          )}
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 44,
-            fontWeight: 400,
-            color: 'var(--text-primary)',
-            letterSpacing: '-1.2px',
-            lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {kr(totalverdi)}
+        {/* Andel-ringen venstrestilt ved siden av totalen (#779). Skjules når
+            totalverdien er 0 — da finnes det ingen andel å regne ut. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {andelPst !== null && <AndelSirkel andelPst={andelPst} />}
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-tertiary)',
+                letterSpacing: '1.5px',
+                textTransform: 'uppercase',
+                marginBottom: 4,
+              }}
+            >
+              Totalverdi
+              {perDato && (
+                <>
+                  <span aria-hidden="true" style={{ opacity: 0.4 }}> · </span>
+                  Per {perDato}
+                </>
+              )}
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 44,
+                fontWeight: 400,
+                color: 'var(--text-primary)',
+                letterSpacing: '-1.2px',
+                lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {kr(totalverdi)}
+            </div>
+          </div>
         </div>
 
         {/* Nøkkeltall per aktivaklasse */}

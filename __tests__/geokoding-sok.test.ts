@@ -49,6 +49,7 @@ describe('sokSteder() (#757)', () => {
     expect(parsed.searchParams.get('format')).toBe('jsonv2')
     expect(parsed.searchParams.get('limit')).toBe(String(STED_SOK_MAKS_TREFF))
     expect(parsed.searchParams.get('q')).toBe('Karl Johans gate')
+    expect(parsed.searchParams.get('addressdetails')).toBe('1')
     expect(parsed.searchParams.has('viewbox')).toBe(false)
     expect(parsed.searchParams.has('bounded')).toBe(false)
     const headers = init.headers as Record<string, string>
@@ -99,6 +100,36 @@ describe('sokSteder() (#757)', () => {
       lng: 10.7267,
     })
     expect(svar.treff[1].navn).toBe('Grünerløkka')
+  })
+
+  // Et adressesøk ga bare «5B» i timeplanen: en adresse har ingen name,
+  // og første ledd i display_name er husnummeret (#757).
+  it("adresse blir «gate nummer», ikke bare husnummeret", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonRespons([
+        {
+          place_id: 1,
+          name: "",
+          display_name: "5B, Storgata, Sentrum, Oslo, 0184, Norge",
+          address: { road: "Storgata", house_number: "5B" },
+          lat: "59.85",
+          lon: "10.83",
+        },
+        {
+          place_id: 2,
+          name: "Lorry",
+          display_name: "Lorry, 12, Parkveien, Oslo, Norge",
+          address: { road: "Parkveien", house_number: "12" },
+          lat: "59.92",
+          lon: "10.72",
+        },
+      ]),
+    )
+    const svar = await sokSteder("storgata 5b")
+    if (svar.utfall !== "treff") throw new Error("forventet treff")
+    expect(svar.treff[0].navn).toBe("Storgata 5B")
+    // Et sted med eget navn (restaurant) beholder navnet — gate + nummer kun når name mangler.
+    expect(svar.treff[1].navn).toBe("Lorry")
   })
 
   it('tom liste fra Nominatim gir utfall "ingen"', async () => {

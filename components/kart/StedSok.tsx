@@ -265,6 +265,8 @@ export default function StedSok({
                 gap: 2,
                 padding: '10px 12px',
                 minHeight: 44,
+                // Uten dette krymper flexbox kandidatene når lista når maxHeight, og teksten kappes (#757).
+                flexShrink: 0,
                 borderRadius: 'var(--radius-small)',
                 border: '0.5px solid var(--kart-kant)',
                 background: 'var(--bg-elevated)',
