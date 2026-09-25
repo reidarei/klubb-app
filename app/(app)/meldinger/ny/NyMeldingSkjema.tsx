@@ -8,10 +8,15 @@ import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 import { komprimer, bildeSrc } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
 import { iDagOslo } from '@/lib/dato'
 import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
+
+// Fjern-knappens treffflate vokser inn i grid-gapet (#700) — gapet må dekke
+// veksten, ellers stjeler nabo-miniatyren trykket (CHIP_RAD_GAP-fella).
+const FJERN_BILDE_TREFF = treffflateRundt({ hoyde: 22, bredde: 22 })
 
 const inputStil: CSSProperties = {
   width: '100%',
@@ -316,7 +321,7 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 8,
+                  gap: Math.max(8, FJERN_BILDE_TREFF.utvidY),
                   marginBottom: 12,
                 }}
               >
@@ -358,32 +363,30 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                       </div>
                     )}
                     {/* X-knapp for å fjerne bildet */}
-                    <button
-                      type="button"
+                    <Treffflate
+                      synlig={22}
                       onClick={() => fjernBilde(idx)}
                       disabled={isPending}
                       aria-label="Fjern bilde"
-                      style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        width: 22,
-                        height: 22,
-                        borderRadius: '50%',
-                        background: 'var(--overlay-control-bg)',
-                        border: 'none',
-                        color: 'var(--text-primary)',
-                        fontSize: 13,
-                        lineHeight: 1,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0,
-                      }}
+                      style={{ position: 'absolute', top: 4, right: 4, cursor: 'pointer' }}
                     >
-                      ×
-                    </button>
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          background: 'var(--overlay-control-bg)',
+                          color: 'var(--text-primary)',
+                          fontSize: 13,
+                          lineHeight: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        ×
+                      </span>
+                    </Treffflate>
                   </div>
                 ))}
               </div>

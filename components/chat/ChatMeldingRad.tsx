@@ -3,8 +3,9 @@
 import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
 import MessengerBadge from '@/components/ui/MessengerBadge'
+import Treffflate from '@/components/ui/Treffflate'
 import { formaterDatoSkille } from '@/lib/dato'
-import { REAKSJON_EMOJIS } from '@/lib/konstanter'
+import { REAKSJON_EMOJIS, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { LinkifiedMedMentions } from './LinkifiedMedMentions'
 import type { ChatMelding } from './Chat'
 import type { Reaksjon } from './hooks/useChatReaksjoner'
@@ -449,8 +450,12 @@ export default function ChatMeldingRad({
                   [erEgen ? 'right' : 'left']: 0,
                   zIndex: 100,
                   display: 'flex',
-                  gap: 4,
-                  padding: '6px 8px',
+                  // 0, ikke 4 (#700): knappene er hver MIN_TREFFMAAL_PX —
+                  // ingen ekstra gap trengs (jf. ReaksjonPicker).
+                  gap: 0,
+                  // Vertikal padding 0 (#700, jf. ReaksjonPicker): popoveren
+                  // blir da ikke høyere enn de 44 px knappene selv.
+                  padding: '0 8px',
                   borderRadius: 999,
                   background: 'var(--bg-elevated)',
                   border: '0.5px solid var(--border-strong)',
@@ -463,8 +468,10 @@ export default function ChatMeldingRad({
                     type="button"
                     onClick={() => handlers.toggleReaksjon(m.id, emoji)}
                     style={{
-                      width: 34,
-                      height: 34,
+                      // Fast width/height, ikke Treffflate (#700, unntak a):
+                      // usynlig flate rundt hver ville overlappet naboene.
+                      width: MIN_TREFFMAAL_PX,
+                      height: MIN_TREFFMAAL_PX,
                       borderRadius: '50%',
                       border: 'none',
                       background: 'transparent',
@@ -494,7 +501,9 @@ export default function ChatMeldingRad({
                       type="button"
                       onClick={() => handlers.startEdit(m.id, m.innhold!)}
                       style={{
-                        height: 34,
+                        // Høyden matcher emoji-knappene (#700) — bredden er
+                        // allerede tekst-drevet og godt over 44.
+                        height: MIN_TREFFMAAL_PX,
                         borderRadius: 999,
                         border: 'none',
                         background: 'transparent',
@@ -519,32 +528,35 @@ export default function ChatMeldingRad({
             </>
           )}
           {kanSlette && !m.id.startsWith('temp-') && (
-            <button
-              type="button"
-              onClick={() => handlers.handleSlett(m.id)}
+            <Treffflate
+              synlig={20}
               className="chat-slett-knapp"
+              aria-label="Slett melding"
+              onClick={() => handlers.handleSlett(m.id)}
               style={{
                 position: 'absolute',
                 top: -6,
                 [erEgen ? 'left' : 'right']: -6,
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: 'var(--bg-elevated)',
-                border: '0.5px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: 0,
-                color: 'var(--danger)',
                 opacity: 0,
                 transition: 'opacity 120ms',
+                cursor: 'pointer',
               }}
-              aria-label="Slett melding"
             >
-              <Icon name="x" size={10} color="var(--danger)" strokeWidth={2} />
-            </button>
+              <span
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: 'var(--bg-elevated)',
+                  border: '0.5px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="x" size={10} color="var(--danger)" strokeWidth={2} />
+              </span>
+            </Treffflate>
           )}
         </div>
       </div>

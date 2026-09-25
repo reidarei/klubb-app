@@ -242,6 +242,13 @@ All tidshåndtering skal gå gjennom `lib/dato.ts`. **Aldri** bruk `new Date()` 
 **Tidssone:** `Europe/Oslo` (eksportert som `TIDSSONE` fra `lib/dato.ts`). Håndterer automatisk sommertid/vintertid via `date-fns-tz`.
 
 **Vakt:** ESLint-regelen `hk/dato-tidssone-uavhengig` (inline i `eslint.config.mjs`, samme mønster som `hk/supabase-feil-maa-hentes`) håndhever dette på `'error'`. Den sporer taint *ett hopp* gjennom en lokal hjelpers parameter — hvis du skriver en lokal `function dagStreng(d) { return d.toISOString().slice(0, 10) }` som kalles fra prod-koden, flagges KALLSTEDET, ikke hjelperen (det er der rettingen skal gjøres; hjelperen er ikke gal for alle argumenter). Regelen sjekker **argumentene** når den avgjør om en `toISOString()` kappes til en kalenderdag: `slice(0, N)` med N ≤ 10 og `split('T')[0]` er daguttrekk (flagges), `slice(11, 19)` (UTC-klokkeslettet) og `split('.')` (strippe millisekunder) er legitime instant-operasjoner (tillatt).
+
+**Blindsonene er presise, ikke omtrentlige.** Regelen ser fortsatt ikke: (a) mer enn ETT hopp — hjelper A som sender parameteren sin videre til hjelper B som gjør `toISOString()`; (b) hjelpere importert fra en annen fil (ESLint har ingen typeinfo på tvers av filer); (c) parametere som skrives om i kroppen (`d = …`) — verdien er da ikke lenger den kallstedet sendte inn, og vi konkluderer bevisst ikke; (d) destrukturerte og rest-parametere, som ikke har en stabil posisjon å matche kallstedets argument mot; (e) kilder utenfor de tre kjente (`norskDatoNaa()`, `norskDag()`, null-argument `new Date()`), f.eks. en Date lest ut av et objekt eller returnert fra en annen fil. Svaret på et treff er uansett «ikke skriv en lokal dato-hjelper — bruk `lib/dato.ts`», ikke «ikke skriv `toISOString()`».
+
+**En test som mocker bort `lib/dato.ts` må bygge datoene sine med ren `Date.UTC`-aritmetikk og pinne minst én EKSAKT literal.** Bygger mocken dem med `new Date(år, mnd, dag).toISOString().slice(0, 10)`, arver den nøyaktig feilen den skal vokte mot: «10. juni» blir `2026-06-09` i `Europe/Oslo`. Og fordi både fixture-nøkkelen og spørrings-mocken bruker samme hjelper, blir suiten grønn på feil dato — tautologien fra produksjonskoden er bare flyttet ett hakk inn i testen, ikke fjernet. Samme krav gjelder en fixture som mater `byggAgenda` med `naa`: den parameteren er en Oslo-kalenderdag som lokal Date, ikke et instant, og en `'…T12:00:00Z'`-literal der er grønn i UTC og rød på UTC+14. Kjør `npm run test:tz` når du rører datokode — det kjører suiten i Europe/Oslo og Pacific/Kiritimati (egne soner som argumenter: `npm run test:tz -- <sone1> <sone2>`), med en egenkontroll FØR hver kjøring som beviser at sonen faktisk slo gjennom til Node i stedet for å stille falle tilbake til systemsonen (se `scripts/tz-test.mjs`). Bruk aldri `TZ=Europe/Oslo npm test` direkte fra Git Bash på Windows: MSYS dropper `TZ`-verdier med skråstrek når en native prosess spawnes, så barnet arver ingen sone og kjøringen ser grønn ut uten å ha testet noe — PowerShell (`$env:TZ=...`) har ikke dette problemet.
+
+Dette er det samme som tidssone-bug-klassen over — en fjerde gang samme feil oppstår betyr et sterkere grep enn enda en ESLint-regel.
+
 ## Policy: Konfig
 
 Miljø-avhengige verdier samles i `lib/config.ts`. **Aldri** hardkode domenet eller lese `process.env.NEXT_PUBLIC_BASE_URL` direkte i actions/route handlers/komponenter — importér fra `lib/config`.
@@ -287,6 +294,15 @@ Unntak: mutasjoner som returnerer raden (`insert().select().single()`), og den e
 - **Fortsett stille (men logg feilen)** — idempotent eller ikke-kritisk nok til å ta ned resten. Bruk `logg.warn()`/`logg.feil()` slik feilen er synlig i observability uten å blokkere brukeren.
 
 **Bevisst fail-open:** hvis du med vilje lar en spørring feile stille, skriv `eslint-disable-next-line hk/supabase-feil-maa-hentes` med en kort begrunnelse på linjen over. (Destrukturerer du `error` og faktisk bruker den, f.eks. i logging, trenger du **ikke** disable — regelen krever kun at `error` hentes ut og leses.)
+
+
+**Gjeret er lukket:** regelen står på **`error`**, og dekker bruk på tvers av destrukturerings-form — se ESLint-avsnittet over.
+
+**Tilstøtende gjerde — forkastede mutasjoner:** `hk/supabase-feil-maa-hentes` over sporer *konsumert* `data`. En ren mutasjon uten `.select()` (`delete()`, `update()`, `upsert()`, `insert()` uten videre kjede, `.rpc(...)`) har ingen `data` å henge seg på, så en setning som `await supabase.from('x').delete().eq('id', 1)` — hele resultatet forkastet, ingen destrukturering, ingen tilordning — var usynlig for den regelen. 
+
+Egen regel, `hk/supabase-mutasjon-maa-sjekkes` (inline i `eslint.config.mjs`, samme begrunnelse for hvorfor den bor der): den fanger fire former: **(1)** en awaitet/forkastet mutasjonskjede som egen setning; **(2)** en `ObjectPattern`-destrukturering av en mutasjon der `error` ikke faktisk LESES; **(3)** mutasjonskjeder som elementer i en array-literal til `Promise.all`/`Promise.allSettled`; **(4)** reassignment. `.rpc(...)` telles likt som `.from(...)` + mutasjons-verb. Egen `RuleTester`-pinning i `__tests__/eslint-supabase-mutasjon-maa-sjekkes.test.ts`. Står på **`error`**.
+
+**Kontrakten — dette, og bare dette, godtas for en mutasjonskjede:** `.throwOnError()` i kjeden (Supabase kaster selv); `error` som faktisk LESES, enten i en destrukturering eller `.then(cb)`-callback; eller `eslint-disable-next-line` med begrunnelse for bevisst fire-and-forget. En avsluttende `.catch()`/`.finally()` endrer ikke vurderingen — den skrelles av, og det som står igjen vurderes som over.
 
 ## Policy: Konstanter
 

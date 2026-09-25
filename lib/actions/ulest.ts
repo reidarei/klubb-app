@@ -12,7 +12,7 @@ import { DbFeil } from '@/lib/logg'
  */
 export async function markerChatSett() {
   const { supabase } = await ensureInnlogget()
-  const { error } = await supabase.rpc('marker_chat_sett')
+  const { error, status } = await supabase.rpc('marker_chat_sett')
   // Feilen ble tidligere aldri hentet ut: feilet RPC-en, ble ulest-prikken
   // hengende uten et eneste spor. ESLint-regelen hk/supabase-feil-maa-hentes
   // fanget det ikke, fordi den sporer bruk av `data` — og her ble verken `data`
@@ -22,5 +22,7 @@ export async function markerChatSett() {
   // DbFeil, ikke Error: en vanlig Error taper `error.code` i innpakkingen, og
   // raden i feil_logg ble stående som `{"navn":"Error"}` — synlig, men umulig å
   // diagnostisere. Se DbFeil-doccen i lib/logg.ts.
-  if (error) throw new DbFeil(`marker_chat_sett feilet: ${error.message}`, error.code)
+  //
+  // status følger samme vei som code gjennom innpakkingen (#711 runde 2).
+  if (error) throw new DbFeil(`marker_chat_sett feilet: ${error.message}`, error.code, status)
 }

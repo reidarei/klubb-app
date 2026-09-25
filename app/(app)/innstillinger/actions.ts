@@ -1,8 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createServerClient } from '@/lib/supabase/server'
-import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
+import { getProfil } from '@/lib/auth-cache'
 import { revalidatePath } from 'next/cache'
 import { kanAdministrere, rollerMed } from '@/lib/roller'
 import { naa } from '@/lib/dato'
@@ -52,7 +51,8 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
   //
   // NB: nullingen lib/app-innstillinger.ts advarer mot er reell, men gjelder
   // BULK-upsert (array-payload), der supabase-js sender ?columns= som unionen
-  // av alle objektenes nøkler og et objekt uten nøkkelen får DEFAULT/null.
+  // av alle objektenes nøkler og et objekt uten nøkkelen får NULL ved konflikt
+  // (defaultToNull: false påvirker kun nye rader, ikke merge).
   const { error } = await supabase
     .from('varsel_innstillinger')
     .upsert({ noekkel, aktiv, oppdatert: naa() }, { onConflict: 'noekkel' })
@@ -114,8 +114,11 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
 
   // upsert (ikke update) slik at en manglende rad opprettes i stedet for stille
   // no-op på friske instanser (klubb-app). beskrivelse sendes med fra metadata
-  // fordi kolonnen er nullable (migrasjon 111) — utelates den, nulles den ved
-  // konflikt. onConflict='noekkel' matcher primærnøkkelen.
+  // fordi kolonnen er nullable (migrasjon 111) — for INSERT-grenens skyld, slik
+  // at raden får riktig tekst fra første stund i stedet for NULL. onConflict=
+  // 'noekkel' matcher primærnøkkelen; se KJENTE_FLAGG i lib/app-innstillinger.ts
+  // for hvorfor et enkelt-objekt-upsert IKKE nuller utelatte felt ved konflikt
+  // (#771).
   const { error } = await supabase
     .from('app_innstillinger')
     .upsert(
@@ -137,14 +140,13 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
 // Skrives til profiles-tabellen med innlogget brukers RLS-kontekst —
 // ingen kan skru på/av for andre.
 export async function oppdaterBursdagsgratulasjon(aktiv: boolean) {
-  const [profil, bruker] = await Promise.all([getProfil(), getInnloggetBruker()])
-  if (!kanAdministrere(profil?.rolle) || !bruker) return
-
-  const supabase = await createServerClient()
-  await supabase
+  // ensureAdmin() (Policy: Auth) kaster ved avvist tilgang i stedet for stille retur.
+  const { supabase, user } = await ensureAdmin()
+  const { error } = await supabase
     .from('profiles')
     .update({ bursdagsgratulasjon_aktiv: aktiv })
-    .eq('id', bruker.id)
+    .eq('id', user.id)
+  if (error) throw new Error(`Kunne ikke lagre bursdagsgratulasjon-valget: ${error.message}`)
 
   revalidatePath('/innstillinger')
 }

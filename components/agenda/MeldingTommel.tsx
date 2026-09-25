@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import Icon from '@/components/ui/Icon'
 import ReaksjonPicker from '@/components/agenda/ReaksjonPicker'
+import Treffflate from '@/components/ui/Treffflate'
 import { LONG_PRESS_MS, LONG_PRESS_BEVEGELSE_PX } from '@/lib/konstanter'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
@@ -135,8 +136,8 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
 
   return (
     <div ref={rotRef} style={{ position: 'relative', flexShrink: 0 }}>
-      <button
-        type="button"
+      <Treffflate
+        synlig={36}
         disabled={isPending}
         aria-label={harReagert ? 'Fjern reaksjonen din' : 'Lik innlegget — hold for flere reaksjoner'}
         onPointerDown={startLongPress}
@@ -153,38 +154,42 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
           e.preventDefault()
         }}
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
           flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-          border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
-          // Ingen dimming under isPending — den optimistiske tilstanden skal se
-          // ferdig ut umiddelbart, serverturen skal ikke synes (#472-oppf.)
           cursor: 'pointer',
-          transform: pressetAktiv ? 'scale(0.92)' : 'scale(1)',
-          transition: 'transform 120ms ease-out',
-          padding: 0,
           WebkitUserSelect: 'none',
           userSelect: 'none',
           WebkitTouchCallout: 'none',
         }}
       >
-        {harReagert && minEmoji !== '👍'
-          ? <span style={{ fontSize: 17, lineHeight: 1 }}>{minEmoji}</span>
-          : (
-            <Icon
-              name="thumbsUp"
-              size={17}
-              color={harReagert ? 'var(--accent)' : 'var(--text-tertiary)'}
-              strokeWidth={1.8}
-              fill={harReagert ? 'var(--accent)' : 'none'}
-            />
-          )}
-      </button>
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated)',
+            border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
+            // Ingen dimming under isPending — den optimistiske tilstanden skal se
+            // ferdig ut umiddelbart, serverturen skal ikke synes (#472-oppf.)
+            transform: pressetAktiv ? 'scale(0.92)' : 'scale(1)',
+            transition: 'transform 120ms ease-out',
+          }}
+        >
+          {harReagert && minEmoji !== '👍'
+            ? <span style={{ fontSize: 17, lineHeight: 1 }}>{minEmoji}</span>
+            : (
+              <Icon
+                name="thumbsUp"
+                size={17}
+                color={harReagert ? 'var(--accent)' : 'var(--text-tertiary)'}
+                strokeWidth={1.8}
+                fill={harReagert ? 'var(--accent)' : 'none'}
+              />
+            )}
+        </span>
+      </Treffflate>
 
       {pickerApen && (
         <ReaksjonPicker

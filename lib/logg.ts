@@ -141,6 +141,20 @@
 //   reisemodus.av                   — warn: et medlem slo reisemodus AV for turen. Bærer arrangement_id. DEN andre halvparten: slår 14 av 18 den av dag én, er funksjonen feil, og da må tallet finnes (#723)
 //   reisemodus.oppslag.feilet       — arrangement- eller flagg-oppslaget bak reisemodus feiler; modusen faller til AV (fail-open mot VANLIG APP — aldri til fullskjermkart ved en feiltakelse). hentReisemodus() bruker de strenge helper-variantene nettopp for at en DB-feil ikke skal se ut som «ingen tur» eller «kill-switch av» (#723)
 //   kart.symbol.ukjent                 — warn: erGyldigSymbol() koerserte et symbol utenfor registeret til STANDARD_SYMBOL. Migrasjon 152 (#767) bytter constrainten fra verdiliste til format-check, så en slik verdi ikke lenger nødvendigvis feiler i databasen — dette er signalet som erstatter den tapte 23514. Bærer sample = den avviste verdien (klient-kontrollert, men et symbol-navn, ikke fritekst)
+//   kart.sok.tidsavbrudd                — warn: interaktivt stedssøk (sokSted-actionen) traff Nominatims GEOKODING_TIMEOUT_MS. Søketeksten logges ALDRI (#757)
+//   klient.kart.sok.feilet              — sokSted()-actionen AVVISTE i nettleseren (utløpt sesjon, nettverksbrudd); mannen får «Søket svarer ikke», knappen låses opp. Bærer kun feilmeldingen, aldri søketeksten (#757-review)
+//   kart.sok.feilet                     — feil: interaktivt stedssøk feilet (ikke-OK status, nettverksfeil, uventet svarformat). Søketeksten logges ALDRI (#757)
+//   arrangement.koble.feilet        — koble() feiler i opprettArrangement etter at arrangementet er committet; loggføres og opprettelsen fortsetter (#760)
+//   admin.opprett_medlem.profil.feilet — navn/visningsnavn-oppdateringen feiler etter at auth-brukeren alt er opprettet; admin får passordet uansett (#760)
+//   push.abonnement.lagring.feilet  — upsert av push-abonnement feiler i /api/push/subscribe (#760)
+//   push.abonnement.sletting.feilet — sletting av push-abonnement feiler i /api/push/subscribe (#760)
+//   cron.klientfeil.retention.feilet — retention-slettingen i feil_logg feiler; cronet svarer 500 med slettetGamle: null (#760)
+//   kaaringspoll.opprett.opprydding.feilet — kompenserende poll-sletting feiler etter feilet valg-insert; den opprinnelige feilen kastes uansett (#760)
+//   poll.opprett.opprydding.feilet  — kompenserende poll-sletting feiler etter feilet valg-insert; den opprinnelige feilen kastes uansett (#760)
+//   melding.opprett.opprydding.feilet — kompenserende melding-sletting feiler etter feilet bilde-insert; den opprinnelige feilen kastes uansett (#760)
+//   album.bump.feilet               — warn: oppdatert-bump på album feiler etter vellykket bildeopplasting (#760)
+//   album.auto_omslag.feilet        — warn: automatisk omslagssetting feiler etter vellykket bildeopplasting (#760)
+//   fond.historikk.feilet           — insert i fond_verdi_historikk feiler; selve verdien er allerede lagret (#760)
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -175,8 +189,8 @@ export const KONTEKST_WHITELIST = new Set([
   // Rent tall (GitHub-issuenummer) — ingen PII. Gjør en tapt kobling (#632)
   // sporbar til riktig issue i stdout-linja og i Sentry-konteksten. Merk at
   // det IKKE når feil_logg.kontekst: persisterFeilLogg() skriver kun
-  // { code, tabell, navn, noekler }, og den kontrakten utvides ikke her utover
-  // disse fire.
+  // { code, tabell, navn, noekler, status }, og den kontrakten utvides ikke
+  // her utover disse fem (#711 runde 2 la til status).
   'issue_nummer',
   // Den deployede app-versjonen (f.eks. «V3.5.60») — en konstant fra
   // lib/versjon.json, aldri en radverdi. Uten den kan ikke
@@ -275,6 +289,10 @@ function normaliserFeil(err: unknown): {
   // formvaktet og kappet; det som ble filtrert bort står som «+N_ukjent_form»
   // / «+N_flere» i stedet for å forsvinne stille.
   noekler?: string
+  // DB-svarets HTTP-status (0 = transport). Fanger `DbFeil.status` og ethvert
+  // kastet objekt med en numerisk `status`-property (#711 runde 2) — selve
+  // valideringen (heltall, 0–599) skjer i persisterFeilLogg(), ikke her.
+  status?: number
 } {
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
@@ -309,6 +327,11 @@ function normaliserFeil(err: unknown): {
     if (navn === undefined && noekler === undefined) {
       navn = 'objekt-uten-egne-nokler'
     }
+    // Kun formen sjekkes her — en 600 eller en 1.5 slipper gjennom til
+    // persisterFeilLogg(), som er stedet den faktiske grensevalideringen
+    // (heltall, 0–599) skjer. Ingen truthy-sjekk: 0 (transport) er en gyldig
+    // status og skal ikke droppes av en `e.status &&`-vakt.
+    const status = typeof e.status === 'number' ? e.status : undefined
     if (typeof e.code === 'string' && typeof e.message === 'string') {
       // Forsøk å ekstrahere en identifikator (tabell eller constraint) fra
       // PostgREST-meldingen. Typisk format:
@@ -323,11 +346,12 @@ function normaliserFeil(err: unknown): {
         melding: e.message,
         navn,
         noekler,
+        status,
       }
     }
     // Ikke-PostgREST-feil: meldingsformen holdes uendret (String(err) gir
-    // «Error: …»), kun navn/noekler kommer i tillegg.
-    return { melding: String(err), navn, noekler }
+    // «Error: …»), kun navn/noekler/status kommer i tillegg.
+    return { melding: String(err), navn, noekler, status }
   }
   // err er ikke et objekt (streng, tall, boolean, null, undefined) — kastet
   // uten Error-innpakking. navn bærer typeof (typeof null er «object», så den
@@ -337,7 +361,8 @@ function normaliserFeil(err: unknown): {
 }
 
 /**
- * Feil som bærer PostgREST-koden med seg gjennom en innpakking.
+ * Feil som bærer PostgREST-koden (og HTTP-statusen) med seg gjennom en
+ * innpakking.
  *
  * Pakker du en Supabase-feil inn i `new Error(\`… ${error.message}\`)`, ser
  * normaliserFeil() over ingen `code`-property og faller til else-grenen. Da er
@@ -353,14 +378,20 @@ function normaliserFeil(err: unknown): {
  * Kaster du derimot der du selv kan logge, er `logg.feil(event, error,
  * { ctx: { code: error.code } })` med det rå PostgREST-objektet like bra —
  * denne klassen er for stiene der kastet ER kanalen.
+ *
+ * `status` er DB-svarets HTTP-status (0 = transport/nettverksfeil), aldri
+ * rutas egen svarkode — se persisterFeilLogg() for grensevalideringen (#711
+ * runde 2).
  */
 export class DbFeil extends Error {
   readonly code?: string
+  readonly status?: number
 
-  constructor(melding: string, code?: string) {
+  constructor(melding: string, code?: string, status?: number) {
     super(melding)
     this.name = 'DbFeil'
     this.code = code
+    this.status = status
   }
 }
 
@@ -473,20 +504,27 @@ async function skrivFeilLoggRad(
   }
 }
 
+// Øvre grense for hva vi godtar som en HTTP-status i feil_logg.kontekst.
+// Samme presedens som RENDER_MELDING_MAKS under: en ren loggedetalj som ikke
+// speiler noen DB-constraint, derfor bor den her og ikke i lib/konstanter.ts.
+const HTTP_STATUS_MAKS = 599
+
 async function persisterFeilLogg(
   event: string,
   code: string | undefined,
   tabell: string | undefined,
   navn: string | undefined,
   noekler: string | undefined,
+  status: number | undefined,
   ctx?: Record<string, unknown>,
 ): Promise<void> {
   // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
-  // (arrangement_id, count, fingerprint, sample, status) er ikke del av
-  // kontrakten for denne tabellen. melding persisteres bevisst ALDRI her:
-  // normaliserFeil() returnerer PostgREST-teksten rått, og den kan bære
-  // radverdier (f.eks. «Key (epost)=(x@y.no) already exists»).
-  // Render-feil er unntaket — se loggRenderFeil() under, som maskerer først.
+  // (arrangement_id, count, fingerprint, sample) er ikke del av kontrakten
+  // for denne tabellen. status ER det, fra og med #711 runde 2 — se under.
+  // melding persisteres bevisst ALDRI her: normaliserFeil() returnerer
+  // PostgREST-teksten rått, og den kan bære radverdier (f.eks.
+  // «Key (epost)=(x@y.no) already exists»). Render-feil er unntaket — se
+  // loggRenderFeil() under, som maskerer først.
   const ctxScrubbet = scrubbet(ctx)
   const profilId = typeof ctxScrubbet.profil_id === 'string' ? ctxScrubbet.profil_id : null
 
@@ -498,7 +536,24 @@ async function persisterFeilLogg(
   // INVARIANT: normaliserFeil() garanterer at minst ett av
   // {code, tabell, navn, noekler} alltid er satt for enhver kastet verdi, så
   // denne linjen skal aldri kunne skrive en tom kontekst.
-  await skrivFeilLoggRad(event, { code, tabell, navn, noekler }, { profilId })
+  //
+  // status: ctx.status vinner over feilobjektets status (#711 runde 2) — en
+  // kaller som eksplisitt setter { ctx: { status } } (f.eks. vitals- og
+  // aktivitet-rutene, som leser status direkte fra Supabase-svaret) vet bedre
+  // enn normaliserFeil()s beste gjetning fra et generisk feilobjekt.
+  const ctxStatus = typeof ctxScrubbet.status === 'number' ? ctxScrubbet.status : undefined
+  const statusKandidat = ctxStatus ?? status
+  // EKSAKT validering, INGEN truthy-sjekk: 0 (transport) er en gyldig og
+  // meningsbærende verdi og skal ikke droppes av en `if (statusKandidat)`.
+  const validertStatus =
+    typeof statusKandidat === 'number' &&
+    Number.isInteger(statusKandidat) &&
+    statusKandidat >= 0 &&
+    statusKandidat <= HTTP_STATUS_MAKS
+      ? statusKandidat
+      : undefined
+
+  await skrivFeilLoggRad(event, { code, tabell, navn, noekler, status: validertStatus }, { profilId })
 }
 
 // ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
@@ -552,7 +607,7 @@ export const logg = {
       ctx?: Record<string, unknown>
     },
   ) {
-    const { code, tabell, melding, navn, noekler } = normaliserFeil(error)
+    const { code, tabell, melding, navn, noekler, status } = normaliserFeil(error)
 
     const tilgangsklasse = klassifiserTilgangsfeil(melding, code)
     if (tilgangsklasse === 'warn') {
@@ -572,6 +627,9 @@ export const logg = {
         code,
         tabell,
         melding,
+        // FØR spread av ctx (#711 runde 2): en kaller som setter
+        // opts.ctx.status skal kunne overstyre normaliserFeil()s gjetning.
+        status,
         fingerprint: opts?.fingerprint,
         ...scrubbet(opts?.ctx),
       })
@@ -581,7 +639,7 @@ export const logg = {
     // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
     // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
     // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
-    await persisterFeilLogg(event, code, tabell, navn, noekler, opts?.ctx)
+    await persisterFeilLogg(event, code, tabell, navn, noekler, status, opts?.ctx)
 
     const Sentry = await getSentry()
     if (!Sentry) return

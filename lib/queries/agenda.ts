@@ -103,7 +103,7 @@ export async function hentAgendaData(
     supabase
       .from('arrangementer')
       .select(
-        `id, type, tittel, start_tidspunkt, oppmoetested, bilde_url,
+        `id, type, tittel, start_tidspunkt, slutt_tidspunkt, oppmoetested, bilde_url,
          paameldinger (profil_id, status, profiles (visningsnavn, bilde_url, rolle)),
          arrangement_chat (count)`,
       )

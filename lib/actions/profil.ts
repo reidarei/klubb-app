@@ -226,10 +226,16 @@ export async function slettMedlem(id: string) {
 
   const admin = createAdminClient()
 
-  // Slett avhengige rader før auth-bruker slettes
-  await admin.from('paameldinger').delete().eq('profil_id', id)
-  await admin.from('push_subscriptions').delete().eq('profil_id', id)
-  await admin.from('arrangoransvar').update({ ansvarlig_id: null }).eq('ansvarlig_id', id)
+  // Slett avhengige rader først, og kast FØR deleteUser ved feil — retry er
+  // idempotent, og auth-brukeren skal aldri forsvinne før radene er borte (#760).
+  const { error: paameldingerFeil } = await admin.from('paameldinger').delete().eq('profil_id', id)
+  if (paameldingerFeil) throw new Error(`Kunne ikke slette påmeldinger for medlemmet: ${paameldingerFeil.message}`)
+
+  const { error: pushFeil } = await admin.from('push_subscriptions').delete().eq('profil_id', id)
+  if (pushFeil) throw new Error(`Kunne ikke slette push-abonnement for medlemmet: ${pushFeil.message}`)
+
+  const { error: ansvarFeil } = await admin.from('arrangoransvar').update({ ansvarlig_id: null }).eq('ansvarlig_id', id)
+  if (ansvarFeil) throw new Error(`Kunne ikke løsne arrangøransvar for medlemmet: ${ansvarFeil.message}`)
 
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) throw new Error(error.message)

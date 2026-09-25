@@ -119,19 +119,25 @@ export async function lastOppAlbumBilde(formData: FormData): Promise<{ id: strin
     throw new Error(error?.message ?? 'Kunne ikke registrere bildet')
   }
 
-  // Bumper oppdatert på album så agendakort kan reflektere endring
-  await supabase.from('album').update({ oppdatert: new Date().toISOString() }).eq('id', albumId)
+  // Bumper oppdatert på album så agendakort kan reflektere endring. Ikke-
+  // kritisk nok til å velte en allerede vellykket opplasting — logges (#760).
+  const { error: bumpFeil } = await supabase
+    .from('album')
+    .update({ oppdatert: new Date().toISOString() })
+    .eq('id', albumId)
+  if (bumpFeil) logg.warn('album.bump.feilet', { code: bumpFeil.code, album_id: albumId })
 
   // Første opplastede bilde blir albumets omslag automatisk (#463) — sørger for
   // at innleggskort alltid har et cover å vise. `.is('cover_bilde_id', null)`
   // gjør settingen betinget: et manuelt valgt omslag (via lightbox) overskrives
   // aldri, og ved parallell opplasting (AlbumOpplaster kjører 3 samtidige
   // workers) vinner én rad — resten blir no-op.
-  await supabase
+  const { error: omslagFeil } = await supabase
     .from('album')
     .update({ cover_bilde_id: rad.id })
     .eq('id', albumId)
     .is('cover_bilde_id', null)
+  if (omslagFeil) logg.warn('album.auto_omslag.feilet', { code: omslagFeil.code, album_id: albumId })
 
   revalidatePath(`/album/${albumId}`)
   return { id: rad.id, url }

@@ -3,7 +3,11 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 import { oppdaterAlbumTittel } from '@/lib/actions/album'
+
+// Lagre/Avbryt (36 px) vokser 4 px til hver side (#700) — gapet må dekke begges vekst.
+const KNAPP_TREFF = treffflateRundt({ hoyde: 36, bredde: 36 })
 
 // Album-tittel med inline-redigering for admin og eier. Klikk på rediger-
 // knappen gir et kompakt input + lagre/avbryt-knapper. Lagring kjører via
@@ -65,30 +69,21 @@ export default function AlbumTittel({
           {initialTittel}
         </h1>
         {kanRedigere && (
-          <button
-            type="button"
+          <Treffflate
+            synlig={16}
             onClick={() => setRedigerer(true)}
             aria-label="Rediger tittel"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--text-tertiary)',
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
           >
             <Icon name="cog" size={16} color="currentColor" />
-          </button>
+          </Treffflate>
         )}
       </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: Math.max(6, KNAPP_TREFF.minsteKolonneGap), marginTop: 6 }}>
       <input
         type="text"
         value={tekst}
@@ -117,49 +112,53 @@ export default function AlbumTittel({
           letterSpacing: '-0.4px',
         }}
       />
-      <button
-        type="button"
+      <Treffflate
+        synlig={36}
         onClick={lagre}
         disabled={pending}
         aria-label="Lagre"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          border: 'none',
-          background: 'var(--accent)',
-          color: 'var(--accent-foreground)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: pending ? 'default' : 'pointer',
-          opacity: pending ? 0.6 : 1,
-        }}
+        style={{ cursor: pending ? 'default' : 'pointer' }}
       >
-        <Icon name="checkmark" size={18} color="currentColor" strokeWidth={2.5} />
-      </button>
-      <button
-        type="button"
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'var(--accent)',
+            color: 'var(--accent-foreground)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pending ? 0.6 : 1,
+          }}
+        >
+          <Icon name="checkmark" size={18} color="currentColor" strokeWidth={2.5} />
+        </span>
+      </Treffflate>
+      <Treffflate
+        synlig={36}
         onClick={() => {
           setRedigerer(false)
           setTekst(initialTittel)
         }}
         aria-label="Avbryt"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          border: '0.5px solid var(--border)',
-          background: 'transparent',
-          color: 'var(--text-tertiary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
+        style={{ cursor: 'pointer' }}
       >
-        <Icon name="x" size={16} color="currentColor" />
-      </button>
+        <span
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            border: '0.5px solid var(--border)',
+            color: 'var(--text-tertiary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name="x" size={16} color="currentColor" />
+        </span>
+      </Treffflate>
     </div>
   )
 }

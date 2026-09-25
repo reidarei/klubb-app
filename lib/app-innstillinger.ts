@@ -11,9 +11,19 @@ export const CHAT_FANE = 'chat_fane'
 export const REISEMODUS = 'reisemodus'
 
 // Registret over kjente funksjonsflagg med metadata. Nye flagg legges til her.
-// beskrivelse tas med i upsert (se oppdaterAppInnstilling) slik at en manglende
-// rad opprettes med riktig tekst i stedet for NULL — beskrivelse er nullable i
-// migrasjon 111, så en upsert som utelater den ville nulle feltet ved konflikt.
+// beskrivelse tas med i upsert (se oppdaterAppInnstilling) for INSERT-grenens
+// skyld — kolonnen er nullable (migrasjon 111), og en manglende rad på en
+// fersk instans ville ellers fått NULL der.
+//
+// Nullingen ved konflikt gjelder BULK-upsert (array-payload): supabase-js
+// setter da `?columns=` som unionen av alle objektenes nøkler, og et objekt
+// som mangler en nøkkel får NULL i `do update`-grenen. { defaultToNull: false }
+// hjelper ikke der — ifølge biblioteket gjelder den kun nye rader (INSERT),
+// ikke merge med eksisterende. Et ENKELT-objekt-upsert, som her, setter kun
+// payloadens egne kolonner ved `do update` — målt mot @supabase/postgrest-js
+// 2.101.1 (#771, se #767 for bakgrunnen). app_innstillinger.beskrivelse er
+// statisk metadata; varsel_innstillinger.beskrivelse for test_modus bærer
+// brukerdata — se oppdaterVarselInnstilling.
 export const KJENTE_FLAGG = {
   [FOND_FANE]: { beskrivelse: 'Vis Fond-fanen for alle medlemmer' },
   [CHAT_FANE]: { beskrivelse: 'Vis Chat-fanen for alle medlemmer' },
@@ -22,8 +32,11 @@ export const KJENTE_FLAGG = {
 
 export type Flaggnoekkel = keyof typeof KJENTE_FLAGG
 
+// Object.hasOwn, ikke `in`: `in` slipper gjennom hele Object.prototype
+// ('toString' in KJENTE_FLAGG er sant), samme prototype-hull erVarselBryter()
+// i lib/varsel-typer.ts vokter mot.
 export function erKjentFlagg(noekkel: string): noekkel is Flaggnoekkel {
-  return noekkel in KJENTE_FLAGG
+  return Object.hasOwn(KJENTE_FLAGG, noekkel)
 }
 
 /**

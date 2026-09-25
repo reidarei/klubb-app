@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   // Bruk admin-klient for insert siden RLS ikke har insert-policy
   const admin = createAdminClient()
-  const { error } = await admin.from('vitals_logg').insert({
+  const { error, status } = await admin.from('vitals_logg').insert({
     rute,
     metric,
     verdi,
@@ -74,7 +74,10 @@ export async function POST(req: NextRequest) {
   })
 
   if (error) {
-    await logg.feil('vitals.insert.feilet', error, { ctx: { code: error.code } })
+    // status er DB-svarets HTTP-status (fra Supabase-klienten), ikke rutas
+    // egen — den er 500 rett under, en fast fallback til klienten (#711
+    // runde 2).
+    await logg.feil('vitals.insert.feilet', error, { ctx: { code: error.code, status } })
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 

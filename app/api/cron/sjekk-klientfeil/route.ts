@@ -100,10 +100,23 @@ async function handle(req: NextRequest) {
     Date.now() - LOGG_FEIL_RETENSJONSDAGER * 24 * 60 * 60 * 1000,
   ).toISOString()
 
-  const { count: slettet } = await admin
+  const { count: slettet, error: sletteFeil } = await admin
     .from('feil_logg')
     .delete({ count: 'exact' })
     .lt('opprettet', grense)
+
+  if (sletteFeil) {
+    await logg.feil('cron.klientfeil.retention.feilet', sletteFeil, { ctx: { code: sletteFeil.code } })
+    return NextResponse.json(
+      {
+        ok: false,
+        antallFeil: antall,
+        varsletAdmins: antall > KLIENT_FEIL_ALARM_TERSKEL,
+        slettetGamle: null,
+      },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json({
     ok: true,

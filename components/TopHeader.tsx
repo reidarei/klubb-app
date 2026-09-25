@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import ReisemodusToggle from '@/components/reisemodus/ReisemodusToggle'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 import { harGulGloed, kanAdministrere } from '@/lib/roller'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
 
@@ -101,6 +102,14 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   const MAAL = kompakt
     ? { ytrePadding: 10, ytreGap: 6, faneGap: 2, faneXPadding: 9, faneSkrift: 15, hoeyreGap: 6 }
     : { ytrePadding: 16, ytreGap: 8, faneGap: 6, faneXPadding: 14, faneSkrift: 17, hoeyreGap: 8 }
+
+  // Synlig fanehøyde = tekstlinjen (lineHeight: 1) + 2 × 8 px padding = 31/33 px;
+  // TREFF vokser tap-flaten usynlig til 44 px (#700).
+  const faneSynligHoyde = MAAL.faneSkrift + 16
+  const TREFF = treffflateRundt({ hoyde: faneSynligHoyde })
+  // Avatar (38 px) skal IKKE få nye props (Policy: Avatar) — treffflaten
+  // vokser på Link-omslaget rundt i stedet (#700).
+  const AVATAR_TREFF = treffflateRundt({ hoyde: 38, bredde: 38 })
 
   // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
   // deretter aldri igjen (per enhet). Settes i effect — localStorage finnes ikke
@@ -281,7 +290,14 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             const tabStil: CSSProperties = {
               position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk og z-index over pill
               zIndex: 1, // løft tekst over pill-bakgrunnen
-              padding: `8px ${MAAL.faneXPadding}px`,
+              paddingTop: 8 + TREFF.utvidY,
+              paddingBottom: 8 + TREFF.utvidY,
+              paddingLeft: MAAL.faneXPadding,
+              paddingRight: MAAL.faneXPadding,
+              // Negativ margin nøytraliserer den ekstra paddingen (#700) — pillen
+              // og radhøyden er uendret, kun tap-flaten vokser.
+              marginTop: -TREFF.utvidY,
+              marginBottom: -TREFF.utvidY,
               borderRadius: 999,
               fontFamily: 'var(--font-body)',
               fontSize: MAAL.faneSkrift,
@@ -312,7 +328,9 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                       aria-hidden="true"
                       style={{
                         position: 'absolute',
-                        top: 4,
+                        // + TREFF.utvidY (#700): prikken skal sitte ved det synlige
+                        // fanehjørnet, ikke oppe i den usynlige tap-flaten.
+                        top: 4 + TREFF.utvidY,
                         right: 6,
                         width: 6,
                         height: 6,
@@ -368,8 +386,17 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
               display: 'block',
               borderRadius: '50%',
               outline: visAktivOutline ? '1.5px solid var(--accent)' : 'none',
-              outlineOffset: 2,
+              // Minus utvidX (#700): outline tegnes rundt den utvidede flaten — ringen skal sitte som før.
+              outlineOffset: 2 - AVATAR_TREFF.utvidX,
               flexShrink: 0,
+              paddingTop: AVATAR_TREFF.utvidY,
+              paddingBottom: AVATAR_TREFF.utvidY,
+              paddingLeft: AVATAR_TREFF.utvidX,
+              paddingRight: AVATAR_TREFF.utvidX,
+              marginTop: -AVATAR_TREFF.utvidY,
+              marginBottom: -AVATAR_TREFF.utvidY,
+              marginLeft: -AVATAR_TREFF.utvidX,
+              marginRight: -AVATAR_TREFF.utvidX,
             }}
           >
             <Avatar
@@ -387,8 +414,9 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                   aria-hidden="true"
                   style={{
                     position: 'absolute',
-                    top: -2,
-                    right: -2,
+                    // + utvid* (#700): prikken sitter ved det synlige avatar-hjørnet.
+                    top: -2 + AVATAR_TREFF.utvidY,
+                    right: -2 + AVATAR_TREFF.utvidX,
                     width: 10,
                     height: 10,
                     borderRadius: '50%',

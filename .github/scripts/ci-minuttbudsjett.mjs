@@ -18,10 +18,23 @@
 // kjerneporten (lint/typecheck/test/build) røres aldri.
 //
 // FORBEHOLD (les før du justerer tersklene):
-// - Vi måler *run*-varighet (run_started_at → updated_at), ikke summen av
-//   jobb-varigheter. Det sammenfaller så lenge hver workflow har ett job —
-//   alle våre har det i dag. Får en workflow flere PARALLELLE jobs, undervurderer
-//   vakten det faktiske minuttforbruket (GitHub fakturerer per jobb, ikke per run).
+// - Vi måler *run*-varighet (run_started_at → updated_at), korrigert for
+//   reruns (#668, se tidligereForsok()/hentTidligereForsokMinutter() under —
+//   run_attempt står allerede på hver run i listeresponsen, så deteksjonen
+//   koster 0 ekstra kall). Gjenstående feilkilder, hver med målt retning og
+//   størrelse (sept. 2026, 1.–23.):
+//     · `updated_at` henger etter siste jobbs completed_at: +43 min
+//       (overteller). Beholdt UKORRIGERT — trygg retning, vakten kutter e2e
+//       litt for tidlig, aldri for sent.
+//     · Parallelle jobber i samme workflow ville UNDERvurdert forbruket
+//       (GitHub fakturerer per jobb) — ingen workflow har mer enn én jobb i
+//       dag, så feilkilden er teoretisk per nå.
+//     · Et rerun telles i måneden RUNEN ble opprettet, ikke måneden forsøket
+//       faktisk kjørte i — uendret, ikke korrigert (reruns rett over et
+//       månedsskifte er sjeldne).
+//   Netto: run-basert (ukorrigert) 1613 min → korrigert for reruns 1735 min,
+//   mot 1692 min jobb-basert (GitHubs faktiske faktureringsenhet) — en
+//   gjenværende overtelling på ~2,5 %, i trygg retning.
 // - Vi ser kun DETTE repoet via runs-endepunktet, men kvoten er KONTOBRED.
 //   Andre private repoer på samme konto (~293 min i juli 2026 for vår del) er
 //   usynlige for skriptet. Det er derfor DRIFTSRESERVE_MIN er dimensjonert til
@@ -81,7 +94,14 @@ export const VED_MAALEFEIL = 'kutt'
 // Ett ord å snu hvis vi en dag vil feile ÅPENT (kjøre e2e) i stedet for
 // LUKKET (kutte e2e) når GitHub API-kallet selv feiler. 'kutt' er valgt fordi
 // konsekvensen av en feilmåling er «e2e manglet på én PR», mens motsatt
-// (kjøre blindt) risikerer å sprenge budsjettet vi ikke klarte å måle.
+// (kjøre blindt) risikerer å sprenge budsjettet vi ikke klarte å måle. Samme
+// prinsipp gjelder attempts-oppslaget for reruns (#668): et sprengt
+// MAKS_FORSOK_OPPSLAG kaster, akkurat som pagineringstaket under.
+
+export const MAKS_FORSOK_OPPSLAG = 50
+// Tak på antall /attempts/{n}-oppslag hentTidligereForsokMinutter() gjør i én
+// kjøring (#668). September 2026 hadde 8 — taket finnes så vakten selv ikke
+// brenner et ukjent antall minutter på å slå opp minuttene den vokter.
 
 // ─── Ren logikk (testbar uten nettverk) ─────────────────────────────────────
 
@@ -119,22 +139,97 @@ export function foersteIManeden(naa = new Date()) {
   return new Date(Date.UTC(naa.getUTCFullYear(), naa.getUTCMonth(), 1, 0, 0, 0)).toISOString()
 }
 
+// Lister ALLE tidligere forsøk for kjøringer med run_attempt > 1 (#668). En
+// run med run_attempt = 3 har to tapte forsøk (1 og 2) — kun det siste
+// forsøket sitt run_started_at/updated_at er synlig på selve run-objektet,
+// fordi GitHub setter de feltene til SISTE forsøks tidspunkt ved rerun.
+// Ren funksjon: `run.run_attempt` finnes allerede i listeresponsen, så denne
+// bygger lista uten et eneste nettverkskall.
+export function tidligereForsok(runs) {
+  const liste = []
+  for (const run of runs) {
+    const sisteForsok = run.run_attempt ?? 1
+    for (let forsok = 1; forsok < sisteForsok; forsok++) {
+      liste.push({ runId: run.id, forsok })
+    }
+  }
+  return liste
+}
+
 // ─── Nettverk: hent + summer forbruk for inneværende måned ─────────────────
+
+function githubHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+}
+
+// Henter minuttene for ALLE tidligere (tapte) forsøk i `runs` via
+// GET .../attempts/{n}, ett historisk forsøk om gangen (#668). Endepunktet
+// gir et FROSSET run-objekt for akkurat det forsøket — run_started_at og
+// updated_at gjelder det forsøket alene, ikke siste — så vi kan gjenbruke
+// forbrukMinutter() uendret på svarene.
+//
+// Sekvensielt, ikke parallelt: samme begrunnelse som resten av vakten —
+// formålet er å SPARE minutter, ikke maksimere gjennomstrømning mot et API vi
+// selv er rate-limitet av.
+export async function hentTidligereForsokMinutter({ repo, token, runs, fetchImpl = fetch, maksOppslag = MAKS_FORSOK_OPPSLAG }) {
+  const liste = tidligereForsok(runs)
+  if (liste.length > maksOppslag) {
+    // Fail-closed, samme begrunnelse som pagineringstaket i
+    // hentForbrukForManeden(): et ukjent antall utelatte forsøk er en
+    // ufullstendig sum som SER komplett ut, verre enn en feilmelding.
+    throw new Error(
+      `Flere enn ${maksOppslag} tidligere forsøk å slå opp denne måneden — taket nådd, forbruket kan ikke måles fullstendig.`,
+    )
+  }
+  const attemptObjekter = []
+  for (const { runId, forsok } of liste) {
+    const url = `https://api.github.com/repos/${repo}/actions/runs/${runId}/attempts/${forsok}`
+    const res = await fetchImpl(url, { headers: githubHeaders(token), signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) {
+      throw new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
+    }
+    const forsokObjekt = await res.json()
+    // Validér FØR forbrukMinutter(): den hopper stille over manglende/ugyldige
+    // tider (riktig for queued runs), men et ferdig tapt forsøk uten dem ville
+    // blitt 0 min — en undervurdering som slipper e2e videre. Kast ⇒ VED_MAALEFEIL.
+    const start = Date.parse(forsokObjekt?.run_started_at)
+    const slutt = Date.parse(forsokObjekt?.updated_at)
+    if (!Number.isFinite(start) || !Number.isFinite(slutt) || slutt < start) {
+      throw new Error(
+        `Ugyldig tidsrom for ${url}: run_started_at=${forsokObjekt?.run_started_at}, updated_at=${forsokObjekt?.updated_at}`,
+      )
+    }
+    attemptObjekter.push(forsokObjekt)
+  }
+  return forbrukMinutter(attemptObjekter)
+}
 
 // Paginerer repos/{owner}/{repo}/actions/runs, maks 10 sider (1000 kjøringer)
 // — et pragmatisk tak; en måned med over 1000 kjøringer er uansett et signal
 // om noe annet enn manglende paginering.
-export async function hentForbrukForManeden({ repo, token, naa = new Date(), fetchImpl = fetch, maksSider = 10 }) {
+//
+// Returnerer et OBJEKT (#668), ikke bare summen: `sisteForsokMin` er run-basert
+// telling (kun siste forsøk per kjøring, som før #668), `tidligereForsokMin`
+// er korreksjonen fra hentTidligereForsokMinutter(), og `totalMin` er summen
+// av de to — tallet resten av vakten (skalKjoreE2e, step summary) skal bruke.
+export async function hentForbrukForManeden({
+  repo,
+  token,
+  naa = new Date(),
+  fetchImpl = fetch,
+  maksSider = 10,
+  maksOppslag = MAKS_FORSOK_OPPSLAG,
+}) {
   const siden = foersteIManeden(naa)
-  let sum = 0
+  const runs = []
   for (let side = 1; side <= maksSider; side++) {
     const url = `https://api.github.com/repos/${repo}/actions/runs?created=${encodeURIComponent('>=' + siden)}&per_page=100&page=${side}`
     const res = await fetchImpl(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: githubHeaders(token),
       // undici henger i ~300 s på headers-timeout by default. Ti slike kall
       // ville brent flere minutter i en vakt hvis hele poeng er å SPARE
       // minutter. Kastet abort håndteres som målefeil ⇒ VED_MAALEFEIL.
@@ -144,9 +239,15 @@ export async function hentForbrukForManeden({ repo, token, naa = new Date(), fet
       throw new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
     }
     const data = await res.json()
-    const runs = data.workflow_runs ?? []
-    sum += forbrukMinutter(runs)
-    if (runs.length < 100) return sum // siste side — summen er komplett
+    const sideRuns = data.workflow_runs ?? []
+    runs.push(...sideRuns)
+    if (sideRuns.length < 100) {
+      // Siste side — runs er komplett, korriger for reruns og returner.
+      const sisteForsokMin = forbrukMinutter(runs)
+      const tidligereForsokMin = await hentTidligereForsokMinutter({ repo, token, runs, fetchImpl, maksOppslag })
+      const oppslag = tidligereForsok(runs).length
+      return { totalMin: sisteForsokMin + tidligereForsokMin, sisteForsokMin, tidligereForsokMin, oppslag }
+    }
   }
   // Vi brukte opp alle sidene OG siste side var full: det finnes flere
   // kjøringer vi ikke har talt. Å returnere summen her ville feilet ÅPENT —
@@ -170,18 +271,23 @@ function skrivSummary(markdown) {
   else console.log(markdown) // lokal kjøring uten GITHUB_STEP_SUMMARY-fil
 }
 
-function tabell({ forbruk, budsjett, reserve, verdikt, ekstraRad }) {
+function tabell({ forbruk, budsjett, reserve, verdikt, ekstraRad, rerunMin }) {
   const rader = [
     '### CI-minuttbudsjett (#534)',
     '',
     '| Felt | Verdi |',
     '|---|---|',
     `| Forbruk hittil i måneden | ${forbruk} min |`,
+  ]
+  // Kun med når reruns faktisk bidro (#668) — en rad med «0 min» på hver
+  // eneste PR ville vært støy i en tabell som skal vise trend.
+  if (rerunMin) rader.push(`| Herav tidligere rerun-forsøk | ${rerunMin} min |`)
+  rader.push(
     `| E2e-kost (anslått tillegg) | ${E2E_KOST_MIN} min |`,
     `| Budsjett (kvote − driftsreserve) | ${budsjett} min |`,
     `| Driftsreserve | ${reserve} min |`,
     `| Verdikt | ${verdikt} |`,
-  ]
+  )
   if (ekstraRad) rader.push(`| Merknad | ${ekstraRad} |`)
   return rader.join('\n')
 }
@@ -226,12 +332,13 @@ async function main() {
     return
   }
 
-  const kjorE2e = skalKjoreE2e(forbruk, CI_BUDSJETT_MIN, E2E_KOST_MIN)
-  const naermerSegTaket = forbruk >= CI_BUDSJETT_MIN * VARSEL_ANDEL
+  const totalMin = forbruk.totalMin
+  const kjorE2e = skalKjoreE2e(totalMin, CI_BUDSJETT_MIN, E2E_KOST_MIN)
+  const naermerSegTaket = totalMin >= CI_BUDSJETT_MIN * VARSEL_ANDEL
 
   let ekstraRad = null
   if (!kjorE2e) {
-    ekstraRad = `forbruk (${forbruk}) + e2e-kost (${E2E_KOST_MIN}) > budsjett (${CI_BUDSJETT_MIN})`
+    ekstraRad = `forbruk (${totalMin}) + e2e-kost (${E2E_KOST_MIN}) > budsjett (${CI_BUDSJETT_MIN})`
     console.log(`::warning::CI-minuttbudsjett kuttet e2e denne PR-en — ${ekstraRad}. Se docs/ci-minuttbudsjett.md.`)
   } else if (naermerSegTaket) {
     ekstraRad = `nærmer seg taket (over ${Math.round(VARSEL_ANDEL * 100)} % av budsjettet brukt)`
@@ -239,11 +346,12 @@ async function main() {
 
   skrivOutput(kjorE2e)
   skrivSummary(tabell({
-    forbruk,
+    forbruk: totalMin,
     budsjett: CI_BUDSJETT_MIN,
     reserve: DRIFTSRESERVE_MIN,
     verdikt: kjorE2e ? '✅ Kjør e2e' : '❌ Kuttet e2e denne kjøringen',
     ekstraRad,
+    rerunMin: forbruk.tidligereForsokMin,
   }))
 }
 

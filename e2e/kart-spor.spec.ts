@@ -131,10 +131,10 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
     // Punktene henger på arrangementet med on delete cascade, men vi sletter
     // eksplisitt: testen skal ikke være avhengig av at cascaden virker for å
     // rydde etter seg — det er en annen ting enn det den tester.
-    await admin.from('posisjon_punkt').delete().eq('profil_id', PETTER)
-    await admin.from('posisjon_deling').delete().eq('profil_id', PETTER)
-    await admin.from('profiles').update({ bilde_url: petterBildeFoer }).eq('id', PETTER)
-    if (arrangementId) await admin.from('arrangementer').delete().eq('id', arrangementId)
+    await admin.from('posisjon_punkt').delete().eq('profil_id', PETTER).throwOnError()
+    await admin.from('posisjon_deling').delete().eq('profil_id', PETTER).throwOnError()
+    await admin.from('profiles').update({ bilde_url: petterBildeFoer }).eq('id', PETTER).throwOnError()
+    if (arrangementId) await admin.from('arrangementer').delete().eq('id', arrangementId).throwOnError()
   })
 
   test('hele ruta tegnes mens arrangementet pågår', async ({ page }) => {
@@ -179,7 +179,7 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
       })
       .eq('id', arrangementId!)
     if (error) throw new Error(`Kunne ikke flytte arrangementet: ${error.message}`)
-    await admin!.from('posisjon_punkt').update({ arrangement_id: null }).eq('profil_id', PETTER)
+    await admin!.from('posisjon_punkt').update({ arrangement_id: null }).eq('profil_id', PETTER).throwOnError()
 
     try {
       await page.goto('/kart')
@@ -203,10 +203,12 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
           slutt_tidspunkt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         })
         .eq('id', arrangementId!)
+        .throwOnError()
       await admin!
         .from('posisjon_punkt')
         .update({ arrangement_id: arrangementId })
         .eq('profil_id', PETTER)
+        .throwOnError()
     }
   })
 
@@ -225,7 +227,8 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
         slutt_tidspunkt: new Date(Date.now() - 47 * 60 * 60 * 1000).toISOString(),
       })
       .eq('id', arrangementId!)
-    await admin!.from('posisjon_punkt').update({ arrangement_id: null }).eq('profil_id', PETTER)
+      .throwOnError()
+    await admin!.from('posisjon_punkt').update({ arrangement_id: null }).eq('profil_id', PETTER).throwOnError()
 
     const { data: eldst, error: eldstFeil } = await admin!
       .from('posisjon_punkt')
@@ -240,7 +243,7 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
     const utenfor = new Date(
       Date.now() - (POSISJON_SPOR_TIMER + 2) * 60 * 60 * 1000,
     ).toISOString()
-    await admin!.from('posisjon_punkt').update({ registrert: utenfor }).eq('id', eldst.id)
+    await admin!.from('posisjon_punkt').update({ registrert: utenfor }).eq('id', eldst.id).throwOnError()
 
     try {
       await page.goto('/kart')
@@ -263,14 +266,17 @@ test.describe('posisjonsspor under pågående arrangement (#695)', () => {
           slutt_tidspunkt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         })
         .eq('id', arrangementId!)
+        .throwOnError()
       await admin!
         .from('posisjon_punkt')
         .update({ arrangement_id: arrangementId })
         .eq('profil_id', PETTER)
+        .throwOnError()
       await admin!
         .from('posisjon_punkt')
         .update({ registrert: new Date(Date.now() - 30 * 60 * 1000).toISOString() })
         .eq('id', eldst.id)
+        .throwOnError()
     }
   })
 

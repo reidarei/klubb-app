@@ -22,6 +22,7 @@ import {
   KART_DELT_STED_FLY_VENT_MS,
   LONG_PRESS_MS,
   LONG_PRESS_BEVEGELSE_PX,
+  MIN_TREFFMAAL_PX,
 } from '@/lib/konstanter'
 import { formaterDato } from '@/lib/dato'
 import { useKeyboardOffset } from '@/components/chat/hooks/useKeyboardOffset'
@@ -51,6 +52,8 @@ import TimeplanPanel, { type TimeplanArrangement, type TimeplanPost } from './Ti
 import { beregnDefaultTimeplanDato } from './NyTimeplanPost'
 import KartListePanel from './KartListePanel'
 import MarkeringDetalj from './MarkeringDetalj'
+import StedSok from './StedSok'
+import type { StedTreff } from '@/lib/geokoding'
 import ReisemodusBar, { KART_TOPP_MARGIN, REISEMODUS_BAR_SONE } from './ReisemodusBar'
 // Re-eksportert slik at page.tsx kan importere ALLE kart-typene fra ett sted
 // (samme mønster som Mann/Markering/Punkt under).
@@ -278,7 +281,11 @@ export default function PosisjonsKart({
   //   'timeplan-punkt' — samme sikte, men for en timeplan-post (#716): ÉN
   //                      sikte-tilstand for hele kartet, aldri to parallelle
   //                      sikte-flagg. Panelet glir helt ut mens dette står på.
-  const [steg, setSteg] = useState<'av' | 'sted' | 'tekst' | 'timeplan-punkt'>('av')
+  //   'sok'            — interaktivt stedssøk (#757): eget panel i bunn-blokka,
+  //                      ingen sikte. Et valgt treff går VIDERE til 'sted' (via
+  //                      «Sett markering her») eller rett i timeplan-utkastet —
+  //                      se onMarkeringFraSok/onTimeplanFraSok under.
+  const [steg, setSteg] = useState<'av' | 'sted' | 'tekst' | 'timeplan-punkt' | 'sok'>('av')
   // Lytterne i langtrykk-effekten under (#762) registreres ÉN gang (deps
   // [kartKlar]), og leser derfor steg via en REF, ikke via closure over
   // React-state: leste de `steg` direkte, måtte de re-bindes ved hvert
@@ -291,11 +298,14 @@ export default function PosisjonsKart({
   // Punktet ringen under et pågående langtrykk tegnes på (#762), relativt
   // til kartcontainerens rect. null = ingen gest pågår.
   const [presseRing, setPresseRing] = useState<{ x: number; y: number } | null>(null)
-  // Styrer hjelpeteksten i steg 'sted' (#762): kom man dit via langtrykk,
-  // står krysset allerede over stedet man pekte på, og «Flytt kartet» er da
-  // feil oppfordring. Nullstilles i bekreftSted og avbrytMarkering — begge
-  // avslutter steget.
-  const [stedFraLangtrykk, setStedFraLangtrykk] = useState(false)
+  // Styrer hjelpeteksten i steg 'sted' (#762, utvidet #757): kom man dit via
+  // langtrykk eller via et valgt søketreff, står krysset allerede over
+  // stedet — «Flytt kartet» er da feil oppfordring. Nullstilles ('knapp') i
+  // bekreftSted og avbrytMarkering — begge avslutter steget.
+  const [stedKilde, setStedKilde] = useState<'knapp' | 'langtrykk' | 'sok'>('knapp')
+  // Valgt kandidat fra StedSok (#757) — treffnåla tegnes for dette punktet
+  // så lenge steg === 'sok'. null utenfor et aktivt søk eller før noe er valgt.
+  const [sokValgt, setSokValgt] = useState<StedTreff | null>(null)
   const [markeringTekst, setMarkeringTekst] = useState('')
   const [markeringSymbol, setMarkeringSymbol] = useState<MarkeringSymbol>(STANDARD_SYMBOL)
   // Koordinatet låses når man bekrefter stedet, slik at en utilsiktet
@@ -854,17 +864,21 @@ export default function PosisjonsKart({
       }
       // Koordinatet er låst i steg 'tekst' (#702) — hele poenget med
       // to-stegs-flyten er at teksten ikke skal kunne flytte nåla.
-      if (stegRef.current === 'tekst') return
+      // Steg 'sok' (#757) har sitt eget panel og ingen sikte — et langtrykk
+      // der skal ikke starte en parallell markeringsflyt.
+      if (stegRef.current === 'tekst' || stegRef.current === 'sok') return
       // Kollisjonsvakten mot boble-gesten (#719): et langtrykk på en
       // eksisterende markering/kontroll skal IKKE i tillegg starte en ny
       // markering. Eksplisitt target-sil — ikke avhengig av at boblas egen
       // stopPropagation() i pointerup rekker først (den lytteren rører vi
       // ikke — se boble-gesten lenger ned i denne effekten som tegner
       // markørene, merket #719).
+      // Ikke '.leaflet-marker-icon' (#700): den står på alle markører, også
+      // interactive:false-ansiktene der langtrykk skal starte en markering.
       const target = e.target as HTMLElement
       if (
         target.closest(
-          '.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup, .leaflet-control, .leaflet-interactive',
+          '.leaflet-tooltip, .leaflet-popup, .leaflet-control, .leaflet-interactive',
         )
       ) {
         return
@@ -1114,6 +1128,10 @@ export default function PosisjonsKart({
           }),
           alt: m.navn,
           title: `${m.navn} — ${relativTid(siste.registrert)}`,
+          // #700: ansiktet har ingen handling — trykk går til kartet (lukker panel),
+          // langtrykk starter en markering, som på tom kartflate.
+          interactive: false,
+          keyboard: false,
         }).addTo(lag)
       }
     })
@@ -1152,6 +1170,10 @@ export default function PosisjonsKart({
         }),
         alt: deltSted.tekst ?? 'Delt sted',
         title: deltSted.tekst ?? 'Delt sted',
+        // #700: samme resonnement som person-markøren over — ingen handling,
+        // trykk lukker nå panel, langtrykk starter markering, som vedtatt.
+        interactive: false,
+        keyboard: false,
       }).addTo(kart)
       const el = markoer.getElement()
       if (el) el.setAttribute('data-testid', 'delt-sted')
@@ -1166,6 +1188,47 @@ export default function PosisjonsKart({
     // begrunnelsen over.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kartKlar, deltStedKey])
+
+  // Treffnåla for et valgt søketreff (#757) — PRIVAT og MIDLERTIDIG (i
+  // motsetning til en kart_markering-rad): den lever kun så lenge steg ===
+  // 'sok' og et treff er valgt, forsvinner igjen så snart man går videre
+  // («Sett markering her»/«Legg i timeplanen») eller avbryter. Egen
+  // LayerGroup, ikke lagRef — den delte laget tegnes på nytt av en annen
+  // effekt (menn/markeringer) og ville visket bort nåla ved neste render.
+  const sokLagRef = useRef<LayerGroup | null>(null)
+  useEffect(() => {
+    if (!kartKlar) return
+    let avbrutt = false
+    import('leaflet').then(mod => {
+      if (avbrutt) return
+      const L = mod.default
+      const kart = kartetRef.current
+      if (!kart) return
+      if (!sokLagRef.current) sokLagRef.current = L.layerGroup().addTo(kart)
+      const lag = sokLagRef.current
+      lag.clearLayers()
+      if (steg !== 'sok' || !sokValgt) return
+      const markoer = L.marker([sokValgt.lat, sokValgt.lng], {
+        icon: L.divIcon({
+          html: '<div class="kart-sok-naal" aria-hidden="true">📍</div>',
+          className: '',
+          iconSize: [30, 30],
+          iconAnchor: [15, 28],
+        }),
+        alt: sokValgt.navn,
+        title: sokValgt.navn,
+        // Ren visning — ikke-interaktiv og ikke i keyboard-tabordenen, i
+        // motsetning til en ekte kart_markering-boble som tar imot trykk.
+        interactive: false,
+        keyboard: false,
+      }).addTo(lag)
+      const el = markoer.getElement()
+      if (el) el.setAttribute('data-testid', 'sted-sok-naal')
+    })
+    return () => {
+      avbrutt = true
+    }
+  }, [kartKlar, steg, sokValgt])
 
   // Flytter kartet til et NYTT delt sted etter mount (#719) — startutsnittet
   // dekkes allerede av init-effekten over. Refen holder unna den samme
@@ -1269,7 +1332,7 @@ export default function PosisjonsKart({
     const senter = kart.getCenter()
     setValgtSted({ lat: senter.lat, lng: senter.lng })
     setFeil(null)
-    setStedFraLangtrykk(false)
+    setStedKilde('knapp')
     setSteg('tekst')
   }, [])
 
@@ -1298,7 +1361,7 @@ export default function PosisjonsKart({
     setValgtMarkering(null)
     kart.panTo(latlng, { animate: false })
     setFeil(null)
-    setStedFraLangtrykk(true)
+    setStedKilde('langtrykk')
     // Steg 'av' → gå til 'sted' (start flyten). Steg 'sted'/'timeplan-punkt' →
     // bare panorer, la steget stå (regissørens beslutning #2). 'tekst' nås
     // aldri hit — koordinatet er låst der, og pointerdown-lytteren silte det
@@ -1312,7 +1375,7 @@ export default function PosisjonsKart({
     setMarkeringSymbol(STANDARD_SYMBOL)
     setValgtSted(null)
     setFeil(null)
-    setStedFraLangtrykk(false)
+    setStedKilde('knapp')
   }, [])
 
   // Punktvalg for en timeplan-post (#716) — samme sikte som markeringsflyten
@@ -1335,20 +1398,88 @@ export default function PosisjonsKart({
     const senter = kart.getCenter()
     setTimeplanPunkt({ lat: senter.lat, lng: senter.lng })
     setFeil(null)
-    // Et langtrykk under punktvalget setter stedFraLangtrykk (samme gest,
-    // begge steg). Uten nullstilling her ville neste ordinære «Sett
-    // markering» møtt hjelpeteksten «Krysset står der du holdt» selv om den
-    // ble startet med knappen.
-    setStedFraLangtrykk(false)
+    // Et langtrykk (eller et søketreff, #757) under punktvalget setter
+    // stedKilde (samme sikte, flere veier inn). Uten nullstilling her ville
+    // neste ordinære «Sett markering» møtt hjelpeteksten «Krysset står der
+    // du holdt» selv om den ble startet med knappen.
+    setStedKilde('knapp')
     setSteg('av')
     setAapentPanel('timeplan')
   }, [])
 
   const avbrytTimeplanPunkt = useCallback(() => {
     setFeil(null)
-    setStedFraLangtrykk(false)
+    setStedKilde('knapp')
     setSteg('av')
     setAapentPanel('timeplan')
+  }, [])
+
+  // ── Stedssøk (#757) ────────────────────────────────────────────────────
+  // Åpner søket. Samme opprydding som «Sett markering»/langtrykk: lukk andre
+  // paneler, nullstill en tidligere valgt markering og feilmelding.
+  const startStedSok = useCallback(() => {
+    setAapentPanel('ingen')
+    setValgtMarkering(null)
+    setFeil(null)
+    setSokValgt(null)
+    setSteg('sok')
+  }, [])
+
+  // Et treff er valgt fra StedSoks kandidatliste: kartet flyr dit (uten
+  // animasjon hvis brukeren har bedt om redusert bevegelse) og treffnåla
+  // tegnes av effekten lenger ned (avhenger av sokValgt). Ren visning —
+  // ingenting er «satt» ennå, det skjer først i markerFraSok/leggSokITimeplan.
+  const velgSokTreff = useCallback((treff: StedTreff) => {
+    setSokValgt(treff)
+    const kart = kartetRef.current
+    if (!kart) return
+    if (foretrekkerRedusertBevegelse()) {
+      kart.setView([treff.lat, treff.lng], POSISJON_KART_ZOOM, { animate: false })
+    } else {
+      kart.flyTo([treff.lat, treff.lng], POSISJON_KART_ZOOM)
+    }
+  }, [])
+
+  // «Sett markering her» fra et søketreff: går via SAMME sikte/«Her er
+  // det»-bekreftelse som «Sett markering»-knappen og langtrykket — treffnåla
+  // er privat og midlertidig, kun bekreftSted() lager en delt kart_markering
+  // (regissørens produktvalg for #757). panTo (synkron) sentrerer kartet
+  // eksakt på treffet FØR steg 'sted' vises, slik at «Her er det» kan
+  // trykkes med én gang uten å måtte vente på en flyTo-animasjon.
+  const markerFraSokTreff = useCallback((treff: StedTreff) => {
+    const kart = kartetRef.current
+    if (kart) kart.panTo([treff.lat, treff.lng], { animate: false })
+    setSokValgt(null)
+    setFeil(null)
+    setStedKilde('sok')
+    setSteg('sted')
+  }, [])
+
+  // «Legg i timeplanen» fra et søketreff: fyller PUNKTET i utkastet direkte
+  // (samme felt som punktvalg-flyten skriver til), og fyller TEKSTEN med
+  // stedets navn KUN hvis feltet er tomt — en tekst brukeren alt har skrevet
+  // skal aldri overskrives av et treffnavn. Adressen NULLSTILLES (fylles ikke
+  // med Nominatim-teksten): adresse vinner over punkt ved navigering, så en
+  // gammel adresse fra utkastet ville sendt folk feil sted (#757-review).
+  const leggSokTreffITimeplan = useCallback((treff: StedTreff) => {
+    setTimeplanPunkt({ lat: treff.lat, lng: treff.lng })
+    setTimeplanAdresse(null)
+    setTimeplanTekst(t => (t.trim() ? t : treff.navn))
+    setSokValgt(null)
+    setFeil(null)
+    setSteg('av')
+    setAapentPanel('timeplan')
+  }, [])
+
+  // «Nytt søk»: det forrige treffet er ikke lenger valgt, så nåla skal bort.
+  const nyttStedSok = useCallback(() => {
+    setSokValgt(null)
+  }, [])
+
+  const avbrytStedSok = useCallback(() => {
+    setSokValgt(null)
+    setFeil(null)
+    setSteg('av')
   }, [])
 
   const lagreMarkering = useCallback(async () => {
@@ -1673,6 +1804,33 @@ export default function PosisjonsKart({
           </button>
         )}
 
+        {/* Søk-knappen (#757), samme gate som «Sett markering» over. Rund
+            ikonknapp og ikke en tekstpille: raden flexWrap-er allerede på en
+            390 px skjerm, og en fjerde pille (etter del/oppdater/sett
+            markering) ville dyttet timeplan-pilla ned i en ny rad oftere enn
+            nødvendig. 44×44 — minste lovlige trykkflate. */}
+        {steg === 'av' && (
+          <button
+            type="button"
+            onClick={startStedSok}
+            aria-label="Søk etter et sted"
+            data-testid="sted-sok-start"
+            style={{
+              ...PILLE,
+              width: 44,
+              height: 44,
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              fontSize: 17,
+            }}
+          >
+            <span aria-hidden="true">🔍</span>
+          </button>
+        )}
+
         {/* Timeplan-pilla (#716). Rendres kun når det finnes et aktuelt
             arrangement — uansett hvor langt fram — og skjules mens man
             sikter, samme gate som «Sett markering» over. Viser neste
@@ -1766,9 +1924,11 @@ export default function PosisjonsKart({
           {steg === 'sted' && (
             <>
               <div style={HJELPETEKST}>
-                {stedFraLangtrykk
+                {stedKilde === 'langtrykk'
                   ? 'Krysset står der du holdt. Flytt kartet hvis det skal justeres.'
-                  : 'Flytt kartet så krysset står der markeringen skal.'}
+                  : stedKilde === 'sok'
+                    ? 'Krysset står på treffet du valgte. Flytt kartet hvis det skal justeres.'
+                    : 'Flytt kartet så krysset står der markeringen skal.'}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
@@ -1946,6 +2106,21 @@ export default function PosisjonsKart({
             </>
           )}
 
+          {steg === 'sok' && (
+            <StedSok
+              hentNaer={() => {
+                const senter = kartetRef.current?.getCenter()
+                return senter ? { lat: senter.lat, lng: senter.lng } : null
+              }}
+              kanTimeplan={!!timeplanArrangement && !timeplanArrangement.blaatur}
+              onVelg={velgSokTreff}
+              onMarkering={markerFraSokTreff}
+              onTimeplan={leggSokTreffITimeplan}
+              onNyttSok={nyttStedSok}
+              onAvbryt={avbrytStedSok}
+            />
+          )}
+
           {plinget && (
             <div role="status" style={{ ...HJELPETEKST, color: 'var(--success)' }}>
               Plinget {plinget}.
@@ -2090,6 +2265,8 @@ export default function PosisjonsKart({
           skjuler hverandre. */}
       {visChat && !panelAapent && !timeplanAapent && (
         <>
+          {/* Usynlig 44 px knapp, håndtaket flush venstre (#700) — speiler KartListePanel;
+              overflow:hidden klipper vekst forbi left:0 (Treffflate.tsx, unntak c). */}
           <button
             type="button"
             onClick={aapneChat}
@@ -2101,25 +2278,37 @@ export default function PosisjonsKart({
               left: chatAapent ? 'min(320px, 88%)' : 0,
               top: '50%',
               transform: 'translateY(-50%)',
-              width: 30,
+              width: MIN_TREFFMAAL_PX,
               height: 76,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              border: '0.5px solid var(--kart-kant)',
-              borderLeft: chatAapent ? '0.5px solid var(--kart-kant)' : 'none',
-              borderRadius: '0 14px 14px 0',
-              background: 'var(--kart-flate-sterk)',
-              backdropFilter: 'var(--blur-card)',
-              color: 'var(--text-secondary)',
+              justifyContent: 'flex-start',
+              background: 'transparent',
+              border: 'none',
               cursor: 'pointer',
               padding: 0,
               zIndex: Z.HANDTAK,
               transition: 'left 220ms ease',
             }}
           >
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1 }}>
-              {chatAapent ? '‹' : '›'}
+            <span
+              style={{
+                width: 30,
+                height: 76,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '0.5px solid var(--kart-kant)',
+                borderLeft: chatAapent ? '0.5px solid var(--kart-kant)' : 'none',
+                borderRadius: '0 14px 14px 0',
+                background: 'var(--kart-flate-sterk)',
+                backdropFilter: 'var(--blur-card)',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1 }}>
+                {chatAapent ? '‹' : '›'}
+              </span>
             </span>
           </button>
 

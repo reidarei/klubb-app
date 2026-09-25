@@ -1,7 +1,46 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type ButtonHTMLAttributes, type CSSProperties } from 'react'
 import { leggTilKaaringMal, oppdaterKaaringMal, slettKaaringMal } from '@/lib/actions/kaaringmaler'
+import { treffflateRundt } from '@/components/ui/Treffflate'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
+
+// Synlig pille: 26 px høy (text-xs + py-1 + 1 px kant), minWidth 44 (#700).
+const ADMIN_KNAPP_TREFF = treffflateRundt({ hoyde: 26 })
+// Radhøyde ≥ tap-flaten (+1 for borderTop), så knappene i nabo-radene ikke overlapper vertikalt.
+const RAD_MIN_HOYDE = MIN_TREFFMAAL_PX + 1
+
+// Usynlig knapp vokser vertikalt til 44; pillen inni bærer utseendet og får reell
+// minstebredde, så ingen X-utvidelse trengs og gap-1 mellom naboer overlapper ikke.
+function AdminKnapp({
+  stil,
+  children,
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style' | 'className' | 'type'> & { stil: CSSProperties }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      style={{
+        ...ADMIN_KNAPP_TREFF.stil,
+        background: 'none',
+        border: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+      }}
+    >
+      <span
+        className="text-xs px-2 py-1 rounded-lg"
+        style={{ display: 'block', minWidth: MIN_TREFFMAAL_PX, textAlign: 'center', border: '1px solid transparent', ...stil }}
+      >
+        {children}
+      </span>
+    </button>
+  )
+}
 
 type Mal = { id: string; navn: string; rekkefolge: number }
 
@@ -47,43 +86,43 @@ function MalRad({ mal }: { mal: Mal }) {
           autoFocus
           onKeyDown={e => { if (e.key === 'Enter') handleLagre(); if (e.key === 'Escape') setRedigerer(false) }}
         />
-        <button onClick={handleLagre} disabled={isPending} className="text-xs px-2 py-1 rounded-lg shrink-0"
-          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
+        <AdminKnapp onClick={handleLagre} disabled={isPending}
+          stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: isPending ? 0.5 : 1 }}>
           {isPending ? '…' : 'OK'}
-        </button>
-        <button onClick={() => { setNavn(mal.navn); setRedigerer(false) }} className="text-xs px-2 py-1 rounded-lg shrink-0"
-          style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+        </AdminKnapp>
+        <AdminKnapp onClick={() => { setNavn(mal.navn); setRedigerer(false) }}
+          stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
           ✕
-        </button>
+        </AdminKnapp>
       </div>
     )
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+    <div className="flex items-center justify-between gap-2 py-2" style={{ borderTop: '1px solid var(--border-subtle)', minHeight: RAD_MIN_HOYDE }}>
       <p className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--text-primary)' }}>{mal.navn}</p>
       <div className="flex gap-1 shrink-0">
         {bekrefterSlett ? (
           <>
-            <button onClick={handleSlett} disabled={isPending} className="text-xs px-2 py-1 rounded-lg"
-              style={{ background: 'var(--danger)', color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', opacity: isPending ? 0.5 : 1 }}>
+            <AdminKnapp onClick={handleSlett} disabled={isPending}
+              stil={{ background: 'var(--danger)', color: 'var(--text-primary)', opacity: isPending ? 0.5 : 1 }}>
               Slett
-            </button>
-            <button onClick={() => setBekrefterSlett(false)} className="text-xs px-2 py-1 rounded-lg"
-              style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+            </AdminKnapp>
+            <AdminKnapp onClick={() => setBekrefterSlett(false)}
+              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
               Nei
-            </button>
+            </AdminKnapp>
           </>
         ) : (
           <>
-            <button onClick={() => setRedigerer(true)} className="text-xs px-2 py-1 rounded-lg"
-              style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+            <AdminKnapp onClick={() => setRedigerer(true)}
+              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
               Rediger
-            </button>
-            <button onClick={() => setBekrefterSlett(true)} className="text-xs px-2 py-1 rounded-lg"
-              style={{ border: '1px solid var(--border)', color: 'var(--danger)', background: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
+            </AdminKnapp>
+            <AdminKnapp onClick={() => setBekrefterSlett(true)}
+              stil={{ border: '1px solid var(--border)', color: 'var(--danger)', background: 'none' }}>
               Slett
-            </button>
+            </AdminKnapp>
           </>
         )}
       </div>
@@ -112,10 +151,10 @@ function NyMalForm() {
         style={inputStil}
         onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
       />
-      <button onClick={handleLeggTil} disabled={isPending || !navn.trim()} className="text-xs px-2 py-1 rounded-lg shrink-0"
-        style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', fontFamily: 'inherit', cursor: 'pointer', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
+      <AdminKnapp onClick={handleLeggTil} disabled={isPending || !navn.trim()}
+        stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
         {isPending ? '…' : '+ Legg til'}
-      </button>
+      </AdminKnapp>
     </div>
   )
 }

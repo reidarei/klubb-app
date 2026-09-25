@@ -38,8 +38,8 @@ test.describe('Maler — stabil sortering ved kolliderende rekkefolge', () => {
   async function ryddMaler() {
     const supabase = adminKlient('maler-sortering')
     if (!supabase) return
-    if (idA) await supabase.from('kaaringmaler').delete().eq('id', idA)
-    if (idB) await supabase.from('kaaringmaler').delete().eq('id', idB)
+    if (idA) await supabase.from('kaaringmaler').delete().eq('id', idA).throwOnError()
+    if (idB) await supabase.from('kaaringmaler').delete().eq('id', idB).throwOnError()
     idA = null
     idB = null
     const { error } = await supabase.from('kaaringmaler').delete().like('navn', NAVN_MOENSTER)

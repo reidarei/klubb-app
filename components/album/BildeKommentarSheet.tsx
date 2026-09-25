@@ -7,6 +7,7 @@ import { sendChatMelding, slettChatMelding } from '@/lib/actions/chat'
 import { konfigFor } from '@/lib/chat-konfig'
 import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 import ChatMeldingRad from '@/components/chat/ChatMeldingRad'
 import type { ChatMelding } from '@/components/chat/Chat'
 import { useKeyboardOffset } from '@/components/chat/hooks/useKeyboardOffset'
@@ -19,6 +20,9 @@ import {
   type ChatProfil,
 } from '@/lib/mention'
 import MentionVelger from '@/components/agenda/MentionVelger'
+
+// «Vis eldre»: usynlig knapp vokser vertikalt, pillen inni bærer utseendet (#700).
+const VIS_ELDRE_TREFF = treffflateRundt({ hoyde: 26 })
 
 type Props = {
   bildeId: string
@@ -237,25 +241,14 @@ export default function BildeKommentarSheet({
         >
           Kommentarer {antall > 0 && `(${antall})`}
         </span>
-        <button
-          type="button"
-          onClick={onLukk}
+        <Treffflate
+          synlig={32}
           aria-label="Lukk kommentarer"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
+          onClick={onLukk}
+          style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
         >
           <Icon name="x" size={18} color="currentColor" strokeWidth={2} />
-        </button>
+        </Treffflate>
       </div>
 
       {/* Meldingsliste + input i SAMME scroll-container. Input-pillen ligger
@@ -276,7 +269,8 @@ export default function BildeKommentarSheet({
           WebkitOverflowScrolling: 'touch',
           display: 'flex',
           flexDirection: 'column',
-          padding: '10px 16px 0',
+          // paddingTop ≥ utvidY (#700): ellers klipper overflowY:auto treffflaten (unntak c).
+          padding: `${Math.max(10, VIS_ELDRE_TREFF.utvidY)}px 16px 0`,
         }}
       >
         {harMerEldre && meldinger.length > 0 && (
@@ -286,20 +280,30 @@ export default function BildeKommentarSheet({
               onClick={lastEldre}
               disabled={henterEldre}
               style={{
-                padding: '6px 14px',
+                ...VIS_ELDRE_TREFF.stil,
+                paddingLeft: 0,
+                paddingRight: 0,
                 background: 'transparent',
-                border: '0.5px solid var(--border)',
-                borderRadius: 999,
-                color: 'var(--text-secondary)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                letterSpacing: '1.4px',
-                textTransform: 'uppercase',
+                border: 'none',
                 cursor: henterEldre ? 'wait' : 'pointer',
-                opacity: henterEldre ? 0.5 : 1,
               }}
             >
-              {henterEldre ? 'Henter…' : 'Vis eldre'}
+              <span
+                style={{
+                  display: 'block',
+                  padding: '6px 14px',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 999,
+                  color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  letterSpacing: '1.4px',
+                  textTransform: 'uppercase',
+                  opacity: henterEldre ? 0.5 : 1,
+                }}
+              >
+                {henterEldre ? 'Henter…' : 'Vis eldre'}
+              </span>
             </button>
           </div>
         )}
@@ -425,27 +429,31 @@ export default function BildeKommentarSheet({
               fontSize: 13,
             }}
           />
-          <button
-            type="button"
-            onClick={handleSend}
+          <Treffflate
+            synlig={32}
             disabled={!tekst.trim() || sender}
+            aria-label="Send kommentar"
+            onClick={handleSend}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              flexShrink: 0,
               cursor: !tekst.trim() || sender ? 'default' : 'pointer',
               opacity: !tekst.trim() || sender ? 0.4 : 1,
-              flexShrink: 0,
             }}
-            aria-label="Send kommentar"
           >
-            <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
-          </button>
+            <span
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
+            </span>
+          </Treffflate>
         </div>
         </div>
       </div>

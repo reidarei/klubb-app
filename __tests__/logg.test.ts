@@ -488,3 +488,110 @@ describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
     expect(mockFrom).not.toHaveBeenCalled()
   })
 })
+
+describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
+  // Samme fangInsert-mønster som DbFeil-blokka over.
+  function fangInsert() {
+    const spion = vi.fn()
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.insert = vi.fn((rad: unknown) => {
+        spion(rad)
+        return chain
+      })
+      chain.abortSignal = vi.fn().mockReturnValue(chain)
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+    return spion
+  }
+
+  function kontekstFra(spion: ReturnType<typeof vi.fn>) {
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    return rad.kontekst as Record<string, unknown>
+  }
+
+  it('status 0 (transport) bevares — ingen truthy-sjekk', async () => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+      ctx: { status: 0 },
+    })
+
+    expect(kontekstFra(spion).status).toBe(0)
+  })
+
+  it('500 og 504 tas med fra ctx.status', async () => {
+    const spion500 = fangInsert()
+    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+      ctx: { status: 500 },
+    })
+    expect(kontekstFra(spion500).status).toBe(500)
+
+    const spion504 = fangInsert()
+    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+      ctx: { status: 504 },
+    })
+    expect(kontekstFra(spion504).status).toBe(504)
+  })
+
+  it('DbFeil bærer status helt fram til raden når rad.kontekst.status er satt', async () => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', new DbFeil('marker_chat_sett feilet: nettverksfeil', undefined, 502))
+
+    expect(kontekstFra(spion).status).toBe(502)
+  })
+
+  it.each([
+    ['negativ', -1],
+    ['over grensen', 600],
+    ['ikke heltall', 1.5],
+    ['NaN', NaN],
+    ['streng', '500'],
+    ['null', null],
+  ])('ugyldig status (%s) droppes — feltet er fraværende, ikke null', async (_label, ugyldigStatus) => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+      ctx: { status: ugyldigStatus },
+    })
+
+    const kontekst = kontekstFra(spion)
+    expect(kontekst.status).toBeUndefined()
+    // Nøkkelen står i JS-objektet med verdien undefined (samme mønster som
+    // code/tabell andre steder), men JSON-serialiseringen som faktisk går til
+    // Postgres dropper en undefined-nøkkel helt — i motsetning til null, som
+    // ville blitt stående i kontekst-kolonnen. Verifiser derfor «fraværende»
+    // etter samme runde inserten faktisk går gjennom.
+    expect('status' in JSON.parse(JSON.stringify(kontekst))).toBe(false)
+  })
+
+  it('fravær av status gir ingen status-nøkkel', async () => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'))
+
+    const kontekst = kontekstFra(spion)
+    expect(kontekst.status).toBeUndefined()
+    expect('status' in JSON.parse(JSON.stringify(kontekst))).toBe(false)
+  })
+
+  it('ctx.status vinner over feilobjektets egen status', async () => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', new DbFeil('feilet', undefined, 502), { ctx: { status: 404 } })
+
+    expect(kontekstFra(spion).status).toBe(404)
+  })
+
+  it('radformen er fortsatt uendret: event, kontekst, nivaa, profil_id', async () => {
+    const spion = fangInsert()
+
+    await logg.feil('test.event', new DbFeil('feilet', 'PGRST100', 500))
+
+    const rad = spion.mock.calls[0][0] as Record<string, unknown>
+    expect(Object.keys(rad).sort()).toEqual(['event', 'kontekst', 'nivaa', 'profil_id'])
+  })
+})

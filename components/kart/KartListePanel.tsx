@@ -2,7 +2,7 @@
 
 import Avatar from '@/components/ui/Avatar'
 import { formaterDato, FORMAT_KLOKKE } from '@/lib/dato'
-import { POSISJON_DELING_TIMER, POSISJON_FERSK_MINUTTER } from '@/lib/konstanter'
+import { POSISJON_DELING_TIMER, POSISJON_FERSK_MINUTTER, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { symbolEmoji } from '@/lib/markering-symboler'
@@ -112,6 +112,8 @@ export default function KartListePanel({
   return (
     <>
       {visHandtak && (
+        // Usynlig 44 px knapp, håndtaket (indre span) flush høyre (#700): kartets
+        // overflow:hidden klipper vekst utover right:0 (Treffflate.tsx, unntak c).
         <button
           type="button"
           onClick={onToggle}
@@ -123,40 +125,52 @@ export default function KartListePanel({
             right: panelAapent ? 'min(300px, 85%)' : 0,
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 30,
+            width: MIN_TREFFMAAL_PX,
             height: 76,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: 3,
-            border: '0.5px solid var(--kart-kant)',
-            borderRight: panelAapent ? '0.5px solid var(--kart-kant)' : 'none',
-            borderRadius: '14px 0 0 14px',
-            background: 'var(--kart-flate-sterk)',
-            backdropFilter: 'var(--blur-card)',
-            color: 'var(--text-secondary)',
+            justifyContent: 'flex-end',
+            background: 'transparent',
+            border: 'none',
             cursor: 'pointer',
             padding: 0,
             zIndex: handtakZIndex,
             transition: 'right 220ms ease',
           }}
         >
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1 }}>
-            {panelAapent ? '\u2039' : '\u203a'}
-          </span>
-          {!panelAapent && antallPaaKartet > 0 && (
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: 'var(--kart-sol)',
-                lineHeight: 1,
-              }}
-            >
-              {antallPaaKartet}
+          <span
+            style={{
+              width: 30,
+              height: 76,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 3,
+              border: '0.5px solid var(--kart-kant)',
+              borderRight: panelAapent ? '0.5px solid var(--kart-kant)' : 'none',
+              borderRadius: '14px 0 0 14px',
+              background: 'var(--kart-flate-sterk)',
+              backdropFilter: 'var(--blur-card)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1 }}>
+              {panelAapent ? '\u2039' : '\u203a'}
             </span>
-          )}
+            {!panelAapent && antallPaaKartet > 0 && (
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--kart-sol)',
+                  lineHeight: 1,
+                }}
+              >
+                {antallPaaKartet}
+              </span>
+            )}
+          </span>
         </button>
       )}
 

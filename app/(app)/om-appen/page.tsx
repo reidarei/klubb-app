@@ -114,6 +114,16 @@ export default function OmAppen() {
           Under en tur med reisemodus er kartet appens forside — det endrer
           ikke hvem som er synlig der, bare hvor du lander når du åpner appen.
         </Avsnitt>
+        {/* Nominatim (OSM) er den samme tjenesten som allerede geokoder
+         * turdestinasjoner i bakgrunnen (se docs/geokoding.md) — dette
+         * avsnittet dekker de to stedene et medlem selv utløser et kall:
+         * kartsøket og timeplan-adressen. Ingen bruker-id følger med
+         * (server-til-server), men søketeksten gjør. */}
+        <Avsnitt overskrift="Stedssøk på kartet">
+          Søker du etter et sted på kartet, eller skriver en adresse i
+          timeplanen, sendes søketeksten fra appens server til OpenStreetMap
+          (Nominatim) for å finne stedet. Hvem du er følger ikke med.
+        </Avsnitt>
         <Avsnitt overskrift="Ingen tracking">
           Vi har ingen annonser, ingen Google Analytics, ingen Facebook-
           piksler, ingen «cookies» som følger deg på tvers av nettsteder.
@@ -129,7 +139,7 @@ export default function OmAppen() {
             (AI-leverandør i USA) for å tolke en eventuell dato, slik at
             innlegget kan festes øverst frem til den datoen. Dette skjer
             automatisk mens du skriver, og bare på nye innlegg — ingen annen
-            tekst i appen sendes ut.
+            tekst sendes til Anthropic.
           </Avsnitt>
         )}
         {/* Egen KI-flate, egen leverandør (Google), egen jurisdiksjon fra

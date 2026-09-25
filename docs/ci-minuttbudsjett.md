@@ -19,6 +19,16 @@ available_budget = quota_limit − drift_reserve
 
 See the constants block at the top of `.github/scripts/ci-minuttbudsjett.mjs` for current values.
 
+### Rerun correction
+
+A rerun does not create a new run — it bumps `run_attempt` on the SAME run, and GitHub moves `run_started_at`/`updated_at` to the latest attempt. Counting run duration alone therefore only sees the last attempt, although every attempt is billed.
+
+The watcher corrects for this. `run_attempt` is already on every run in the list response, so finding runs with reruns costs no extra calls. For each run with `run_attempt > 1`, `hentTidligereForsokMinutter()` fetches the earlier attempts one at a time via `GET .../actions/runs/{id}/attempts/{n}`, which returns a frozen run object for that attempt alone. An HTTP 200 response without a valid time span (missing or invalid timestamps, or `updated_at` before `run_started_at`) THROWS like a non-OK response — otherwise a lost attempt would silently count as 0 minutes and the watcher would undercount.
+
+More than `MAKS_FORSOK_OPPSLAG` (50) earlier attempts in one month also throws: an unknown number of skipped attempts produces a total that LOOKS complete. Like every other measurement error, this is treated as `VED_MAALEFEIL` and cuts e2e instead of guessing low.
+
+Remaining known deviations: `updated_at` lags the last job's `completed_at` by a little, which overcounts (safe direction, left as is); parallel jobs within one workflow would undercount (none of the workflows have more than one job); and an attempt is counted in the month its run was CREATED. `GET .../runs/{id}/timing` was considered but returns `total_ms: 0` in practice.
+
 ## Public repos (like this template)
 
 **This repository (`klubb-app`) is public,** so GitHub Actions minutes are free and unlimited. The watcher detects this via the `REPO_PRIVAT` environment variable and **always allows e2e** with no API call. Template users on a public repository see no quota effects.

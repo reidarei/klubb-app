@@ -5,6 +5,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { KART_BREDDE as W, KART_HOEYDE as H, LAND_BANER } from '@/lib/europa-kart-data'
 import { bildeSrc } from '@/lib/bilde-utils'
+import Treffflate from '@/components/ui/Treffflate'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 
 // Bildealbum koblet til en tur (via album.arrangement_id). Vises som lenke i
 // detaljkortet så gutta kan hoppe rett fra stedet til bildene.
@@ -24,12 +26,6 @@ type Props = {
 // Prosent-posisjon i containeren (som har nøyaktig samme aspekt som viewBox).
 const pctX = (x: number) => `${(x / W) * 100}%`
 const pctY = (y: number) => `${(y / H) * 100}%`
-
-// Usynlig tap-treffområde rundt hver markør. Prikkene er små (7–15 px), men
-// en finger dekker ~44 px — uten et større treffområde tolkes et vanlig
-// (litt bevegelig) trykk som scroll, og klikket avlyses. 44 px følger Apples
-// minste anbefalte tap-mål.
-const TREFF = 44
 
 export default function EuropaKart({ steder }: Props) {
   const [valgt, setValgt] = useState<string | null>(null)
@@ -95,13 +91,15 @@ export default function EuropaKart({ steder }: Props) {
                   setValgt(erValgt ? null : s.by)
                 }}
                 aria-label={`${s.by}, ${s.turer.length} tur${s.turer.length > 1 ? 'er' : ''}`}
+                // Fast width/height, ikke Treffflate (#700): translate(-50%, -50%)
+                // + negativ margin regner feil (Treffflate.tsx, unntak e).
                 style={{
                   position: 'absolute',
                   left: 0,
                   top: 0,
                   transform: 'translate(-50%, -50%)',
-                  width: TREFF,
-                  height: TREFF,
+                  width: MIN_TREFFMAAL_PX,
+                  height: MIN_TREFFMAAL_PX,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -186,27 +184,15 @@ export default function EuropaKart({ steder }: Props) {
               </div>
               {/* Eksplisitt lukk-knapp — trykk-utenfor og Escape lukker også,
                   men touch-brukere kjenner ikke alltid disse gestene (#508) */}
-              <button
-                type="button"
-                onClick={() => setValgt(null)}
+              <Treffflate
+                synlig={28}
                 aria-label="Lukk"
+                onClick={() => setValgt(null)}
                 style={{
                   flexShrink: 0,
-                  // Samme 44 px-mål som markørene (se TREFF): dette er den eneste
-                  // oppdagbare utveien for touch. Negativ margin nøytraliserer
-                  // veksten så tittelraden ikke blir høyere enn før.
-                  width: TREFF,
-                  height: TREFF,
-                  margin: -8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'transparent',
-                  border: 'none',
                   borderRadius: 8,
-                  cursor: 'pointer',
                   color: 'var(--text-secondary)',
-                  padding: 0,
+                  cursor: 'pointer',
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -217,7 +203,7 @@ export default function EuropaKart({ steder }: Props) {
                     strokeLinecap="round"
                   />
                 </svg>
-              </button>
+              </Treffflate>
             </div>
             {valgtSted.turer
               .slice()

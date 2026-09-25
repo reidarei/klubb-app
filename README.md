@@ -286,7 +286,7 @@ e2e/             # Playwright — kjører mot lokal Supabase-testinstans,
 
 ## Testing
 
-**Enhetstester og integrasjonstester (Vitest):** helpers (dato, roller, mention-regex, varsler, linkify m.fl.) og server actions (påmeldinger, arrangementer, chat-reaksjoner) med mocket Supabase-klient. Kjøres med `npm test`, og automatisk i CI på hver PR.
+**Enhetstester og integrasjonstester (Vitest):** helpers (dato, roller, mention-regex, varsler, linkify m.fl.) og server actions (påmeldinger, arrangementer, chat-reaksjoner) med mocket Supabase-klient. Kjøres med `npm test`, og automatisk i CI på hver PR. Kjør `npm run test:tz` når du rører datokode — det sjekker Europe/Oslo og Pacific/Kiritimati; vanlig `TZ=...` fra Git Bash på Windows dropper stille sonen (se `.env.example`).
 
 **End-to-end (Playwright):** spec-er for hovedflytene — innlogging, agenda-rendering, polls og kommentarer. E2e krever en **dedikert lokal Supabase-instans**, siden testene muterer data fritt (oppretter poller, endrer RSVP-svar) og derfor aldri skal kjøre mot produksjons-databasen din:
 

@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import RsvpGlyph from '@/components/arrangement/RsvpGlyph'
+import Treffflate from '@/components/ui/Treffflate'
 import { purreUtenSvar, purreKanskje } from '@/lib/actions/arrangementer'
 import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
 
@@ -358,34 +359,32 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
               }}
             >
               <span style={{ flex: 1 }}>Svar ({alleSvar.length})</span>
-              <button
-                type="button"
+              <Treffflate
+                synlig={32}
                 onClick={() => setModalAapen(false)}
                 aria-label="Lukk"
-                style={{
-                  width: 32,
-                  height: 32,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  color: 'var(--text-secondary)',
-                  flexShrink: 0,
-                  padding: 0,
-                }}
+                style={{ color: 'var(--text-secondary)', flexShrink: 0, cursor: 'pointer' }}
               >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 4l10 10M14 4L4 14"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
+                <span
+                  style={{
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 8,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 4l10 10M14 4L4 14"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+              </Treffflate>
             </div>
 
             {/* Scrollbar liste — gruppert etter status.

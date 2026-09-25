@@ -38,7 +38,8 @@ export default function Button({
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`rounded-xl px-4 py-2.5 font-semibold text-sm transition-colors disabled:opacity-50 ${fullWidth ? 'w-full' : ''} ${className}`}
+      // py-3 (ikke py-2.5): 44 px trykkhøyde (#700) — secondary blir 46 px pga rammen.
+      className={`rounded-xl px-4 py-3 font-semibold text-sm transition-colors disabled:opacity-50 ${fullWidth ? 'w-full' : ''} ${className}`}
       style={{ ...styles[variant], fontFamily: 'inherit', cursor: 'pointer' }}
       {...props}
     >

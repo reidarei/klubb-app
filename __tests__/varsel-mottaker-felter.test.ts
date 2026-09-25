@@ -77,6 +77,7 @@ vi.mock('@/lib/feil-alarm', () => ({
   hentToppEventRader: mockHentToppEventRader,
   lagToppEventTekst: () => '',
 }))
+vi.mock('@/lib/logg', () => ({ logg: { feil: vi.fn(), warn: vi.fn() } }))
 
 // Modulnivå-import: vi.mock hoistes over imports, så mockene over er på plass.
 // Trygt her fordi ruten leser CRON_SECRET inne i handleren (route.ts:32), ikke
@@ -87,6 +88,7 @@ vi.mock('@/lib/feil-alarm', () => ({
 // ruten leser GITHUB_WEBHOOK_SECRET ved modul-last, så rekkefølgen er reell der.
 const { POST: postKlientfeil } = await import('@/app/api/cron/sjekk-klientfeil/route')
 const { NextRequest } = await import('next/server')
+const { logg } = await import('@/lib/logg')
 
 describe('/api/cron/sjekk-klientfeil – mottakere filtreres på faar_feilvarsler', () => {
   beforeEach(() => {
@@ -119,6 +121,60 @@ describe('/api/cron/sjekk-klientfeil – mottakere filtreres på faar_feilvarsle
     expect(mockSendVarsel).toHaveBeenCalledWith(
       expect.objectContaining({ mottakere: ['p1'] }),
     )
+  })
+})
+
+// #760: feilet retention-sletting i feil_logg logges og gir 500 med
+// slettetGamle: null — ikke et stille «0 rader ryddet».
+describe('/api/cron/sjekk-klientfeil – retention-sletting (#760)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.CRON_SECRET = 'test-cron-secret'
+    mockSendVarsel.mockResolvedValue({})
+    // Under alarm-terskelen — vi tester kun retention-grenen her, ikke varselet.
+    mockTellAlarmverdigeFeil.mockResolvedValue({ count: 0, error: null })
+    mockHentToppEventRader.mockResolvedValue({ data: [] })
+  })
+
+  it('logger cron.klientfeil.retention.feilet og svarer 500 med slettetGamle: null når slettingen feiler', async () => {
+    const { klient } = lagAdminKlient({
+      feil_logg: { count: null, error: { message: 'DB nede', code: 'DBQ' } },
+    })
+    mockCreateAdmin.mockReturnValue(klient)
+
+    const req = new NextRequest('http://localhost:3000/api/cron/sjekk-klientfeil', {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-cron-secret' },
+    })
+
+    const res = await postKlientfeil(req)
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.ok).toBe(false)
+    expect(json.slettetGamle).toBeNull()
+    expect(logg.feil).toHaveBeenCalledWith(
+      'cron.klientfeil.retention.feilet',
+      expect.objectContaining({ message: 'DB nede' }),
+      expect.objectContaining({ ctx: expect.objectContaining({ code: 'DBQ' }) }),
+    )
+  })
+
+  it('svarer 200 med det faktiske antallet slettede rader når retention lykkes', async () => {
+    const { klient } = lagAdminKlient({
+      feil_logg: { count: 3, error: null },
+    })
+    mockCreateAdmin.mockReturnValue(klient)
+
+    const req = new NextRequest('http://localhost:3000/api/cron/sjekk-klientfeil', {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-cron-secret' },
+    })
+
+    const res = await postKlientfeil(req)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.slettetGamle).toBe(3)
   })
 })
 

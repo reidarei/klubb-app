@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const { error } = await admin.rpc('tell_aktivitet', {
+  const { error, status } = await admin.rpc('tell_aktivitet', {
     p_unik_dag: !!body.unik,
     p_unik_uke: !!body.uke,
     p_treff: !!body.treff,
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   if (error) {
     // profil_id er whitelistet i lib/sentry-scrub.ts, men utelates BEVISST
     // her — denne målingen skal aldri kunne kobles til en person.
-    await logg.feil('aktivitet.tell.feilet', error, { ctx: { code: error.code } })
+    await logg.feil('aktivitet.tell.feilet', error, { ctx: { code: error.code, status } })
   }
 
   // Alltid 204 uansett utfall — suksess er taus, og en feil her skal aldri

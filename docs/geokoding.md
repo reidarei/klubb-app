@@ -59,6 +59,45 @@ rate limit og treffsikkerhet, er `geokod()` det eneste stedet å endre — signa
 (`(sted: string) => Promise<{lat, lng} | null>`) er tjeneste-uavhengig. Husk at en
 nøkkelbasert tjeneste krever at hver klubb-app-instans setter opp egen nøkkel.
 
+
+## Interaktivt stedssøk
+
+Kartet (`/kart`) har en egen søkeknapp — `components/kart/StedSok.tsx`, kalt via
+server-actionen `sokSted()` i `lib/actions/sted-sok.ts`, som bruker `sokSteder()`
+i `lib/geokoding.ts`. Samme Nominatim-tjeneste som `geokod()` over, men en annen
+form: flere kandidater (`STED_SOK_MAKS_TREFF`, i dag 5) i stedet for `limit=1`, og
+et diskriminert utfall (`treff` / `ingen` / `tidsavbrudd` / `feil`) i stedet for en
+stille `null` — et interaktivt søk der brukeren venter på svar må få vite om det
+ikke kom noe.
+
+- **Kun eksplisitt trykk.** Nominatims bruksvilkår forbyr autocomplete/søk-mens-
+  du-skriver. `StedSok.tsx` søker ALDRI fra en `onChange`-handler — kun ved Enter
+  eller et knappetrykk, akkurat som `opprettArrangement`/`oppdaterArrangement`
+  allerede gjør ved å geokode kun ved lagring.
+- **Rate limit-grensen er PR APPEN, ikke per funksjon.** `geokod()` og
+  `sokSteder()` deler samme 1 req/s-hensyn — begge er menneskestyrte handlinger
+  (lagre en tur, trykke søk), og ingen av dem kan i praksis nærme seg grensen.
+- **Strupingen er per server-instans, ikke global.** `sokSted()` har to billige
+  vakter: samtidige søk med samme cache-nøkkel deler ett utgående kall
+  (coalescing), og to utgående kall fra samme instans holdes minst
+  `NOMINATIM_MIN_AVSTAND_MS` (1000 ms) fra hverandre — det neste *venter* på
+  luken. Vercel kan kjøre flere instanser samtidig, og hver har sin egen klokke og
+  sin egen kø.
+- **Caching er påkrevd av vilkårene**, og server-actionen `sokSted()` cacher
+  `treff`/`ingen`-svar i en in-memory `Map` med TTL `STED_SOK_CACHE_SEK` (7
+  dager). `tidsavbrudd`/`feil` caches ALDRI — en tjeneste som er nede akkurat nå
+  skal ikke late som den er tom for alltid. `geokod()` selv cacher fortsatt IKKE
+  — den kalles sjelden nok (kun ved lagring av en tur) at det ikke er verdt kompleksiteten.
+- **Viewbox, ikke filter.** Har søket et kartsenter å vekte mot (`naer`), sendes
+  Nominatims `viewbox`-parameter med `bounded=0` — en PREFERANSE som rangerer
+  nære treff høyere, men aldri utelukker et reelt treff langt unna. Se
+  `STED_SOK_VIEWBOX_GRADER` i `lib/konstanter.ts`.
+- **Søketeksten logges aldri** — verken ved treff, tidsavbrudd eller feil (kun
+  event-navnet, se `lib/logg.ts`).
+- Et valgt treff er PRIVAT og MIDLERTIDIG inntil brukeren går videre: «Sett
+  markering her» ruter gjennom den eksisterende sikte-/bekreftelsesflyten
+  (`bekreftSted()` i `PosisjonsKart.tsx`) før noe lagres som en delt `kart_markering`-rad.
+
 ## Etterslep / historiske turer
 
 Turer som ble backfillet før geokoding fantes (eller via SQL/script utenom

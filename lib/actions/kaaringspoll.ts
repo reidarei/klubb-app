@@ -133,7 +133,14 @@ export async function opprettKaaringspoll(input: OpprettInput) {
 
   const { error: valgErr } = await admin.from('poll_valg').insert(valgRader)
   if (valgErr) {
-    await admin.from('poll').delete().eq('id', poll.id)
+    // Kompenserende sletting — logg feiler den også, men kast den opprinnelige
+    // valgErr videre: den er årsaken brukeren skal se (#760).
+    const { error: opprydFeil } = await admin.from('poll').delete().eq('id', poll.id)
+    if (opprydFeil) {
+      await logg.feil('kaaringspoll.opprett.opprydding.feilet', opprydFeil, {
+        ctx: { code: opprydFeil.code, sample: poll.id },
+      })
+    }
     throw new Error(valgErr.message)
   }
 

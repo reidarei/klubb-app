@@ -28,7 +28,14 @@
 //   2. «Kommende»   = alt annet som ikke er tidligere (sortert stigende
 //                     på sortIso, utkast uten purredato faller til enden)
 //   3. «Tidligere»  = arrangementer/polls som har passert + meldinger som
-//                     har «falt ned» (sortert synkende — nyeste øverst)
+//                     har «falt ned» (sortert synkende — nyeste øverst).
+//                     Unntak: en tur MED slutt_tidspunkt som ennå ikke er
+//                     over (start passert, slutt ikke) blir stående i
+//                     «Kommende» helt til slutt_tidspunkt passerer — se
+//                     erPaagaaende() under. En tur UTEN slutt_tidspunkt, og
+//                     alle møter (som aldri har slutt_tidspunkt, håndhevet av
+//                     DB-constrainten tur_felt_kun_for_tur), faller til
+//                     Tidligere som før, rett etter start_tidspunkt.
 //
 // === sortIso-bygging per type ========================================
 //   - arrangement : start_tidspunkt (UTC ISO fra DB)
@@ -86,6 +93,11 @@ export type ArrangementRaad = {
   type: string
   tittel: string
   start_tidspunkt: string
+  // PÅKREVD med vilje, ikke valgfri (#766): en glemt select av kolonnen skal
+  // være en byggefeil, ikke en tur som stille faller til Tidligere ved
+  // start_tidspunkt — samme begrunnelse som bursdagsbilde på
+  // ProfilMedBursdag over.
+  slutt_tidspunkt: string | null
   oppmoetested: string | null
   bilde_url: string | null
   paameldinger: PaameldingRaad[]
@@ -294,6 +306,12 @@ export function tilPollKort(p: PollRaad, avsluttet: boolean): PollKortData {
     mineStemmer: p.mineStemmer,
     stemmerPerValg: p.stemmerPerValg,
   }
+}
+
+// Tur med sluttid som ikke er passert (#766). Uten sluttid: ingen pågår-status.
+// tur_felt_kun_for_tur (mig. 002) gjør slutt_tidspunkt null for møter.
+export function erPaagaaende(arr: ArrangementRaad, naaIso: string): boolean {
+  return arr.slutt_tidspunkt !== null && arr.slutt_tidspunkt >= naaIso
 }
 
 // Mapper et ArrangementRaad til ArrangementKortData — kompakt kort brukt i
@@ -533,7 +551,12 @@ export function byggAgenda(input: {
   // hindrer at et arrangement klokka 17:00 norsk tid havner under «Tidligere»
   // senere samme kveld.
   const tidligereArr: TidligereItem[] = arrangementer
-    .filter(a => !erPaaOsloDag(a.start_tidspunkt, naa) && a.start_tidspunkt < nowIso)
+    .filter(
+      a =>
+        !erPaaOsloDag(a.start_tidspunkt, naa) &&
+        a.start_tidspunkt < nowIso &&
+        !erPaagaaende(a, nowIso),
+    )
     .sort((a, b) => b.start_tidspunkt.localeCompare(a.start_tidspunkt))
     .map(a => ({
       kind: 'arrangement' as const,
@@ -598,7 +621,11 @@ export function byggAgenda(input: {
   const arrItems: AgendaItem[] = arrangementer
     .filter(a => {
       if (ubesvarteIds.has(a.id)) return false // allerede i ubesvart
-      return a.start_tidspunkt >= nowIso || erPaaOsloDag(a.start_tidspunkt, naa)
+      return (
+        a.start_tidspunkt >= nowIso ||
+        erPaaOsloDag(a.start_tidspunkt, naa) ||
+        erPaagaaende(a, nowIso)
+      )
     })
     .map(a => {
       const erIdag = erPaaOsloDag(a.start_tidspunkt, naa)

@@ -46,11 +46,12 @@ async function koble(
   aar: number | null | undefined,
 ) {
   if (!malNavn || malNavn === 'Annet' || !aar) return
-  await supabase
+  const { error } = await supabase
     .from('arrangoransvar')
     .update({ arrangement_id: arrangementId })
     .eq('aar', aar)
     .eq('arrangement_navn', malNavn)
+  if (error) throw new Error(`Kunne ikke koble arrangøransvar: ${error.message}`)
 }
 
 async function losne(
@@ -58,10 +59,11 @@ async function losne(
   arrangementId: string,
 ) {
   // Sett arrangement_id = null på alle rader som peker til dette arrangementet
-  await supabase
+  const { error } = await supabase
     .from('arrangoransvar')
     .update({ arrangement_id: null })
     .eq('arrangement_id', arrangementId)
+  if (error) throw new Error(`Kunne ikke løsne arrangøransvar: ${error.message}`)
 }
 
 export async function opprettArrangement(data: ArrangementInput) {
@@ -120,7 +122,13 @@ export async function opprettArrangement(data: ArrangementInput) {
     await logg.feil('arrangement.rsvp.feilet', rsvpError, { ctx: { code: rsvpError.code } })
   }
 
-  await koble(supabase, arrangement.id, data.mal_navn, data.aar)
+  // Arrangementet er allerede committet her — en koblingsfeil skal logges og
+  // ikke ta ned opprettelsen, samme mønster som auto-RSVP-en over (#760).
+  try {
+    await koble(supabase, arrangement.id, data.mal_navn, data.aar)
+  } catch (err: unknown) {
+    await logg.feil('arrangement.koble.feilet', err, { ctx: { arrangement_id: arrangement.id } })
+  }
 
   revalidatePath('/')
   revalidatePath('/arrangoransvar')

@@ -87,7 +87,7 @@ test.describe('kartmarkeringer (#697)', () => {
   test.afterAll(async () => {
     const admin = adminKlient('kart-markering')
     if (!admin) return
-    await admin.from('kart_markering').delete().like('tekst', 'Playwright —%')
+    await admin.from('kart_markering').delete().like('tekst', 'Playwright —%').throwOnError()
   })
 
   test('markeringer tegnes på kartet og listes under', async ({ page }) => {
@@ -185,12 +185,12 @@ test.describe('kartmarkeringer (#697)', () => {
     // Legg begge tilbake, så testrekkefølgen ikke påvirker naboene.
     const admin = adminKlient('kart-markering')
     if (admin && megId) {
-      await admin.from('kart_markering').delete().like('tekst', 'Playwright —%')
+      await admin.from('kart_markering').delete().like('tekst', 'Playwright —%').throwOnError()
       const om4t = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
       await admin.from('kart_markering').insert([
         { opprettet_av: megId, lat: 59.9139, lng: 10.7522, tekst: TEKST_MIN, utloper: om4t },
         { opprettet_av: PETTER, lat: 59.9165, lng: 10.758, tekst: TEKST_ANNEN, utloper: om4t },
-      ])
+      ]).throwOnError()
     }
   })
 
@@ -213,7 +213,7 @@ test.describe('kartmarkeringer (#697)', () => {
       await admin.from('kart_markering').insert({
         opprettet_av: megId, lat: 59.9139, lng: 10.7522, tekst: TEKST_MIN,
         utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-      })
+      }).throwOnError()
     }
   })
 
@@ -281,7 +281,7 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.getByTestId('markering-sikte')).toHaveCount(0)
 
     const admin = adminKlient('kart-markering')
-    if (admin) await admin.from('kart_markering').delete().eq('tekst', 'Playwright — fra siktet')
+    if (admin) await admin.from('kart_markering').delete().eq('tekst', 'Playwright — fra siktet').throwOnError()
   })
 
   test('lista ligger i et panel som må åpnes', async ({ page }) => {
@@ -357,7 +357,7 @@ test.describe('kartmarkeringer (#697)', () => {
     ).toContainText(valgtEmoji)
 
     const admin = adminKlient('kart-markering')
-    if (admin) await admin.from('kart_markering').delete().eq('tekst', 'Playwright — med symbol')
+    if (admin) await admin.from('kart_markering').delete().eq('tekst', 'Playwright — med symbol').throwOnError()
   })
 
   test('alle symbolene finnes og har hvert sitt ikon', async ({ page }) => {
@@ -703,7 +703,7 @@ test.describe('kartmarkeringer (#697)', () => {
       // Den lange teksten skal være der, brutt over flere linjer — ikke borte.
       await expect(panel.getByText(/Playwright-x+/)).toBeVisible()
     } finally {
-      await admin!.from('klubb_chat').delete().like('innhold', 'Playwright-%')
+      await admin!.from('klubb_chat').delete().like('innhold', 'Playwright-%').throwOnError()
     }
   })
 
@@ -946,7 +946,7 @@ test.describe('kartmarkeringer (#697)', () => {
       lng: 10.7522,
       tekst: EGEN,
       utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-    })
+    }).throwOnError()
 
     await page.goto('/kart')
 
@@ -964,6 +964,6 @@ test.describe('kartmarkeringer (#697)', () => {
     expect(boks!.width).toBeGreaterThanOrEqual(44)
     expect(boks!.height).toBeGreaterThanOrEqual(28)
 
-    await admin!.from('kart_markering').delete().eq('tekst', EGEN)
+    await admin!.from('kart_markering').delete().eq('tekst', EGEN).throwOnError()
   })
 })

@@ -115,9 +115,24 @@ function settGeolocation(verdi: unknown) {
 
 type DeltSted = { lat: number; lng: number; tekst: string | null } | null
 
-function kartProps(deltSted: DeltSted) {
+// Én mann med gyldig posisjon — grunnlaget for #700-testen under, som
+// trenger et faktisk tegnet person-ikon å inspisere.
+const EN_MANN = [
+  {
+    profilId: 'meg-1',
+    navn: 'Playwright',
+    bildeUrl: null,
+    rolle: 'medlem',
+    delerTil: new Date(Date.now() + 3_600_000).toISOString(),
+    spor: [
+      { id: 'p1', lat: 59.9, lng: 10.8, registrert: new Date().toISOString(), noeyaktighetM: 10 },
+    ],
+  },
+]
+
+function kartProps(deltSted: DeltSted, menn: typeof EN_MANN = []) {
   return {
-    menn: [],
+    menn,
     markeringer: [],
     megId: 'meg-1',
     underArrangement: false,
@@ -135,8 +150,8 @@ function kartProps(deltSted: DeltSted) {
   }
 }
 
-function monter(deltSted: DeltSted) {
-  return render(<PosisjonsKart {...kartProps(deltSted)} />)
+function monter(deltSted: DeltSted, menn: typeof EN_MANN = []) {
+  return render(<PosisjonsKart {...kartProps(deltSted, menn)} />)
 }
 
 const DELT_STED = { lat: 59.91387, lng: 10.75225, tekst: 'Vi sitter her' }
@@ -333,5 +348,27 @@ describe("ankomst på et delt sted (#753) — hovedveien: flislaget melder 'load
     })
 
     expect(flyKall).toHaveLength(1)
+  })
+})
+
+// #700: person-/delt-sted-markørene skal være trykk-gjennomsiktige
+// (interactive: false, keyboard: false i PosisjonsKart.tsx).
+describe('kartmarkører er trykk-gjennomsiktige (#700)', () => {
+  it('person-markøren og det delte stedet har verken leaflet-interactive eller role="button"', async () => {
+    monter(DELT_STED, EN_MANN)
+
+    await waitFor(() => {
+      expect(document.querySelector('.kart-markoer')).not.toBeNull()
+      expect(document.querySelector('[data-testid="delt-sted"]')).not.toBeNull()
+    })
+
+    const personIkon = document.querySelector('.kart-markoer')!.closest('.leaflet-marker-icon')
+    expect(personIkon).not.toBeNull()
+    expect(personIkon!.classList.contains('leaflet-interactive')).toBe(false)
+    expect(personIkon!.hasAttribute('role')).toBe(false)
+
+    const deltStedIkon = document.querySelector('[data-testid="delt-sted"]')!
+    expect(deltStedIkon.classList.contains('leaflet-interactive')).toBe(false)
+    expect(deltStedIkon.hasAttribute('role')).toBe(false)
   })
 })

@@ -27,20 +27,23 @@ export async function oppdaterVedtekt(data: {
 
   if (!vedtekt) throw new Error('Vedtekt ikke funnet')
 
-  // Lagre gammel versjon
-  await supabase.from('vedtekter_versjoner').insert({
+  // Lagre gammel versjon. Kastes ved feil FØR oppdateringen under (#760) —
+  // ellers ville en feilet versjonering vært usynlig og historikken mistet.
+  const { error: versjonFeil } = await supabase.from('vedtekter_versjoner').insert({
     vedtekt_id: vedtekt.id,
     innhold: vedtekt.innhold,
     vedtaksdato: data.vedtaksdato,
     endringsnotat: data.endringsnotat,
     endret_av: user.id,
   })
+  if (versjonFeil) throw new Error(`Kunne ikke lagre vedtektsversjon: ${versjonFeil.message}`)
 
   // Oppdater gjeldende innhold
-  await supabase
+  const { error: oppdaterFeil } = await supabase
     .from('vedtekter')
     .update({ innhold: data.nyttInnhold, oppdatert: naa() })
     .eq('slug', data.slug)
+  if (oppdaterFeil) throw new Error(`Kunne ikke oppdatere vedtekten: ${oppdaterFeil.message}`)
 
   revalidatePath(`/klubbinfo/vedtekter/${data.slug}`)
 }

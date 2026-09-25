@@ -189,6 +189,9 @@ Feltene settes i `lib/klient-logg.ts` og må stå i whitelisten i `lib/logg-sani
 
 **Manglende kodebit retter seg selv.** Skjer det fordi appen kjører en utdatert utgave, henter den fersk versjon i stedet for å vise feilsiden — én gang, og bare når enheten har nett. Begge sperrene er der med vilje: uten dem ville vi enten sendt folk uten dekning inn i en omlasting som ikke kan lykkes, eller inn i en løkke som aldri stopper.
 
+**Dedup-indeksen deler ikke opp per nivå — status-feltet arver den begrensningen.** `feil_logg_profil_event_minutt_uq` er unik på `(profil_id, event, minutt)`, uten `nivaa`. To feil med samme `event`-navn men ulikt nivå (warn/error) innenfor samme minutt kolliderer derfor på samme indeks, og den andre raden svelges stille som `23505` i `skrivFeilLoggRad()` — ikke fordi den faktisk er et duplikat av den første, men fordi indeksen ikke skiller dem. REGEL: enhver ny warn-rad MÅ ha sitt eget event-navn, aldri deles med en error-rad på samme hendelse. Konsekvens for `status`: under en storm skrives kun én rad per `event` per minutt, så statusen du leser i den raden er fra den FØRSTE feilen i minuttet, ikke nødvendigvis den siste. Og generelt: `status` på en server-rad er HTTP-statusen fra den mislykkede nedstrømsresponsen — en feil fra f.eks. Vertex eller Anthropic bærer den tjenestens status. Den er aldri appens egen svarkode.
+
+
 ### Sentry er sekundærkanalen
 
 Sentry viser stakksporet og grupperer like feil, og er derfor nyttig når noe skal feilsøkes. Men den forutsetter at noen leser e-post. Døgnalarmen er primærkanalen, siden den kommer som varsel på telefonen.

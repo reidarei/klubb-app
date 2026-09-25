@@ -486,9 +486,15 @@ body.fullskjerm-side .deploy-info {
 }
 
 /* Vis slett-knapp på chat-boble ved hover/fokus */
+/* Den usynlige 44 px-treffflaten (#700) ville ellers stjålet trykk fra boblen
+   over mens knappen er skjult — trykkbar kun når den vises. */
+.chat-slett-knapp {
+  pointer-events: none;
+}
 .chat-boble:hover .chat-slett-knapp,
 .chat-boble:focus-within .chat-slett-knapp {
   opacity: 1 !important;
+  pointer-events: auto;
 }
 
 /* Hindre at long-press på chat-meldinger markerer tekst eller åpner iOS-

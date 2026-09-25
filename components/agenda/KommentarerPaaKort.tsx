@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 import { sendChatMelding } from '@/lib/actions/chat'
 import type { ChatScope } from '@/lib/chat-konfig'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -41,6 +42,10 @@ export type KommentarScope =
   | { type: 'arrangement'; id: string }
   | { type: 'poll'; id: string }
   | { type: 'melding'; id: string }
+
+// Send-knappens treffflate vokser inn i gapet mot input-feltet (#700) —
+// gapet må minst dekke utvidX, ellers stjeler den fra tekstfeltet.
+const KOMMENTAR_SEND_TREFF = treffflateRundt({ hoyde: 24, bredde: 24 })
 
 /**
  * Brukes i kommentarradene for å styre + knapp-synlighet.
@@ -592,7 +597,7 @@ export default function KommentarerPaaKort({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: Math.max(8, KOMMENTAR_SEND_TREFF.utvidX),
             padding: '6px 6px 6px 12px',
             border: '0.5px solid var(--border)',
             borderRadius: 999,
@@ -632,27 +637,31 @@ export default function KommentarerPaaKort({
               fontSize: 12,
             }}
           />
-          <button
-            type="button"
+          <Treffflate
+            synlig={24}
             onClick={handleSend}
             disabled={!tekst.trim() || sender}
             aria-label="Send kommentar"
             style={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              flexShrink: 0,
               cursor: !tekst.trim() || sender ? 'default' : 'pointer',
               opacity: !tekst.trim() || sender ? 0.4 : 1,
-              flexShrink: 0,
             }}
           >
-            <Icon name="arrowRight" size={12} color="#0a0a0a" strokeWidth={2.5} />
-          </button>
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="arrowRight" size={12} color="#0a0a0a" strokeWidth={2.5} />
+            </span>
+          </Treffflate>
         </div>
         </div>
         </div>

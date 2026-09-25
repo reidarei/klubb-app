@@ -83,8 +83,8 @@ test.describe('kart-pakken (#719, #721, #722, #725, #726)', () => {
   test.afterAll(async () => {
     const admin = adminKlient('kart-pakke')
     if (!admin) return
-    await admin.from('posisjon_punkt').delete().eq('profil_id', OLA)
-    await admin.from('posisjon_deling').delete().eq('profil_id', OLA)
+    await admin.from('posisjon_punkt').delete().eq('profil_id', OLA).throwOnError()
+    await admin.from('posisjon_deling').delete().eq('profil_id', OLA).throwOnError()
     if (arrangementId) {
       // Cascade rydder påmeldinger med.
       const { error } = await admin.from('arrangementer').delete().eq('id', arrangementId)

@@ -79,8 +79,8 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
   test.afterAll(async () => {
     const admin = adminKlient('kart-markorer')
     if (!admin || !seedetProfilId) return
-    await admin.from('posisjon_punkt').delete().eq('profil_id', seedetProfilId)
-    await admin.from('posisjon_deling').delete().eq('profil_id', seedetProfilId)
+    await admin.from('posisjon_punkt').delete().eq('profil_id', seedetProfilId).throwOnError()
+    await admin.from('posisjon_deling').delete().eq('profil_id', seedetProfilId).throwOnError()
   })
 
   test('markøren tegnes på kartet ved fersh sidelast', async ({ page }) => {

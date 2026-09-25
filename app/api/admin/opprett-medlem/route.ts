@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { ensureAdmin } from '@/lib/auth'
 import { BASE_URL } from '@/lib/config'
 import { KLUBB_NAVN } from '@/lib/klubb-config'
+import { logg } from '@/lib/logg'
 
 function genererPassord() {
   const tegn = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -44,12 +45,18 @@ export async function POST(request: Request) {
 
   if (error) return NextResponse.json({ feil: error.message }, { status: 400 })
 
-  // Oppdater profiles med navn og visningsnavn (fornavn)
+  // Sett navn/visningsnavn. Auth-brukeren finnes alt, så feil logges i stedet
+  // for å kastes — admin må uansett få passordet (#760).
   const visningsnavn = navn.split(' ')[0]
-  await adminClient
+  const { error: profilFeil } = await adminClient
     .from('profiles')
     .update({ navn, visningsnavn })
     .eq('id', data.user.id)
+  if (profilFeil) {
+    await logg.feil('admin.opprett_medlem.profil.feilet', profilFeil, {
+      ctx: { code: profilFeil.code, profil_id: data.user.id },
+    })
+  }
 
   // Send velkomst-e-post med innloggingsinfo
   await sendEpost({

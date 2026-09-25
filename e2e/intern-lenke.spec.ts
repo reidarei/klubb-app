@@ -45,7 +45,7 @@ test.describe('interne lenker i innlegg (#703)', () => {
   test.afterAll(async () => {
     const admin = adminKlient('intern-lenke')
     if (!admin || !meldingId) return
-    await admin.from('meldinger').delete().eq('id', meldingId)
+    await admin.from('meldinger').delete().eq('id', meldingId).throwOnError()
   })
 
   test('lenke til /kart navigerer i appen, uten å åpne ny fane', async ({ page, context }) => {

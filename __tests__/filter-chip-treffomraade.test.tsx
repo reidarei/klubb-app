@@ -11,14 +11,15 @@
  *
  * Testen utleder paddingen fra den faktisk rendrede chippen (ikke fra en
  * duplisert konstant) og krever at radene bruker minst 2 × den som row-gap.
- * Da møtes treffområdene eksakt uten å overlappe. Justeres USYNLIG_PADDING
+ * Da møtes treffområdene eksakt uten å overlappe. Justeres CHIP_SYNLIG_HOYDE
  * senere uten at radene følger med, ryker denne.
  */
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
-import FilterChip, { CHIP_RAD_GAP } from '@/components/ui/FilterChip'
+import FilterChip, { CHIP_RAD_GAP, CHIP_SYNLIG_HOYDE } from '@/components/ui/FilterChip'
 import TidligereTypeFilter from '@/components/tidligere/TidligereTypeFilter'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 
 afterEach(cleanup)
 
@@ -52,6 +53,11 @@ describe('FilterChip — treffområder på tvers av rader', () => {
     const padding = chipVertikalPadding()
     // Chippen over stikker `padding` ned, chippen under stikker `padding` opp.
     expect(CHIP_RAD_GAP).toBeGreaterThanOrEqual(padding * 2)
+  })
+
+  it('CHIP_RAD_GAP er minst treffflateRundt() sin egen minsteRadGap (#700)', () => {
+    const { minsteRadGap } = treffflateRundt({ hoyde: CHIP_SYNLIG_HOYDE })
+    expect(minsteRadGap).toBeLessThanOrEqual(CHIP_RAD_GAP)
   })
 
   it('chippen nøytraliserer paddingen med negativ margin (layout uendret)', () => {

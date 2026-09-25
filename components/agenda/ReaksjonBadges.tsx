@@ -1,7 +1,9 @@
 'use client'
 
 import { type MouseEvent } from 'react'
-import ReaksjonPicker from '@/components/agenda/ReaksjonPicker'
+import ReaksjonPicker, { PICKER_AVSTAND_PX } from '@/components/agenda/ReaksjonPicker'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 
 type Props = {
@@ -39,6 +41,15 @@ export default function ReaksjonBadges({
     e.stopPropagation()
   }
 
+  // «+»-flaten vokser utvidX/utvidY inn i gapene (#700) — gap og pickerens
+  // avstand må være minst like store, ellers stjeler naboen trykket.
+  const pluss = treffflateRundt({ bredde: 28, hoyde: 26 })
+  const pickerAvstand = onPlussKlikk ? Math.max(PICKER_AVSTAND_PX, pluss.utvidY) : PICKER_AVSTAND_PX
+  // Badgene vokser usynlig vertikalt og får reell minWidth 44 (ingen X-utvidelse).
+  // Radgapet dekker to nabo-rader som begge vokser (CHIP_RAD_GAP-fella).
+  const badge = treffflateRundt({ hoyde: 24 })
+  const maxUtvidY = Math.max(badge.utvidY, pluss.utvidY)
+
   return (
     <div
       onClick={stopp}
@@ -46,7 +57,8 @@ export default function ReaksjonBadges({
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
+        rowGap: Math.max(6, maxUtvidY * 2),
+        columnGap: Math.max(6, pluss.utvidX),
         flexWrap: 'wrap',
       }}
     >
@@ -62,59 +74,75 @@ export default function ReaksjonBadges({
               toggle(r.emoji)
             }}
             style={{
+              // Usynlig knapp: vokser vertikalt (padding + negativ margin), pillen inni bærer utseendet (#700).
+              ...badge.stil,
               display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '3px 8px',
-              borderRadius: 999,
-              background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated-2)',
-              border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-body)',
-              fontSize: 12,
+              background: 'transparent',
+              border: 'none',
+              paddingLeft: 0,
+              paddingRight: 0,
               // Bevisst ingen dimming under isPending: optimistisk visning skal
               // se ferdig ut umiddelbart — serverturen skal ikke synes (#472-oppf.).
               // disabled beholdes for å hindre dobbel-fyring.
               cursor: 'pointer',
             }}
           >
-            <span>{r.emoji}</span>
-            <span style={{ fontWeight: 500 }}>{r.profilIder.length}</span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                minWidth: MIN_TREFFMAAL_PX,
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: harReagert ? 'var(--accent-soft)' : 'var(--bg-elevated-2)',
+                border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+              }}
+            >
+              <span>{r.emoji}</span>
+              <span style={{ fontWeight: 500 }}>{r.profilIder.length}</span>
+            </span>
           </button>
         )
       })}
 
       {/* + knapp kun i uncontrolled mode (detaljside) */}
       {onPlussKlikk && (
-        <button
-          type="button"
+        <Treffflate
+          synlig={{ bredde: 28, hoyde: 26 }}
+          aria-label="Legg til reaksjon"
           onClick={e => {
             stopp(e)
             onPlussKlikk()
           }}
-          aria-label="Legg til reaksjon"
-          style={{
-            width: 28,
-            height: 26,
-            borderRadius: 999,
-            background: 'transparent',
-            border: '0.5px dashed var(--border-strong)',
-            color: 'var(--text-tertiary)',
-            fontSize: 14,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 0,
-          }}
         >
-          +
-        </button>
+          <span
+            style={{
+              width: 28,
+              height: 26,
+              borderRadius: 999,
+              border: '0.5px dashed var(--border-strong)',
+              color: 'var(--text-tertiary)',
+              fontSize: 14,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            +
+          </span>
+        </Treffflate>
       )}
 
       {apen && (
         <ReaksjonPicker
           isPending={isPending}
+          avstand={pickerAvstand}
           onVelg={emoji => {
             lukk()
             toggle(emoji)

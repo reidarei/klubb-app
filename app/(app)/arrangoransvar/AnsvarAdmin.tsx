@@ -3,6 +3,13 @@
 import { useState, useTransition } from 'react'
 import { leggTilAnsvarlig, fjernAnsvarlig } from '@/lib/actions/arrangoransvar'
 import Icon from '@/components/ui/Icon'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
+
+// Fjern-knappens treffflate vokser inn i radgapet fra begge sider (#700) —
+// gapet må dekke summen, ellers stjeler naboraden trykket (CHIP_RAD_GAP-fella).
+const FJERN_TREFF = treffflateRundt({ hoyde: 26 })
+// «Legg til» er type=submit, og <Treffflate> tvinger type=button — teknikken legges på manuelt (#700).
+const LEGG_TIL_TREFF = treffflateRundt({ hoyde: 32, bredde: 32 })
 
 const selectStil: React.CSSProperties = {
   flex: 1,
@@ -85,7 +92,7 @@ export default function AnsvarAdmin({
         marginTop: 10,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: Math.max(8, FJERN_TREFF.minsteRadGap),
         opacity: isPending ? 0.5 : 1,
       }}
     >
@@ -106,26 +113,28 @@ export default function AnsvarAdmin({
             >
               {navn}
             </span>
-            <button
-              type="button"
-              onClick={() => handleFjern(a.ansvarId)}
+            <Treffflate
+              synlig={26}
               disabled={isPending}
               aria-label="Fjern ansvarlig"
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                background: 'transparent',
-                border: '0.5px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: 'var(--danger)',
-              }}
+              onClick={() => handleFjern(a.ansvarId)}
+              style={{ cursor: 'pointer' }}
             >
-              <Icon name="x" size={12} color="var(--danger)" strokeWidth={2} />
-            </button>
+              <span
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  border: '0.5px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--danger)',
+                }}
+              >
+                <Icon name="x" size={12} color="var(--danger)" strokeWidth={2} />
+              </span>
+            </Treffflate>
           </div>
         )
       })}
@@ -143,19 +152,35 @@ export default function AnsvarAdmin({
             disabled={isPending}
             aria-label="Legg til"
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              width: 32 + 2 * LEGG_TIL_TREFF.utvidX,
+              height: 32 + 2 * LEGG_TIL_TREFF.utvidY,
+              marginTop: -LEGG_TIL_TREFF.utvidY,
+              marginBottom: -LEGG_TIL_TREFF.utvidY,
+              marginLeft: -LEGG_TIL_TREFF.utvidX,
+              marginRight: -LEGG_TIL_TREFF.utvidX,
+              padding: 0,
+              background: 'transparent',
+              border: 'none',
               cursor: 'pointer',
               flexShrink: 0,
             }}
           >
-            <Icon name="plus" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
+            <span
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'var(--accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="plus" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
+            </span>
           </button>
         </form>
       )}

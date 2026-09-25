@@ -19,6 +19,7 @@ function turPaa(dato: string, paameldinger: PaameldingRaad[] = []): ArrangementR
     type: 'tur',
     tittel: 'Praha',
     start_tidspunkt: `${dato}T04:40:00.000Z`, // 06:40 i Oslo (UTC+2 i september)
+    slutt_tidspunkt: null,
     oppmoetested: 'Gardermoen',
     bilde_url: null,
     paameldinger,

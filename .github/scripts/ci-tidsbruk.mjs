@@ -15,11 +15,16 @@
 // FORBEHOLD (les før du tolker tallene):
 // - Jobb-basert vs. run-basert: dette verktøyet summerer PER JOBB (GitHubs
 //   faktiske faktureringsenhet — ceil per jobb). `ci-minuttbudsjett.mjs`
-//   summerer PER RUN (run_started_at → updated_at). De to sammenfaller når en
-//   run har ett forsøk og én jobb, men rerunner gjør jobb-basert HØYERE — en
-//   rerun øker run_attempt på SAMME run i stedet for å lage en ny, og
-//   run-basert telling ser derfor kun siste forsøk. Se § Mot budsjettvakten
-//   i rapporten og docs/ci-minuttbudsjett.md § Hvor tiden faktisk går.
+//   summerer PER RUN (run_started_at → updated_at), og korrigerer siden #668
+//   for reruns via et eget attempts-oppslag (hentTidligereForsokMinutter()).
+//   Den korreksjonen bor IKKE i forbrukMinutter() selv — funksjonen isolert,
+//   slik DENNE fila importerer og bruker den (§ 3, budsjett.runBasertMin), er
+//   fortsatt den UKORRIGERTE run-basisen: kun siste forsøk per kjøring. § 3
+//   legger derfor selv til minuttene fra de TIDLIGERE forsøkene (alle unntatt
+//   siste per run — ikke § 2 sine «reruns», som inkluderer siste forsøk og
+//   ville telt det dobbelt) for et korrigert anslag, i stedet for å late som `budsjett.runBasertMin` alene er
+//   sammenlignbart med jobb-basert total. Se docs/ci-minuttbudsjett.md
+//   § Hvor tiden faktisk går.
 // - `ukjent` i gating-seksjonen betyr «kjøring fra før #663, ingen
 //   markørsteg» — IKKE «e2e kjørte». De to må aldri slås sammen: en rapport
 //   som telte `ukjent` som `kjorte` ville løyet om gatingens effekt for enhver
@@ -104,16 +109,31 @@ export function jobbMinutter(jobber) {
 // og «reruns» (run_attempt ≥ 2). Reruns er usynlige i standardvisningen
 // («gh run list» viser én rad per run uansett antall forsøk) — dette er
 // selve blindsonen issuet ber om å lukke.
-export function forsokFordeling(jobber) {
+//
+// `tidligereForsokMin` er et ANNET snitt: alle forsøk unntatt SISTE per run —
+// nøyaktig det run-basert telling ikke ser, og det budsjettvakten henter via
+// attempts-endepunktet. `rerunMin` inkluderer siste forsøk og kan derfor ikke
+// legges oppå run-basert telling (#668-review). `sisteForsokPerRun` (run_id →
+// run.run_attempt) er fasit når den finnes; ellers høyeste forsøk blant jobbene.
+export function forsokFordeling(jobber, sisteForsokPerRun = new Map()) {
   const forsteForsokJobber = jobber.filter(j => (j.run_attempt ?? 1) <= 1)
   const rerunJobber = jobber.filter(j => (j.run_attempt ?? 1) > 1)
   const { minutter: forsteForsokMin, utelatt: forsteForsokUtelatt } = jobbMinutter(forsteForsokJobber)
   const { minutter: rerunMin, utelatt: rerunUtelatt } = jobbMinutter(rerunJobber)
   const runsMedFlereForsok = new Set(rerunJobber.map(j => j.run_id)).size
+
+  const sisteForsok = new Map(sisteForsokPerRun)
+  for (const j of jobber) {
+    const forsok = j.run_attempt ?? 1
+    if (!sisteForsokPerRun.has(j.run_id)) sisteForsok.set(j.run_id, Math.max(sisteForsok.get(j.run_id) ?? 1, forsok))
+  }
+  const tidligereJobber = jobber.filter(j => (j.run_attempt ?? 1) < (sisteForsok.get(j.run_id) ?? 1))
+  const { minutter: tidligereForsokMin } = jobbMinutter(tidligereJobber)
+
   // `utelatt` fra BEGGE delkallene, ikke kastet: pågående jobber er utelatt
   // fra begge sider av rerun-brøken, og en prosent som ikke sier hvor mye den
   // ikke så, ser mer komplett ut enn den er.
-  return { forsteForsokMin, rerunMin, runsMedFlereForsok, utelatt: forsteForsokUtelatt + rerunUtelatt }
+  return { forsteForsokMin, rerunMin, tidligereForsokMin, runsMedFlereForsok, utelatt: forsteForsokUtelatt + rerunUtelatt }
 }
 
 // Terskel for å slå steg sammen til «Øvrige steg»: et steg som verken utgjør
@@ -338,7 +358,7 @@ export async function kjorRapport({ dager, repo, token, workflowNavn, fetchImpl 
   }
   const perWorkflow = [...perWorkflowMap.entries()].map(([navn, min]) => ({ navn, min })).sort((a, b) => b.min - a.min)
 
-  const forsok = forsokFordeling(alleJobber)
+  const forsok = forsokFordeling(alleJobber, new Map(runs.map(run => [run.id, run.run_attempt ?? 1])))
 
   // Samme funksjon budsjettvakten bruker — ikke en kopi. Se filhode-forbeholdet
   // om at vinduet her er glidende, ikke kalendermåned.
@@ -407,10 +427,16 @@ export function byggRapport(data) {
   linjer.push('## 3. Mot budsjettvakten')
   linjer.push('')
   linjer.push(
-    `Jobb-basert (dette verktøyet): ${jobb.totalMin} min. Run-basert (\`forbrukMinutter()\`, slik budsjettvakten ser det): ${budsjett.runBasertMin} min. Differanse: **${budsjett.differanseMin} min**.`,
+    `Jobb-basert (dette verktøyet): ${jobb.totalMin} min. Run-basert (\`forbrukMinutter()\`, UKORRIGERT — kun siste forsøk per kjøring, slik budsjettvakten så det FØR #668): ${budsjett.runBasertMin} min. Differanse: **${budsjett.differanseMin} min**.`,
+  )
+  // Kun forsøkene run-basert telling IKKE ser (alle unntatt siste per run) —
+  // § 2 sin rerunMin inkluderer siste forsøk, som runBasertMin allerede har med.
+  const korrigertRunBasert = budsjett.runBasertMin + forsok.tidligereForsokMin
+  linjer.push(
+    `Korrigert for reruns (tidligere forsøk, dvs. alle unntatt siste per kjøring — ingen nye kall): ${budsjett.runBasertMin} + ${forsok.tidligereForsokMin} = **${korrigertRunBasert} min**, mot ${jobb.totalMin} min jobb-basert.`,
   )
   linjer.push(
-    'Differansen er i hovedsak reruns — budsjettvakten teller siste forsøk per RUN, mens jobb-basert teller hvert forsøk (§ 2). Merk at vinduene ikke er identiske: dette verktøyet måler siste `--dager`, budsjettvakten kalendermåned.',
+    'Differansen har to komponenter med MOTSATT fortegn (#668): reruns gjør ukorrigert run-basert for LAV (kun siste forsøk telles), mens `updated_at` som gjerne henger etter siste jobbs `completed_at` gjør run-basert for HØY. Nettoeffekten kan derfor gå begge veier avhengig av måneden. Merk også at vinduene ikke er identiske: dette verktøyet måler siste `--dager`, budsjettvakten kalendermåned. Se docs/ci-minuttbudsjett.md § Hvor tiden faktisk går for målte tall.',
   )
   linjer.push('')
 

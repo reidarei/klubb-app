@@ -56,8 +56,8 @@ test.describe('samtale / samtale_chat — kun deltakerne kan lese (#533)', () =>
     // eksplisitt først for tydelighetens skyld. `unique (profil_a, profil_b)`
     // på samtale krever at BEGGE samtalene er borte før en gjenkjøring kan
     // seede dem på nytt.
-    await service.from('samtale_chat').delete().eq('id', CHAT_PETTER_OLA_ID)
-    await service.from('samtale').delete().in('id', [SAMTALE_PETTER_OLA_ID, SAMTALE_ADMIN_OLA_ID])
+    await service.from('samtale_chat').delete().eq('id', CHAT_PETTER_OLA_ID).throwOnError()
+    await service.from('samtale').delete().in('id', [SAMTALE_PETTER_OLA_ID, SAMTALE_ADMIN_OLA_ID]).throwOnError()
   })
 
   test('Admin (ikke part) ser ikke Petter/Ola-samtalen eller meldingen i den', async () => {

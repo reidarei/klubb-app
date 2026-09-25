@@ -12,6 +12,7 @@ import { konfigFor, type ChatScope as ChatScopeKonfig } from '@/lib/chat-konfig'
 import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
+import Treffflate from '@/components/ui/Treffflate'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import {
   beregnMentionSøk,
@@ -639,32 +640,30 @@ export default function Chat({
               objectFit: 'cover',
             }}
           />
-          <button
-            type="button"
+          <Treffflate
+            synlig={22}
             onClick={fjernBilde}
             aria-label="Fjern bilde"
-            style={{
-              position: 'absolute',
-              top: -6,
-              right: -6,
-              width: 22,
-              height: 22,
-              borderRadius: '50%',
-              // original var litt mørkere — konsolidert til felles overlay-control-bg-token
-              background: 'var(--overlay-control-bg)',
-              color: 'var(--text-primary)',
-              border: 'none',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-            }}
+            style={{ position: 'absolute', top: -6, right: -6, cursor: 'pointer' }}
           >
-            ×
-          </button>
+            <span
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                // original var litt mørkere — konsolidert til felles overlay-control-bg-token
+                background: 'var(--overlay-control-bg)',
+                color: 'var(--text-primary)',
+                fontSize: 14,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ×
+            </span>
+          </Treffflate>
         </div>
       )}
       {bildeFeil && (
@@ -695,27 +694,25 @@ export default function Chat({
           marginBottom: 4,
         }}
       >
-        <button
-          type="button"
+        <Treffflate
+          synlig={32}
           onClick={() => bildeInputRef.current?.click()}
           aria-label="Legg ved bilde"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: 'transparent',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'var(--text-secondary)',
-            flexShrink: 0,
-            padding: 0,
-          }}
+          style={{ color: 'var(--text-secondary)', flexShrink: 0, cursor: 'pointer' }}
         >
-          <Icon name="image" size={18} color="currentColor" strokeWidth={1.8} />
-        </button>
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="image" size={18} color="currentColor" strokeWidth={1.8} />
+          </span>
+        </Treffflate>
         <input
           ref={bildeInputRef}
           type="file"
@@ -758,27 +755,31 @@ export default function Chat({
             fontSize: 13,
           }}
         />
-        <button
-          type="button"
+        <Treffflate
+          synlig={32}
           onClick={handleSend}
           disabled={(!tekst.trim() && !bildeFil) || sender}
+          aria-label="Send melding"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: 'var(--accent)',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            flexShrink: 0,
             cursor: (!tekst.trim() && !bildeFil) || sender ? 'default' : 'pointer',
             opacity: (!tekst.trim() && !bildeFil) || sender ? 0.4 : 1,
-            flexShrink: 0,
           }}
-          aria-label="Send melding"
         >
-          <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
-        </button>
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="arrowRight" size={14} color="var(--accent-foreground)" strokeWidth={2.5} />
+          </span>
+        </Treffflate>
       </div>
       </div>
       </div>

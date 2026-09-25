@@ -237,6 +237,19 @@
   pointer-events: none;
 }
 
+/* Treffnåla for et valgt søketreff (#757) — samme 📍-form som den delte
+   stedsnåla over, men dempet i opacity: dette er en PRIVAT, midlertidig
+   markør (ren visning, ikke-interaktiv) mens man vurderer treffet, til
+   forskjell fra en ekte kart_markering (snakkeboble) eller en delt
+   stedslenke. Dempingen leser som «foreløpig», ikke «bekreftet». */
+.kart-sok-naal {
+  font-size: 28px;
+  line-height: 1;
+  opacity: 0.85;
+  filter: drop-shadow(var(--kart-naal-skygge));
+  pointer-events: none;
+}
+
 /* Siktet som viser hvor markeringen havner (#704). Et kryss og ikke en nål:
    nåla er hva du FÅR, krysset er hvor du sikter — de skal ikke forveksles.
 

@@ -351,6 +351,49 @@ describe('opprettArrangement', () => {
     }
   })
 
+  // #760: arrangementet er alt committet når koble() feiler — feilen logges
+  // (arrangement.koble.feilet) og opprettelsen fullfører, som auto-RSVP over.
+  it('koble-feil under opprettelse logges, og opprettelsen fullfører (redirect kalles)', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    try {
+      mockFrom.mockImplementation((tabell: string) => {
+        if (tabell === 'arrangementer') {
+          const chain = lagChain(null)
+          chain.single = vi.fn().mockResolvedValue({ data: arrangerNyttArrangementFraDb(), error: null })
+          return chain
+        }
+        if (tabell === 'arrangoransvar') {
+          const chain = lagChain(null)
+          chain.then = (resolve: (v: unknown) => void) =>
+            Promise.resolve({ data: null, error: { message: 'koble feilet' } }).then(resolve)
+          return chain
+        }
+        const chain = lagChain(null)
+        chain.then = (resolve: (v: unknown) => void) =>
+          Promise.resolve({ data: null, error: null }).then(resolve)
+        return chain
+      })
+
+      await expect(
+        opprettArrangement({
+          type: 'moete',
+          tittel: 'Vårfest',
+          start_tidspunkt: '2026-06-15T16:00:00Z',
+          mal_navn: 'Sommerfest',
+          aar: 2026,
+        })
+      ).rejects.toThrow('NEXT_REDIRECT')
+
+      expect(mockRedirect).toHaveBeenCalled()
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('arrangement.koble.feilet')
+      )
+    } finally {
+      consoleLogSpy.mockRestore()
+    }
+  })
+
   it('kaster ved insert-feil på arrangementer-tabellen', async () => {
     // Tabell-diskriminert mock: kun arrangementer-insert feiler; andre tabeller
     // svarer ok. Dette låser kontrakten om at insert-feil kaster — en fremtidig
@@ -436,6 +479,28 @@ describe('slettArrangement', () => {
     expect(mockSlettR2).toHaveBeenCalledWith('arrangementer/xyz.jpg')
     // R2-opprydning er fire-and-forget (catch(() => {})) — redirect skal likevel ha fullført
     expect(mockRedirect).toHaveBeenCalledWith('/')
+  })
+
+  // #760: losne() kaster nå, og stopper slettingen FØR delete() — en FK-løsning
+  // som glapp skal aldri etterfølges av at raden forsvinner.
+  it('kaster når losne() feiler, og kaller aldri arrangementer.delete()', async () => {
+    const ansvarChain = lagChain(null, { message: 'losne feilet' })
+    const arrSelectChain = lagChain(null)
+    arrSelectChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const arrDeleteChain = lagChain(null)
+
+    let arrangementerKallTeller = 0
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'arrangementer') {
+        return ++arrangementerKallTeller === 1 ? arrSelectChain : arrDeleteChain
+      }
+      if (tabell === 'arrangoransvar') return ansvarChain
+      return lagChain(null)
+    })
+
+    await expect(slettArrangement('arr-abc')).rejects.toThrow('Kunne ikke løsne arrangøransvar: losne feilet')
+    expect(arrDeleteChain.delete).not.toHaveBeenCalled()
+    expect(mockRedirect).not.toHaveBeenCalled()
   })
 
   it('kaster Error ved delete-feil og kaller ikke redirect', async () => {
@@ -531,6 +596,34 @@ describe('oppdaterArrangement', () => {
     // koble() returnerer tidlig for "Annet" og null — kun losne() kjøres
     expect(ansvarUpdateSpy).toHaveBeenCalledTimes(1)
     expect(ansvarUpdateSpy).toHaveBeenCalledWith({ arrangement_id: null })
+  })
+
+  // #760: losne() lykkes, men koble() feiler — mal-byttet skal kaste, ikke la
+  // brukeren tro at den nye koblingen ble satt.
+  it('kaster når koble() feiler under mal-bytte, selv om losne() lyktes', async () => {
+    const arrChain = lagChain(null)
+    const ansvarChain = lagChain(null)
+    let ansvarKall = 0
+    ansvarChain.then = (resolve: (v: unknown) => void) => {
+      ansvarKall++
+      const resultat = ansvarKall === 1
+        ? { data: null, error: null } // losne() lykkes
+        : { data: null, error: { message: 'koble feilet' } } // koble() feiler
+      return Promise.resolve(resultat).then(resolve)
+    }
+
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'arrangementer') return arrChain
+      if (tabell === 'arrangoransvar') return ansvarChain
+      return lagChain(null)
+    })
+
+    await expect(
+      oppdaterArrangement('arr-abc', { tittel: 'X', mal_navn: 'Sommerfest', aar: 2026 }),
+    ).rejects.toThrow('Kunne ikke koble arrangøransvar: koble feilet')
+
+    const ansvarUpdateSpy = ansvarChain.update as ReturnType<typeof vi.fn>
+    expect(ansvarUpdateSpy).toHaveBeenCalledTimes(2) // losne + koble ble begge forsøkt
   })
 
   it('kaster Error ved update-feil og kaller ikke arrangoransvar', async () => {

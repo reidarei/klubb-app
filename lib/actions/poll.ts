@@ -63,8 +63,14 @@ export async function opprettPoll(data: PollInput) {
 
   const { error: valgErr } = await supabase.from('poll_valg').insert(valgRader)
   if (valgErr) {
-    // Rydd opp — slik at vi ikke etterlater en poll uten alternativer
-    await supabase.from('poll').delete().eq('id', poll.id)
+    // Rydd opp — slik at vi ikke etterlater en poll uten alternativer. Logg
+    // feiler den også, men kast den opprinnelige valgErr videre (#760).
+    const { error: opprydFeil } = await supabase.from('poll').delete().eq('id', poll.id)
+    if (opprydFeil) {
+      await logg.feil('poll.opprett.opprydding.feilet', opprydFeil, {
+        ctx: { code: opprydFeil.code, sample: poll.id },
+      })
+    }
     throw new Error(valgErr.message)
   }
 

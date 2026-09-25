@@ -10,6 +10,8 @@ import {
   grupperPerUke,
   hentRuns,
   hentJobber,
+  kjorRapport,
+  byggRapport,
   STEG_E2E,
   MARKOER_LAV_RISIKO,
   MARKOER_BUDSJETT,
@@ -81,6 +83,27 @@ describe('forsokFordeling — rerun-blindsonen', () => {
     const { forsteForsokMin, rerunMin } = forsokFordeling([jobb({ run_attempt: undefined })])
     expect(forsteForsokMin).toBe(1)
     expect(rerunMin).toBe(0)
+  })
+
+  // tidligereForsokMin = alle forsøk unntatt SISTE per run — det run-basert
+  // telling ikke ser. Ikke det samme som rerunMin (run_attempt ≥ 2).
+  it('tidligereForsokMin teller alle forsøk unntatt siste per run', () => {
+    const { rerunMin, tidligereForsokMin } = forsokFordeling([
+      jobb({ id: 1, run_id: 1, run_attempt: 1, started_at: '2026-09-01T10:00:00Z', completed_at: '2026-09-01T10:05:00Z' }), // 5
+      jobb({ id: 2, run_id: 1, run_attempt: 2, started_at: '2026-09-01T11:00:00Z', completed_at: '2026-09-01T11:07:00Z' }), // 7
+      jobb({ id: 3, run_id: 1, run_attempt: 3, started_at: '2026-09-01T12:00:00Z', completed_at: '2026-09-01T12:04:00Z' }), // 4 (siste)
+      jobb({ id: 4, run_id: 2, run_attempt: 1, started_at: '2026-09-01T13:00:00Z', completed_at: '2026-09-01T13:03:00Z' }), // 3 (siste)
+    ])
+    expect(rerunMin).toBe(7 + 4)
+    expect(tidligereForsokMin).toBe(5 + 7)
+  })
+
+  // run.run_attempt er fasit: har siste forsøk ingen jobber ennå, er forsøk 1
+  // likevel et TIDLIGERE forsøk run-basert telling ikke ser.
+  it('bruker sisteForsokPerRun fremfor jobbenes høyeste forsøk', () => {
+    const jobber = [jobb({ run_id: 7, run_attempt: 1, started_at: '2026-09-01T10:00:00Z', completed_at: '2026-09-01T10:05:00Z' })]
+    expect(forsokFordeling(jobber).tidligereForsokMin).toBe(0)
+    expect(forsokFordeling(jobber, new Map([[7, 2]])).tidligereForsokMin).toBe(5)
   })
 
   // Pågående jobber er utelatt fra BEGGE sider av rerun-brøken. Kastes tallet,
@@ -379,5 +402,40 @@ describe('kobling til .github/workflows/pr-check.yml', () => {
     for (const navn of [STEG_E2E, MARKOER_LAV_RISIKO, MARKOER_BUDSJETT]) {
       expect(stegnavn).toContain(navn)
     }
+  })
+})
+
+// § 3 «Korrigert for reruns» — review-BLOCKER i #668: summen la til § 2 sin
+// rerunMin (inkl. siste forsøk), og telte dermed siste forsøk dobbelt. Fasit
+// er kjent: uten updated_at-etterslep skal korrigert run-basert = jobb-basert.
+describe('kjorRapport + byggRapport — korrigert run-basert i § 3', () => {
+  const t = (hhmm: string) => `2026-09-01T${hhmm}:00Z`
+  const run = (id: number, run_attempt: number, start: string, slutt: string) => ({
+    id, name: 'PR-sjekk', event: 'push', run_attempt, created_at: t('09:00'), run_started_at: t(start), updated_at: t(slutt),
+  })
+  const j = (id: number, run_id: number, run_attempt: number, start: string, slutt: string) =>
+    jobb({ id, run_id, run_attempt, started_at: t(start), completed_at: t(slutt) })
+
+  // Run 1: tre forsøk (5, 7, 4 min). Run 2: ett forsøk (3). Run 3: to forsøk (6, 2).
+  // Run-objektene bærer kun SISTE forsøks tidspunkter, slik GitHub gjør.
+  const runs = [run(1, 3, '12:00', '12:04'), run(2, 1, '13:00', '13:03'), run(3, 2, '15:00', '15:02')]
+  const jobberPerRun: Record<number, unknown[]> = {
+    1: [j(11, 1, 1, '10:00', '10:05'), j(12, 1, 2, '11:00', '11:07'), j(13, 1, 3, '12:00', '12:04')],
+    2: [j(21, 2, 1, '13:00', '13:03')],
+    3: [j(31, 3, 1, '14:00', '14:06'), j(32, 3, 2, '15:00', '15:02')],
+  }
+  const fetchImpl = (async (url: string) => {
+    const m = /\/runs\/(\d+)\/jobs/.exec(url)
+    const body = m ? { jobs: jobberPerRun[Number(m[1])] } : { workflow_runs: runs }
+    return { ok: true, status: 200, statusText: 'OK', json: async () => body }
+  }) as unknown as typeof fetch
+
+  it('legger kun til tidligere forsøk, ikke § 2 sine reruns', async () => {
+    const data = await kjorRapport({ dager: 30, repo: 'a/b', token: 't', workflowNavn: 'PR-sjekk', fetchImpl, naa: new Date('2026-09-02T00:00:00Z') })
+    expect(data.jobb.totalMin).toBe(27)
+    expect(data.budsjett.runBasertMin).toBe(4 + 3 + 2)
+    expect(data.forsok.rerunMin).toBe(7 + 4 + 2) // § 2 — inkluderer siste forsøk
+    expect(data.forsok.tidligereForsokMin).toBe(5 + 7 + 6)
+    expect(byggRapport(data)).toContain('9 + 18 = **27 min**, mot 27 min jobb-basert')
   })
 })

@@ -87,13 +87,15 @@ export default async function Forside() {
     arrangementerBerikt.map(a => norskDatoNokkel(a.start_tidspunkt))
   )]
 
-  // Turdager skilles ut så kalenderen kan vise fly i stedet for øl (#510).
-  // Delmengde av arrangementDatoer — kalenderen lar tur vinne på kollisjonsdager.
-  const turDatoer = [...new Set(
-    arrangementerBerikt
-      .filter(a => a.type === 'tur')
-      .map(a => norskDatoNokkel(a.start_tidspunkt))
-  )]
+  // Turperioder (start + evt. slutt) så kalenderen kan tegne fly-strek-fly for
+  // hele turen, ikke bare avreisedagen (#770). arrangementDatoer utvides IKKE
+  // med mellomdager — byggTurMarkering i MiniKalender løser strek-tegningen.
+  const turPerioder = arrangementerBerikt
+    .filter(a => a.type === 'tur')
+    .map(a => ({
+      start: norskDatoNokkel(a.start_tidspunkt),
+      slutt: a.slutt_tidspunkt ? norskDatoNokkel(a.slutt_tidspunkt) : null,
+    }))
 
   // Bursdager som MM-dd-nøkler (uten år — de gjentar seg årlig, og
   // kalenderen kan blas på tvers av år). fodselsdato er en date-kolonne
@@ -153,7 +155,7 @@ export default async function Forside() {
         </div>
 
         {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
-        <MiniKalender arrangementDatoer={arrangementDatoer} turDatoer={turDatoer} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} />
+        <MiniKalender arrangementDatoer={arrangementDatoer} turPerioder={turPerioder} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} />
 
         <NyFAB />
       </header>

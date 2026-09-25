@@ -29,6 +29,7 @@ function lagArrangement(id: string, startTidspunkt: string): ArrangementRaad {
     type: 'moete',
     tittel: `Møte ${id}`,
     start_tidspunkt: startTidspunkt,
+    slutt_tidspunkt: null,
     oppmoetested: null,
     bilde_url: null,
     paameldinger: [],

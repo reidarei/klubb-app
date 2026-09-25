@@ -59,12 +59,15 @@ export default async function TidligereSide({
   const grense = TIDLIGERE_SIDESTOERRELSE + 1 // hent én ekstra for å sjekke om det er mer
 
   // === Arrangementer ===
+  // Pågående tur hører til «Kommende» på forsiden (#766). Speiler erPaagaaende()
+  // i lib/agenda-sortering.ts — endres den ene, må den andre følge (jf. #491).
   let arrQuery = supabase
     .from('arrangementer')
     .select(
-      'id, type, tittel, start_tidspunkt, oppmoetested, bilde_url, paameldinger (profil_id, status, profiles (visningsnavn, bilde_url, rolle))',
+      'id, type, tittel, start_tidspunkt, slutt_tidspunkt, oppmoetested, bilde_url, paameldinger (profil_id, status, profiles (visningsnavn, bilde_url, rolle))',
     )
     .lt('start_tidspunkt', naa())
+    .or(`slutt_tidspunkt.is.null,slutt_tidspunkt.lt.${naa()}`)
     .order('start_tidspunkt', { ascending: false })
     .order('id', { ascending: false })
     .limit(grense)

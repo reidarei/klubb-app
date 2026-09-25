@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { draNedForOppdaterAv } from '@/lib/navigasjon'
 import { DRA_NED_PING_TIMEOUT_MS } from '@/lib/konstanter'
+import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 
 const TERSKEL = 80
 const MAX = 120
@@ -18,6 +19,8 @@ const MAX = 120
 // gir ingen «ferdig»-callback, så tiden er kosmetisk — den gjør bare at gesten
 // kjennes avsluttet i stedet for å blinke bort momentant.
 const SPINNER_ETTERSLEP_MS = 900
+// «Prøv på nytt»: usynlig knapp vokser vertikalt, pillen inni bærer utseendet (#700).
+const PROEV_PAA_NYTT_TREFF = treffflateRundt({ hoyde: 28 })
 
 export default function DraNedForOppdater() {
   const [dra, setDra] = useState(0)
@@ -257,39 +260,51 @@ export default function DraNedForOppdater() {
             type="button"
             onClick={() => void oppdater()}
             style={{
-              padding: '6px 14px',
-              borderRadius: 999,
-              border: 'none',
-              background: 'var(--accent)',
-              color: 'var(--accent-foreground)',
-              fontFamily: 'var(--font-body)',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Prøv på nytt
-          </button>
-          <button
-            type="button"
-            onClick={() => setFeilet(false)}
-            aria-label="Lukk"
-            style={{
-              width: 28,
-              height: 28,
-              flexShrink: 0,
-              borderRadius: '50%',
+              ...PROEV_PAA_NYTT_TREFF.stil,
+              paddingLeft: 0,
+              paddingRight: 0,
+              display: 'flex',
               border: 'none',
               background: 'transparent',
-              color: 'var(--text-tertiary)',
-              fontSize: 16,
-              lineHeight: 1,
               cursor: 'pointer',
             }}
           >
-            ✕
+            <span
+              style={{
+                padding: '6px 14px',
+                borderRadius: 999,
+                background: 'var(--accent)',
+                color: 'var(--accent-foreground)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 13,
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Prøv på nytt
+            </span>
           </button>
+          <Treffflate
+            synlig={28}
+            onClick={() => setFeilet(false)}
+            aria-label="Lukk"
+            style={{ flexShrink: 0, color: 'var(--text-tertiary)', cursor: 'pointer' }}
+          >
+            <span
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                fontSize: 16,
+                lineHeight: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </span>
+          </Treffflate>
         </div>
       )}
 

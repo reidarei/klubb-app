@@ -224,7 +224,7 @@ test.describe('varsel_logg — kun `lest` er oppdaterbar, kun på egne rader (mi
   test.beforeAll(async () => {
     const service = adminKlient('varsel-logg-fixtures')
     if (!service) throw new Error('adminKlient ga null selv om harRlsMiljo() er sann')
-    await service.from('varsel_logg').delete().in('id', [VARSEL_PETTER_ID, VARSEL_OLA_ID])
+    await service.from('varsel_logg').delete().in('id', [VARSEL_PETTER_ID, VARSEL_OLA_ID]).throwOnError()
     const { error } = await service.from('varsel_logg').insert([
       { id: VARSEL_PETTER_ID, profil_id: PETTER.id, tittel: 'Testvarsel Petter', melding: 'Seedet for #533.' },
       { id: VARSEL_OLA_ID, profil_id: OLA.id, tittel: 'Testvarsel Ola', melding: 'Seedet for #533.' },

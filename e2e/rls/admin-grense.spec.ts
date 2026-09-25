@@ -62,7 +62,7 @@ test.describe('er_admin()-gatede operasjoner — medlem stoppes, begge admin-rol
     if (vedtekterFeil) throw new Error(`Kunne ikke snapshotte vedtektene: ${vedtekterFeil.message}`)
     vedtekterFoer = vedtekter.innhold
 
-    await service.from('arrangementer').delete().in('id', [ARR_A_ID, ARR_B_ID])
+    await service.from('arrangementer').delete().in('id', [ARR_A_ID, ARR_B_ID]).throwOnError()
     const { error } = await service.from('arrangementer').insert([
       {
         id: ARR_A_ID,

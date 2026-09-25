@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { slettMeldingBilde } from '@/lib/actions/meldinger'
+import Treffflate from '@/components/ui/Treffflate'
 
 // Klient-komponent for å slette ett bilde fra en melding.
 // Mønsteret speiler SlettMeldingKnapp — confirm + router.refresh() for
@@ -25,32 +26,35 @@ export default function SlettBildeKnapp({ bildeId }: { bildeId: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleSlett}
+    <Treffflate
+      synlig={28}
       disabled={isPending}
       aria-label="Slett bilde"
+      onClick={handleSlett}
       style={{
         position: 'absolute',
         top: 8,
         right: 8,
-        width: 28,
-        height: 28,
-        borderRadius: '50%',
-        background: 'var(--overlay-control-bg)',
-        border: 'none',
-        color: 'var(--text-primary)',
-        fontSize: 16,
-        lineHeight: 1,
         cursor: isPending ? 'wait' : 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 0,
         opacity: isPending ? 0.5 : 1,
       }}
     >
-      ×
-    </button>
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: '50%',
+          background: 'var(--overlay-control-bg)',
+          color: 'var(--text-primary)',
+          fontSize: 16,
+          lineHeight: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ×
+      </span>
+    </Treffflate>
   )
 }

@@ -76,8 +76,14 @@ export async function opprettMelding(input: {
       .insert(bildeRader)
 
     if (bildeErr) {
-      // Compensating delete — vi vil ikke ha en tom melding uten bilder
-      await supabase.from('meldinger').delete().eq('id', data.id)
+      // Compensating delete — vi vil ikke ha en tom melding uten bilder. Logg
+      // feiler den også, men kast den opprinnelige bildeErr videre (#760).
+      const { error: opprydFeil } = await supabase.from('meldinger').delete().eq('id', data.id)
+      if (opprydFeil) {
+        await logg.feil('melding.opprett.opprydding.feilet', opprydFeil, {
+          ctx: { code: opprydFeil.code, sample: data.id },
+        })
+      }
       throw new Error(`Bildeopplasting feilet: ${bildeErr.message}`)
     }
   }

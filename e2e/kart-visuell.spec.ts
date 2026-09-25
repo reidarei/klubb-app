@@ -48,28 +48,28 @@ test.describe('Kartsiden — visuell baseline', () => {
     await admin.from('posisjon_deling').upsert([
       { profil_id: profil.id, deler_til: om4t, oppdatert: new Date().toISOString() },
       { profil_id: PETTER, deler_til: om4t, oppdatert: new Date().toISOString() },
-    ], { onConflict: 'profil_id' })
+    ], { onConflict: 'profil_id' }).throwOnError()
 
     await admin.from('posisjon_punkt').insert([
       { profil_id: profil.id, lat: 59.9139, lng: 10.7522, noeyaktighet_m: 12, registrert: new Date(Date.now() - 5 * 60_000).toISOString() },
       { profil_id: PETTER, lat: 59.9111, lng: 10.7461, noeyaktighet_m: 20, registrert: new Date(Date.now() - 40 * 60_000).toISOString() },
       { profil_id: PETTER, lat: 59.9165, lng: 10.758, noeyaktighet_m: 15, registrert: new Date(Date.now() - 10 * 60_000).toISOString() },
-    ])
+    ]).throwOnError()
 
     await admin.from('kart_markering').insert([
       { opprettet_av: profil.id, lat: 59.9150, lng: 10.7500, tekst: `${MERKE} — vi sitter her`, symbol: STANDARD_SYMBOL, utloper: om4t },
       { opprettet_av: PETTER, lat: 59.9120, lng: 10.7560, tekst: `${MERKE} — møt oss her`, symbol: ANNET_SYMBOL?.id ?? STANDARD_SYMBOL, utloper: om4t },
-    ])
+    ]).throwOnError()
   })
 
   test.afterAll(async () => {
     const admin = adminKlient('kart-visuell')
     if (!admin) return
-    await admin.from('kart_markering').delete().like('tekst', `${MERKE}%`)
+    await admin.from('kart_markering').delete().like('tekst', `${MERKE}%`).throwOnError()
     for (const id of [megId, PETTER]) {
       if (!id) continue
-      await admin.from('posisjon_punkt').delete().eq('profil_id', id)
-      await admin.from('posisjon_deling').delete().eq('profil_id', id)
+      await admin.from('posisjon_punkt').delete().eq('profil_id', id).throwOnError()
+      await admin.from('posisjon_deling').delete().eq('profil_id', id).throwOnError()
     }
   })
 

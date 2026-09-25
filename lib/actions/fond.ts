@@ -22,7 +22,7 @@ async function skrivHistorikk(
   ny_verdi: number,
 ) {
   if (gammel_verdi === ny_verdi) return // ingen endring — ingenting å logge
-  await supabase.from('fond_verdi_historikk').insert({
+  const { error } = await supabase.from('fond_verdi_historikk').insert({
     kilde,
     kilde_id,
     gammel_verdi,
@@ -30,6 +30,11 @@ async function skrivHistorikk(
     endret_av: userId,
     tidspunkt: naa(),
   })
+  // Verdien er allerede lagret — en feilet historikk-rad skal ikke velte
+  // selve oppdateringen, kun logges (#760).
+  if (error) {
+    await logg.feil('fond.historikk.feilet', error, { ctx: { code: error.code, sample: kilde } })
+  }
 }
 
 // ─── Validering ──────────────────────────────────────────────────────────────

@@ -36,8 +36,8 @@ test.describe('pass_info — passnummer skal aldri lekke uten godkjent, gyldig t
     // om en tidligere kjøring krasjet halvveis, og `retries: 1`
     // (playwright.config.ts) faller da ikke på en duplikatnøkkel-feil ved
     // insert.
-    await service.from('pass_tilgang_forespørsel').delete().eq('id', FORESPORSEL_ID)
-    await service.from('pass_info').delete().eq('profil_id', OLA.id)
+    await service.from('pass_tilgang_forespørsel').delete().eq('id', FORESPORSEL_ID).throwOnError()
+    await service.from('pass_info').delete().eq('profil_id', OLA.id).throwOnError()
 
     const { error } = await service.from('pass_info').insert({
       profil_id: OLA.id,
@@ -50,8 +50,8 @@ test.describe('pass_info — passnummer skal aldri lekke uten godkjent, gyldig t
   test.afterAll(async () => {
     const service = adminKlient('pass-info-cleanup')
     if (!service) return
-    await service.from('pass_tilgang_forespørsel').delete().eq('id', FORESPORSEL_ID)
-    await service.from('pass_info').delete().eq('profil_id', OLA.id)
+    await service.from('pass_tilgang_forespørsel').delete().eq('id', FORESPORSEL_ID).throwOnError()
+    await service.from('pass_info').delete().eq('profil_id', OLA.id).throwOnError()
   })
 
   // Ett gjenbrukt forespørsel-fixture som muteres mellom hver test i stedet

@@ -113,6 +113,10 @@ export const LONG_PRESS_MS = 350
 // for å slippe kvadratrot. se #359-review / #468.
 export const LONG_PRESS_BEVEGELSE_PX = 10
 
+// Apples minste anbefalte trykkmål, kortside. Brukes av components/ui/Treffflate.tsx
+// til å regne ut usynlig treffområde rundt små visuelle kontroller. Se #700.
+export const MIN_TREFFMAAL_PX = 44
+
 // ─── FEILLOGGING / OBSERVABILITY ─────────────────────────────────────────────
 
 // Antall klient-feil vi tillater per IP+profil per minutt via /api/logg-feil.
@@ -529,3 +533,40 @@ export const KART_KLYNGE_AVSTAND_M = 50_000
 // i stedet for å gjemme to tredjedeler av gjengen bak den største
 // enkeltgruppa (#735).
 export const KART_KLYNGE_MIN_ANDEL = 0.5
+
+// ─── STEDSSØK PÅ KARTET (#757) ────────────────────────────────────────────
+
+// Tegngrenser for søketeksten i StedSok. Nedre grense hindrer et
+// enkelt-tegn-søk som uansett ikke gir treff verdt kostnaden mot Nominatim;
+// øvre er en raus fritekst-adresse ("Karl Johans gate 1, Oslo, Norge").
+export const STED_SOK_MIN_LENGDE = 2
+export const STED_SOK_MAKS_LENGDE = 120
+
+// Maks antall kandidater vist etter ett søk. Nominatims `limit`-parameter
+// settes til samme tall — vi henter aldri flere treff enn vi faktisk viser.
+export const STED_SOK_MAKS_TREFF = 5
+
+// Timeout på ETT Nominatim-kall (geokod() og sokSteder() deler denne).
+// Samme 5 s som geokod() hardkodet før denne konstanten fantes.
+export const GEOKODING_TIMEOUT_MS = 5000
+
+// Levetid på cachede søkeresultater i sokSted()-actionen. Nominatims
+// bruksvilkår krever caching av respons; 7 dager er lenge nok til at et
+// gjentatt søk på samme sted/nærhet ikke går til tjenesten på nytt, og kort
+// nok til at et sted som får nytt navn (skifter eier, endrer skilting)
+// retter seg selv innen rimelig tid.
+export const STED_SOK_CACHE_SEK = 7 * 24 * 3600
+
+// Minste avstand mellom to utgående Nominatim-kall fra sokSted() — Nominatims
+// grense er 1 req/s. Håndheves PER SERVER-INSTANS, ikke globalt (se
+// docs/geokoding.md § Interaktivt stedssøk for hvorfor det er godtatt).
+export const NOMINATIM_MIN_AVSTAND_MS = 1000
+
+// Halv bredde/høyde (i grader) på viewbox rundt kartets senter når søket har
+// en nærhet å vekte mot (#757). `bounded=0` gjør boksen til en PREFERANSE,
+// ikke et filter — et treff langt utenfor bare rangeres lavere, forsvinner
+// ikke. 0.5° er omtrent en storby-region (~55 km nord-sør ved norsk
+// breddegrad), stort nok til at søk etter et sted i nabobyen fortsatt
+// fungerer, men skjevt nok til å foretrekke stedet nærmest kartutsnittet
+// framfor et likelydende sted på andre siden av kloden.
+export const STED_SOK_VIEWBOX_GRADER = 0.5
