@@ -4,6 +4,8 @@ import ReisemodusToggle from '@/components/reisemodus/ReisemodusToggle'
 
 type Props = {
   zIndex: number
+  /** 'reise' eller 'moete' (#780) — styrer tittelteksten og toggelens aria-label. */
+  modus: 'reise' | 'moete'
 }
 
 // ── Toppkontroll-sonen på kartflaten (#723-review) ──────────────────────────
@@ -38,7 +40,7 @@ export const REISEMODUS_BAR_SONE = REISEMODUS_BAR_AVATAR + BAR_LUFT
  * kart-panelene konsumerer i stedet for å lese iOS' egen topp-innsett-
  * variabel selv (se PosisjonsKart.tsx for hele regnestykket).
  */
-export default function ReisemodusBar({ zIndex }: Props) {
+export default function ReisemodusBar({ zIndex, modus }: Props) {
   // En strek som fader ut mot enden i stedet for å stoppe brått. Rett strek
   // mot kartfliser ser ut som en feil i kartet; en gradient leser som pynt.
   const strek = (retning: 'venstre' | 'hoeyre') => (
@@ -94,7 +96,7 @@ export default function ReisemodusBar({ zIndex }: Props) {
           flexShrink: 0,
         }}
       >
-        Reisemodus
+        {modus === 'moete' ? 'Møtemodus' : 'Reisemodus'}
       </span>
 
       {strek('hoeyre')}
@@ -110,7 +112,7 @@ export default function ReisemodusBar({ zIndex }: Props) {
           alignItems: 'center',
         }}
       >
-        <ReisemodusToggle paa variant="kart" />
+        <ReisemodusToggle paa variant="kart" modus={modus} />
       </span>
     </div>
   )

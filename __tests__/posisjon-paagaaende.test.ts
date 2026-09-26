@@ -100,8 +100,9 @@ describe('finnPaagaaendeArrangement — varighet (#735)', () => {
 })
 
 // «Ingen tur pågår» og «oppslaget feilet» så identiske ut i returverdien `null`
-// fram til #723-reviewen. Reisemodus må kunne skille dem for å kunne logge
-// reisemodus.oppslag.feilet; posisjonsdeling må FORTSATT fail-ope. Testen
+// fram til #723-reviewen. Kartmodus (reisemodus/møtemodus) må kunne skille dem
+// for å kunne logge kartmodus.oppslag.feilet; posisjonsdeling må FORTSATT
+// fail-ope. Testen
 // pinner begge halvdelene, så en fremtidig forenkling til én variant feiler her
 // i stedet for å bli oppdaget i prod som stillhet.
 describe('finnPaagaaendeArrangement — feil vs. ingen tur (#723)', () => {

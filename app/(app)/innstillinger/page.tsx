@@ -14,7 +14,7 @@ import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
 import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed, godkjennerPassTilgang } from '@/lib/roller'
-import { hentAppFlagg, FOND_FANE, CHAT_FANE, REISEMODUS } from '@/lib/app-innstillinger'
+import { hentAppFlagg, FOND_FANE, CHAT_FANE, REISEMODUS, MOETEMODUS } from '@/lib/app-innstillinger'
 import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { SYMBOLER_VARSLER } from '@/lib/markering-symboler'
 import { osloUkestart } from '@/lib/dato'
@@ -49,6 +49,7 @@ export default async function Innstillinger() {
     fondFaneAktiv,
     chatFaneAktiv,
     reisemodusAktiv,
+    moetemodusAktiv,
     { data: aktivitetDagerRaw, error: aktivitetDagerFeil },
     { data: aktivitetUkerRaw, error: aktivitetUkerFeil },
   ] = await Promise.all([
@@ -103,6 +104,8 @@ export default async function Innstillinger() {
     // fallback false — kill-switch, ikke synlighetsbryter: en feilet
     // spørring skal ALDRI kunne sende noen til fullskjermkart (#723).
     hentAppFlagg(supabase, REISEMODUS, false),
+    // Samme fail-closed begrunnelse som REISEMODUS over (#780).
+    hentAppFlagg(supabase, MOETEMODUS, false),
     admin
       .from('aktivitet_dag')
       .select('unike')
@@ -378,16 +381,17 @@ export default async function Innstillinger() {
 
       {/* Funksjoner — app-vide på/av-flagg.
           Beskrivelsen presiserer at «admin har alltid tilgang» KUN gjelder
-          fanene: reisemodus er en global kill-switch og er av for alle, også
-          admin, når bryteren står av (#723-review). */}
+          fanene: reisemodus og møtemodus er globale kill-switcher og er av
+          for alle, også admin, når bryteren står av (#723-review, #780). */}
       <InnstillingsKort
         tittel="Funksjoner"
         oppsummering={[
           fondFaneAktiv ? 'Fond: synlig for alle' : 'Fond: kun admin',
           chatFaneAktiv ? 'Chat: synlig for alle' : 'Chat: kun admin',
           reisemodusAktiv ? 'Reisemodus: på' : 'Reisemodus: av',
+          moetemodusAktiv ? 'Møtemodus: på' : 'Møtemodus: av',
         ].join(' · ')}
-        beskrivelse="Skru funksjoner av og på for alle medlemmer. Fond- og Chat-fanen er alltid synlige for admin; reisemodus er av for alle når bryteren er av."
+        beskrivelse="Skru funksjoner av og på for alle medlemmer. Fond- og Chat-fanen er alltid synlige for admin; reisemodus og møtemodus er av for alle når bryterne er av."
       >
         <FunksjonToggle
           noekkel={FOND_FANE}
@@ -406,6 +410,13 @@ export default async function Innstillinger() {
           noekkel={REISEMODUS}
           aktiv={reisemodusAktiv}
           beskrivelse="Reisemodus (fullskjerm kart) når en tur med sluttid pågår"
+        />
+        {/* Kill-switch (#780) — landes AV i migrasjon 153, samme begrunnelse
+            som REISEMODUS over. */}
+        <FunksjonToggle
+          noekkel={MOETEMODUS}
+          aktiv={moetemodusAktiv}
+          beskrivelse="Møtemodus (fullskjerm kart) fra møtestart til kl. 06 dagen etter"
           last
         />
       </InnstillingsKort>

@@ -172,6 +172,21 @@ export function norskDatoNokkel(iso: string): string {
 }
 
 /**
+ * UTC-instantet for et gitt norsk klokkeslett DAGEN ETTER `iso`s norske
+ * kalenderdag, som ISO-streng. Brukt av møtemodus (#780): et møte som starter
+ * 00:30 skal fortsatt vare til kl. 06:00 dagen ETTER (ikke samme dag) —
+ * `osloDagPluss(1, …)` løser akkurat den forskyvningen, forankret til `iso`s
+ * EGEN dag (ikke dagens dato) slik at et bakoverskuende oppslag regner riktig
+ * uansett når det kjøres. DST-trygt og TZ-uavhengig, samme knep som
+ * osloDagStartIso(): fromZonedTime tolker strengen som veggklokke-tid i
+ * TIDSSONE — ingen lokal Date, ingen toISOString() på en Oslo-kalenderdag
+ * (jf. hk/dato-tidssone-uavhengig).
+ */
+export function osloKlokkeslettDagenEtter(iso: string, klokke: string): string {
+  return fromZonedTime(`${osloDagPluss(1, norskDatoNokkel(iso))}T${klokke}:00`, TIDSSONE).toISOString()
+}
+
+/**
  * Sammenligner om to ISO-tidspunkter faller på samme norske kalenderdag.
  * Viktig: bruker Oslo-tidssone så en melding sendt 01:30 norsk tid teller
  * som "i dag", ikke "i går" basert på UTC.

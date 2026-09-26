@@ -31,6 +31,12 @@ export const AVREISE_VINDU_DAGER = 7
 // trekke tilbake.
 export const PASS_TILGANG_TIMER = 24
 
+// Møtemodus (#780) — klokkeslett (norsk tid) møtemodus varer TIL, dagen ETTER
+// møtets startdato. Et møte som starter 00:30 skal likevel vare til 06:00
+// NESTE morgen, ikke samme natt — endringen er bevisst valgt (se #780).
+// Møtets eget slutt_tidspunkt ignoreres bevisst; se lib/moetemodus.ts.
+export const MOETEMODUS_SLUTT_KLOKKE = '06:00'
+
 // Retry-vindu (i dager) for kåringsvinner-varselet: cronen leter etter
 // avsluttede-men-uvarslede kåringspoller helt til riktig markør for pollens utfall er satt
 // (vinner_varslet_paa eller tiebreak_varslet_paa, se #521)

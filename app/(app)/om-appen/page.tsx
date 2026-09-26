@@ -111,8 +111,9 @@ export default function OmAppen() {
           arrangement pågår. Ruta slettes når arrangementet er over, og med én
           gang hvis du skrur av delingen selv.
           {' '}
-          Under en tur med reisemodus er kartet appens forside — det endrer
-          ikke hvem som er synlig der, bare hvor du lander når du åpner appen.
+          Under en tur med reisemodus, eller et møte med møtemodus, er kartet
+          appens forside — det endrer ikke hvem som er synlig der, bare hvor
+          du lander når du åpner appen.
         </Avsnitt>
         {/* Nominatim (OSM) er den samme tjenesten som allerede geokoder
          * turdestinasjoner i bakgrunnen (se docs/geokoding.md) — dette

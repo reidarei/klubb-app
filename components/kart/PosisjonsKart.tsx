@@ -139,6 +139,14 @@ type Props = {
    * kart-flaten under.
    */
   reisemodus: boolean
+  /**
+   * Hvilken av de to modusene som er PÅ (#780) — 'reise' eller 'moete'. Kun
+   * relevant når `reisemodus` (fellesnavnet for boolean-flagget, beholdt for
+   * å unngå en bred rename) er true; styrer teksten på ReisemodusBar. Valgfri
+   * (default null) så eksisterende tester som seeder `reisemodus: false`
+   * ikke måtte utvides for en modus som aldri vises i den tilstanden.
+   */
+  kartmodus?: 'reise' | 'moete' | null
 }
 
 function relativTid(iso: string): string {
@@ -242,6 +250,7 @@ export default function PosisjonsKart({
   deltSted,
   pingKandidater,
   reisemodus,
+  kartmodus = null,
 }: Props) {
   const kartRef = useRef<HTMLDivElement>(null)
   const kartetRef = useRef<LeafletMap | null>(null)
@@ -1698,8 +1707,8 @@ export default function PosisjonsKart({
           app/(app)/layout.tsx): egen avatar + ulest-prikk + toggle, flytende
           over kartet øverst til høyre — «samme sted i begge moduser»,
           bevisst valgt (#723). */}
-      {reisemodus && (
-        <ReisemodusBar zIndex={Z.KNAPPER} />
+      {reisemodus && kartmodus && (
+        <ReisemodusBar zIndex={Z.KNAPPER} modus={kartmodus} />
       )}
 
       {/* ── Knapperad, oppå kartet ───────────────────────────────────────────

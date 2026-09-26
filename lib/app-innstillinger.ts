@@ -9,6 +9,9 @@ export const FOND_FANE = 'fond_fane'
 export const CHAT_FANE = 'chat_fane'
 // Kill-switch for reisemodus (#723/#724) — fallback false, se lib/reisemodus.ts.
 export const REISEMODUS = 'reisemodus'
+// Kill-switch for møtemodus (#780) — samme mønster som REISEMODUS, fallback
+// false, se lib/moetemodus.ts.
+export const MOETEMODUS = 'moetemodus'
 
 // Registret over kjente funksjonsflagg med metadata. Nye flagg legges til her.
 // beskrivelse tas med i upsert (se oppdaterAppInnstilling) for INSERT-grenens
@@ -28,6 +31,7 @@ export const KJENTE_FLAGG = {
   [FOND_FANE]: { beskrivelse: 'Vis Fond-fanen for alle medlemmer' },
   [CHAT_FANE]: { beskrivelse: 'Vis Chat-fanen for alle medlemmer' },
   [REISEMODUS]: { beskrivelse: 'Vis reisemodus (fullskjerm kart) mens en tur med sluttid pågår' },
+  [MOETEMODUS]: { beskrivelse: 'Vis møtemodus (fullskjerm kart) fra møtestart til kl. 06 dagen etter' },
 } as const
 
 export type Flaggnoekkel = keyof typeof KJENTE_FLAGG

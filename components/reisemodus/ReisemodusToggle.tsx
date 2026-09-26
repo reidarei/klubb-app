@@ -2,28 +2,32 @@
 
 import { useTransition } from 'react'
 import { usePathname } from 'next/navigation'
-import { settReisemodus } from '@/lib/actions/reisemodus'
+import { settKartmodus } from '@/lib/actions/kartmodus'
 import ToggleSwitch from '@/components/ui/ToggleSwitch'
 
 type Props = {
   paa: boolean
   /**
    * 'header' — liten pille i TopHeader, ved siden av avataren (normal modus,
-   * eller reisemodus PÅ men brukeren er på en annen rute enn /kart).
+   * eller kartmodus PÅ men brukeren er på en annen rute enn /kart).
    * 'kart'   — mørk glass-pille i ReisemodusBar, flytende over selve kartet.
    */
   variant?: 'header' | 'kart'
+  /** Hvilken modus toggelen styrer — avgjør kun aria-label-teksten (#780). */
+  modus?: 'reise' | 'moete'
 }
 
 /**
- * Bevisst valg: knappen sier «Reise» (aria-label sier «reisemodus»,
- * for skjermlesere — se CLAUDE.md). Kaller settReisemodus() med GJELDENDE
- * sti, slik at av-valget ikke river brukeren ut av siden han står på (kun
- * på/av-logikken avgjør om det faktisk redirectes — se lib/actions/reisemodus.ts).
+ * Bevisst valg: knappen sier «Reise» (aria-label sier «reisemodus»/
+ * «møtemodus» etter `modus`, for skjermlesere — se CLAUDE.md). Kaller
+ * settKartmodus() med GJELDENDE sti, slik at av-valget ikke river brukeren ut
+ * av siden han står på (kun på/av-logikken avgjør om det faktisk redirectes
+ * — se lib/actions/kartmodus.ts).
  */
-export default function ReisemodusToggle({ paa, variant = 'header' }: Props) {
+export default function ReisemodusToggle({ paa, variant = 'header', modus = 'reise' }: Props) {
   const pathname = usePathname()
   const [isPending, startTransition] = useTransition()
+  const modusNavn = modus === 'moete' ? 'møtemodus' : 'reisemodus'
 
   function toggle() {
     // Actionen MÅ awaites inne i transitionen. Som løs promise floater
@@ -37,7 +41,7 @@ export default function ReisemodusToggle({ paa, variant = 'header' }: Props) {
     // navigasjonen ferdig, håndter alt annet selv. Se SendMeldingKnapp.tsx.
     startTransition(async () => {
       try {
-        await settReisemodus(!paa, pathname)
+        await settKartmodus(!paa, pathname)
       } catch (err) {
         if (
           typeof err === 'object' &&
@@ -62,7 +66,7 @@ export default function ReisemodusToggle({ paa, variant = 'header' }: Props) {
       onChange={toggle}
       disabled={isPending}
       testId="reisemodus-toggle"
-      ariaLabel={paa ? 'Slå av reisemodus' : 'Slå på reisemodus'}
+      ariaLabel={paa ? `Slå av ${modusNavn}` : `Slå på ${modusNavn}`}
     />
   )
 

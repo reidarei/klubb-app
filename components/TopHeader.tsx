@@ -54,10 +54,12 @@ type Props = {
   /** False hvis Chat-fanen er skrudd av for vanlige medlemmer (app_innstillinger.chat_fane).
       Default true — chat skal aldri forsvinne pga. manglende prop (f.eks. SSR-fallback). */
   visChat?: boolean
-  /** True når en tur med sluttid pågår OG klubb-flagget `reisemodus` er på (#723) — styrer om toggelen vises. */
+  /** True når en tur/møte pågår OG riktig klubb-flagg (`reisemodus`/`moetemodus`) er på (#723/#780) — styrer om toggelen vises. */
   reisemodusTilgjengelig?: boolean
-  /** True når reisemodus faktisk er PÅ for denne brukeren (ikke slått av for turen). Styrer om headeren skjuler seg selv på /kart. */
+  /** True når kartmodus faktisk er PÅ for denne brukeren (ikke slått av for arrangementet). Styrer om headeren skjuler seg selv på /kart. */
   reisemodusPaa?: boolean
+  /** Hvilken modus som er aktuell — 'reise' eller 'moete' — sendt videre til ReisemodusToggle. null når ingen er tilgjengelig. */
+  kartmodus?: 'reise' | 'moete' | null
 }
 
 /**
@@ -71,7 +73,7 @@ type Props = {
  * #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Se
  * Policy: Navigasjon i CLAUDE.md.
  */
-export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true, reisemodusTilgjengelig = false, reisemodusPaa = false }: Props) {
+export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true, reisemodusTilgjengelig = false, reisemodusPaa = false, kartmodus = null }: Props) {
   const pathname = usePathname()
 
   // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
@@ -367,13 +369,13 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             å holde toggle og avatar samlet «øverst til høyre», et bevisst
             valg (#723). */}
         <div style={{ display: 'flex', alignItems: 'center', gap: MAAL.hoeyreGap, flexShrink: 0 }}>
-          {/* Kun når en tur med sluttid pågår og klubb-flagget er på. Samme
-              hjørne i begge moduser — her, til venstre for profil-snarveien,
-              når headeren i det hele tatt vises (dvs. reisemodus AV, eller
-              vi er på en annen rute enn /kart — se ReisemodusBar for
-              fullskjerm-varianten). */}
-          {reisemodusTilgjengelig && (
-            <ReisemodusToggle paa={reisemodusPaa} variant="header" />
+          {/* Kun når en tur/møte pågår og riktig klubb-flagg er på (#780).
+              Samme hjørne i begge moduser — her, til venstre for
+              profil-snarveien, når headeren i det hele tatt vises (dvs.
+              kartmodus AV, eller vi er på en annen rute enn /kart — se
+              ReisemodusBar for fullskjerm-varianten). */}
+          {reisemodusTilgjengelig && kartmodus && (
+            <ReisemodusToggle paa={reisemodusPaa} variant="header" modus={kartmodus} />
           )}
 
           {/* Profil-snarvei */}

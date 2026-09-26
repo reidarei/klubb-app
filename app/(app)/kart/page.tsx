@@ -5,7 +5,7 @@ import { hentAppFlagg, CHAT_FANE } from '@/lib/app-innstillinger'
 import { KLUBB_KART_SENTER } from '@/lib/klubb-config'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
 import { finnAktuellArrangement } from '@/lib/timeplan'
-import { hentReisemodus } from '@/lib/reisemodus'
+import { hentKartmodus } from '@/lib/kartmodus'
 import { POSISJON_SPOR_TIMER, POSISJON_PUNKT_MAKS } from '@/lib/konstanter'
 import { parseStedParam } from '@/lib/kart-lenke'
 import { beregnPingKandidater } from '@/lib/kart-deltakere'
@@ -48,15 +48,15 @@ type Props = {
 }
 
 export default async function Kart({ searchParams }: Props) {
-  // hentReisemodus() er cache()-wrappet (React cache) og lager sin egen
+  // hentKartmodus() er cache()-wrappet (React cache) og lager sin egen
   // klient internt — samme instans som AppLayout allerede kalte i denne
-  // requesten, så dette blir ÉN spørring, ikke to (#723).
-  const [supabase, bruker, profil, sp, reisemodus] = await Promise.all([
+  // requesten, så dette blir ÉN spørring, ikke to (#723/#780).
+  const [supabase, bruker, profil, sp, kartmodus] = await Promise.all([
     createServerClient(),
     getInnloggetBruker(),
     getProfil(),
     searchParams,
-    hentReisemodus(),
+    hentKartmodus(),
   ])
   const deltSted = parseStedParam(sp)
 
@@ -354,7 +354,8 @@ export default async function Kart({ searchParams }: Props) {
       timeplanFeil={timeplanHentFeil !== null}
       deltSted={deltSted}
       pingKandidater={pingKandidater}
-      reisemodus={reisemodus.paa}
+      reisemodus={kartmodus.paa}
+      kartmodus={kartmodus.modus}
     />
   )
 }
