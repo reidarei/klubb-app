@@ -130,6 +130,10 @@ export default function Chat({
   const andreProfiler = useRef(
     profiler.filter(p => p.id !== brukerId && p.navn),
   ).current
+  // Alle navn, også ens eget — andre kan tagge deg, og taggen skal avgrenses likt.
+  const mentionNavn = useRef(
+    profiler.flatMap(p => (p.navn ? [p.navn] : [])),
+  ).current
   const supabase = useRef(createClient()).current
 
   // CHAT_KONFIG-lookup samler tabell/kanal/charLimit per scope. Erstatter
@@ -536,6 +540,7 @@ export default function Chat({
               navn={profilMap.get(m.profil_id) ?? 'Ukjent'}
               bilde={bildeMap.get(m.profil_id)}
               rolle={rolleMap.get(m.profil_id) ?? null}
+              mentionNavn={mentionNavn}
               tid={formaterDato(m.opprettet, 'HH:mm')}
               brukerId={brukerId}
               charLimit={konfig.charLimit}

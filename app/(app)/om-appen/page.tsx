@@ -125,6 +125,15 @@ export default function OmAppen() {
           timeplanen, sendes søketeksten fra appens server til OpenStreetMap
           (Nominatim) for å finne stedet. Hvem du er følger ikke med.
         </Avsnitt>
+        {/* Lenkekort i chatten (#782): serveren henter siden, men bildet i
+         * kortet lastes rett fra nettstedet av telefonen — derfor kan
+         * nettstedet se at kortet ble vist, slik det ser et vanlig klikk. */}
+        <Avsnitt overskrift="Lenker i chatten">
+          Deler noen en lenke, henter appens server tittel og bilde fra siden
+          for å vise et forhåndsvisningskort. Hvem du er følger ikke med. Bildet
+          i kortet lastes rett fra nettstedet, så nettstedet ser at kortet ble
+          vist — på samme måte som om du hadde åpnet lenken.
+        </Avsnitt>
         <Avsnitt overskrift="Ingen tracking">
           Vi har ingen annonser, ingen Google Analytics, ingen Facebook-
           piksler, ingen «cookies» som følger deg på tvers av nettsteder.

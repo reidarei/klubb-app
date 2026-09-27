@@ -25,7 +25,7 @@ import {
   EPOST_DOEGNBUDSJETT_CHAT,
   EPOST_BUDSJETT_VINDU_TIMER,
 } from '@/lib/konstanter'
-import { mentionExtractRegex } from '@/lib/mention'
+import { splittPaaMentions } from '@/lib/mention'
 import { logg } from '@/lib/logg'
 // Mapping type → noekkel bor i lib/varsel-typer.ts sammen med de norske
 // navnene på hver type, så kontrollpanelet og denne gaten aldri kan uenige
@@ -1264,22 +1264,30 @@ export function finnNevnte<T extends MentionKandidat>(
   profiler: T[],
   avsenderId: string,
 ): T[] {
-  const mentions = [...tekst.matchAll(mentionExtractRegex())].map(m =>
-    m[1].trim().toLowerCase(),
-  )
+  // Taggene avgrenses mot kjente navn (lengste først), så «@Ola Hansen»
+  // blir ÉN tagg på hele navnet — ikke søket «ola», som traff alle Ola-er.
+  const kjente = profiler.flatMap(p => [p.navn, p.visningsnavn].filter((n): n is string => !!n))
+  const mentions = splittPaaMentions(tekst, kjente)
+    .filter(d => d.type === 'mention')
+    .map(d => d.verdi.slice(1).trim().toLowerCase())
   if (mentions.length === 0) return []
 
-  const erAlle = mentions.includes('alle')
-  return erAlle
-    ? profiler.filter(p => p.id !== avsenderId)
-    : profiler.filter(p => {
-        if (p.id === avsenderId) return false
-        return mentions.some(
-          m =>
-            p.navn?.toLowerCase().includes(m) ||
-            p.visningsnavn?.toLowerCase().includes(m),
-        )
-      })
+  const andre = profiler.filter(p => p.id !== avsenderId)
+  if (mentions.includes('alle')) return andre
+
+  const likt = (p: T, m: string) =>
+    p.navn?.toLowerCase() === m || p.visningsnavn?.toLowerCase() === m
+  const delvis = (p: T, m: string) =>
+    !!(p.navn?.toLowerCase().includes(m) || p.visningsnavn?.toLowerCase().includes(m))
+  // Eksakt navn vinner. Kun når ingen profil heter nøyaktig det som står i
+  // taggen (håndskrevet «@Lars» for «Lars Erik Nordmann»), faller vi til
+  // delstreng-treff som før.
+  return andre.filter(p =>
+    mentions.some(m => {
+      const eksakt = profiler.some(q => likt(q, m))
+      return eksakt ? likt(p, m) : delvis(p, m)
+    }),
+  )
 }
 
 function utdrag(tekst: string, maks = 80): string {

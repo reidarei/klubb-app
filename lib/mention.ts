@@ -16,12 +16,60 @@
 // group fanger navnet uten `@`. Se bug 28. april 2026.
 export const mentionExtractRegex = (): RegExp => /@([\wæøåÆØÅ-]+)/g
 
-// SPLIT brukes til å splitte meldingstekst for rendering, der hele
-// `@navn`-tokenet (med eventuelle mellomrom for flerords-navn) skal
-// stylises. Capture-group fanger hele `@navn`-strengen inkludert `@`.
-// Tillater mellomrom inni navnet fordi mention-velgeren setter inn
-// fullt navn (f.eks. «@Lars Erik»). Bredere enn EXTRACT med vilje.
-export const mentionSplitRegex = (): RegExp => /(@[\wæøåÆØÅ][\w æøåÆØÅ-]*)/g
+// Tegn som kan inngå i et navn-ord. En tagg slutter der et navn slutter,
+// så etter navnet må det komme et tegn UTENFOR denne klassen (eller slutt).
+const NAVNETEGN = /[\wæøåÆØÅ-]/
+
+export type MentionDel = { type: 'tekst' | 'mention'; verdi: string }
+
+/**
+ * Splitt meldingstekst i tekst- og mention-biter for rendering.
+ *
+ * En tagg er `@` + det LENGSTE kjente navnet (eller «alle») som står rett
+ * etter — ikke alt fram til neste tegnsetting. Den gamle regexen tillot
+ * mellomrom for flerords-navn og visste derfor ikke hvor navnet sluttet:
+ * «@Ola Hansen og @Per Olav … er fortsatt på hotellet» ble tagget helt ut.
+ * Matcher ingen kjent navn (tidligere medlem, kallenavn), tagges kun første
+ * ord — samme grense som mentionExtractRegex bruker for varsling.
+ */
+export function splittPaaMentions(tekst: string, kjenteNavn: string[]): MentionDel[] {
+  // Lengste først, så «Ola Hansen» vinner over et eventuelt «Ola».
+  const navn = [...kjenteNavn, 'alle']
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  const deler: MentionDel[] = []
+  let buffer = ''
+  let i = 0
+
+  while (i < tekst.length) {
+    const forrige = i > 0 ? tekst[i - 1] : ''
+    // `@` midt i et ord (e-post: ola@vg.no) er ikke en tagg.
+    if (tekst[i] !== '@' || NAVNETEGN.test(forrige)) {
+      buffer += tekst[i++]
+      continue
+    }
+    const etter = tekst.slice(i + 1)
+    const lower = etter.toLowerCase()
+    let lengde = 0
+    for (const n of navn) {
+      if (lower.startsWith(n.toLowerCase()) && !NAVNETEGN.test(etter[n.length] ?? '')) {
+        lengde = n.length
+        break
+      }
+    }
+    if (!lengde) lengde = etter.match(/^[\wæøåÆØÅ-]+/)?.[0].length ?? 0
+    if (!lengde) {
+      buffer += tekst[i++]
+      continue
+    }
+    if (buffer) deler.push({ type: 'tekst', verdi: buffer })
+    buffer = ''
+    deler.push({ type: 'mention', verdi: tekst.slice(i, i + 1 + lengde) })
+    i += 1 + lengde
+  }
+  if (buffer) deler.push({ type: 'tekst', verdi: buffer })
+  return deler
+}
 
 export type ChatProfil = {
   id: string

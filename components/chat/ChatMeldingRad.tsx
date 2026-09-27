@@ -7,6 +7,9 @@ import Treffflate from '@/components/ui/Treffflate'
 import { formaterDatoSkille } from '@/lib/dato'
 import { REAKSJON_EMOJIS, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { LinkifiedMedMentions } from './LinkifiedMedMentions'
+import { LenkeKort } from './LenkeKort'
+import { splittPaaUrler } from '@/lib/linkify-core'
+import { velgForhaandsvisningsLenke } from '@/lib/lenke-forhaandsvisning-core'
 import type { ChatMelding } from './Chat'
 import type { Reaksjon } from './hooks/useChatReaksjoner'
 import { bildeSrc } from '@/lib/bilde-utils'
@@ -44,6 +47,8 @@ type Props = {
   navn: string
   bilde: string | null | undefined
   rolle: string | null
+  /** Fulle navn på medlemmene — avgrenser hvor en @-tagg slutter i visningen. */
+  mentionNavn: string[]
   /** Ferdig formatert HH:mm. */
   tid: string
   brukerId: string
@@ -70,6 +75,7 @@ export default function ChatMeldingRad({
   navn,
   bilde,
   rolle,
+  mentionNavn,
   tid,
   brukerId,
   charLimit,
@@ -82,6 +88,9 @@ export default function ChatMeldingRad({
 }: Props) {
   const meldingBilde = bildeSrc(m.bilde_url)
   const meldingVideo = bildeSrc(m.video_url)
+  // Første eksterne lenke får forhåndsvisningskort (#782). Billig nok til å
+  // regnes per render — samme splitt som LinkifiedMedMentions gjør uansett.
+  const lenke = m.innhold ? velgForhaandsvisningsLenke(splittPaaUrler(m.innhold)) : null
   return (
     <>
       {visDatoSkille && (
@@ -353,7 +362,14 @@ export default function ChatMeldingRad({
             {/* LinkifiedMedMentions wrapper splittPaaUrler og legger
                 på mention-styling. Bevarer fet/accent-farge på @navn
                 samtidig som URLer blir klikkbare. se #350 */}
-            {m.innhold && <LinkifiedMedMentions text={m.innhold} />}
+            {m.innhold && (
+              <LinkifiedMedMentions
+                text={m.innhold}
+                mentionNavn={mentionNavn}
+                skjulFraIndeks={lenke?.erSist ? lenke.indeks : undefined}
+              />
+            )}
+            {lenke && <LenkeKort href={lenke.href} />}
           </div>
           )}
           {m.fra_facebook && <MessengerBadge erEgen={erEgen} />}

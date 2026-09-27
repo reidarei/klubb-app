@@ -576,3 +576,15 @@ export const NOMINATIM_MIN_AVSTAND_MS = 1000
 // fungerer, men skjevt nok til å foretrekke stedet nærmest kartutsnittet
 // framfor et likelydende sted på andre siden av kloden.
 export const STED_SOK_VIEWBOX_GRADER = 0.5
+
+// Lenke-forhåndsvisning i chatten. Serveren henter siden et medlem lenket
+// til og leser tittel/bilde ut av <head>. Tidsgrensen holder et tregt
+// nettsted fra å henge kortet; bytegrensen holder oss unna å laste ned
+// hele artikkelen (DN-forsiden er ~500 KB, og alt vi trenger står i head).
+export const LENKE_HENT_TIDSGRENSE_MS = 5000
+export const LENKE_HENT_MAKS_BYTES = 512 * 1024
+export const LENKE_MAKS_OMDIRIGERINGER = 4
+// Levetid for en hentet forhåndsvisning — i serverens minne og i telefonens
+// HTTP-cache. En artikkeltittel endrer seg sjelden etter publisering.
+export const LENKE_CACHE_SEK = 24 * 3600
+export const LENKE_MAKS_LENGDE = 2048

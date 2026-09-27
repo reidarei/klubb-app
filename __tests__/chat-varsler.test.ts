@@ -420,6 +420,16 @@ describe('finnNevnte', () => {
     expect(finnNevnte('Bare en vanlig setning', PROFILER, 'a1')).toEqual([])
   })
 
+  it('fullt navn treffer kun den profilen, ikke andre med samme fornavn', () => {
+    const profiler = [
+      ...PROFILER,
+      { id: 'e1', navn: 'Knut Berg', visningsnavn: null },
+      { id: 'e2', navn: 'Knut Hansen', visningsnavn: null },
+    ]
+    const treff = finnNevnte('Vi drar nå, @Knut Hansen og @Ola er fortsatt der', profiler, 'a1')
+    expect(treff.map(p => p.id).sort()).toEqual(['e2', 'u1'])
+  })
+
   it('ingen treff når @ ikke matcher noe navn', () => {
     expect(finnNevnte('@Ukjentnavn dukker aldri opp', PROFILER, 'a1')).toEqual([])
   })

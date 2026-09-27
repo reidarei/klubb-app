@@ -198,7 +198,7 @@ export async function kjorBursdagsgratulasjon(
         // Fullt `navn` i taggen — IKKE `visningsnavn`, som er kallenavnet og
         // i praksis bare fornavnet (mig. 018). Flere medlemmer deler fornavn,
         // så en tagg på kallenavnet ville pekt tvetydig på flere profiler.
-        // mentionSplitRegex tillater mellomrom, så «@Ola Nordmann» rendres
+        // splittPaaMentions matcher mot fulle navn, så «@Ola Nordmann» rendres
         // som én sammenhengende tagg i chatten.
         const innhold = `${hilsen} med dagen @${barn.navn}${utropstegn} ${emojis.join(' ')}`
 

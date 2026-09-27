@@ -1,10 +1,11 @@
 'use client'
 
 import { Fragment } from 'react'
-import { mentionSplitRegex } from '@/lib/mention'
+import { splittPaaMentions } from '@/lib/mention'
 // Importer fra linkify-core (pure helper) i stedet for linkify.tsx — vi
 // trenger bare splitteren, ikke React-komponenten. Holder bundle slank.
 import { splittPaaUrler } from '@/lib/linkify-core'
+import { kortUrl } from '@/lib/lenke-forhaandsvisning-core'
 
 /**
  * Rendrer melding-innhold med både klikkbare URLer OG mention-styling.
@@ -12,8 +13,24 @@ import { splittPaaUrler } from '@/lib/linkify-core'
  * mention-styling er chat-spesifikk og hører hjemme her (jf. avatar-policy:
  * lokal wrapper framfor å utvide felleskomponent med props). se #350
  */
-export function LinkifiedMedMentions({ text }: { text: string }) {
-  const deler = splittPaaUrler(text)
+export function LinkifiedMedMentions({
+  text,
+  mentionNavn,
+  skjulFraIndeks,
+}: {
+  text: string
+  mentionNavn: string[]
+  /** Del-indeks (fra splittPaaUrler) der teksten kappes — en avsluttende
+   *  lenke som vises som forhåndsvisningskort i stedet. */
+  skjulFraIndeks?: number
+}) {
+  let deler = splittPaaUrler(text)
+  if (skjulFraIndeks !== undefined) {
+    deler = deler.slice(0, skjulFraIndeks)
+    const sist = deler[deler.length - 1]
+    // «Se her: <lenke>» → «Se her:» — ikke et hengende mellomrom/linjeskift over kortet.
+    if (sist?.type === 'tekst') deler[deler.length - 1] = { ...sist, verdi: sist.verdi.trimEnd() }
+  }
   if (deler.length === 0) return null
 
   return (
@@ -33,21 +50,23 @@ export function LinkifiedMedMentions({ text }: { text: string }) {
                 overflowWrap: 'anywhere',
               }}
             >
-              {del.verdi}
+              {/* Kort visning («dn.no/marked/finans…») — en full artikkel-URL
+                  fylte ellers flere linjer av bobla. href er fortsatt hele. */}
+              {kortUrl(del.href)}
             </a>
           )
         }
         // Tekst-del: splitt videre på mentions og styliser dem
-        const subDeler = del.verdi.split(mentionSplitRegex())
+        const subDeler = splittPaaMentions(del.verdi, mentionNavn)
         return (
           <Fragment key={i}>
             {subDeler.map((sub, j) =>
-              sub.startsWith('@') ? (
+              sub.type === 'mention' ? (
                 <span key={j} style={{ fontWeight: 600, color: 'var(--accent)' }}>
-                  {sub}
+                  {sub.verdi}
                 </span>
               ) : (
-                <Fragment key={j}>{sub}</Fragment>
+                <Fragment key={j}>{sub.verdi}</Fragment>
               ),
             )}
           </Fragment>

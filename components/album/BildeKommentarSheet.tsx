@@ -72,6 +72,7 @@ export default function BildeKommentarSheet({
   const bildeMap = useRef(new Map(profiler.map(p => [p.id, p.bilde_url]))).current
   const rolleMap = useRef(new Map(profiler.map(p => [p.id, p.rolle ?? null]))).current
   const andreProfiler = useRef(profiler.filter(p => p.id !== brukerId && p.navn)).current
+  const mentionNavn = useRef(profiler.flatMap(p => (p.navn ? [p.navn] : []))).current
   const supabase = useRef(createClient()).current
 
   const scope = { type: 'albumbilde' as const, bildeId, albumId }
@@ -358,6 +359,7 @@ export default function BildeKommentarSheet({
                 navn={profilMap.get(m.profil_id) ?? 'Ukjent'}
                 bilde={bildeMap.get(m.profil_id)}
                 rolle={rolleMap.get(m.profil_id) ?? null}
+                mentionNavn={mentionNavn}
                 tid={formaterDato(m.opprettet, 'HH:mm')}
                 brukerId={brukerId}
                 charLimit={konfig.charLimit}
