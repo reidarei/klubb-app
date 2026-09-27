@@ -234,6 +234,50 @@ export default function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meldinger.length, scrollTilBunn, autoScrollTilBunn])
 
+  // Fest til bunnen mens innholdet vokser. Chat-bilder har ingen kjent høyde
+  // før de er lastet (120×90-plate → opptil 280 px), så scrollen ved mount
+  // traff en bunn som flyttet seg etterpå — chatten startet et stykke oppe i
+  // tråden. Står brukeren ved bunnen, følger vi etter når lista blir høyere.
+  // ResizeObserver måler content-box, så padding-bottom (tastatur-luft) utløser
+  // den IKKE — ellers ville den flyttet visningen per vv-hendelse (Policy:
+  // Skrivefelt og iOS-tastatur).
+  const listeRef = useRef<HTMLDivElement>(null)
+  const festetBunn = useRef(true)
+  useEffect(() => {
+    if (!autoScrollTilBunn) return
+    const liste = listeRef.current
+    if (!liste || typeof ResizeObserver === 'undefined') return
+    const boks = scrollContainer?.()
+    const mål: HTMLElement | Window = boks ?? window
+    // Egne scrollTo-kall gir også scroll-events; underveis i en smooth-scroll
+    // er vi ikke nær bunnen ennå, og det skal ikke tolkes som at han scrollet opp.
+    let egenScrollTil = 0
+    const følg = () => {
+      egenScrollTil = Date.now() + 700
+      scrollTilBunn(true)
+    }
+    const påScroll = () => {
+      if (Date.now() < egenScrollTil) return
+      festetBunn.current = erNaerBunn()
+    }
+    let forrigeHoyde = liste.getBoundingClientRect().height
+    const obs = new ResizeObserver(entries => {
+      const hoyde = entries[0]?.contentRect.height ?? forrigeHoyde
+      const vokste = hoyde > forrigeHoyde
+      forrigeHoyde = hoyde
+      if (vokste && festetBunn.current) følg()
+    })
+    obs.observe(liste)
+    mål.addEventListener('scroll', påScroll, { passive: true })
+    return () => {
+      obs.disconnect()
+      mål.removeEventListener('scroll', påScroll)
+    }
+    // erNaerBunn er en lokal funksjon som kun leser scrollContainer — samme
+    // avhengighet som står i lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScrollTilBunn, scrollContainer, scrollTilBunn])
+
   // iOS-tastaturhøyde — skjør visualViewport-logikk, se hooks/useKeyboardOffset.ts.
   // keyboardOffset (viewport-forankret) brukes KUN i !iEgenBoks-grenene under;
   // tastaturHoyde (stabil, for flyt) brukes KUN i iEgenBoks-grenen. Se #714.
@@ -487,6 +531,7 @@ export default function Chat({
           flyt rett under meldingslisten, ikke forankret, så det trengs ikke
           noe tomrom å reservere for den. Se #714. */}
       <div
+        ref={listeRef}
         style={{
           display: 'flex',
           flexDirection: 'column',
