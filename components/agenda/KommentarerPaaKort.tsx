@@ -47,6 +47,11 @@ export type KommentarScope =
 // gapet må minst dekke utvidX, ellers stjeler den fra tekstfeltet.
 const KOMMENTAR_SEND_TREFF = treffflateRundt({ hoyde: 24, bredde: 24 })
 
+// Avkort-pilas treffflate vokser usynlig til minstemål uten å flytte layout
+// (#700/#793). Kan ikke bruke <Treffflate> (rendrer <button>) fordi pila
+// ligger inni kortets ytre <a> — se KommentarMiniatyr for samme begrunnelse.
+const KOMMENTAR_EKSPANDER_TREFF = treffflateRundt({ hoyde: 14, bredde: 14 })
+
 /**
  * Brukes i kommentarradene for å styre + knapp-synlighet.
  * Holder ID-en til raden der picker er åpen (null = lukket).
@@ -54,7 +59,10 @@ const KOMMENTAR_SEND_TREFF = treffflateRundt({ hoyde: 24, bredde: 24 })
  */
 type AktivReaksjonId = string | null
 
-function snippet(tekst: string | null, maks = 90): string {
+// Kommentarer lengre enn dette avkortes med en ekspander-pil (#793).
+const AVKORT_GRENSE = 90
+
+function snippet(tekst: string | null, maks = AVKORT_GRENSE): string {
   if (!tekst) return ''
   const rensket = tekst.replace(/\s+/g, ' ').trim()
   if (rensket.length <= maks) return rensket
@@ -71,14 +79,70 @@ export function detaljUrl(scope: KommentarScope): string {
   }
 }
 
-// Returnerer kun tekst-noden — bilde-miniatyr håndteres separat i raden av
-// KommentarMiniatyr. Beholder null-guard mot tom rad (se #281) og snippet-
-// avkorting av URL-treff (se #350). inneILenke: kommentarene rendres inni
-// kortets ytre <a>, så ekte lenker ville nøstet <a>-i-<a> (#465).
-function visningsInnhold(k: { innhold: string | null }): ReactNode {
-  const tekst = snippet(k.innhold)
-  if (tekst) return <Linkified text={tekst} inneILenke />
-  return null
+/**
+ * Render av én kommentars tekstinnhold, avkortet med en ekspander-pil for
+ * lange kommentarer (#793). Egen komponent — ikke en lokal variabel inni
+ * .map() — fordi ekspandert-tilstanden er lokal per kommentar; en useState
+ * kalt inni en map-callback ville brutt rules of hooks.
+ *
+ * Beholder null-guard mot tom rad (se #281). inneILenke: kommentarene
+ * rendres inni kortets ytre <a>, så ekte lenker ville nøstet <a>-i-<a> (#465)
+ * — samme begrunnelse gjelder ekspander-pila, derfor <span role="button">
+ * og ikke <Treffflate> (som rendrer <button>).
+ */
+function KommentarTekst({ tekst }: { tekst: string }) {
+  const [utvidet, setUtvidet] = useState(false)
+  const rensket = tekst.replace(/\s+/g, ' ').trim()
+  if (!rensket) return null
+  const langTekst = rensket.length > AVKORT_GRENSE
+  // Avkortet visning er allerede whitespace-kollapset av snippet() og flyter
+  // som normal brødtekst. Utvidet visning beholder linjeskift fra originalen.
+  const visning = utvidet ? tekst.trim() : snippet(tekst)
+
+  function toggle(e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    setUtvidet(v => !v)
+  }
+
+  return (
+    <div
+      style={{
+        fontFamily: 'var(--font-body)',
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        lineHeight: 1.4,
+        whiteSpace: utvidet ? 'pre-wrap' : undefined,
+      }}
+    >
+      <Linkified text={visning} inneILenke />
+      {langTekst && (
+        // Ytre span bærer den synlige avstanden til teksten; indre span bærer
+        // treffflatens egne negative marginer uforstyrret av den avstanden.
+        <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 4 }}>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') toggle(e)
+            }}
+            aria-expanded={utvidet}
+            aria-label={utvidet ? 'Vis mindre' : 'Vis hele kommentaren'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              ...KOMMENTAR_EKSPANDER_TREFF.stil,
+            }}
+          >
+            <Icon name={utvidet ? 'chevronUp' : 'chevronDown'} size={14} strokeWidth={2} />
+          </span>
+        </span>
+      )}
+    </div>
+  )
 }
 
 // Subkomponent for bilde-miniatyr i kommentar-raden. Rendres kun når
@@ -457,9 +521,6 @@ export default function KommentarerPaaKort({
             const erTempRad = k.id.startsWith('temp-')
             // Temp-rader (optimistiske) har ikke server-ID ennå — picker skjules
             const pickerApen = !erTempRad && aktivReaksjonId === k.id
-            // Beregnes én gang for å unngå dobbeltkall i JSX — bilde håndteres
-            // av KommentarMiniatyr under, ikke her
-            const innhold = visningsInnhold(k)
             return (
               <div
                 key={k.id}
@@ -537,20 +598,9 @@ export default function KommentarerPaaKort({
                       {relativTid(k.opprettet)}
                     </span>
                   </div>
-                  {/* Tekst-div rendres kun når det finnes tekst — unngår tom div
-                      ved ren-bilde-kommentarer. Se #281/#350 */}
-                  {innhold && (
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 13,
-                        color: 'var(--text-secondary)',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {innhold}
-                    </div>
-                  )}
+                  {/* KommentarTekst rendrer kun når det finnes tekst — unngår
+                      tom div ved ren-bilde-kommentarer. Se #281/#350 */}
+                  {k.innhold && <KommentarTekst tekst={k.innhold} />}
                   {/* Bilde-miniatyr rendres i tillegg til tekst hvis kommentaren
                       har bilde_url — både tekst og miniatyr vises når begge finnes */}
                   {k.bilde_url && (
