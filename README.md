@@ -35,7 +35,7 @@ Privat web-app for vennegjenger som vil ha et felles sted for å holde kontakten
 - **Album** — bildedelinger knyttet til arrangementer eller stå-alone. Cover-velger, lightbox med swipe og pil-navigering. Bildene fra klubbchatten vises som et eget, levende album.
 - **Roller og ansvar** — arrangøransvar per år.
 - **Kåringer** — kategorier og årets vinnere, med avstemning blant medlemmene.
-- **Fond** — klubbkassen som en enkel portefølje: eiendom, verdipapirer, kontanter og medlemsinnskudd, med verdihistorikk og avkastning. Admin redigerer.
+- **Fond** — klubbkassen som en enkel portefølje: eiendom, verdipapirer, kontanter og medlemsinnskudd, med verdihistorikk og avkastning. Admin redigerer og kan publisere kvartalsrapporter med medlemsandeler og endringer.
 - **Stedene** — alle turene plottet på et Europakart, med reiserute per år og kobling til album.
 - **Pass-tilgang** — medlemmer kan lagre passnummer og utløpsdato for felles reisebooking. Andre må be om dagstilgang, som generalsekretær-rollen godkjenner; tilgangen varer 24 timer.
 - **Innspill** — medlemmer kan ønske seg funksjoner; går rett inn som GitHub Issues.
