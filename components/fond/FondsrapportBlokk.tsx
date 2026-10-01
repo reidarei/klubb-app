@@ -156,10 +156,12 @@ export default function FondsrapportBlokk({ rapport, brukerId }: Props) {
         Hvem eier kontantene
       </div>
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+      {/* Sirkelen over lista, ikke ved siden av: side om side ble det ikke plass
+          til navnene på mobilbredde. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Smultring */}
-        <div style={{ position: 'relative', width: 112, height: 112, flexShrink: 0 }}>
-          {/* Dekorativ — samme info står i eierlista ved siden av (som AndelSirkel) */}
+        <div style={{ position: 'relative', width: 112, height: 112, flexShrink: 0, alignSelf: 'center' }}>
+          {/* Dekorativ — samme info står i eierlista under (som AndelSirkel) */}
           <svg viewBox="0 0 42 42" width="100%" height="100%" aria-hidden="true">
             <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border-subtle)" strokeWidth="5" />
             {segmenter.map(s => (
@@ -205,7 +207,7 @@ export default function FondsrapportBlokk({ rapport, brukerId }: Props) {
         </div>
 
         {/* Liste */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rapport.linjer.map((l, i) => {
             const andelPst = totalLinjer > 0 ? (l.belop / totalLinjer) * 100 : 0
             const egen = refFor(brukerId) === l.ref
