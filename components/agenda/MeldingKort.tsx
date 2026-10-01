@@ -2,17 +2,18 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
 import Card from '@/components/ui/Card'
 import Icon from '@/components/ui/Icon'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
 import ReaksjonBadges from '@/components/agenda/ReaksjonBadges'
+import ReaksjonPicker from '@/components/agenda/ReaksjonPicker'
 import MeldingTommel from '@/components/agenda/MeldingTommel'
 import type { ReaksjonGruppe } from '@/lib/reaksjoner'
 import { useMeldingReaksjoner } from '@/lib/reaksjoner-hook'
-import { LONG_PRESS_MS } from '@/lib/konstanter'
+import { LONG_PRESS_MS, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import type { ChatProfil } from '@/lib/mention'
 import type { AlbumKort } from '@/lib/melding-album'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -75,8 +76,21 @@ type Props = {
  */
 export default function MeldingKort({ melding, brukerId, kommentarer = [], profiler, erAdmin = false }: Props) {
   const [pickerApen, setPickerApen] = useState(false)
+  const [pickerY, setPickerY] = useState(0)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressFired = useRef(false)
+  const fingerY = useRef(0)
+  // Hold på reaksjons-badgene viser hvem som har reagert (ikke picker — den
+  // ligger på innlegget og tommelen).
+  const [hvemApen, setHvemApen] = useState(false)
+  const hvemTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hvemFired = useRef(false)
+  const linkRef = useRef<HTMLAnchorElement | null>(null)
+  const pickerRef = useRef<HTMLDivElement | null>(null)
+  const hvemRef = useRef<HTMLDivElement | null>(null)
+  // Satt når et trykk lukket en åpen popover — da skal det samme trykket ikke
+  // også navigere til innlegget.
+  const lukketVedTrykk = useRef(false)
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -120,12 +134,16 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
     })
   }
 
-  function startLongPress() {
+  function startLongPress(e: React.TouchEvent<HTMLDivElement>) {
     if (melding.tidligere) return
+    // Husk hvor fingeren er, så picker-pillen åpner der — ikke nederst på et langt kort.
+    const touch = e.touches[0]
+    if (touch) fingerY.current = touch.clientY - e.currentTarget.getBoundingClientRect().top
     longPressFired.current = false
     if (longPressTimer.current) clearTimeout(longPressTimer.current)
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
+      setPickerY(fingerY.current)
       setPickerApen(true)
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate?.(15)
@@ -141,12 +159,64 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   }
 
   function handleLinkClick(e: React.MouseEvent) {
-    // Hvis long-press fikk åpnet picker, hindre at samme tap navigerer
-    if (longPressFired.current) {
+    // Hvis long-press fikk åpnet picker, eller trykket lukket en popover,
+    // hindre at samme tap navigerer
+    if (longPressFired.current || lukketVedTrykk.current) {
       e.preventDefault()
       e.stopPropagation()
       longPressFired.current = false
+      lukketVedTrykk.current = false
     }
+  }
+
+  function startHvem(e: React.TouchEvent) {
+    // Ikke la holdet boble opp til kortets long-press (som åpner picker).
+    e.stopPropagation()
+    hvemFired.current = false
+    if (hvemTimer.current) clearTimeout(hvemTimer.current)
+    hvemTimer.current = setTimeout(() => {
+      hvemFired.current = true
+      setPickerApen(false)
+      setHvemApen(true)
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate?.(15)
+      }
+    }, LONG_PRESS_MS)
+  }
+
+  function stoppHvem(e: React.TouchEvent) {
+    e.stopPropagation()
+    if (hvemTimer.current) {
+      clearTimeout(hvemTimer.current)
+      hvemTimer.current = null
+    }
+  }
+
+  // Trykk utenfor en åpen popover (picker eller hvem-liste) lukker den. Lytteren
+  // monteres først når popoveren er åpen, så holdet som åpnet den ikke lukker den.
+  const popoverApen = pickerApen || hvemApen
+  useEffect(() => {
+    if (!popoverApen) return
+    function handleUtenfor(e: Event) {
+      const mål = e.target as Node
+      if (pickerRef.current?.contains(mål) || hvemRef.current?.contains(mål)) return
+      setPickerApen(false)
+      setHvemApen(false)
+      if (linkRef.current?.contains(mål)) lukketVedTrykk.current = true
+    }
+    document.addEventListener('pointerdown', handleUtenfor)
+    return () => document.removeEventListener('pointerdown', handleUtenfor)
+  }, [popoverApen])
+
+  useEffect(() => {
+    return () => {
+      if (hvemTimer.current) clearTimeout(hvemTimer.current)
+    }
+  }, [])
+
+  function navnFor(id: string) {
+    if (id === brukerId) return 'Deg'
+    return profiler?.find(p => p.id === id)?.navn ?? 'Ukjent'
   }
 
   // Bilde-grid-logikk:
@@ -157,7 +227,10 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   // Hvis melding.albumKort er satt overstyres dette helt — vi viser
   // albumets omslagsbilde + CTA-pille i stedet for grid.
   const wrapperBunn =
-    !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) ? 10 : 0
+    !melding.tidligere && meldingReaksjoner.reaksjoner.length > 0 ? 10 : 0
+  // Pillen legges over fingeren (ikke under, der fingeren dekker den). Card har
+  // overflow: hidden, så toppen klemmes slik at hele pillen (44 px) står inni kortet.
+  const pickerTopp = Math.max(pickerY - 16, MIN_TREFFMAAL_PX + 16)
   // Fondsrapport (#785): tegnes fra teksten selv, uansett forfatterens rolle
   // — bindende ramme fra issue #785, IKKE en admin-sjekk her.
   const fondsrapport = lesFondsrapport(melding.innhold)
@@ -168,18 +241,18 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   const bildeGrid = melding.bilder.slice(0, 4) // maks 4 vises
   const foersteBilde = bildeSrc(melding.bilder[0])
 
-  // iOS sin link-preview trigges på selve <a>-tagen — touch-callout
-  // settes derfor på Link. Vi unngår user-select: none på Link siden
-  // det vil blokkere tekst-seleksjon i kommentar-inputen lenger nede.
+  // iOS sin link-preview på <a> slås av globalt i globals.css (a { -webkit-touch-callout }).
+  // Vi unngår user-select: none på Link siden det vil blokkere tekst-seleksjon
+  // i kommentar-inputen lenger nede.
   return (
     <Link
+      ref={linkRef}
       href={`/meldinger/${melding.id}`}
       onClick={handleLinkClick}
       style={{
         textDecoration: 'none',
         color: 'inherit',
         display: 'block',
-        WebkitTouchCallout: 'none',
       }}
     >
       <Card
@@ -198,6 +271,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
           onTouchMove={clearLongPress}
           onTouchCancel={clearLongPress}
           style={{
+            position: 'relative',
             padding: '10px 14px',
             WebkitUserSelect: 'none',
             userSelect: 'none',
@@ -508,19 +582,103 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             </div>
           )}
 
-          {/* Reaksjons-rad — vises kun hvis det finnes reaksjoner eller
-              picker er åpen. Picker styres av long-press over. Bruker
+          {/* Reaksjons-rad — vises kun hvis det finnes reaksjoner. Bruker
               ReaksjonBadges direkte med state delt fra meldingReaksjoner-hooken
               (samme som MeldingTommel) — ingen «+»-knapp på agenda. Se #468/F5. */}
-          {!melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) && (
-            <ReaksjonBadges
-              brukerId={brukerId}
-              reaksjoner={meldingReaksjoner.reaksjoner}
-              toggle={meldingReaksjoner.toggle}
-              isPending={meldingReaksjoner.isPending}
-              apen={pickerApen}
-              lukk={() => setPickerApen(false)}
-            />
+          {!melding.tidligere && meldingReaksjoner.reaksjoner.length > 0 && (
+            <div
+              onTouchStart={startHvem}
+              onTouchEnd={stoppHvem}
+              onTouchMove={stoppHvem}
+              onTouchCancel={stoppHvem}
+              onClickCapture={e => {
+                // Halen av holdet er et click på en badge — den skal ikke toggle reaksjonen.
+                if (hvemFired.current) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  hvemFired.current = false
+                }
+              }}
+              style={{ position: 'relative' }}
+            >
+              <ReaksjonBadges
+                brukerId={brukerId}
+                reaksjoner={meldingReaksjoner.reaksjoner}
+                toggle={meldingReaksjoner.toggle}
+                isPending={meldingReaksjoner.isPending}
+                apen={false}
+                lukk={() => setPickerApen(false)}
+              />
+
+              {/* Hvem har reagert — over badge-raden, samme popover-uttrykk som pickeren. */}
+              {hvemApen && (
+                <div
+                  ref={hvemRef}
+                  role="dialog"
+                  aria-label="Hvem har reagert"
+                  onClick={e => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }}
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 6px)',
+                    left: 0,
+                    right: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    padding: '10px 14px',
+                    background: 'var(--bg-elevated-2)',
+                    border: '0.5px solid var(--border)',
+                    borderRadius: 14,
+                    boxShadow: 'var(--shadow-popover)',
+                    zIndex: 10,
+                  }}
+                >
+                  {meldingReaksjoner.reaksjoner.map(r => (
+                    <div
+                      key={r.emoji}
+                      style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>{r.emoji}</span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-body)',
+                          fontSize: 13,
+                          color: 'var(--text-primary)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {r.profilIder.map(navnFor).join(', ')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Picker fra long-press: forankret der fingeren holdt, ikke ved
+              reaksjons-raden nederst (lange innlegg). Høyde-0-anker — pickeren
+              legger seg selv over ankeret (bottom: 100% + avstand). */}
+          {!melding.tidligere && pickerApen && (
+            <div
+              ref={pickerRef}
+              onClick={e => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              style={{ position: 'absolute', top: pickerTopp, left: 14, height: 0 }}
+            >
+              <ReaksjonPicker
+                isPending={meldingReaksjoner.isPending}
+                onVelg={emoji => {
+                  setPickerApen(false)
+                  meldingReaksjoner.toggle(emoji)
+                }}
+              />
+            </div>
           )}
         </div>
 

@@ -408,7 +408,7 @@ export default function AlbumLightbox({
           style={{
             maxWidth: '95vw',
             maxHeight: sheetAapen ? '40dvh' : '95vh',
-            marginTop: sheetAapen ? 'max(16px, env(safe-area-inset-top))' : 0,
+            marginTop: sheetAapen ? 'max(16px, var(--header-topp))' : 0,
             objectFit: 'contain',
             userSelect: 'none',
             pointerEvents: 'none',
@@ -425,7 +425,9 @@ export default function AlbumLightbox({
         />
       </div>
 
-      {/* Lukk-knapp — skjult mens sheeten er åpen (sheeten har sin egen) */}
+      {/* Lukk-knapp — skjult mens sheeten er åpen (sheeten har sin egen).
+          Toppkontrollene bruker --header-topp, ikke bare safe-area: den har
+          ekstra luft i installert app forbi iOS' Liquid Glass-slør (#787). */}
       {!sheetAapen && (
         <button
           type="button"
@@ -433,7 +435,7 @@ export default function AlbumLightbox({
           aria-label="Lukk"
           style={{
             position: 'absolute',
-            top: 'max(16px, env(safe-area-inset-top))',
+            top: 'max(16px, var(--header-topp))',
             right: 16,
             width: 44,
             height: 44,
@@ -456,7 +458,7 @@ export default function AlbumLightbox({
         <div
           style={{
             position: 'absolute',
-            top: 'max(24px, calc(env(safe-area-inset-top) + 8px))',
+            top: 'max(24px, calc(var(--header-topp) + 8px))',
             left: '50%',
             transform: 'translateX(-50%)',
             color: 'var(--lightbox-foreground)',
@@ -597,7 +599,7 @@ export default function AlbumLightbox({
         <div
           style={{
             position: 'absolute',
-            top: 'max(16px, env(safe-area-inset-top))',
+            top: 'max(16px, var(--header-topp))',
             left: 16,
             display: 'flex',
             alignItems: 'center',

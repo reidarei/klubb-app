@@ -529,6 +529,14 @@ body.fullskjerm-side .deploy-info {
   user-select: none;
 }
 
+/* Ingen iOS-lenkeforhåndsvisning («Åpne / Legg til i leselisten / Del…»)
+   ved long-press på lenker. Det er Safari-chrome som ikke hører hjemme i en
+   installert app, og den kolliderte med kort som er lenker (bursdag, innlegg).
+   Kun callout — ikke user-select, så tekst inni lenker kan fortsatt markeres. */
+a {
+  -webkit-touch-callout: none;
+}
+
 /* Tving portrett-visning. Manifest har allerede orientation:portrait, men
    iOS Safari i browser-modus ignorerer det. Når enheten er i landskap
    blokkerer vi appen med et overlay som ber brukeren rotere tilbake. */

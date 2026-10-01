@@ -193,7 +193,7 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
                 display: 'flex',
                 flexDirection: 'column',
                 outline: 'none',
-                marginTop: 'max(24px, env(safe-area-inset-top))',
+                marginTop: 'max(24px, var(--header-topp))',
                 background: 'var(--bg-elevated-solid)',
                 borderTopLeftRadius: 16,
                 borderTopRightRadius: 16,
