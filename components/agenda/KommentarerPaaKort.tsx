@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useTransition, useCallback, type MouseEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition, useCallback, type MouseEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Avatar from '@/components/ui/Avatar'
@@ -55,7 +55,7 @@ const KOMMENTAR_EKSPANDER_TREFF = treffflateRundt({ hoyde: 14, bredde: 14 })
 /**
  * Brukes i kommentarradene for å styre + knapp-synlighet.
  * Holder ID-en til raden der picker er åpen (null = lukket).
- * Åpnes via hover (desktop) eller long-press (mobil).
+ * Åpnes via long-press; lukkes ved valg eller trykk utenfor raden.
  */
 type AktivReaksjonId = string | null
 
@@ -124,6 +124,8 @@ function KommentarTekst({ tekst }: { tekst: string }) {
             role="button"
             tabIndex={0}
             onClick={toggle}
+            // Pila skal ikke starte long-press for reaksjoner på raden rundt
+            onPointerDown={e => e.stopPropagation()}
             onKeyDown={e => {
               if (e.key === 'Enter' || e.key === ' ') toggle(e)
             }}
@@ -281,6 +283,18 @@ export default function KommentarerPaaKort({
   // ID-en til raden som er «under aktivt trykk» — brukes til subtil scale-transform
   // som visuell feedback før 350 ms-terskelen. null = ingen aktiv presse.
   const [pressetId, setPressetId] = useState<string | null>(null)
+
+  // Trykk utenfor raden med åpen picker lukker den. Uten dette lukket den seg
+  // bare ved valg av reaksjon — på mobil fantes ingen vei ut (#793-oppfølging).
+  useEffect(() => {
+    if (aktivReaksjonId === null) return
+    const lukkVedTrykkUtenfor = (e: PointerEvent) => {
+      const rad = (e.target as Element | null)?.closest?.('[data-kommentar-rad]')
+      if (rad?.getAttribute('data-kommentar-rad') !== aktivReaksjonId) setAktivReaksjonId(null)
+    }
+    document.addEventListener('pointerdown', lukkVedTrykkUtenfor)
+    return () => document.removeEventListener('pointerdown', lukkVedTrykkUtenfor)
+  }, [aktivReaksjonId])
 
   const mentionForslag = lagMentionForslag(mentionSøk, profiler, brukerId)
 
@@ -524,6 +538,8 @@ export default function KommentarerPaaKort({
             return (
               <div
                 key={k.id}
+                // Brukes av «trykk utenfor lukker»-lytteren til å kjenne igjen raden
+                data-kommentar-rad={k.id}
                 // Hover-gruppe: CSS-klasse for hover-avhengig + knapp
                 className="kommentar-rad-gruppe"
                 style={{
@@ -541,9 +557,6 @@ export default function KommentarerPaaKort({
                   WebkitUserSelect: pressetId === k.id ? 'none' : undefined,
                   WebkitTouchCallout: pressetId === k.id ? 'none' : undefined,
                 }}
-                // Desktop: hover åpner picker
-                onMouseEnter={() => !erTempRad && setAktivReaksjonId(k.id)}
-                onMouseLeave={() => setAktivReaksjonId(null)}
                 // Mobil: long-press (350 ms) åpner picker
                 onPointerDown={!erTempRad ? startLongPress(k.id) : undefined}
                 onPointerMove={sjekkBevegelse}
