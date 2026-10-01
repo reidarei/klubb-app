@@ -206,7 +206,8 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     left: 0,
     right: 0,
     zIndex: 30,
-    paddingTop: 'env(safe-area-inset-top)',
+    // --header-topp = safe-area + litt luft i installert app, se globals.css (#787)
+    paddingTop: 'var(--header-topp)',
     borderBottom: '0.5px solid var(--border-subtle)',
   }
 
@@ -250,23 +251,6 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
           background: 'var(--bg-header)',
           backdropFilter: 'var(--blur-nav)',
           WebkitBackdropFilter: 'var(--blur-nav)',
-        }}
-      />
-      {/* iOS 26+ tegner en egen uskarp «Liquid Glass»-kant over toppen av
-          installerte webapper (black-translucent + viewport-fit=cover), ~40 pt
-          ned forbi statuslinja — der fanene og avataren står (#787). WebKit
-          dropper den når en fast, farget boks dekker toppkanten. Høyden er 0
-          utenfor standalone, så stripen finnes bare i den installerte appen. */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 'env(safe-area-inset-top)',
-          background: 'var(--bg)',
-          pointerEvents: 'none',
         }}
       />
       <div style={innerStyle}>

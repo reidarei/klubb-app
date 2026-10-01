@@ -120,6 +120,9 @@
    * --kart-panel-safe-top i stedet for å lese iOS-variabelen hver for seg —
    * det var nettopp den spredningen som dobbelttalte innsettet før #723. */
   --safe-top: env(safe-area-inset-top, 0px);
+  /* Toppen av TopHeader (og det som stikker seg under den). Se blokka for
+     display-mode: standalone nederst for hvorfor den kan være større (#787). */
+  --header-topp: env(safe-area-inset-top, 0px);
 
   /* Form */
   --radius: 18px;
@@ -571,5 +574,15 @@ body.fullskjerm-side .deploy-info {
   }
   html.tillat-landskap body {
     overflow: visible !important;
+  }
+}
+
+/* iOS 26+ tegner en uskarp «Liquid Glass»-kant over toppen av installerte
+   webapper, ~40 pt ned forbi statuslinja, og den kan ikke skrus av (#787).
+   Litt ekstra luft skyver fanene og avataren forbi den sterkeste delen.
+   Kun i installert app; i nettleserfane finnes ikke effekten. */
+@media (display-mode: standalone) {
+  :root {
+    --header-topp: calc(env(safe-area-inset-top, 0px) + 18px);
   }
 }
