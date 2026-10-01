@@ -73,7 +73,7 @@ export default function AlbumTittel({
             synlig={16}
             onClick={() => setRedigerer(true)}
             aria-label="Rediger tittel"
-            style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
+            style={{ color: 'var(--text-tertiary)' }}
           >
             <Icon name="cog" size={16} color="currentColor" />
           </Treffflate>
@@ -92,10 +92,6 @@ export default function AlbumTittel({
         maxLength={200}
         onKeyDown={e => {
           if (e.key === 'Enter') lagre()
-          else if (e.key === 'Escape') {
-            setRedigerer(false)
-            setTekst(initialTittel)
-          }
         }}
         style={{
           flex: 1,
@@ -117,7 +113,6 @@ export default function AlbumTittel({
         onClick={lagre}
         disabled={pending}
         aria-label="Lagre"
-        style={{ cursor: pending ? 'default' : 'pointer' }}
       >
         <span
           style={{
@@ -142,7 +137,6 @@ export default function AlbumTittel({
           setTekst(initialTittel)
         }}
         aria-label="Avbryt"
-        style={{ cursor: 'pointer' }}
       >
         <span
           style={{

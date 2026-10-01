@@ -36,7 +36,6 @@ export default function Segment<V extends string>({ value, onChange, options }: 
           background: 'transparent',
           border: 'none',
           borderLeft: i === 0 ? 'none' : '0.5px solid var(--border-subtle)',
-          cursor: 'pointer',
           position: 'relative',
         }
         return (

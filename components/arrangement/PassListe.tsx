@@ -140,7 +140,6 @@ export default function PassListe({ arrangementId, deltakere }: Props) {
                 fontFamily: 'var(--font-body)',
                 fontSize: 11,
                 fontWeight: 500,
-                cursor: aktiv === d.id ? 'wait' : 'pointer',
                 flexShrink: 0,
               }}
             >

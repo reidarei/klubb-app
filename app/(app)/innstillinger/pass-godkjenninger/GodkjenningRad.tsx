@@ -95,8 +95,7 @@ export default function GodkjenningRad({
             borderRadius: 999,
             color: 'var(--danger)',
             fontFamily: 'var(--font-body)',
-            fontSize: 12,
-            cursor: isPending ? 'wait' : 'pointer',
+            fontSize: 12
           }}
         >
           Avslå
@@ -113,8 +112,7 @@ export default function GodkjenningRad({
             color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
-            fontWeight: 600,
-            cursor: isPending ? 'wait' : 'pointer',
+            fontWeight: 600
           }}
         >
           Godkjenn (24t)

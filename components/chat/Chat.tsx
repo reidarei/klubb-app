@@ -509,7 +509,6 @@ export default function Chat({
               fontSize: 10,
               letterSpacing: '1.4px',
               textTransform: 'uppercase',
-              cursor: henterEldre ? 'wait' : 'pointer',
               opacity: henterEldre ? 0.5 : 1,
             }}
           >
@@ -659,7 +658,6 @@ export default function Chat({
               : autoScrollTilBunn
                 ? {
                     width: '100%',
-                    maxWidth: 480,
                     padding: '0 20px',
                     boxSizing: 'border-box',
                     pointerEvents: 'auto',
@@ -694,7 +692,7 @@ export default function Chat({
             synlig={22}
             onClick={fjernBilde}
             aria-label="Fjern bilde"
-            style={{ position: 'absolute', top: -6, right: -6, cursor: 'pointer' }}
+            style={{ position: 'absolute', top: -6, right: -6 }}
           >
             <span
               style={{
@@ -748,7 +746,7 @@ export default function Chat({
           synlig={32}
           onClick={() => bildeInputRef.current?.click()}
           aria-label="Legg ved bilde"
-          style={{ color: 'var(--text-secondary)', flexShrink: 0, cursor: 'pointer' }}
+          style={{ color: 'var(--text-secondary)', flexShrink: 0 }}
         >
           <span
             style={{
@@ -812,7 +810,6 @@ export default function Chat({
           aria-label="Send melding"
           style={{
             flexShrink: 0,
-            cursor: (!tekst.trim() && !bildeFil) || sender ? 'default' : 'pointer',
             opacity: (!tekst.trim() && !bildeFil) || sender ? 0.4 : 1,
           }}
         >

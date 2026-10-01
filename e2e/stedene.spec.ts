@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 
 // /stedene — Europakartet over turer (#508/#514). Dekker de fem punktene fra
-// #508: klikk-på-by, klikk-utenfor, lukk/Escape, «x{antall}»-etiketten og
+// #508: klikk-på-by, klikk-utenfor, lukk-knappen, «x{antall}»-etiketten og
 // hull-år-radene i Reiseruta.
 //
 // Kjøres mot TEST-INSTANSEN, som seed.sql (#514) forsyner med fire turer:
@@ -48,17 +48,10 @@ test.describe('/stedene — Europakartet (#514)', () => {
     await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
   })
 
-  test('lukk-knappen og Escape lukker detaljkortet', async ({ page }) => {
-    // Lukk-knapp
+  test('lukk-knappen lukker detaljkortet', async ({ page }) => {
     await page.getByRole('button', { name: /^Stockholm, 1 tur$/ }).click()
     await expect(page.getByTestId('sted-detaljkort-navn')).toHaveText('Stockholm')
     await page.getByRole('button', { name: 'Lukk' }).click()
-    await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
-
-    // Escape
-    await page.getByRole('button', { name: /^Edinburgh, 1 tur$/ }).click()
-    await expect(page.getByTestId('sted-detaljkort-navn')).toHaveText('Edinburgh')
-    await page.keyboard.press('Escape')
     await expect(page.getByTestId('sted-detaljkort')).toHaveCount(0)
   })
 

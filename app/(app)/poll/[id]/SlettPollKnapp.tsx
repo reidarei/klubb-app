@@ -44,7 +44,6 @@ export default function SlettPollKnapp({ pollId }: { pollId: string }) {
         fontFamily: 'var(--font-body)',
         fontSize: 14,
         fontWeight: 500,
-        cursor: isPending ? 'wait' : 'pointer',
         opacity: isPending ? 0.6 : 1,
       }}
     >

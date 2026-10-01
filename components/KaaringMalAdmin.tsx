@@ -28,8 +28,7 @@ function AdminKnapp({
         display: 'inline-flex',
         alignItems: 'center',
         flexShrink: 0,
-        fontFamily: 'inherit',
-        cursor: 'pointer',
+        fontFamily: 'inherit'
       }}
     >
       <span
@@ -84,7 +83,7 @@ function MalRad({ mal }: { mal: Mal }) {
           onChange={e => setNavn(e.target.value)}
           style={inputStil}
           autoFocus
-          onKeyDown={e => { if (e.key === 'Enter') handleLagre(); if (e.key === 'Escape') setRedigerer(false) }}
+          onKeyDown={e => { if (e.key === 'Enter') handleLagre() }}
         />
         <AdminKnapp onClick={handleLagre} disabled={isPending}
           stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: isPending ? 0.5 : 1 }}>

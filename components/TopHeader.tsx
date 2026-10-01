@@ -183,7 +183,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   }, [pathname, synligeTabs.length, kompakt])
 
   // Re-mål ved resize (f.eks. rotering av telefon). rAF-throttles så vi ikke
-  // gjør getBoundingClientRect 60+ ganger i sekundet under desktop-window-drag.
+  // gjør getBoundingClientRect flere ganger per frame under rotasjonen.
   useEffect(() => {
     let raf = 0
     const onResize = () => {

@@ -73,7 +73,7 @@ export default function VarselLogg({
               onClick={hentFlere}
               disabled={laster}
               className="text-xs font-medium mt-2 block"
-              style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              style={{ color: 'var(--accent)', background: 'none', border: 'none', padding: 0 }}
             >
               {laster ? 'Laster…' : `Vis flere (${total - rader.length} igjen)`}
             </button>

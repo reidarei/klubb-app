@@ -69,7 +69,6 @@ export default function KaaringerVisning({
           style={{
             background: 'none',
             border: 'none',
-            cursor: kanBakover ? 'pointer' : 'default',
             color: 'var(--text-tertiary)',
             padding: 4,
             display: 'flex',
@@ -99,7 +98,6 @@ export default function KaaringerVisning({
           style={{
             background: 'none',
             border: 'none',
-            cursor: kanFremover ? 'pointer' : 'default',
             color: 'var(--text-tertiary)',
             padding: 4,
             display: 'flex',
@@ -255,7 +253,6 @@ export default function KaaringerVisning({
                       letterSpacing: '1.4px',
                       textTransform: 'uppercase',
                       fontWeight: 600,
-                      cursor: 'pointer',
                       flexShrink: 0,
                     }}
                   >

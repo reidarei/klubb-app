@@ -149,7 +149,7 @@ export default async function AlbumOversikt() {
                 id="chatten"
                 src={chatThumb}
                 antall={chatAntall}
-                sizes="(max-width: 480px) 50vw, 240px"
+                sizes="50vw"
               />
               <div style={{ padding: '12px 2px 0' }}>
                 <div
@@ -198,7 +198,7 @@ export default async function AlbumOversikt() {
                 id={r.id}
                 src={r.thumb}
                 antall={r.antall}
-                sizes="(max-width: 480px) 50vw, 240px"
+                sizes="50vw"
               />
               <div style={{ padding: '12px 2px 0' }}>
                 <div

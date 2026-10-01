@@ -51,7 +51,6 @@ const PILLE = {
   background: 'var(--kart-flate-sterk)',
   backdropFilter: 'var(--blur-card)',
   color: 'var(--kart-tekst)',
-  cursor: 'pointer',
   pointerEvents: 'auto',
   whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-popover)',
@@ -272,7 +271,6 @@ export default function StedSok({
                 background: 'var(--bg-elevated)',
                 color: 'var(--text-primary)',
                 textAlign: 'left',
-                cursor: 'pointer',
                 width: '100%',
               }}
             >

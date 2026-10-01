@@ -110,7 +110,6 @@ export default function AlbumDetalj({
                 padding: 0,
                 overflow: 'hidden',
                 borderRadius: 6,
-                cursor: 'zoom-in',
                 background: 'var(--bg-elevated)',
               }}
             >
@@ -118,7 +117,7 @@ export default function AlbumDetalj({
                 src={bilde}
                 alt=""
                 fill
-                sizes="(max-width: 480px) 33vw, 160px"
+                sizes="33vw"
                 style={{ objectFit: 'cover' }}
               />
             </button>

@@ -37,11 +37,9 @@ export default function NyFAB() {
         setApen(false)
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('touchstart', handleClick)
+    document.addEventListener('pointerdown', handleClick)
     return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('touchstart', handleClick)
+      document.removeEventListener('pointerdown', handleClick)
     }
   }, [apen])
 
@@ -55,7 +53,6 @@ export default function NyFAB() {
     alignItems: 'center',
     justifyContent: 'center',
     color: 'var(--accent)',
-    cursor: 'pointer',
     padding: 0,
     transition: 'transform 180ms ease-out',
     transform: apen ? 'rotate(45deg)' : 'rotate(0deg)',

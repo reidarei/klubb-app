@@ -64,8 +64,7 @@ export default function PollStemtVisning({
               fontFamily: 'var(--font-body)',
               fontSize: 13,
               fontWeight: 500,
-              letterSpacing: '0.2px',
-              cursor: 'pointer',
+              letterSpacing: '0.2px'
             }}
           >
             Endre svar

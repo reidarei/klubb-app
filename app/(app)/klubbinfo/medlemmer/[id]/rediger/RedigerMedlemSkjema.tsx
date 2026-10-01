@@ -448,7 +448,6 @@ export default function RedigerMedlemSkjema({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 4px',
-            cursor: isPending ? 'wait' : 'pointer',
             background: 'none',
             border: 'none',
             textAlign: 'left',

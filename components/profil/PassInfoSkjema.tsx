@@ -95,8 +95,7 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
             borderRadius: 999,
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            cursor: 'pointer',
+            fontSize: 13
           }}
         >
           Avbryt
@@ -115,7 +114,6 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 600,
-            cursor: isPending ? 'wait' : 'pointer',
             opacity: isPending ? 0.6 : 1,
           }}
         >

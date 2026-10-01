@@ -109,8 +109,7 @@ export default function Error({
             color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
+            fontWeight: 600
           }}
         >
           Prøv igjen
@@ -125,8 +124,7 @@ export default function Error({
             background: 'transparent',
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            cursor: 'pointer',
+            fontSize: 13
           }}
         >
           Til forsiden

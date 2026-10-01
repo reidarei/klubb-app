@@ -70,7 +70,7 @@ export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
             alt=""
             fill
             style={{ objectFit: 'cover' }}
-            sizes="(max-width: 512px) 100vw, 512px"
+            sizes="100vw"
             priority
           />
         </div>

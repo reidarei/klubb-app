@@ -80,7 +80,7 @@ export default function InstallVeiledning() {
       iosTimer = setTimeout(() => setIosNettleser(nettleser), 600)
     }
 
-    // Android (og Chrome desktop) — fang beforeinstallprompt og lagre eventet
+    // Android — fang beforeinstallprompt og lagre eventet
     function handler(e: Event) {
       e.preventDefault()
       setAndroidEvent(e as BeforeInstallPromptEvent)
@@ -252,8 +252,7 @@ export default function InstallVeiledning() {
                   background: 'var(--accent)',
                   color: 'var(--accent-foreground)',
                   fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  fontWeight: 600
                 }}
               >
                 Installer
@@ -269,7 +268,6 @@ export default function InstallVeiledning() {
             border: 'none',
             background: 'transparent',
             color: 'var(--text-tertiary)',
-            cursor: 'pointer',
             padding: 4,
             display: 'flex',
             alignItems: 'center',

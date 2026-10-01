@@ -11,7 +11,7 @@ type Props = {
   brukerId: string
   reaksjoner: ReaksjonGruppe[]
   /** Styres av forelder-komponenten (KommentarerPaaKort) som håndterer
-   * hover (desktop) og long-press (mobil). true = vis picker, false = skjul. */
+   * long-press (mobil). true = vis picker, false = skjul. */
   pickerApen: boolean
   lukkPicker: () => void
 }
@@ -22,8 +22,8 @@ type Props = {
  * lib/actions/chat.ts) — ikke melding_reaksjon-tabellen.
  *
  * Rendrer eksisterende reaksjons-badges + en controlled emoji-picker som
- * åpnes/lukkes av forelderen (KommentarerPaaKort) basert på hover (desktop)
- * eller long-press (mobil). Ingen egen trigger-knapp — helt controlled. se #359.
+ * åpnes/lukkes av forelderen (KommentarerPaaKort) basert på long-press
+ * (mobil). Ingen egen trigger-knapp — helt controlled. se #359.
  */
 export default function KommentarReaksjoner({
   meldingId,
@@ -82,9 +82,7 @@ export default function KommentarReaksjoner({
               border: harReagert ? '0.5px solid var(--accent)' : '0.5px solid var(--border)',
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
-              fontSize: 11,
-              // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
-              cursor: 'pointer',
+              fontSize: 11
             }}
           >
             <span>{r.emoji}</span>
@@ -93,7 +91,7 @@ export default function KommentarReaksjoner({
         )
       })}
 
-      {/* Picker — åpnes ved hover (desktop) eller long-press/tap (mobil),
+      {/* Picker — åpnes ved long-press/tap (mobil),
           styrt av forelderen via pickerApen. Bruker nå delt ReaksjonPicker
           (#471) — liten visuell endring (2 px posisjon, 30 px knapper) er
           bevisst konsolidering. */}

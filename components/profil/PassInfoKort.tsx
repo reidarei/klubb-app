@@ -146,8 +146,7 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
             color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
+            fontWeight: 600
           }}
         >
           Fyll ut pass-info
@@ -202,7 +201,6 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
-            cursor: 'pointer',
             flexShrink: 0,
           }}
         >

@@ -23,8 +23,8 @@ import {
   type Punkt,
 } from '@/lib/bilde-zoom'
 
-// Fullskjerm-galleri for album. Pil-knapper, swipe, pinch-zoom, tastatur og
-// X for å lukke. Krysser mellom bilder uten å unmounte hele overlayet — det
+// Fullskjerm-galleri for album. Pil-knapper, swipe, pinch-zoom og X for å
+// lukke. Krysser mellom bilder uten å unmounte hele overlayet — det
 // gir en stabil følelse selv om bildene tar tid å laste.
 //
 // Touch-håndtering: vi måler horisontalt drag og bytter bilde hvis terskelen
@@ -32,7 +32,7 @@ import {
 // ikke (bildet fyller skjermen). All gest-matematikk (pinch, panorering,
 // sveip-terskel) ligger i lib/bilde-zoom.ts og er enhetstestet der — en
 // pinch-gest kan ikke automatiseres i Playwright. Selve gest-MASKINEN her
-// (pekerbokføring, wheel-binding, trykk vs. sveip) dekkes av
+// (pekerbokføring, trykk vs. sveip) dekkes av
 // __tests__/album-lightbox-gest.test.tsx, som kjører i jsdom.
 export default function AlbumLightbox({
   bilder,
@@ -85,15 +85,6 @@ export default function AlbumLightbox({
   // ikke skal trigge re-render underveis (kun start/slutt-verdiene gjør).
   const [skala, setSkala] = useState(MIN_SKALA)
   const [pos, setPos] = useState<Punkt>({ x: 0, y: 0 })
-  // Speiler skala/pos i refs, av samme grunn som sheetAapenRef: den native
-  // wheel-lytteren bindes én gang og ville ellers lest verdier fra første
-  // render for alltid. Refs i stedet for state-updatere — updatere skal være
-  // rene, og en setPos() inne i en setSkala()-updater kjøres dobbelt i
-  // StrictMode (og dobler dermed fokusjusteringen per wheel-tick).
-  const skalaRef = useRef(skala)
-  skalaRef.current = skala
-  const posRef = useRef(pos)
-  posRef.current = pos
   const imgRef = useRef<HTMLImageElement>(null)
   const zoomLagRef = useRef<HTMLDivElement>(null)
   const pointereRef = useRef<Map<number, Punkt>>(new Map())
@@ -153,31 +144,13 @@ export default function AlbumLightbox({
   }
 
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      // Mens kommentar-sheeten er åpen: Escape lukker KUN sheeten, og piltaster
-      // ignoreres (ellers bytter de bilde → remount av sheeten → mister tekst
-      // brukeren skriver, f.eks. når markøren flyttes i input-feltet).
-      if (sheetAapenRef.current) {
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          setSheetAapen(false)
-        }
-        return
-      }
-      if (e.key === 'Escape') onLukk()
-      else if (e.key === 'ArrowRight') neste()
-      else if (e.key === 'ArrowLeft') forrige()
-    }
-    document.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
     document.documentElement.classList.add('tillat-landskap')
     return () => {
-      document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
       document.documentElement.classList.remove('tillat-landskap')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bilder.length])
+  }, [])
 
   // FELLE: ikke kall setPointerCapture her (i motsetning til BildeCropper).
   // Zoom-laget dekker hele skjermen, så pekeren kan aldri forlate det — en
@@ -302,49 +275,11 @@ export default function AlbumLightbox({
     dragDeltaXRef.current = 0
   }
 
-  // Trackpad-pinch rapporteres av nettleseren som wheel + ctrlKey, ikke som
-  // pointer-events. Må bindes nativt og ikke-passivt: Reacts onWheel er
-  // passiv, så preventDefault() der ville ikke hindret sidens egen zoom og
-  // gitt en konsoll-advarsel i tillegg.
-  //
-  // Deps MÅ inneholde `montert`: i første commit er montert=false, komponenten
-  // returnerer null og zoomLagRef.current er fortsatt null — med tom dep-array
-  // kjørte effekten aldri på nytt, og lytteren ble aldri registrert i det hele
-  // tatt. Vakt: __tests__/album-lightbox-gest.test.tsx.
-  useEffect(() => {
-    const el = zoomLagRef.current
-    if (!el) return
-    function onWheel(e: WheelEvent) {
-      if (!e.ctrlKey) return
-      e.preventDefault()
-      if (sheetAapenRef.current) return
-      const view = zoomLagRef.current
-      if (!view) return
-      // Verdibaserte kall (ikke updatere) — samme form som pointer-stien.
-      const gammelSkala = skalaRef.current
-      const gammelPos = posRef.current
-      const faktor = Math.exp(-e.deltaY * 0.01)
-      const ny = nySkala(1, faktor, gammelSkala)
-      const senter = senterAv(view)
-      const fokus = { x: e.clientX - senter.x, y: e.clientY - senter.y }
-      const nyX = fokusJustering(gammelPos.x, fokus.x, gammelSkala, ny)
-      const nyY = fokusJustering(gammelPos.y, fokus.y, gammelSkala, ny)
-      const img = imgRef.current
-      setSkala(ny)
-      setPos(
-        img
-          ? klemPosisjon({ x: nyX, y: nyY }, ny, img.offsetWidth, img.offsetHeight, view.offsetWidth, view.offsetHeight)
-          : { x: nyX, y: nyY },
-      )
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [montert])
-
   // Foreldreløse pekere: pointerup treffer kun zoom-laget når pekeren faktisk
-  // slippes DER. På desktop (mus, ingen implisitt pointer capture) er det
-  // trivielt å slippe over en søsken-knapp — pilene er vertikalt sentrert,
-  // nøyaktig der et sveip lander. Uten denne oppryddingen ble pekeren liggende
+  // slippes DER — en peker kan miste eieren og lande på en søsken-knapp i
+  // stedet (mus, uten implisitt pointer capture, er ett kjent tilfelle i
+  // e2e-drag; pilene er vertikalt sentrert, nøyaktig der et sveip lander).
+  // Uten denne oppryddingen ble pekeren liggende
   // i pointereRef resten av økten: neste pointerdown ga size===2 → tolket som
   // pinch → pointerup returnerte på size>0 → verken sveip, pinch eller trykk
   // virket igjen. window ser hvert eneste pointerup, også de vi ikke eier.
@@ -460,14 +395,11 @@ export default function AlbumLightbox({
           justifyContent: 'center',
           // Et 4x-skalert bilde maler ellers utenfor det fikserte overlayet;
           // laget dekker nøyaktig samme flate og er den naturlige klippeflaten.
-          overflow: 'hidden',
-          // Affordanse fra den gamle BildeLightbox: når et trykk hvor som helst
-          // lukker (chat-flaten), skal markøren si det på desktop.
-          cursor: lukkVedTrykk ? 'zoom-out' : undefined,
+          overflow: 'hidden'
         }}
       >
         {/* Bilde — pointerEvents: none så touchene treffer zoom-laget rundt.
-            Navigasjon skjer via pil-knappene, sveip, pinch-zoom og piltaster. */}
+            Navigasjon skjer via pil-knappene, sveip og pinch-zoom. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
@@ -512,7 +444,6 @@ export default function AlbumLightbox({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: 'pointer',
             boxShadow: '0 0 0 1px var(--overlay-control-ring)',
           }}
         >
@@ -540,7 +471,8 @@ export default function AlbumLightbox({
         </div>
       )}
 
-      {/* Pil-knapper (synlig på desktop, swipe brukes på mobil) */}
+      {/* Pil-knapper — vises alltid (ikke bare som sveip-fallback): de er
+          eneste inngang for VoiceOver/skjermleser, som ikke kan sveipe gesten. */}
       {bilder.length > 1 && !sheetAapen && (
         <>
           <button
@@ -562,7 +494,6 @@ export default function AlbumLightbox({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
               backdropFilter: 'blur(8px)',
             }}
           >
@@ -589,7 +520,6 @@ export default function AlbumLightbox({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
               backdropFilter: 'blur(8px)',
             }}
           >
@@ -644,7 +574,6 @@ export default function AlbumLightbox({
                 border: 'none',
                 background: 'transparent',
                 color: 'var(--lightbox-foreground)',
-                cursor: 'pointer',
                 padding: '2px 4px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
@@ -693,7 +622,6 @@ export default function AlbumLightbox({
               fontFamily: 'var(--font-body)',
               fontSize: 11,
               fontWeight: 600,
-              cursor: erOmslag || pending ? 'default' : 'pointer',
               opacity: pending && !erOmslag ? 0.6 : 1,
             }}
           >
@@ -712,7 +640,6 @@ export default function AlbumLightbox({
               fontFamily: 'var(--font-body)',
               fontSize: 11,
               fontWeight: 600,
-              cursor: pending ? 'default' : 'pointer',
               opacity: pending ? 0.6 : 1,
             }}
           >

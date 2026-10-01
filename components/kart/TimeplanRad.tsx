@@ -86,7 +86,6 @@ export default function TimeplanRad({
               padding: 0,
               margin: 0,
               textAlign: 'left',
-              cursor: 'pointer',
               display: 'block',
               width: '100%',
             }}
@@ -116,7 +115,6 @@ export default function TimeplanRad({
               background: 'none',
               border: 'none',
               padding: 0,
-              cursor: 'pointer',
               color: 'var(--accent)',
               fontSize: 13,
             }}
@@ -155,7 +153,6 @@ export default function TimeplanRad({
             background: 'none',
             border: 'none',
             padding: '2px 4px',
-            cursor: 'pointer',
             color: 'var(--text-tertiary)',
             fontSize: 17,
             lineHeight: 1,

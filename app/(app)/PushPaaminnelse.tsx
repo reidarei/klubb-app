@@ -109,7 +109,6 @@ export default function PushPaaminnelse() {
           fontFamily: 'var(--font-body)',
           fontSize: 12,
           fontWeight: 600,
-          cursor: 'pointer',
           flexShrink: 0,
         }}
       >

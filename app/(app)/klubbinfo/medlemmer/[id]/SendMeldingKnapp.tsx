@@ -40,7 +40,6 @@ export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
         fontFamily: 'var(--font-body)',
         fontSize: 12,
         fontWeight: 500,
-        cursor: isPending ? 'wait' : 'pointer',
         opacity: isPending ? 0.6 : 1,
       }}
     >

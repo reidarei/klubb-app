@@ -294,7 +294,7 @@ export default function MeldingRediger({
                     src={bilde}
                     alt=""
                     fill
-                    sizes="(max-width: 512px) 100vw, 512px"
+                    sizes="100vw"
                     style={{ objectFit: 'cover' }}
                     priority
                   />
@@ -410,8 +410,7 @@ const primaerKnapp: CSSProperties = {
   color: 'var(--bg)',
   fontFamily: 'var(--font-body)',
   fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
+  fontWeight: 600
 }
 
 const sekundaerKnapp: CSSProperties = {
@@ -421,6 +420,5 @@ const sekundaerKnapp: CSSProperties = {
   borderRadius: 999,
   color: 'var(--text-secondary)',
   fontFamily: 'var(--font-body)',
-  fontSize: 13,
-  cursor: 'pointer',
+  fontSize: 13
 }

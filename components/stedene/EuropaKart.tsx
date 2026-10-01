@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { KART_BREDDE as W, KART_HOEYDE as H, LAND_BANER } from '@/lib/europa-kart-data'
@@ -30,16 +30,6 @@ const pctY = (y: number) => `${(y / H) * 100}%`
 export default function EuropaKart({ steder }: Props) {
   const [valgt, setValgt] = useState<string | null>(null)
   const valgtSted = steder.find(s => s.by === valgt) ?? null
-
-  // Escape lukker det valgte stedet — samme mønster som AlbumLightbox.
-  useEffect(() => {
-    if (valgt === null) return
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setValgt(null)
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [valgt])
 
   return (
     <div>
@@ -107,7 +97,6 @@ export default function EuropaKart({ steder }: Props) {
                   border: 'none',
                   padding: 0,
                   margin: 0,
-                  cursor: 'pointer',
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
                   // 44 px-treffområdene overlapper for flere bypar på smale skjermer
@@ -182,8 +171,8 @@ export default function EuropaKart({ steder }: Props) {
               >
                 {valgtSted.by}
               </div>
-              {/* Eksplisitt lukk-knapp — trykk-utenfor og Escape lukker også,
-                  men touch-brukere kjenner ikke alltid disse gestene (#508) */}
+              {/* Eksplisitt lukk-knapp — trykk-utenfor lukker også,
+                  men touch-brukere kjenner ikke alltid gesten (#508) */}
               <Treffflate
                 synlig={28}
                 aria-label="Lukk"
@@ -191,8 +180,7 @@ export default function EuropaKart({ steder }: Props) {
                 style={{
                   flexShrink: 0,
                   borderRadius: 8,
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
+                  color: 'var(--text-secondary)'
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">

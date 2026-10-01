@@ -70,7 +70,6 @@ export default function Endringslogg({ rader }: Props) {
             fontFamily: 'var(--font-body)',
             fontSize: 12,
             fontWeight: 500,
-            cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,

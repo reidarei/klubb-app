@@ -864,7 +864,8 @@ export default function PosisjonsKart({
     }
 
     const pointerDown = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse') return
+      // Ingen pointerType-sil (#796): touch er eneste målflate, og et drag
+      // (også e2e-ens mus-drag) passerer bevegelsesterskelen lenge før timeren.
       if (aktivPeker !== null) {
         // Pinch-vakt: en ANDRE peker ned mens den første holder er en
         // knipe-gest, ikke et langtrykk.
@@ -1044,7 +1045,6 @@ export default function PosisjonsKart({
           }
 
           boble.addEventListener('pointerdown', (e: PointerEvent) => {
-            if (e.pointerType === 'mouse') return
             start = { x: e.clientX, y: e.clientY }
             klar = false
             holdTimer = window.setTimeout(() => {
@@ -1302,17 +1302,6 @@ export default function PosisjonsKart({
       if (lenkeKopiertTimer.current) window.clearTimeout(lenkeKopiertTimer.current)
     }
   }, [])
-
-  // Escape lukker markeringspanelet — samme mønster som EuropaKart og
-  // AlbumLightbox bruker.
-  useEffect(() => {
-    if (valgtMarkering === null) return
-    function handterTast(e: KeyboardEvent) {
-      if (e.key === 'Escape') setValgtMarkering(null)
-    }
-    document.addEventListener('keydown', handterTast)
-    return () => document.removeEventListener('keydown', handterTast)
-  }, [valgtMarkering])
 
   // Forsvinner markeringen (fjernet av meg, eller utløpt mens siden sto åpen),
   // skal ikke panelet bli stående og peke på noe som ikke finnes.
@@ -1628,8 +1617,7 @@ export default function PosisjonsKart({
           // felt over et kart er ramme alene lett å overse.
           border: valgt ? '1px solid var(--accent)' : '0.5px solid var(--border)',
           background: valgt ? 'var(--accent-soft)' : 'transparent',
-          color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)',
-          cursor: 'pointer',
+          color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)'
         }}
       >
         <span style={{ fontSize: 20, lineHeight: 1 }} aria-hidden="true">
@@ -2294,7 +2282,6 @@ export default function PosisjonsKart({
               justifyContent: 'flex-start',
               background: 'transparent',
               border: 'none',
-              cursor: 'pointer',
               padding: 0,
               zIndex: Z.HANDTAK,
               transition: 'left 220ms ease',
@@ -2491,7 +2478,6 @@ const PILLE = {
   background: 'var(--kart-flate-sterk)',
   backdropFilter: 'var(--blur-card)',
   color: 'var(--kart-tekst)',
-  cursor: 'pointer',
   pointerEvents: 'auto',
   whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-popover)',

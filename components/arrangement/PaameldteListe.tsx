@@ -134,22 +134,17 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
     return map
   }, [alleSvar, collator])
 
-  // Escape-tast lukker modalen. body-overflow hindrer scroll bak modalen,
-  // særlig viktig på iOS hvor scroll-chain lett lekker gjennom overlay.
-  // Fokus flyttes inn i dialogen ved åpning og tilbake til triggeren ved lukking,
-  // i tråd med WAI-ARIA modal-mønster.
+  // body-overflow hindrer scroll bak modalen, særlig viktig på iOS hvor
+  // scroll-chain lett lekker gjennom overlay. Fokus flyttes inn i dialogen
+  // ved åpning og tilbake til triggeren ved lukking, i tråd med WAI-ARIA
+  // modal-mønster.
   useEffect(() => {
     if (!modalAapen) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setModalAapen(false)
-    }
-    document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     triggerRef.current = document.activeElement as HTMLElement | null
     dialogRef.current?.focus()
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = forrigeOverflow
       triggerRef.current?.focus?.()
     }
@@ -159,20 +154,13 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
   // Effekten avhenger KUN av purreModalAapen — ikke purrePending. Hvis vi
   // hadde lagt pending i dep-listen ville cleanup kjørt midt under sending
   // (når useTransition flipper pending), restore body-overflow og forsøkt
-  // focus-retur mens modalen fortsatt er åpen. Escape-gating gjøres derfor
-  // via purreSendingRef (synkron flagg), samme mønster som VarsleNuKnapp
-  // etter #282-fiksen.
+  // focus-retur mens modalen fortsatt er åpen.
   useEffect(() => {
     if (!purreModalAapen) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !purreSendingRef.current) setPurreMaal(null)
-    }
-    document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const triggerNode = purreTriggerRef.current
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = forrigeOverflow
       // Focus-retur: trigger-knappen for purre-modalen er pillen INNE i
       // hoved-modalen, som lukkes samtidig som purre-modalen åpnes. Når purre
@@ -293,7 +281,6 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
             border: '0.5px solid var(--border)',
             borderRadius: 999,
             padding: '8px 14px',
-            cursor: 'pointer',
             minHeight: 36,
             marginLeft: 4,
           }}
@@ -341,8 +328,8 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
             }}
           >
             {/* Modal-header med eksplisitt Lukk-knapp.
-                Escape og klikk-utenfor lukker også, men en synlig knapp er nødvendig
-                for tastaturbrukere og touch-brukere som ikke kjenner gesten. */}
+                Klikk utenfor lukker også, men en synlig knapp er nødvendig
+                for brukere som ikke kjenner gesten. */}
             <div
               style={{
                 padding: '18px 20px 14px',
@@ -363,7 +350,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                 synlig={32}
                 onClick={() => setModalAapen(false)}
                 aria-label="Lukk"
-                style={{ color: 'var(--text-secondary)', flexShrink: 0, cursor: 'pointer' }}
+                style={{ color: 'var(--text-secondary)', flexShrink: 0 }}
               >
                 <span
                   style={{
@@ -451,7 +438,6 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                             border: '0.5px solid var(--accent)',
                             borderRadius: 999,
                             padding: '4px 10px',
-                            cursor: purrePending ? 'default' : 'pointer',
                             flexShrink: 0,
                           }}
                         >
@@ -654,8 +640,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
+                  textTransform: 'uppercase'
                 }}
               >
                 Avbryt
@@ -675,7 +660,6 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                   fontWeight: 600,
                   letterSpacing: '1.4px',
                   textTransform: 'uppercase',
-                  cursor: purrePending ? 'default' : 'pointer',
                   opacity: purrePending ? 0.7 : 1,
                 }}
               >

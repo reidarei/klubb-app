@@ -116,7 +116,7 @@ export default function OppdaterPassordSide() {
               {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster}>{laster ? 'Lagrer…' : 'Lagre nytt passord'}</Button>
               <button type="button" onClick={() => router.push('/login')} className="w-full text-sm underline pt-1"
-                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', fontFamily: 'inherit' }}>
                 Tilbake til innlogging
               </button>
             </form>

@@ -64,7 +64,6 @@ export default function ReaksjonPicker({
             border: 'none',
             fontSize: 18,
             // Ingen dimming under isPending — serverturen skal ikke synes (#472-oppf.)
-            cursor: 'pointer',
             padding: 0,
           }}
         >

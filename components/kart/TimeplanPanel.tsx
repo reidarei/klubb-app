@@ -333,7 +333,6 @@ export default function TimeplanPanel({
             background: 'none',
             border: 'none',
             padding: 4,
-            cursor: 'pointer',
             color: 'var(--text-secondary)',
             fontSize: 18,
             lineHeight: 1,
@@ -414,8 +413,7 @@ export default function TimeplanPanel({
               borderRadius: 'var(--radius-pill)',
               border: '0.5px solid var(--border)',
               background: 'transparent',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
+              color: 'var(--text-primary)'
             }}
           >
             Prøv igjen
@@ -430,7 +428,6 @@ export default function TimeplanPanel({
               background: 'none',
               border: 'none',
               padding: '2px 4px',
-              cursor: 'pointer',
               color: 'var(--text-tertiary)',
               fontSize: 16,
               lineHeight: 1,

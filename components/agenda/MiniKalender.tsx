@@ -83,7 +83,6 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
   const chevronKnapp: CSSProperties = {
     background: 'transparent',
     border: 'none',
-    cursor: 'pointer',
     color: 'var(--text-tertiary)',
     // Rommelig trykkflate rundt et lite ikon — viktigere på mobil enn desktop.
     padding: '2px 4px',
@@ -109,7 +108,7 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
         type="button"
         style={{
           ...chevronKnapp,
-          ...(kanBakover ? {} : { opacity: 0.3, cursor: 'default' }),
+          ...(kanBakover ? {} : { opacity: 0.3 }),
         }}
         onClick={() => setMaanedOffset(o => Math.max(MIN_OFFSET, o - 1))}
         disabled={!kanBakover}

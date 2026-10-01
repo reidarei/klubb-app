@@ -172,7 +172,6 @@
      på kartet, men bredden er alltid godt over — og halen under legger til
      høyde i praksis. */
   min-height: 32px;
-  cursor: pointer;
   /* Langtrykk kopierer stedslenken (#719). Uten disse to overtar iOS' egen
      callout-meny (Kopier/Del/…) og tekstmarkering på et langt trykk, og
      appens egen håndtering når aldri fram. */

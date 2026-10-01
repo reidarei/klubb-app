@@ -132,8 +132,7 @@ export default function BliUtvikler() {
               border: 'none',
               fontFamily: 'var(--font-body)',
               fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
             Tilbake til tidslinjen
@@ -159,8 +158,7 @@ export default function BliUtvikler() {
               border: '0.5px solid var(--border-strong)',
               fontFamily: 'var(--font-body)',
               fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
             Send inn et nytt ønske

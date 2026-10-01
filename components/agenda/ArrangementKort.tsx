@@ -178,9 +178,11 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
             </span>
             <span style={{ color: 'var(--text-tertiary)', letterSpacing: '1.2px' }}>· {tid}</span>
             {arr.harAlbum && (
+              // role="img" fordi aria-label på en rolleløs span ikke leses
+              // pålitelig opp — samme mønster som MessengerBadge/SladdetFelt.
               <span
+                role="img"
                 aria-label="Har album"
-                title="Har album"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -188,7 +190,7 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
                   color: 'var(--text-tertiary)',
                 }}
               >
-                <Icon name="image" size={12} color="currentColor" />
+                <Icon name="image" size={12} color="currentColor" aria-hidden="true" />
               </span>
             )}
           </div>

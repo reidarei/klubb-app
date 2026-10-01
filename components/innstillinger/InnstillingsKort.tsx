@@ -52,7 +52,6 @@ export default function InnstillingsKort({
           padding: '14px 16px',
           background: 'transparent',
           border: 'none',
-          cursor: 'pointer',
           textAlign: 'left',
         }}
       >

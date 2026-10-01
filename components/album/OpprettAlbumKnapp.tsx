@@ -49,7 +49,6 @@ export default function OpprettAlbumKnapp() {
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-body)',
           fontSize: 13,
-          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -107,7 +106,6 @@ export default function OpprettAlbumKnapp() {
               maxLength={200}
               onKeyDown={e => {
                 if (e.key === 'Enter') lagre()
-                else if (e.key === 'Escape') lukk()
               }}
               style={{
                 width: '100%',
@@ -133,8 +131,7 @@ export default function OpprettAlbumKnapp() {
                   border: '0.5px solid var(--border)',
                   background: 'transparent',
                   color: 'var(--text-secondary)',
-                  fontSize: 13,
-                  cursor: 'pointer',
+                  fontSize: 13
                 }}
               >
                 Avbryt
@@ -151,7 +148,6 @@ export default function OpprettAlbumKnapp() {
                   color: 'var(--accent-foreground)',
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: !tittel.trim() || pending ? 'default' : 'pointer',
                   opacity: !tittel.trim() || pending ? 0.5 : 1,
                 }}
               >

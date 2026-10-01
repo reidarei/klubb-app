@@ -43,7 +43,6 @@ export default function SkjemaBar({
           color: 'var(--text-secondary)',
           fontFamily: 'var(--font-body)',
           fontSize: 14,
-          cursor: 'pointer',
           padding: '4px 0',
         }}
       >
@@ -94,7 +93,6 @@ export default function SkjemaBar({
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 600,
-            cursor: laster ? 'wait' : 'pointer',
             opacity: laster ? 0.7 : 1,
           }}
         >

@@ -68,14 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect('/login')
 
   return (
-    <div
-      className="flex flex-col min-h-screen relative"
-      style={{
-        maxWidth: 480,
-        margin: '0 auto',
-        boxShadow: '0 0 0 0.5px var(--border-subtle)',
-      }}
-    >
+    <div className="flex flex-col min-h-screen relative">
       <ServiceWorkerRegistrering />
       <AktivitetTeller />
       <DraNedForOppdater />

@@ -51,7 +51,7 @@ export default function EndrePassord() {
       <button
         onClick={() => setAapen(true)}
         className="w-full text-left text-sm px-5 py-3.5 rounded-2xl mt-4 flex items-center gap-2.5"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontFamily: 'inherit', cursor: 'pointer' }}
+        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontFamily: 'inherit' }}
       >
         <KeyIcon className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
         Endre passord

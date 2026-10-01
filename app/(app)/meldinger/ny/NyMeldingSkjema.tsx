@@ -368,7 +368,7 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                       onClick={() => fjernBilde(idx)}
                       disabled={isPending}
                       aria-label="Fjern bilde"
-                      style={{ position: 'absolute', top: 4, right: 4, cursor: 'pointer' }}
+                      style={{ position: 'absolute', top: 4, right: 4 }}
                     >
                       <span
                         style={{
@@ -415,8 +415,7 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                   borderRadius: 999,
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  cursor: 'pointer',
+                  fontSize: 12
                 }}
               >
                 {bilder.length === 0 ? 'Legg til bilder' : `Legg til flere (${bilder.length}/${MELDING_MAKS_BILDER})`}
@@ -444,7 +443,6 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)',
                   fontSize: 12,
-                  cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
@@ -492,7 +490,6 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                     fontSize: 10,
                     letterSpacing: '1.2px',
                     textTransform: 'uppercase',
-                    cursor: 'pointer',
                     flexShrink: 0,
                   }}
                 >
@@ -605,8 +602,7 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                       border: '0.5px solid var(--border-subtle)',
                       borderRadius: 'var(--radius-card)',
                       overflow: 'hidden',
-                      textAlign: 'left',
-                      cursor: 'pointer',
+                      textAlign: 'left'
                     }}
                   >
                     <div

@@ -43,7 +43,6 @@ const PILLE = {
   background: 'var(--kart-flate-sterk)',
   backdropFilter: 'var(--blur-card)',
   color: 'var(--kart-tekst)',
-  cursor: 'pointer',
   pointerEvents: 'auto',
   whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-popover)',

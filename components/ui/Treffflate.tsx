@@ -8,7 +8,7 @@ import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 //   (a) Rader med senteravstand < 44 px (ReaksjonPicker): sett width/height direkte, ellers overlapper naboene.
 //   (b) Leaflet-markører: Leaflet måler egen DOM — bruk iconSize, eller interactive:false.
 //   (c) Inni overflow:hidden/auto: det utvidede treffområdet klippes bort.
-//   (d) Oppå andre interaktive flater: styr med pointer-events (.chat-slett-knapp i globals.css).
+//   (d) Oppå andre interaktive flater: styr overlappen med pointer-events.
 //   (e) Sentrert med translate(-50%, -50%): negativ margin + transform regner feil — bruk width/height.
 
 type Maal = { hoyde: number; bredde?: number }

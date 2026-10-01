@@ -31,8 +31,7 @@ const pillKnapp: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
   letterSpacing: '1.4px',
-  textTransform: 'uppercase',
-  cursor: 'pointer',
+  textTransform: 'uppercase'
 }
 
 export default function AnsvarAdmin({
@@ -118,7 +117,6 @@ export default function AnsvarAdmin({
               disabled={isPending}
               aria-label="Fjern ansvarlig"
               onClick={() => handleFjern(a.ansvarId)}
-              style={{ cursor: 'pointer' }}
             >
               <span
                 style={{
@@ -164,7 +162,6 @@ export default function AnsvarAdmin({
               padding: 0,
               background: 'transparent',
               border: 'none',
-              cursor: 'pointer',
               flexShrink: 0,
             }}
           >

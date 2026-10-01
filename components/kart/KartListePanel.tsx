@@ -80,7 +80,6 @@ const PILLE = {
   background: 'var(--kart-flate-sterk)',
   backdropFilter: 'var(--blur-card)',
   color: 'var(--kart-tekst)',
-  cursor: 'pointer',
   pointerEvents: 'auto',
   whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-popover)',
@@ -132,7 +131,6 @@ export default function KartListePanel({
             justifyContent: 'flex-end',
             background: 'transparent',
             border: 'none',
-            cursor: 'pointer',
             padding: 0,
             zIndex: handtakZIndex,
             transition: 'right 220ms ease',
@@ -261,7 +259,6 @@ export default function KartListePanel({
                   border: 'none',
                   padding: 0,
                   textAlign: 'left',
-                  cursor: 'pointer',
                   color: 'inherit',
                 }}
               >
@@ -321,7 +318,6 @@ export default function KartListePanel({
                       style={{
                         ...PILLE,
                         opacity: nettopp ? 0.55 : 1,
-                        cursor: nettopp ? 'default' : 'pointer',
                         color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
                       }}
                     >
@@ -390,7 +386,6 @@ export default function KartListePanel({
                         style={{
                           ...PILLE,
                           opacity: nettopp ? 0.55 : 1,
-                          cursor: nettopp ? 'default' : 'pointer',
                           color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
                         }}
                       >
@@ -432,7 +427,6 @@ export default function KartListePanel({
                 border: 'none',
                 padding: 0,
                 textAlign: 'left',
-                cursor: 'pointer',
                 color: 'inherit',
               }}
             >

@@ -80,11 +80,7 @@ export default function ReaksjonBadges({
               background: 'transparent',
               border: 'none',
               paddingLeft: 0,
-              paddingRight: 0,
-              // Bevisst ingen dimming under isPending: optimistisk visning skal
-              // se ferdig ut umiddelbart — serverturen skal ikke synes (#472-oppf.).
-              // disabled beholdes for å hindre dobbel-fyring.
-              cursor: 'pointer',
+              paddingRight: 0
             }}
           >
             <span
@@ -128,7 +124,6 @@ export default function ReaksjonBadges({
               border: '0.5px dashed var(--border-strong)',
               color: 'var(--text-tertiary)',
               fontSize: 14,
-              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',

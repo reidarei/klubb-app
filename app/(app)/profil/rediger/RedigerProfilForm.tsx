@@ -270,8 +270,7 @@ export default function RedigerProfilForm({
             flexShrink: 0,
             background: 'none',
             border: 'none',
-            padding: 0,
-            cursor: isPending ? 'wait' : 'pointer',
+            padding: 0
           }}
         >
           <Avatar name={navn} size={56} src={previewUrl} rolle={rolle} />
@@ -330,7 +329,6 @@ export default function RedigerProfilForm({
               style={{
                 background: 'none',
                 border: 'none',
-                cursor: isPending ? 'wait' : 'pointer',
                 padding: 0,
                 color: 'var(--accent)',
                 fontFamily: 'var(--font-body)',
@@ -347,7 +345,6 @@ export default function RedigerProfilForm({
                 style={{
                   background: 'none',
                   border: 'none',
-                  cursor: 'pointer',
                   padding: 0,
                   color: 'var(--text-tertiary)',
                   fontFamily: 'var(--font-body)',
@@ -505,7 +502,6 @@ export default function RedigerProfilForm({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 4px',
-            cursor: 'pointer',
             gap: 16,
             background: 'none',
             border: 'none',

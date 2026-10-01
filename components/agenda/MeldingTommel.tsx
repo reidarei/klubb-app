@@ -47,9 +47,7 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
     setPressetAktiv(false)
   }
 
-  // Long-press dekker touch OG mus (i motsetning til KommentarerPaaKort som
-  // skipper mus fordi den bruker hover der) — desktop-brukere har ingen
-  // hover-inngang til emoji-velgeren på tommelen, så mus må også kunne holde. se #468.
+  // Long-press på tommelen åpner emoji-velgeren. se #468.
   function startLongPress(e: PointerEvent) {
     e.stopPropagation()
     longPressFired.current = false
@@ -144,7 +142,6 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
         onPointerMove={sjekkBevegelse}
         onPointerUp={clearLongPress}
         onPointerCancel={clearLongPress}
-        onPointerLeave={clearLongPress}
         onClick={handleClick}
         onContextMenu={e => {
           // Knappen har ingen legitim kontekstmeny — preventDefault ubetinget.
@@ -155,7 +152,6 @@ export default function MeldingTommel({ brukerId, reaksjoner, toggle, isPending 
         }}
         style={{
           flexShrink: 0,
-          cursor: 'pointer',
           WebkitUserSelect: 'none',
           userSelect: 'none',
           WebkitTouchCallout: 'none',

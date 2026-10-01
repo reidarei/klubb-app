@@ -194,7 +194,7 @@ export default function LoginSide() {
             type="button"
             onClick={() => { setTilbakestiltSendt(false); setGlemtPassord(false); setPassord('') }}
             className="text-sm underline pt-4"
-            style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', fontFamily: 'inherit' }}
           >
             Tilbake til innlogging
           </button>
@@ -243,7 +243,7 @@ export default function LoginSide() {
               {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster}>{laster ? 'Sender...' : 'Send kode'}</Button>
               <button type="button" onClick={() => setGlemtPassord(false)} className="w-full text-sm underline pt-1"
-                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', fontFamily: 'inherit' }}>
                 Tilbake til innlogging
               </button>
             </form>
@@ -260,7 +260,7 @@ export default function LoginSide() {
               {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
               <Button type="submit" fullWidth disabled={laster} className="mt-2">{laster ? 'Logger inn...' : 'Logg inn'}</Button>
               <button type="button" onClick={() => setGlemtPassord(true)} className="w-full text-sm underline pt-1"
-                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', fontFamily: 'inherit' }}>
                 Glemt passord?
               </button>
             </form>

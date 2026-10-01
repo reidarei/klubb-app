@@ -37,15 +37,6 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
     return () => URL.revokeObjectURL(url)
   }, [fil])
 
-  // Escape lukker
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onAvbryt()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onAvbryt])
-
   // Lås scroll mens modal er oppe
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -227,7 +218,6 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
           width: VIEW_SIZE,
           height: VIEW_SIZE,
           touchAction: 'none',
-          cursor: dragger ? 'grabbing' : 'grab',
           userSelect: 'none',
           overflow: 'hidden',
           borderRadius: 4,
@@ -329,8 +319,7 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
           onChange={e => setZoom(parseFloat(e.target.value))}
           style={{
             flex: 1,
-            accentColor: 'var(--accent)',
-            cursor: 'pointer',
+            accentColor: 'var(--accent)'
           }}
           aria-label="Zoom"
         />
@@ -360,8 +349,7 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
             border: '0.5px solid var(--border)',
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
-            fontSize: 14,
-            cursor: 'pointer',
+            fontSize: 14
           }}
         >
           Avbryt
@@ -380,7 +368,6 @@ export default function BildeCropper({ fil, onFerdig, onAvbryt }: Props) {
             fontFamily: 'var(--font-body)',
             fontSize: 14,
             fontWeight: 600,
-            cursor: working ? 'wait' : 'pointer',
             opacity: working ? 0.7 : 1,
           }}
         >

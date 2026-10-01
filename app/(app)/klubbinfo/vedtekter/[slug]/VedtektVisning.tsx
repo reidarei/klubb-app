@@ -196,7 +196,6 @@ export default function VedtektVisning({
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 500,
-            cursor: 'pointer',
             marginBottom: 28,
           }}
         >
@@ -219,7 +218,6 @@ export default function VedtektVisning({
               background: 'none',
               border: 'none',
               borderBottom: visHistorikk ? '0.5px solid var(--border-subtle)' : 'none',
-              cursor: 'pointer',
               fontFamily: 'var(--font-body)',
               fontSize: 13,
               color: 'var(--text-secondary)',

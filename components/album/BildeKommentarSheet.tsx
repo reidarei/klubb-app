@@ -246,7 +246,7 @@ export default function BildeKommentarSheet({
           synlig={32}
           aria-label="Lukk kommentarer"
           onClick={onLukk}
-          style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
+          style={{ color: 'var(--text-secondary)' }}
         >
           <Icon name="x" size={18} color="currentColor" strokeWidth={2} />
         </Treffflate>
@@ -285,8 +285,7 @@ export default function BildeKommentarSheet({
                 paddingLeft: 0,
                 paddingRight: 0,
                 background: 'transparent',
-                border: 'none',
-                cursor: henterEldre ? 'wait' : 'pointer',
+                border: 'none'
               }}
             >
               <span
@@ -438,7 +437,6 @@ export default function BildeKommentarSheet({
             onClick={handleSend}
             style={{
               flexShrink: 0,
-              cursor: !tekst.trim() || sender ? 'default' : 'pointer',
               opacity: !tekst.trim() || sender ? 0.4 : 1,
             }}
           >

@@ -43,8 +43,7 @@ export default function PaameldingKnapper({
                 background: erAktiv ? aktivBg : 'var(--bg)',
                 border: `1px solid ${erAktiv ? aktiv : 'var(--border)'}`,
                 color: erAktiv ? aktiv : 'var(--text-secondary)',
-                fontFamily: 'inherit',
-                cursor: 'pointer',
+                fontFamily: 'inherit'
               }}
             >
               {label}

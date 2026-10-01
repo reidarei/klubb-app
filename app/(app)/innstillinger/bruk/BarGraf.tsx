@@ -23,7 +23,7 @@ const TETT_GRENSE = 14
 type Punkt = { nokkel: string; verdi: number }
 
 export default function BarGraf({ data, enhet }: { data: Punkt[]; enhet: string }) {
-  // Indeks for søyla brukeren peker på / har trykket. null = ingen.
+  // Indeks for søyla brukeren holder på / har trykket. null = ingen.
   const [aktiv, setAktiv] = useState<number | null>(null)
 
   if (data.length === 0) {
@@ -129,7 +129,6 @@ export default function BarGraf({ data, enhet }: { data: Punkt[]; enhet: string 
             // Hele kolonnen er trykkflate, ikke bare den fargede delen — en
             // søyle med verdi 0 har null høyde og ville ellers vært umulig å
             // treffe.
-            onPointerEnter={() => setAktiv(i)}
             onPointerDown={() => setAktiv(i)}
             style={{
               flex: 1,
@@ -137,8 +136,7 @@ export default function BarGraf({ data, enhet }: { data: Punkt[]; enhet: string 
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'flex-end',
-              alignItems: 'center',
-              cursor: 'default',
+              alignItems: 'center'
             }}
           >
             {visTall && (

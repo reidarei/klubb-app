@@ -50,8 +50,7 @@ export default function MentionVelger({ forslag, onVelg }: Props) {
               color: 'var(--accent)',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
-              fontWeight: erAlle ? 600 : 500,
-              cursor: 'pointer',
+              fontWeight: erAlle ? 600 : 500
             }}
           >
             @{p.navn}

@@ -1,11 +1,9 @@
 /**
  * Gest-maskinen i AlbumLightbox (#625).
  *
- * Bakgrunn: `lib/bilde-zoom.ts` dekker matematikken, men to alvorlige feil lå i
- * selve maskinen — wheel-lytteren som aldri ble registrert (effekt med `[]`-deps
- * kjørte kun i første commit, der portalen ennå ikke var montert og ref-en var
- * null), og en peker som ble sluppet utenfor zoom-laget og dermed lå igjen i
- * `pointereRef` resten av økten. Ingen av dem kunne enhetstestes gjennom
+ * Bakgrunn: `lib/bilde-zoom.ts` dekker matematikken, men en alvorlig feil lå i
+ * selve maskinen — en peker som ble sluppet utenfor zoom-laget og dermed lå
+ * igjen i `pointereRef` resten av økten. Det kunne ikke enhetstestes gjennom
  * matematikken alene.
  *
  * Argumentet i filhodet til bilde-zoom.ts om at pinch ikke kan automatiseres
@@ -40,7 +38,7 @@ function dialog(): HTMLElement {
 }
 
 // Zoom-laget er den eneste diven med touchAction:'none' — det er der alle
-// pointer-handlerne og wheel-lytteren bor.
+// pointer-handlerne bor.
 function zoomLag(): HTMLElement {
   const lag = Array.from(dialog().querySelectorAll('div')).find(
     d => d.style.touchAction === 'none',
@@ -66,42 +64,6 @@ function pointer(
   })
   return ev
 }
-
-describe('AlbumLightbox — wheel-lytteren er faktisk registrert', () => {
-  it('ctrl+wheel over zoom-laget blir preventDefault-et (ellers zoomer hele siden)', () => {
-    render(<AlbumLightbox bilder={BILDER} startIndex={0} onLukk={() => {}} />)
-
-    const ev = new WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: true,
-      deltaY: -120,
-      clientX: 100,
-      clientY: 100,
-    })
-    act(() => {
-      zoomLag().dispatchEvent(ev)
-    })
-
-    expect(ev.defaultPrevented).toBe(true)
-  })
-
-  it('vanlig wheel (uten ctrl) røres ikke — sidescroll skal ikke fanges', () => {
-    render(<AlbumLightbox bilder={BILDER} startIndex={0} onLukk={() => {}} />)
-
-    const ev = new WheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: false,
-      deltaY: -120,
-    })
-    act(() => {
-      zoomLag().dispatchEvent(ev)
-    })
-
-    expect(ev.defaultPrevented).toBe(false)
-  })
-})
 
 describe('AlbumLightbox — gest-maskinen låser seg ikke', () => {
   it('trykk lukker når lukkVedTrykk er satt (baseline)', () => {

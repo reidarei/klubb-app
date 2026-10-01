@@ -169,7 +169,6 @@ export default function FondPostRad({
             ...radStil,
             background: 'none',
             border: 'none',
-            cursor: 'pointer',
             font: 'inherit',
             color: 'inherit',
             textAlign: 'left',

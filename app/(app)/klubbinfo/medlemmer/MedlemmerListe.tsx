@@ -93,8 +93,7 @@ export default function MedlemmerListe({
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '1.5px',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
+            textTransform: 'uppercase'
           }}
           aria-label="Endre sortering"
         >

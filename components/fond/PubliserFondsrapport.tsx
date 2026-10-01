@@ -230,7 +230,6 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
                     border: 'none',
                     background: 'transparent',
                     color: 'var(--text-secondary)',
-                    cursor: 'pointer',
                     padding: 6,
                     display: 'flex',
                   }}
@@ -413,8 +412,7 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
                   disabled={!klar || henter || isPending}
                   style={{
                     ...primaerKnapp,
-                    opacity: !klar || henter || isPending ? 0.5 : 1,
-                    cursor: !klar || henter || isPending ? 'default' : 'pointer',
+                    opacity: !klar || henter || isPending ? 0.5 : 1
                   }}
                 >
                   {isPending ? 'Publiserer…' : 'Publiser og varsle gutta'}
@@ -476,8 +474,7 @@ const triggerKnapp: CSSProperties = {
   color: 'var(--text-primary)',
   fontFamily: 'var(--font-body)',
   fontSize: 12,
-  fontWeight: 500,
-  cursor: 'pointer',
+  fontWeight: 500
 }
 
 const tekstStil: CSSProperties = {

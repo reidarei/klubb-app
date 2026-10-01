@@ -49,21 +49,16 @@ export default function PurreKnapp({
     })
   }
 
-  // Lukk modalen med Escape og lås body-scroll mens den er åpen.
-  // body-overflow forhindrer scroll-chain bak modalen, særlig på iOS.
+  // Lås body-scroll mens modalen er åpen — forhindrer scroll-chain bak
+  // modalen, særlig på iOS.
   useEffect(() => {
     if (!modalAapen) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !isPending) setModalAapen(false)
-    }
-    document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = forrigeOverflow
     }
-  }, [modalAapen, isPending])
+  }, [modalAapen])
 
   const label = sendt ? 'Purret' : isPending ? 'Sender…' : 'Purre'
 
@@ -85,7 +80,6 @@ export default function PurreKnapp({
             fontWeight: 600,
             letterSpacing: '1.4px',
             textTransform: 'uppercase',
-            cursor: sendt || isPending ? 'default' : 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
@@ -229,8 +223,7 @@ export default function PurreKnapp({
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
+                  textTransform: 'uppercase'
                 }}
               >
                 Avbryt
@@ -250,7 +243,6 @@ export default function PurreKnapp({
                   fontWeight: 600,
                   letterSpacing: '1.4px',
                   textTransform: 'uppercase',
-                  cursor: isPending ? 'default' : 'pointer',
                   opacity: isPending ? 0.7 : 1,
                 }}
               >

@@ -35,7 +35,6 @@ export default function SlettBildeKnapp({ bildeId }: { bildeId: string }) {
         position: 'absolute',
         top: 8,
         right: 8,
-        cursor: isPending ? 'wait' : 'pointer',
         opacity: isPending ? 0.5 : 1,
       }}
     >

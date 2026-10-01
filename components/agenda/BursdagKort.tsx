@@ -182,7 +182,7 @@ function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
             // øverst på agenda samtidig (bursdagskortet + et highlight-kort
             // rett under), og to `priority`-bilder over folden er bevisst:
             // begge er reelt synlige ved førstemaling på mobil.
-            sizes="(max-width: 512px) 100vw, 512px"
+            sizes="100vw"
             priority
           />
         </div>

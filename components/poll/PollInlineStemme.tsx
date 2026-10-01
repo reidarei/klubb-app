@@ -178,8 +178,7 @@ export default function PollInlineStemme({
               fontSize: 9,
               letterSpacing: '1.4px',
               textTransform: 'uppercase',
-              fontWeight: 600,
-              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
             Endre svar
@@ -217,7 +216,6 @@ export default function PollInlineStemme({
                 fontSize: 13,
                 fontWeight: valgt ? 600 : 500,
                 letterSpacing: '0.1px',
-                cursor: isPending ? 'wait' : 'pointer',
                 opacity: isPending ? 0.7 : 1,
                 transition: 'background 120ms, border-color 120ms',
                 textAlign: 'center',
@@ -251,8 +249,7 @@ export default function PollInlineStemme({
               fontSize: 9,
               letterSpacing: '1.4px',
               textTransform: 'uppercase',
-              fontWeight: 600,
-              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
             Se resultat

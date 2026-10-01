@@ -43,8 +43,7 @@ export default function TurFelt({
             background: !hemmelig ? 'var(--accent)' : 'var(--bg-elevated)',
             border: `1px solid ${!hemmelig ? 'var(--accent)' : 'var(--border)'}`,
             color: !hemmelig ? 'var(--accent-foreground)' : 'var(--text-secondary)',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
+            fontFamily: 'inherit'
           }}
         >
           Oppgi
@@ -57,8 +56,7 @@ export default function TurFelt({
             background: hemmelig ? 'var(--bg-elevated-2)' : 'var(--bg-elevated)',
             border: '1px solid var(--border)',
             color: hemmelig ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
+            fontFamily: 'inherit'
           }}
         >
           <span

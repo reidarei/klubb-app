@@ -27,8 +27,7 @@ export default function LoggUtKnapp() {
         fontFamily: 'var(--font-body)',
         fontSize: 14,
         fontWeight: 500,
-        letterSpacing: '0.2px',
-        cursor: 'pointer',
+        letterSpacing: '0.2px'
       }}
     >
       Logg ut

@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="max-w-lg mx-auto px-5 pt-6 pb-8">
+    <div className="px-5 pt-6 pb-8">
       <div className="flex items-center gap-3 mb-6">
         <div className="h-4 w-16 rounded animate-pulse" style={{ background: 'var(--border)' }} />
         <div className="h-7 w-24 rounded-lg animate-pulse" style={{ background: 'var(--border)' }} />

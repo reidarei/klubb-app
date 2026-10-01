@@ -202,7 +202,7 @@ export default function ArrangementTidslinje({
             alt=""
             fill
             className="object-cover"
-            sizes="(max-width: 512px) 100vw, 512px"
+            sizes="100vw"
             priority={prioritert}
           />
         </div>

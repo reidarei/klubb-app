@@ -135,7 +135,6 @@ function KommentarTekst({ tekst }: { tekst: string }) {
               display: 'inline-flex',
               alignItems: 'center',
               color: 'var(--text-tertiary)',
-              cursor: 'pointer',
               ...KOMMENTAR_EKSPANDER_TREFF.stil,
             }}
           >
@@ -183,7 +182,7 @@ function KommentarMiniatyr({ src, href }: { src: string; href: string }) {
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); naviger(e) }
       }}
-      style={{ cursor: 'pointer', display: 'block', marginTop: 4 }}
+      style={{ display: 'block', marginTop: 4 }}
     >
       <div style={{ position: 'relative', width: 'min(140px, 100%)', height: 105, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-elevated)' }}>
         <Image src={bilde} alt="" fill sizes="140px" style={{ objectFit: 'cover' }} onError={() => setFeilet(true)} />
@@ -214,7 +213,6 @@ const HEADER_STIL = {
   letterSpacing: '1.4px',
   textTransform: 'uppercase',
   fontWeight: 600,
-  cursor: 'pointer',
   padding: '8px 10px',
   margin: '0 -10px',
 } as const
@@ -348,11 +346,8 @@ export default function KommentarerPaaKort({
   }
 
   // Long-press på mobil: hold i 350 ms åpner reaksjons-picker for denne raden.
-  // pointerdown/up dekker både touch og peker-enheter — bredere enn touchstart/end.
-  // Mus skippes fordi desktop bruker hover (onMouseEnter/Leave) — long-press på mus
-  // ville dupliserer flyt og forvirre. se #359-review.
+  // pointerdown/up dekker touch-enheter.
   const startLongPress = useCallback((kommentarId: string) => (e: React.PointerEvent) => {
-    if (e.pointerType === 'mouse') return
     e.stopPropagation()
     longPressStartRef.current = { x: e.clientX, y: e.clientY }
     setPressetId(kommentarId)
@@ -540,8 +535,6 @@ export default function KommentarerPaaKort({
                 key={k.id}
                 // Brukes av «trykk utenfor lukker»-lytteren til å kjenne igjen raden
                 data-kommentar-rad={k.id}
-                // Hover-gruppe: CSS-klasse for hover-avhengig + knapp
-                className="kommentar-rad-gruppe"
                 style={{
                   display: 'flex',
                   gap: 8,
@@ -562,7 +555,6 @@ export default function KommentarerPaaKort({
                 onPointerMove={sjekkBevegelse}
                 onPointerUp={avbrytLongPress}
                 onPointerCancel={avbrytLongPress}
-                onPointerLeave={avbrytLongPress}
                 // Hindre iOS context-meny når vi er midt i et long-press
                 onContextMenu={e => {
                   if (pressetId === k.id) e.preventDefault()
@@ -619,7 +611,7 @@ export default function KommentarerPaaKort({
                   {k.bilde_url && (
                     <KommentarMiniatyr src={k.bilde_url} href={detaljUrl(scope)} />
                   )}
-                  {/* Reaksjons-rad: badges alltid synlige, + knapp kun ved hover/long-press.
+                  {/* Reaksjons-rad: badges alltid synlige, + knapp kun ved long-press.
                       brukerId er alltid satt i denne konteksten (agendaforside), men
                       KommentarReaksjoner returnerer null ved tomme reaksjoner og lukket picker. */}
                   {brukerId && !erTempRad && (
@@ -707,7 +699,6 @@ export default function KommentarerPaaKort({
             aria-label="Send kommentar"
             style={{
               flexShrink: 0,
-              cursor: !tekst.trim() || sender ? 'default' : 'pointer',
               opacity: !tekst.trim() || sender ? 0.4 : 1,
             }}
           >

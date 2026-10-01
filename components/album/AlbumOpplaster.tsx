@@ -100,7 +100,6 @@ export default function AlbumOpplaster({ albumId }: { albumId: string }) {
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-body)',
           fontSize: 13,
-          cursor: pending ? 'default' : 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

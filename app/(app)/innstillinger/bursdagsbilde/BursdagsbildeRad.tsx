@@ -106,7 +106,6 @@ export default function BursdagsbildeRad({
             border: 'none',
             borderRadius: 8,
             overflow: 'hidden',
-            cursor: 'pointer',
             background: 'var(--bg-elevated)',
           }}
         >
@@ -178,7 +177,6 @@ export default function BursdagsbildeRad({
               fontFamily: 'var(--font-body)',
               fontSize: 12,
               fontWeight: 600,
-              cursor: noePaagaar || !harProfilbilde ? 'not-allowed' : 'pointer',
               opacity: !harProfilbilde ? 0.5 : 1,
             }}
           >
@@ -196,8 +194,7 @@ export default function BursdagsbildeRad({
                 borderRadius: 999,
                 color: 'var(--danger)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                cursor: noePaagaar ? 'wait' : 'pointer',
+                fontSize: 12
               }}
             >
               {fjerner ? 'Fjerner …' : 'Fjern bildet'}

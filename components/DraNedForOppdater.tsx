@@ -265,8 +265,7 @@ export default function DraNedForOppdater() {
               paddingRight: 0,
               display: 'flex',
               border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
+              background: 'transparent'
             }}
           >
             <span
@@ -288,7 +287,7 @@ export default function DraNedForOppdater() {
             synlig={28}
             onClick={() => setFeilet(false)}
             aria-label="Lukk"
-            style={{ flexShrink: 0, color: 'var(--text-tertiary)', cursor: 'pointer' }}
+            style={{ flexShrink: 0, color: 'var(--text-tertiary)' }}
           >
             <span
               style={{

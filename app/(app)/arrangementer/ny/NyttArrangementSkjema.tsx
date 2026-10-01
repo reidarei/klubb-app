@@ -217,7 +217,7 @@ export default function NyttArrangementSkjema({
               fill
               unoptimized
               style={{ objectFit: 'cover' }}
-              sizes="(max-width: 512px) 100vw, 512px"
+              sizes="100vw"
             />
           </div>
         ) : (

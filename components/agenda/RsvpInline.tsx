@@ -105,7 +105,6 @@ export default function RsvpInline({ arrangementId }: { arrangementId: string })
               fontFamily: 'var(--font-body)',
               fontSize: 14,
               fontWeight: 600,
-              cursor: isPending ? 'wait' : 'pointer',
               opacity: isPending ? 0.6 : 1,
               transition: 'background 0.12s, border 0.12s, opacity 0.12s',
             }}

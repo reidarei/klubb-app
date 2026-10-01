@@ -276,7 +276,7 @@ export default function RedigerSkjema({
                 fill
                 unoptimized
                 style={{ objectFit: 'cover' }}
-                sizes="(max-width: 512px) 100vw, 512px"
+                sizes="100vw"
               />
             ) : (
               <Image
@@ -284,7 +284,7 @@ export default function RedigerSkjema({
                 alt=""
                 fill
                 style={{ objectFit: 'cover' }}
-                sizes="(max-width: 512px) 100vw, 512px"
+                sizes="100vw"
               />
             )}
           </div>
@@ -469,8 +469,7 @@ export default function RedigerSkjema({
                 color: 'var(--danger)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
+                fontWeight: 600
               }}
             >
               Slett arrangement
@@ -501,8 +500,7 @@ export default function RedigerSkjema({
                   background: 'transparent',
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  cursor: 'pointer',
+                  fontSize: 13
                 }}
               >
                 Avbryt
@@ -521,7 +519,6 @@ export default function RedigerSkjema({
                   fontFamily: 'var(--font-body)',
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: 'pointer',
                   opacity: isPending ? 0.7 : 1,
                 }}
               >

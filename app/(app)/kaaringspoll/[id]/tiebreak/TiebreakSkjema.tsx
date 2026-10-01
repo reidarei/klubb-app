@@ -111,8 +111,7 @@ export default function TiebreakSkjema({ pollId, tittel, undertittel, kandidater
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 15,
-                textAlign: 'left',
-                cursor: 'pointer',
+                textAlign: 'left'
               }}
             >
               <KaaringKandidat
@@ -144,8 +143,7 @@ export default function TiebreakSkjema({ pollId, tittel, undertittel, kandidater
             border: '0.5px solid var(--border)',
             borderRadius: 999,
             fontFamily: 'var(--font-body)',
-            fontSize: 14,
-            cursor: 'pointer',
+            fontSize: 14
           }}
         >
           Avbryt
@@ -164,7 +162,6 @@ export default function TiebreakSkjema({ pollId, tittel, undertittel, kandidater
             fontFamily: 'var(--font-body)',
             fontSize: 14,
             fontWeight: 600,
-            cursor: isPending || !valgt ? 'default' : 'pointer',
             opacity: isPending || !valgt ? 0.5 : 1,
           }}
         >

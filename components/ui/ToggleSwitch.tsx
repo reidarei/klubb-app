@@ -29,7 +29,6 @@ export default function ToggleSwitch({
     background: on ? 'var(--accent)' : 'transparent',
     border: on ? 'none' : '0.5px solid var(--border)',
     position: 'relative',
-    cursor: disabled ? 'not-allowed' : 'pointer',
     flexShrink: 0,
     transition: 'background 0.2s',
     opacity: disabled ? 0.5 : 1,

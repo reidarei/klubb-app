@@ -126,7 +126,6 @@ export default function RsvpBlokk({
             fontSize: 12,
             fontWeight: 500,
             letterSpacing: '0.1px',
-            cursor: 'pointer',
             flexShrink: 0,
           }}
         >
@@ -169,7 +168,6 @@ export default function RsvpBlokk({
               fontSize: 9,
               letterSpacing: '1.8px',
               textTransform: 'uppercase',
-              cursor: 'pointer',
               padding: 0,
               fontWeight: 600,
             }}
@@ -212,7 +210,6 @@ export default function RsvpBlokk({
                   : '1px solid var(--border)',
                 color: erAktiv && erJa ? 'var(--accent-foreground)' : 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
-                cursor: 'pointer',
                 transition: 'background 0.15s, border 0.15s',
                 opacity: isPending ? 0.6 : 1,
               }}

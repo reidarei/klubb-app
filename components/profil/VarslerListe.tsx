@@ -129,7 +129,6 @@ export default function VarslerListe({
             font: 'inherit',
             letterSpacing: 'inherit',
             textTransform: 'inherit',
-            cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
@@ -197,7 +196,6 @@ export default function VarslerListe({
                 fontSize: 12,
                 fontWeight: 500,
                 color: kunUleste ? 'var(--accent)' : 'var(--text-tertiary)',
-                cursor: 'pointer',
                 letterSpacing: '-0.1px',
               }}
               aria-pressed={kunUleste}
@@ -218,7 +216,6 @@ export default function VarslerListe({
                 fontWeight: 500,
                 color: totalUlest === 0 ? 'var(--text-tertiary)' : 'var(--accent)',
                 opacity: totalUlest === 0 || isPending ? 0.5 : 1,
-                cursor: totalUlest === 0 ? 'default' : 'pointer',
                 letterSpacing: '-0.1px',
               }}
             >

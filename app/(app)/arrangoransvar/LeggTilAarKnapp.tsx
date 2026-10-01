@@ -35,7 +35,6 @@ export default function LeggTilAarKnapp({ aar }: { aar: number }) {
           fontWeight: 600,
           letterSpacing: '1.4px',
           textTransform: 'uppercase',
-          cursor: isPending ? 'wait' : 'pointer',
           alignSelf: 'flex-start',
         }}
       >

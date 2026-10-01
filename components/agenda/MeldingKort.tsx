@@ -197,9 +197,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
           onTouchEnd={clearLongPress}
           onTouchMove={clearLongPress}
           onTouchCancel={clearLongPress}
-          onMouseDown={startLongPress}
-          onMouseUp={clearLongPress}
-          onMouseLeave={clearLongPress}
           style={{
             padding: '10px 14px',
             WebkitUserSelect: 'none',
@@ -248,7 +245,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
               </span>
               {melding.fraFacebook && (
                 <span
-                  title="Importert fra Facebook"
                   style={{
                     fontFamily: 'var(--font-mono)',
                     fontSize: 9,
@@ -261,7 +257,10 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                     opacity: 0.7,
                   }}
                 >
-                  Facebook
+                  {/* Kort merkelapp for seende, full forklaring for skjermleser (#796:
+                      title-tooltip finnes ikke på touch). */}
+                  <span aria-hidden="true">Facebook</span>
+                  <span className="sr-only">Importert fra Facebook</span>
                 </span>
               )}
             </div>
@@ -275,7 +274,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             {kanFlytte && !melding.tidligere && (
               <button
                 type="button"
-                title="Flytt til Tidligere"
                 aria-label="Flytt innlegget til Tidligere"
                 onClick={e => {
                   e.preventDefault()
@@ -285,7 +283,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 style={{
                   background: 'none',
                   border: 'none',
-                  cursor: 'pointer',
                   padding: 4,
                   color: 'var(--text-tertiary)',
                   flexShrink: 0,
@@ -298,7 +295,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             {kanFlytte && melding.tidligere && (
               <button
                 type="button"
-                title="Hent tilbake fra Tidligere"
                 aria-label="Hent innlegget tilbake fra Tidligere"
                 onClick={e => {
                   e.preventDefault()
@@ -308,7 +304,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 style={{
                   background: 'none',
                   border: 'none',
-                  cursor: 'pointer',
                   padding: 4,
                   color: 'var(--text-tertiary)',
                   flexShrink: 0,
@@ -380,7 +375,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                     src={albumBilde}
                     alt=""
                     fill
-                    sizes="(max-width: 512px) 100vw, 512px"
+                    sizes="100vw"
                     style={{ objectFit: 'cover' }}
                   />
                 </div>
@@ -407,7 +402,6 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                   }
                 }}
                 style={{
-                  cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
@@ -452,7 +446,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 src={foersteBilde}
                 alt=""
                 fill
-                sizes="(max-width: 512px) 100vw, 512px"
+                sizes="100vw"
                 style={{ objectFit: 'cover' }}
               />
             </div>
@@ -486,7 +480,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                       src={bilde}
                       alt=""
                       fill
-                      sizes="(max-width: 512px) 50vw, 256px"
+                      sizes="50vw"
                       style={{ objectFit: 'cover' }}
                     />
                     {/* Overlay på 4. celle når det finnes flere enn 4 bilder */}

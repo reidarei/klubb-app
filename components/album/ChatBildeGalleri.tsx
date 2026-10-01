@@ -78,7 +78,6 @@ export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
                 borderRadius: 'var(--radius-small)',
                 overflow: 'hidden',
                 background: 'var(--bg-elevated)',
-                cursor: 'pointer',
                 display: 'block',
                 textAlign: 'left',
               }}
@@ -89,7 +88,7 @@ export default function ChatBildeGalleri({ bilder }: { bilder: ChatBilde[] }) {
                   alt=""
                   fill
                   style={{ objectFit: 'cover' }}
-                  sizes="(max-width: 480px) 50vw, 240px"
+                  sizes="50vw"
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 8px' }}>

@@ -116,7 +116,7 @@ async function ventTilKlar() {
 }
 
 // Kopiert fra __tests__/album-lightbox-gest.test.tsx. `pointerType` default
-// 'touch' — gesten skal virke på touch, IKKE på mouse (test 5).
+// 'touch' — touch er eneste målflate (#796).
 function pointer(
   type: 'pointerdown' | 'pointerup' | 'pointermove' | 'pointercancel',
   maal: HTMLElement,
@@ -278,23 +278,6 @@ describe('langtrykk på kartflaten (#762) — commit', () => {
 
     expect(panToKall).toHaveLength(0)
     expect(sikte()).toBeNull()
-  })
-
-  it("pointerType 'mouse': ingen gest", async () => {
-    monter()
-    const node = await ventTilKlar()
-    // waitFor() over bruker EKTE setTimeout internt — fake timers skrus derfor
-    // på FØRST etter at kartet er klart, ikke i beforeEach.
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-
-    pointer('pointerdown', node, { x: 90, y: 90, pointerType: 'mouse' })
-    act(() => {
-      vi.advanceTimersByTime(LONG_PRESS_MS)
-    })
-    expect(ring()).toBeNull()
-    pointer('pointerup', node, { x: 90, y: 90, pointerType: 'mouse' })
-
-    expect(panToKall).toHaveLength(0)
   })
 
   it('andre peker ned mens første holder (pinch): avbrutt', async () => {

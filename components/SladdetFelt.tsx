@@ -12,7 +12,10 @@ export default function SladdetFelt({ bredde = '7rem' }: { bredde?: string }) {
         verticalAlign: 'middle',
         display: 'inline-block',
       }}
-      title="Sensurert"
+      // role=img + aria-label: skjermleseren sier «Sensurert»; title-tooltip
+      // finnes ikke på touch (#796).
+      role="img"
+      aria-label="Sensurert"
     />
   )
 }

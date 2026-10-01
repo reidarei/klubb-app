@@ -58,7 +58,6 @@ export default function BildeBytterKnapp({
           fontSize: 12,
           fontWeight: 500,
           fontFamily: 'var(--font-body)',
-          cursor: laster ? 'wait' : 'pointer',
           opacity: laster ? 0.7 : 1,
           ...style,
         }}

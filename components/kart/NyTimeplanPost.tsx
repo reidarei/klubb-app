@@ -96,8 +96,7 @@ export default function NyTimeplanPost({
                   borderRadius: 'var(--radius-pill)',
                   border: valgt ? '1px solid var(--accent)' : '0.5px solid var(--border)',
                   background: valgt ? 'var(--accent-soft)' : 'transparent',
-                  color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
+                  color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)'
                 }}
               >
                 {d.label}
@@ -148,8 +147,7 @@ export default function NyTimeplanPost({
             borderRadius: 'var(--radius-pill)',
             border: '0.5px solid var(--border)',
             background: effektivKlokke ? 'var(--accent-soft)' : 'transparent',
-            color: effektivKlokke ? 'var(--text-primary)' : 'var(--text-tertiary)',
-            cursor: 'pointer',
+            color: effektivKlokke ? 'var(--text-primary)' : 'var(--text-tertiary)'
           }}
         >
           {effektivKlokke
@@ -226,8 +224,7 @@ export default function NyTimeplanPost({
                 borderRadius: 'var(--radius-pill)',
                 border: '0.5px solid var(--kart-kant)',
                 background: 'var(--accent-soft)',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
+                color: 'var(--text-primary)'
               }}
             >
               📍 Punkt satt ✕
@@ -244,8 +241,7 @@ export default function NyTimeplanPost({
                 borderRadius: 'var(--radius-pill)',
                 border: '0.5px solid var(--border)',
                 background: 'transparent',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
+                color: 'var(--text-secondary)'
               }}
             >
               Sett punkt
@@ -268,7 +264,6 @@ export default function NyTimeplanPost({
             border: 'none',
             background: 'var(--kart-sol)',
             color: 'var(--kart-sol-tekst)',
-            cursor: 'pointer',
             opacity: parsed.tekst.trim() ? 1 : 0.5,
             marginLeft: 'auto',
           }}

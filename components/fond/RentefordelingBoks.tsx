@@ -29,19 +29,14 @@ export default function RentefordelingBoks({ onLukk }: { onLukk: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onLukk()
-    }
-    document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    // Flytt fokus inn i panelet så skjermleser og tastatur følger med hit.
+    // Flytt fokus inn i panelet så skjermleser følger med hit.
     panelRef.current?.focus()
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = forrigeOverflow
     }
-  }, [onLukk])
+  }, [])
 
   const innhold = (
     <div
@@ -100,7 +95,6 @@ export default function RentefordelingBoks({ onLukk }: { onLukk: () => void }) {
               border: 'none',
               background: 'transparent',
               color: 'var(--text-tertiary)',
-              cursor: 'pointer',
               padding: 4,
               display: 'flex',
               flexShrink: 0,

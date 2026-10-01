@@ -110,7 +110,7 @@ export default function IssuesListeKlient({ aapne }: { aapne: GitHubIssue[] }) {
           onClick={toggleLukkede}
           disabled={laster}
           className="text-xs font-medium mb-2"
-          style={{ color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          style={{ color: 'var(--text-tertiary)', background: 'none', border: 'none', padding: 0 }}
         >
           {laster ? 'Laster…' : visLukkede ? '▾ Skjul lukkede' : '▸ Vis lukkede'}
         </button>
@@ -127,7 +127,7 @@ export default function IssuesListeKlient({ aapne }: { aapne: GitHubIssue[] }) {
                 onClick={() => hentLukkede(side + 1)}
                 disabled={laster}
                 className="text-xs font-medium mt-2 block"
-                style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                style={{ color: 'var(--accent)', background: 'none', border: 'none', padding: 0 }}
               >
                 {laster ? 'Laster…' : 'Vis flere'}
               </button>

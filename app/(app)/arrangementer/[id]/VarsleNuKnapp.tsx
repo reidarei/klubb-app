@@ -23,13 +23,8 @@ export default function VarsleNuKnapp({
   const sendingRef = useRef(false)
   // Ref på utløser-knappen for focus-retur når modalen lukkes. Sentralt
   // håndtert i useEffect-cleanup nedenfor slik at alle lukke-veier
-  // (Escape, overlay-klikk, Avbryt-knapp, suksess) treffes samtidig.
+  // (overlay-klikk, Avbryt-knapp, suksess) treffes samtidig.
   const triggerRef = useRef<HTMLButtonElement>(null)
-  // Holder siste isPending-verdi tilgjengelig inne i onKey uten å måtte
-  // legge isPending i useEffect-deps (som ville trigget cleanup ved hver
-  // pending-endring og dermed feilaktig focus-retur mens modalen er åpen).
-  const isPendingRef = useRef(isPending)
-  isPendingRef.current = isPending
 
   function aapneModal() {
     if (sendt || isPending) return
@@ -60,15 +55,11 @@ export default function VarsleNuKnapp({
     })
   }
 
-  // Lukk modalen med Escape, lås body-scroll mens den er åpen, og returner
-  // fokus til utløser-knappen ved lukking. Sentral cleanup dekker alle
-  // lukke-veier (Escape, overlay, Avbryt, suksess) i én slag.
+  // Lås body-scroll mens modalen er åpen, og returner fokus til
+  // utløser-knappen ved lukking. Sentral cleanup dekker alle lukke-veier
+  // (overlay, Avbryt, suksess) i én slag.
   useEffect(() => {
     if (!modalAapen) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !isPendingRef.current) setModalAapen(false)
-    }
-    document.addEventListener('keydown', onKey)
     const forrigeOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     // Snapshot trigger ved effekt-start — trigger-knappen forblir mounted
@@ -76,11 +67,9 @@ export default function VarsleNuKnapp({
     // tilfredsstiller react-hooks/exhaustive-deps-linteren.
     const triggerNode = triggerRef.current
     return () => {
-      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = forrigeOverflow
-      // Focus-retur til trigger — viktig for tastatur- og skjermleser-
-      // brukere som ellers mister fokus til <body> etter at modalen
-      // forsvinner fra DOM.
+      // Focus-retur til trigger — viktig for skjermleser-brukere som
+      // ellers mister fokus til <body> etter at modalen forsvinner fra DOM.
       triggerNode?.focus()
     }
   }, [modalAapen])
@@ -114,7 +103,6 @@ export default function VarsleNuKnapp({
           fontFamily: 'var(--font-body)',
           fontSize: 12,
           fontWeight: 500,
-          cursor: sendt || isPending ? 'default' : 'pointer',
           opacity: isPending ? 0.6 : 1,
         }}
       >
@@ -247,8 +235,7 @@ export default function VarsleNuKnapp({
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
+                  textTransform: 'uppercase'
                 }}
               >
                 Avbryt
@@ -268,7 +255,6 @@ export default function VarsleNuKnapp({
                   fontWeight: 600,
                   letterSpacing: '1.4px',
                   textTransform: 'uppercase',
-                  cursor: isPending ? 'default' : 'pointer',
                   opacity: isPending ? 0.7 : 1,
                 }}
               >

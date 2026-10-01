@@ -260,7 +260,7 @@ export default async function ArrangementDetaljer({
               alt=""
               fill
               style={{ objectFit: 'cover' }}
-              sizes="(max-width: 512px) 100vw, 512px"
+              sizes="100vw"
               priority
             />
           </div>

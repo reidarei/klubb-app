@@ -182,7 +182,6 @@ export default async function MeldingDetalj({
               })}
               {melding.fra_facebook && (
                 <span
-                  title="Importert fra Facebook"
                   style={{
                     marginLeft: 8,
                     border: '0.5px solid var(--border)',
@@ -192,7 +191,10 @@ export default async function MeldingDetalj({
                     opacity: 0.7,
                   }}
                 >
-                  Facebook
+                  {/* Kort merkelapp for seende, full forklaring for skjermleser (#796:
+                      title-tooltip finnes ikke på touch). */}
+                  <span aria-hidden="true">Facebook</span>
+                  <span className="sr-only">Importert fra Facebook</span>
                 </span>
               )}
             </div>
@@ -219,7 +221,7 @@ export default async function MeldingDetalj({
                   src={albumKortBilde}
                   alt=""
                   fill
-                  sizes="(max-width: 512px) 100vw, 512px"
+                  sizes="100vw"
                   style={{ objectFit: 'cover' }}
                   priority
                 />

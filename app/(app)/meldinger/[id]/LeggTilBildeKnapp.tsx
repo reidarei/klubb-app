@@ -83,8 +83,7 @@ export default function LeggTilBildeKnapp({
           borderRadius: 999,
           color: 'var(--text-secondary)',
           fontFamily: 'var(--font-body)',
-          fontSize: 12,
-          cursor: isPending ? 'wait' : 'pointer',
+          fontSize: 12
         }}
       >
         <Icon name="image" size={14} color="currentColor" strokeWidth={1.6} />

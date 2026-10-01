@@ -108,7 +108,6 @@ export default function AlbumSeksjon({
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -163,7 +162,6 @@ export default function AlbumSeksjon({
                       padding: 0,
                       overflow: 'hidden',
                       borderRadius: 6,
-                      cursor: 'zoom-in',
                       background: 'var(--bg-elevated)',
                     }}
                   >

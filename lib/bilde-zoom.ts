@@ -4,10 +4,9 @@
 // vitest i stedet for e2e (__tests__/bilde-zoom.test.ts).
 //
 // Merk: matematikken er bare halve historien. Selve gest-maskinen (hvilke
-// pekere er nede, når er en gest et sveip/pinch/trykk, er wheel-lytteren i det
-// hele tatt registrert) testes som komponent i jsdom —
-// __tests__/album-lightbox-gest.test.tsx. Begge de alvorlige feilene i første
-// runde av #625 lå i maskinen, ikke i formlene her.
+// pekere er nede, når er en gest et sveip/pinch/trykk) testes som komponent
+// i jsdom — __tests__/album-lightbox-gest.test.tsx. Den alvorlige feilen i
+// første runde av #625 lå i maskinen, ikke i formlene her.
 //
 // Grensene bor her og ikke i lib/konstanter.ts: den fila er for
 // domenekonstanter (tegnegrenser, dag-vinduer), mens dette er gest-parametere

@@ -45,7 +45,6 @@ export default function SegmentPiller<T extends string>({
             fontSize: 12,
             fontWeight: 600,
             color: aktiv === key ? 'var(--accent)' : 'var(--text-tertiary)',
-            cursor: disabled ? 'default' : 'pointer',
             opacity: disabled ? 0.6 : 1,
             letterSpacing: '-0.1px',
           }}

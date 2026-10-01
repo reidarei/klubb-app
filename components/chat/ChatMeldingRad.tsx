@@ -1,9 +1,7 @@
 'use client'
 
 import Avatar from '@/components/ui/Avatar'
-import Icon from '@/components/ui/Icon'
 import MessengerBadge from '@/components/ui/MessengerBadge'
-import Treffflate from '@/components/ui/Treffflate'
 import { formaterDatoSkille } from '@/lib/dato'
 import { REAKSJON_EMOJIS, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { LinkifiedMedMentions } from './LinkifiedMedMentions'
@@ -91,6 +89,10 @@ export default function ChatMeldingRad({
   // Første eksterne lenke får forhåndsvisningskort (#782). Billig nok til å
   // regnes per render — samme splitt som LinkifiedMedMentions gjør uansett.
   const lenke = m.innhold ? velgForhaandsvisningsLenke(splittPaaUrler(m.innhold)) : null
+  const visRediger = tillatRediger && erEgen && m.innhold !== null
+  // «Slett» flyttet inn i long-press-pickeren (#796) — ingen separat
+  // hover-knapp på selve boblen lenger.
+  const visSlett = kanSlette && !m.id.startsWith('temp-')
   return (
     <>
       {visDatoSkille && (
@@ -200,9 +202,6 @@ export default function ChatMeldingRad({
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     handlers.lagreEdit(m.id)
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    handlers.avbrytEdit()
                   }
                 }}
                 maxLength={charLimit}
@@ -242,8 +241,7 @@ export default function ChatMeldingRad({
                     fontSize: 9,
                     letterSpacing: '1.4px',
                     textTransform: 'uppercase',
-                    fontWeight: 600,
-                    cursor: lagrerEdit ? 'wait' : 'pointer',
+                    fontWeight: 600
                   }}
                 >
                   Avbryt
@@ -263,8 +261,6 @@ export default function ChatMeldingRad({
                     letterSpacing: '1.4px',
                     textTransform: 'uppercase',
                     fontWeight: 600,
-                    cursor:
-                      lagrerEdit || !editTekst.trim() ? 'default' : 'pointer',
                     opacity: lagrerEdit || !editTekst.trim() ? 0.5 : 1,
                   }}
                 >
@@ -279,8 +275,8 @@ export default function ChatMeldingRad({
             onTouchMove={handlers.clearLongPress}
             onTouchCancel={handlers.clearLongPress}
             onContextMenu={e => {
-              // Hindrer iOS sin native callout (kopier/del) og
-              // fungerer som desktop-høyreklikk-trigger.
+              // preventDefault stopper iOS' callout (kopier/del); Android
+              // Chrome fyrer contextmenu ved langtrykk (e2e bruker høyreklikk).
               e.preventDefault()
               if (!m.id.startsWith('temp-')) handlers.setPickerFor(m.id)
             }}
@@ -298,7 +294,6 @@ export default function ChatMeldingRad({
               letterSpacing: '0.1px',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              cursor: 'default',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               WebkitTouchCallout: 'none',
@@ -323,7 +318,6 @@ export default function ChatMeldingRad({
                   borderRadius: 8,
                   background: 'var(--foto-tom-bg)',
                   margin: m.innhold ? '0 0 8px' : 0,
-                  cursor: 'zoom-in',
                   maxWidth: '100%',
                 }}
                 aria-label="Vis bilde i full skjerm"
@@ -371,6 +365,21 @@ export default function ChatMeldingRad({
             )}
             {lenke && <LenkeKort href={lenke.href} />}
           </div>
+          )}
+          {/* Skjermleser-inngang til Rediger/Slett (#796): long-press er
+              eneste visuelle vei inn i pickeren, og den gamle kryss-knappen
+              (synlig via :focus-within) er borte. Visuelt skjult, ingen
+              endring for seende. Ligger rett før pickeren i DOM-en, så neste
+              sveip etter åpning lander på reaksjonene og handlingene. */}
+          {!editerer && (visRediger || visSlett) && (
+            <button
+              type="button"
+              aria-expanded={pickerAapen}
+              onClick={() => handlers.setPickerFor(pickerAapen ? null : m.id)}
+              style={SR_ONLY}
+            >
+              Meldingsvalg
+            </button>
           )}
           {m.fra_facebook && <MessengerBadge erEgen={erEgen} />}
           {/* Reaksjons-chips — flyter på bunnkanten av bobla, ikke
@@ -420,7 +429,6 @@ export default function ChatMeldingRad({
                       fontSize: 11,
                       lineHeight: 1.2,
                       color: 'var(--text-primary)',
-                      cursor: 'pointer',
                       fontFamily: 'var(--font-body)',
                     }}
                     aria-label={`${emoji} ${antall} ${minReaksjon ? '(fjern din reaksjon)' : '(reager også)'}`}
@@ -459,6 +467,10 @@ export default function ChatMeldingRad({
                   background: 'transparent',
                 }}
               />
+              {/* To rader (#796): reaksjonene alene er 6 × 44 px + padding ≈
+                  280 px; med Rediger/Slett på samme rad ble pillen ~420 px og
+                  gikk utenfor en 375 px-skjerm. Handlingene får egen pille
+                  under, nærmest bobla. */}
               <div
                 style={{
                   position: 'absolute',
@@ -466,113 +478,93 @@ export default function ChatMeldingRad({
                   [erEgen ? 'right' : 'left']: 0,
                   zIndex: 100,
                   display: 'flex',
-                  // 0, ikke 4 (#700): knappene er hver MIN_TREFFMAAL_PX —
-                  // ingen ekstra gap trengs (jf. ReaksjonPicker).
-                  gap: 0,
-                  // Vertikal padding 0 (#700, jf. ReaksjonPicker): popoveren
-                  // blir da ikke høyere enn de 44 px knappene selv.
-                  padding: '0 8px',
-                  borderRadius: 999,
-                  background: 'var(--bg-elevated)',
-                  border: '0.5px solid var(--border-strong)',
-                  boxShadow: 'var(--shadow-popover)',
+                  flexDirection: 'column',
+                  alignItems: erEgen ? 'flex-end' : 'flex-start',
+                  gap: 6,
                 }}
               >
-                {REAKSJON_EMOJIS.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handlers.toggleReaksjon(m.id, emoji)}
-                    style={{
-                      // Fast width/height, ikke Treffflate (#700, unntak a):
-                      // usynlig flate rundt hver ville overlappet naboene.
-                      width: MIN_TREFFMAAL_PX,
-                      height: MIN_TREFFMAAL_PX,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: 20,
-                      cursor: 'pointer',
-                      padding: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                    aria-label={`Reager med ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-                {tillatRediger && erEgen && m.innhold !== null && (
-                  <>
-                    <div
-                      style={{
-                        width: '0.5px',
-                        background: 'var(--border-subtle)',
-                        margin: '4px 4px',
-                      }}
-                      aria-hidden="true"
-                    />
+                <div
+                  style={{
+                    display: 'flex',
+                    // 0, ikke 4 (#700): knappene er hver MIN_TREFFMAAL_PX —
+                    // ingen ekstra gap trengs (jf. ReaksjonPicker).
+                    gap: 0,
+                    // Vertikal padding 0 (#700, jf. ReaksjonPicker): popoveren
+                    // blir da ikke høyere enn de 44 px knappene selv.
+                    padding: '0 8px',
+                    ...PICKER_PILLE,
+                  }}
+                >
+                  {REAKSJON_EMOJIS.map(emoji => (
                     <button
+                      key={emoji}
                       type="button"
-                      onClick={() => handlers.startEdit(m.id, m.innhold!)}
+                      onClick={() => handlers.toggleReaksjon(m.id, emoji)}
                       style={{
-                        // Høyden matcher emoji-knappene (#700) — bredden er
-                        // allerede tekst-drevet og godt over 44.
+                        // Fast width/height, ikke Treffflate (#700, unntak a):
+                        // usynlig flate rundt hver ville overlappet naboene.
+                        width: MIN_TREFFMAAL_PX,
                         height: MIN_TREFFMAAL_PX,
-                        borderRadius: 999,
+                        borderRadius: '50%',
                         border: 'none',
                         background: 'transparent',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: 'var(--text-secondary)',
-                        letterSpacing: '1.4px',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        padding: '0 12px',
+                        fontSize: 20,
+                        padding: 0,
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                      aria-label="Rediger melding"
+                      aria-label={`Reager med ${emoji}`}
                     >
-                      Rediger
+                      {emoji}
                     </button>
-                  </>
+                  ))}
+                </div>
+                {(visRediger || visSlett) && (
+                  <div style={{ display: 'flex', gap: 0, padding: '0 4px', ...PICKER_PILLE }}>
+                    {visRediger && (
+                      <button
+                        type="button"
+                        onClick={() => handlers.startEdit(m.id, m.innhold!)}
+                        style={{
+                          ...HANDLING_KNAPP,
+                          color: 'var(--text-secondary)',
+                        }}
+                        aria-label="Rediger melding"
+                      >
+                        Rediger
+                      </button>
+                    )}
+                    {visRediger && visSlett && (
+                      <div
+                        style={{
+                          width: '0.5px',
+                          background: 'var(--border-subtle)',
+                          margin: '8px 0',
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    {visSlett && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handlers.setPickerFor(null)
+                          handlers.handleSlett(m.id)
+                        }}
+                        style={{
+                          ...HANDLING_KNAPP,
+                          color: 'var(--danger)',
+                        }}
+                        aria-label="Slett melding"
+                      >
+                        Slett
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </>
-          )}
-          {kanSlette && !m.id.startsWith('temp-') && (
-            <Treffflate
-              synlig={20}
-              className="chat-slett-knapp"
-              aria-label="Slett melding"
-              onClick={() => handlers.handleSlett(m.id)}
-              style={{
-                position: 'absolute',
-                top: -6,
-                [erEgen ? 'left' : 'right']: -6,
-                opacity: 0,
-                transition: 'opacity 120ms',
-                cursor: 'pointer',
-              }}
-            >
-              <span
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: '50%',
-                  background: 'var(--bg-elevated)',
-                  border: '0.5px solid var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name="x" size={10} color="var(--danger)" strokeWidth={2} />
-              </span>
-            </Treffflate>
           )}
         </div>
       </div>
@@ -580,3 +572,41 @@ export default function ChatMeldingRad({
     </>
   )
 }
+
+// Visuelt skjult, men lesbar for VoiceOver/TalkBack — samme teknikk som
+// MiniKalender.
+const SR_ONLY = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const
+
+// Felles flate for de to pillene i long-press-pickeren (#796).
+const PICKER_PILLE = {
+  borderRadius: 999,
+  background: 'var(--bg-elevated)',
+  border: '0.5px solid var(--border-strong)',
+  boxShadow: 'var(--shadow-popover)',
+} as const
+
+// Rediger/Slett: høyden matcher emoji-knappene (#700) — bredden er
+// tekst-drevet og godt over 44 px.
+const HANDLING_KNAPP = {
+  height: MIN_TREFFMAAL_PX,
+  borderRadius: 999,
+  border: 'none',
+  background: 'transparent',
+  fontFamily: 'var(--font-mono)',
+  fontSize: 9,
+  letterSpacing: '1.4px',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+  padding: '0 14px',
+  display: 'flex',
+  alignItems: 'center',
+} as const

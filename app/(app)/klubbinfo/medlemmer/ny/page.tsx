@@ -165,8 +165,7 @@ export default function NyttMedlem() {
             border: 'none',
             fontFamily: 'var(--font-body)',
             fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
+            fontWeight: 600
           }}
         >
           Tilbake til medlemslisten

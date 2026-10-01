@@ -41,8 +41,7 @@ const inputStil: CSSProperties = {
   outline: 'none',
   padding: 0,
   appearance: 'none',
-  WebkitAppearance: 'none',
-  cursor: 'pointer',
+  WebkitAppearance: 'none'
 }
 
 export default function TypeVelger({ valg, valgtKey, onValg }: Props) {

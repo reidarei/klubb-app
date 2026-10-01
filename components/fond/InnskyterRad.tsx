@@ -169,7 +169,6 @@ export default function InnskyterRad({
             ...radStil,
             background: 'none',
             border: 'none',
-            cursor: 'pointer',
             font: 'inherit',
             color: 'inherit',
             textAlign: 'left',
@@ -208,8 +207,7 @@ export default function InnskyterRad({
                     font: 'inherit',
                     color: 'var(--accent)',
                     textDecoration: 'underline',
-                    textUnderlineOffset: 2,
-                    cursor: 'pointer',
+                    textUnderlineOffset: 2
                   }}
                 >
                   andel

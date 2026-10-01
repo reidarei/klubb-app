@@ -98,7 +98,7 @@ export function Linkified({ text, inneILenke = false }: { text: string; inneILen
                 tabIndex={0}
                 onClick={aapne}
                 onKeyDown={(e) => { if (e.key === 'Enter') aapne(e) }}
-                style={{ ...lenkeStil, cursor: 'pointer' }}
+                style={{ ...lenkeStil }}
               >
                 {del.verdi}
               </span>

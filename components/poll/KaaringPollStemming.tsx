@@ -66,7 +66,6 @@ export default function KaaringPollStemming({ pollId, valg, mineStemmer }: Props
                 fontFamily: 'var(--font-body)',
                 fontSize: 15,
                 textAlign: 'left',
-                cursor: 'pointer',
                 transition: 'background 120ms, border-color 120ms',
               }}
             >
@@ -128,7 +127,6 @@ export default function KaaringPollStemming({ pollId, valg, mineStemmer }: Props
           fontFamily: 'var(--font-body)',
           fontSize: 14,
           fontWeight: 600,
-          cursor: isPending || !harEndret ? 'default' : 'pointer',
           opacity: isPending || !harEndret ? 0.5 : 1,
         }}
       >

@@ -101,8 +101,7 @@ export default function GlobalError({
             background: '#e8d9b5',
             color: '#0a0a0a',
             fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
+            fontWeight: 600
           }}
         >
           Prøv igjen
