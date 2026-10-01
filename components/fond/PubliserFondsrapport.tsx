@@ -12,16 +12,19 @@
 // kun innholdet får plass å scrolle i). Scroll ved fokus + mens tastaturet
 // vokser, samme mønster som components/kart/TimeplanPanel.tsx og
 // components/album/BildeKommentarSheet.tsx.
-import { useState, useRef, useEffect, useId, useTransition, type CSSProperties } from 'react'
+import { useState, useRef, useEffect, useId, useMemo, useTransition, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
+import Avatar from '@/components/ui/Avatar'
+import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
+import { Linkified } from '@/lib/linkify'
 import { useTastaturHoyde } from '@/components/chat/hooks/useKeyboardOffset'
 import {
   hentFondsrapportUtkast,
   publiserFondsrapport,
   type FondsrapportUtkast,
 } from '@/lib/actions/fondsrapport'
-import { heleKr } from '@/lib/fondsrapport'
+import { heleKr, lesFondsrapport } from '@/lib/fondsrapport'
 import { formaterDato } from '@/lib/dato'
 
 // redirect() i publiserFondsrapport kaster en spesiell NEXT_REDIRECT-feil
@@ -37,7 +40,16 @@ function erNextRedirect(err: unknown): boolean {
   )
 }
 
-export default function PubliserFondsrapport() {
+type Props = {
+  /** Innloggede admins navn — vises som forfatter i forhåndsvisningen. */
+  navn: string
+  bildeUrl: string | null
+  rolle: string | null
+  /** Trengs av FondsrapportBlokk for å utheve egen linje (samme ref-logikk som i det ekte kortet). */
+  brukerId: string
+}
+
+export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }: Props) {
   const [apen, setApen] = useState(false)
   const [utkast, setUtkast] = useState<FondsrapportUtkast | null>(null)
   const [henter, setHenter] = useState(false)
@@ -141,6 +153,15 @@ export default function PubliserFondsrapport() {
   // rapportblokken — serveren regner den ut og validerer den på nytt.
   const maksHilsen = utkast?.maksHilsen ?? 0
   const klar = !!utkast && hilsen.length <= maksHilsen
+
+  // Forhåndsvisning (#787): samme inngang som kortet på agendaen bruker
+  // (lesFondsrapport), kjørt på den ferdige blokken fra serveren — admin skal
+  // se nøyaktig samme rapportkort han ville fått i innlegget, ikke en egen
+  // gjenimplementering av formateringen i klienten.
+  const rapportForhaandsvisning = useMemo(
+    () => (utkast ? lesFondsrapport(utkast.blokk)?.rapport ?? null : null),
+    [utkast],
+  )
 
   return (
     <>
@@ -309,6 +330,69 @@ export default function PubliserFondsrapport() {
                 <div style={{ ...mono, textAlign: 'right', marginTop: 6, marginBottom: 18 }}>
                   {maksHilsen - hilsen.length} tegn igjen
                 </div>
+
+                {/* Forhåndsvisning (#787): samme ramme og tokens som
+                    MeldingKort.tsx bruker for forfatter-rad + tekst + blokk —
+                    ikke MeldingKort selv, som er en Link med reaksjoner og
+                    hooks arket ikke trenger. Live mens han skriver. */}
+                {rapportForhaandsvisning && (
+                  <>
+                    <div style={{ ...mono, marginBottom: 8 }}>Slik blir det</div>
+                    <div
+                      style={{
+                        marginBottom: 18,
+                        borderRadius: 'var(--radius-card)',
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <Avatar name={navn} size={26} src={bildeUrl} rolle={rolle} />
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-body)',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: 'var(--text-primary)',
+                              }}
+                            >
+                              {navn}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 9,
+                                color: 'var(--text-tertiary)',
+                                letterSpacing: '0.8px',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              nå
+                            </span>
+                          </div>
+                        </div>
+                        {hilsen.trim() && (
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-body)',
+                              fontSize: 14,
+                              color: 'var(--text-primary)',
+                              lineHeight: 1.4,
+                              whiteSpace: 'pre-wrap',
+                              wordWrap: 'break-word',
+                            }}
+                          >
+                            <Linkified text={hilsen.trim()} />
+                          </div>
+                        )}
+                        <FondsrapportBlokk rapport={rapportForhaandsvisning} brukerId={brukerId} />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {feil && (
                   <div

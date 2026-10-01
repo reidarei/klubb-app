@@ -243,8 +243,15 @@ export default async function FondSide() {
             </Link>
             {/* Fondsrapport (#785) — admin-only, åpner et ark med kvartalet (fra siste oppgjør),
                 sjekkliste og hilsen. Ikke i NyFAB: kortet tegnes fra teksten i
-                et vanlig innlegg, men publiseringen er en egen, avgrenset flyt. */}
-            <PubliserFondsrapport />
+                et vanlig innlegg, men publiseringen er en egen, avgrenset flyt.
+                Forhåndsvisning (#787): profil er garantert ikke-null her —
+                kanAdministrere(profil?.rolle) er bare true når profil finnes. */}
+            <PubliserFondsrapport
+              navn={profil?.navn ?? ''}
+              bildeUrl={profil?.bilde_url ?? null}
+              rolle={profil?.rolle ?? null}
+              brukerId={bruker?.id ?? ''}
+            />
           </div>
         )}
       </div>

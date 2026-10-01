@@ -240,12 +240,16 @@ export type FondsrapportUtkast = {
   sammenlignesMed: { aar: number; kvartal: Kvartal; kilde: 'rapport' | 'beregnet' }
   finnesAlleredeForKvartal: boolean
   maksHilsen: number
+  // Den ferdige rapportblokken (#787) — arket forhåndsviser innlegget akkurat
+  // slik det vil se ut via lesFondsrapport(blokk), i stedet for å la admin
+  // publisere blindt på sjekklisten alene.
+  blokk: string
 }
 
 /**
  * Utkastet arket viser før publisering: kvartalet (fra siste oppgjørsdato),
- * hvor ferske tallene er, hva rapporten sammenlignes med og hvor lang
- * hilsenen kan være.
+ * hvor ferske tallene er, hva rapporten sammenlignes med, hvor lang
+ * hilsenen kan være, og selve rapportblokken til forhåndsvisning.
  *
  * Next maskerer feilmeldinger kastet fra server actions i prod (se
  * lib/actions/fond.ts), så forventede feil returneres som { ok: false, feil }.
@@ -271,6 +275,7 @@ export async function hentFondsrapportUtkast(): Promise<
         sammenlignesMed: grunnlag.sammenlignesMed,
         finnesAlleredeForKvartal: grunnlag.finnesAlleredeForKvartal,
         maksHilsen: maksHilsenFor(blokk),
+        blokk,
       },
     }
   } catch (e) {
