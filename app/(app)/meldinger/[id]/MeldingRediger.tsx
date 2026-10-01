@@ -14,6 +14,8 @@ import SlettBildeKnapp from './SlettBildeKnapp'
 import LeggTilBildeKnapp from './LeggTilBildeKnapp'
 import SlettMeldingKnapp from './SlettMeldingKnapp'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { lesFondsrapport, splittFondsrapport } from '@/lib/fondsrapport'
+import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
 
 type Bilde = { id: string; bilde_url: string }
 
@@ -34,6 +36,7 @@ export default function MeldingRediger({
   aiPaa,
   bilder,
   erAlbum,
+  brukerId,
   // (forfatter || admin) og ikke FB-importert: styrer tekst-redigering,
   // bilde-sletting, sletting av innlegget og selve Rediger-knappen.
   kanRedigere,
@@ -48,11 +51,22 @@ export default function MeldingRediger({
   aiPaa: boolean
   bilder: Bilde[]
   erAlbum: boolean
+  /** Innloggedes egen profil_id — sendes videre til FondsrapportBlokk for å utheve egen linje. */
+  brukerId: string
   kanRedigere: boolean
   kanLeggeTilBilder: boolean
 }) {
+  // Fondsrapport (#785): innholdet er hilsen + en frosset tallblokk (se
+  // lib/fondsrapport.ts). Redigering skal KUN kunne røre hilsenen — blokken
+  // limes uendret på igjen ved lagring. «uendret» betyr her den RÅ blokk-
+  // teksten fra innlegget (splittFondsrapport), ikke en reformatert kopi —
+  // selv om parse→format skal rundtripe identisk, er dette den tryggeste
+  // kilden til sannhet om hva som faktisk sto der.
+  const fondsrapport = lesFondsrapport(innhold)
+  const blokkRaw = fondsrapport ? splittFondsrapport(innhold).blokk : null
+
   const [redigerer, setRedigererLokal] = useState(false)
-  const [tekst, setTekst] = useState(innhold)
+  const [tekst, setTekst] = useState(fondsrapport ? fondsrapport.hilsen : innhold)
   const [dato, setDato] = useState(aktuellDato ?? '')
   // Skiller «brukeren tømte datoen bevisst» fra «datoen er bare ikke satt».
   // Bare i det siste tilfellet slipper vi KI-en til ved lagring.
@@ -74,6 +88,10 @@ export default function MeldingRediger({
   const visLeggTil =
     redigerer && kanLeggeTilBilder && !erAlbum && bilder.length < MELDING_MAKS_BILDER
 
+  // −2 for skille-linjen («\n\n») som limes inn mellom hilsen og blokk ved lagring.
+  const maksTekstLengde =
+    fondsrapport && blokkRaw ? INNLEGG_MAKS_LENGDE - blokkRaw.length - 2 : INNLEGG_MAKS_LENGDE
+
   // Tomt datofelt som brukeren ikke har rørt betyr «finn den for meg»: vi gjør
   // ett uttrekk fra teksten ved lagring. Har han tømt feltet selv, respekterer
   // vi det og lagrer null. Feilende uttrekk gir null — datoen er en
@@ -94,7 +112,16 @@ export default function MeldingRediger({
     setFeil('')
     startTransition(async () => {
       try {
-        await oppdaterMeldingPost(meldingId, tekst, await bestemDato())
+        // Fondsrapport: blokken limes uendret på igjen bak hilsenen — den
+        // frosne teksten er aldri en del av det som sendes til bestemDato()
+        // (som kun ser `tekst`, altså hilsenen) eller til lagringen selv.
+        const innholdSomLagres =
+          fondsrapport && blokkRaw
+            ? tekst.trim()
+              ? `${tekst.trim()}\n\n${blokkRaw}`
+              : blokkRaw
+            : tekst
+        await oppdaterMeldingPost(meldingId, innholdSomLagres, await bestemDato())
         settRedigerer(false)
         setDatoRoert(false)
         router.refresh()
@@ -107,7 +134,7 @@ export default function MeldingRediger({
   function avbryt() {
     // Forkast tekst- og dato-endringer og gå tilbake til visningsmodus.
     // Bilde-endringer er allerede persistert, så de påvirkes ikke av Avbryt.
-    setTekst(innhold)
+    setTekst(fondsrapport ? fondsrapport.hilsen : innhold)
     setDato(aktuellDato ?? '')
     setDatoRoert(false)
     setFeil('')
@@ -149,12 +176,17 @@ export default function MeldingRediger({
         <div style={{ marginBottom: 16 }}>
           <textarea
             value={tekst}
-            onChange={e => setTekst(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))}
+            onChange={e => setTekst(e.target.value.slice(0, maksTekstLengde))}
             disabled={isPending}
-            placeholder="Skriv her…"
+            placeholder={fondsrapport ? 'Skriv en hilsen (valgfritt)…' : 'Skriv her…'}
             style={tekstStil}
           />
-          <div style={tellerStil}>{INNLEGG_MAKS_LENGDE - tekst.length} tegn igjen</div>
+          <div style={tellerStil}>{maksTekstLengde - tekst.length} tegn igjen</div>
+          {fondsrapport && (
+            <div style={{ ...tellerStil_venstre, marginTop: 6, textTransform: 'none', letterSpacing: '0.2px' }}>
+              Tallene kan ikke endres. Slett og publiser på nytt ved feil.
+            </div>
+          )}
 
           {/* AKTUELL DATO — redigerbar. Ingen `min` her (til forskjell fra
               /meldinger/ny): et eldre innlegg kan ha en passert dato, og en
@@ -197,6 +229,24 @@ export default function MeldingRediger({
                 : 'Holder innlegget festet øverst til datoen er passert.'}
             </div>
           </div>
+        </div>
+      ) : fondsrapport ? (
+        <div style={{ marginBottom: 16 }}>
+          {fondsrapport.hilsen && (
+            <div
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 16,
+                color: 'var(--text-primary)',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+              }}
+            >
+              <Linkified text={fondsrapport.hilsen} />
+            </div>
+          )}
+          <FondsrapportBlokk rapport={fondsrapport.rapport} brukerId={brukerId} />
         </div>
       ) : (
         innhold && (

@@ -6,6 +6,7 @@ import InnskyterRad from '@/components/fond/InnskyterRad'
 import FondPostRad from '@/components/fond/FondPostRad'
 import Avkastning from '@/components/fond/Avkastning'
 import AndelSirkel from '@/components/fond/AndelSirkel'
+import PubliserFondsrapport from '@/components/fond/PubliserFondsrapport'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
@@ -222,7 +223,7 @@ export default async function FondSide() {
         {/* Rediger-knapp — kun for admin (medlemmer har ikke tilgang til /fond/rediger).
             Synlig pille i profil-sidens stil; den gamle 9px-lenken var usynlig på mobil. */}
         {kanAdministrere(profil?.rolle) && (
-          <div style={{ marginTop: 18 }}>
+          <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Link
               href="/fond/rediger"
               style={{
@@ -240,6 +241,10 @@ export default async function FondSide() {
             >
               Rediger fondet
             </Link>
+            {/* Fondsrapport (#785) — admin-only, åpner et ark med kvartalet (fra siste oppgjør),
+                sjekkliste og hilsen. Ikke i NyFAB: kortet tegnes fra teksten i
+                et vanlig innlegg, men publiseringen er en egen, avgrenset flyt. */}
+            <PubliserFondsrapport />
           </div>
         )}
       </div>

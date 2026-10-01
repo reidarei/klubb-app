@@ -20,6 +20,8 @@ import { nb } from 'date-fns/locale'
 import { arkiverMelding, avarkiverMelding } from '@/lib/actions/meldinger'
 import { Linkified } from '@/lib/linkify'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { lesFondsrapport } from '@/lib/fondsrapport'
+import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
 
 export type MeldingKortData = {
   id: string
@@ -156,6 +158,9 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
   // albumets omslagsbilde + CTA-pille i stedet for grid.
   const wrapperBunn =
     !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen) ? 10 : 0
+  // Fondsrapport (#785): tegnes fra teksten selv, uansett forfatterens rolle
+  // — bindende ramme fra issue #785, IKKE en admin-sjekk her.
+  const fondsrapport = lesFondsrapport(melding.innhold)
   const albumKort = melding.albumKort
   const albumBilde = albumKort ? bildeSrc(albumKort.bildeUrl) : null
   const antallBilder = albumKort ? 0 : melding.bilder.length
@@ -315,25 +320,46 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             )}
           </div>
 
-          {/* Innhold */}
-          <div
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 14,
-              color: 'var(--text-primary)',
-              lineHeight: 1.4,
-              whiteSpace: 'pre-wrap',
-              wordWrap: 'break-word',
-              marginBottom: antallBilder > 0 || albumKort
-                ? 10
-                : !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen)
-                  ? 8
-                  : 0,
-            }}
-          >
-            {/* inneILenke: kortet er en <a>, ekte lenker i teksten ville nøstet <a>-i-<a> (#465) */}
-            <Linkified text={melding.innhold ?? ''} inneILenke />
-          </div>
+          {/* Innhold — fondsrapport (#785) erstatter vanlig tekstvisning med
+              hilsen (kun hvis skrevet) + kortet tegnet fra teksten. */}
+          {fondsrapport ? (
+            <div style={{ marginBottom: wrapperBunn }}>
+              {fondsrapport.hilsen && (
+                <div
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 14,
+                    color: 'var(--text-primary)',
+                    lineHeight: 1.4,
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                  }}
+                >
+                  <Linkified text={fondsrapport.hilsen} inneILenke />
+                </div>
+              )}
+              <FondsrapportBlokk rapport={fondsrapport.rapport} brukerId={brukerId} />
+            </div>
+          ) : (
+            <div
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 14,
+                color: 'var(--text-primary)',
+                lineHeight: 1.4,
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                marginBottom: antallBilder > 0 || albumKort
+                  ? 10
+                  : !melding.tidligere && (meldingReaksjoner.reaksjoner.length > 0 || pickerApen)
+                    ? 8
+                    : 0,
+              }}
+            >
+              {/* inneILenke: kortet er en <a>, ekte lenker i teksten ville nøstet <a>-i-<a> (#465) */}
+              <Linkified text={melding.innhold ?? ''} inneILenke />
+            </div>
+          )}
 
           {/* Albumkort: albumets omslagsbilde + CTA-pille som lenker til
               hele albumet. Erstatter vanlig bilde-grid. Se #214, #463. */}

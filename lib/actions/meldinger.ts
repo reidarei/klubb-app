@@ -2,13 +2,11 @@
 
 import { createServerClient } from '@/lib/supabase/server'
 import { ensureInnlogget } from '@/lib/auth'
-import { sendVarsel } from '@/lib/varsler'
+import { opprettInnleggOgVarsle } from '@/lib/melding-opprett'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { BASE_URL } from '@/lib/config'
 import { INNLEGG_MAKS_LENGDE, INNLEGG_MIN_LENGDE, MELDING_MAKS_BILDER } from '@/lib/konstanter'
 import { naa, erGyldigKalenderdato } from '@/lib/dato'
-import { logg } from '@/lib/logg'
 
 export async function opprettMelding(input: {
   innhold: string
@@ -48,84 +46,9 @@ export async function opprettMelding(input: {
 
   const { supabase, user } = await ensureInnlogget()
 
-  const { data, error } = await supabase
-    .from('meldinger')
-    .insert({
-      profil_id: user.id,
-      // Null-innhold er OK når bildet bærer innlegget
-      innhold: tekst || null,
-      album_id: albumId,
-      aktuell_dato: aktuellDato,
-    })
-    .select('id')
-    .single()
-
-  if (error) throw new Error(error.message)
-  if (!data) throw new Error('Klarte ikke å opprette innlegget')
-
-  // Sett inn bilder i melding_bilder. Hvis dette feiler, slett meldingen
-  // slik at vi ikke etterlater en tom rad i feeden (best-effort cleanup).
-  if (bilder.length > 0) {
-    const bildeRader = bilder.map((url, i) => ({
-      melding_id: data.id,
-      bilde_url: url,
-      rekkefoelge: i,
-    }))
-    const { error: bildeErr } = await supabase
-      .from('melding_bilder')
-      .insert(bildeRader)
-
-    if (bildeErr) {
-      // Compensating delete — vi vil ikke ha en tom melding uten bilder. Logg
-      // feiler den også, men kast den opprinnelige bildeErr videre (#760).
-      const { error: opprydFeil } = await supabase.from('meldinger').delete().eq('id', data.id)
-      if (opprydFeil) {
-        await logg.feil('melding.opprett.opprydding.feilet', opprydFeil, {
-          ctx: { code: opprydFeil.code, sample: data.id },
-        })
-      }
-      throw new Error(`Bildeopplasting feilet: ${bildeErr.message}`)
-    }
-  }
-
-  // Varsle alle aktive (utenom forfatter) om nytt innlegg.
-  // maybeSingle + eksplisitt error: med .single() rapporterer PostgREST 0 rader
-  // som error PGRST116 og lar data være null — leses ikke feilen, faller vi
-  // stille tilbake på «Noen skrev» i stedet for navnet. Se CLAUDE.md
-  // § Policy: Databasespørringer.
-  const { data: avsender, error: avsenderFeil } = await supabase
-    .from('profiles')
-    .select('navn, visningsnavn')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  // Navneoppslaget skal ikke velte et innlegg som allerede er lagret — vi
-  // logger og bruker fallbacken, men da vet vi i det minste hvorfor.
-  if (avsenderFeil) {
-    await logg.feil('melding.avsendernavn.feilet', avsenderFeil, {
-      ctx: { profil_id: user.id, code: avsenderFeil.code },
-    })
-  }
-
-  const avsenderNavn = avsender?.visningsnavn ?? avsender?.navn ?? 'Noen'
-  // Hvis meldingen kun er bilder vises et standardutdrag i stedet for tekst
-  const utdrag = tekst
-    ? (tekst.length > 80 ? tekst.slice(0, 77) + '...' : tekst)
-    : '[delte bilde]'
-
-  sendVarsel({
-    tittel: `${avsenderNavn} skrev`,
-    melding: utdrag,
-    url: `${BASE_URL}/meldinger/${data.id}`,
-    knappTekst: 'Åpne innlegget',
-    type: 'melding-ny',
-    // Bærer verken arrangementId, pollId eller dedupNoekkel — default
-    // tillatDuplikat: false var derfor en no-op (samme felle som #518,
-    // funnet under det arbeidet). Ingen retry-mekanisme kaller dette
-    // stedet i dag, så tillatDuplikat: true sier bare sannheten om
-    // oppførselen som allerede fantes.
-    tillatDuplikat: true,
-  }).catch((err: unknown) => logg.feil('melding.varsler.feilet', err))
+  // Insert + bilder + navneoppslag + varsel — delt med fondsrapport-
+  // publiseringen, se lib/melding-opprett.ts.
+  await opprettInnleggOgVarsle({ supabase, user, tekst, bilder, albumId, aktuellDato })
 
   // Uten dette serverer Router Cache den gamle forsiden ved redirect, så det
   // nye innlegget mangler til brukeren refresher manuelt. Alle andre

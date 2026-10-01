@@ -588,3 +588,12 @@ export const LENKE_MAKS_OMDIRIGERINGER = 4
 // HTTP-cache. En artikkeltittel endrer seg sjelden etter publisering.
 export const LENKE_CACHE_SEK = 24 * 3600
 export const LENKE_MAKS_LENGDE = 2048
+
+// Fondsrapport (#785): kvartalsvis innlegg med kontantstatus og fordeling.
+// Antall EGNE farge-tokens (--fond-farge-1..6) før eierne deler siste,
+// nøytrale token (--fond-farge-7) — se lib/fondsrapport.ts fargeToken().
+// Lengden på ref-en («~a1b2c3d4», de SISTE hex-tegnene av profil-UUID-en) som
+// identifiserer en eier i teksten uten å lekke hele id-en — bare nok til å
+// skille de ~18 medlemmene fra hverandre, se lib/fondsrapport.ts refFor().
+export const FONDSRAPPORT_EGNE_FARGER = 6
+export const FONDSRAPPORT_REF_LENGDE = 8

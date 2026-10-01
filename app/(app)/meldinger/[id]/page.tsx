@@ -265,6 +265,7 @@ export default async function MeldingDetalj({
           aiPaa={AI_PAA}
           bilder={bilder.map(b => ({ id: b.id, bilde_url: b.bilde_url }))}
           erAlbum={!!albumKort}
+          brukerId={user!.id}
           kanRedigere={kanRedigere}
           kanLeggeTilBilder={kanLeggeTilBilder}
         />
