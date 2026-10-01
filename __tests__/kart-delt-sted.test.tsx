@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner KOBLINGEN mellom ankomst-beslutningen (lib/kart-ankomst.ts) og det
 // virkelige kartet (#753) — at konstanten faktisk når frem til Leaflet, ikke
 // bare beslutningslogikken isolert (dekket av kart-ankomst.test.ts).

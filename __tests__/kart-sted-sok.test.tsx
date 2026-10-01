@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Interaktivt stedssøk på kartet (#757).
 //
 // Samme oppsett som __tests__/kart-langtrykk.test.tsx og

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner klient-halvparten av #626-fiksen: sjekkPendingNav() skal lese
 // push-klikk-URL-en direkte fra Cache Storage FØR den i det hele tatt rører
 // navigator.serviceWorker.ready. Det er nøyaktig det som gjør stien uavhengig

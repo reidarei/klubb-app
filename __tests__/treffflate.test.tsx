@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner Treffflate-primitiven (#700): tap-flaten når alltid 44 px på begge akser,
 // uten å endre det synlige elementet, og geometrien kan ikke overstyres via style.
 

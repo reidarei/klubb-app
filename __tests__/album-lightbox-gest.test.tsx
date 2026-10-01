@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Gest-maskinen i AlbumLightbox (#625).
  *

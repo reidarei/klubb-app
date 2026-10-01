@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // #700-review: «+»-knappens treffflate vokser utvidY oppover, og pickeren (z-index 10)
 // ligger over forelderen — avstanden må dekke utvidelsen, ellers stjeler pickeren trykk.
 // jsdom har ingen layout, så geometrien pinnes via de rendrede stilverdiene.

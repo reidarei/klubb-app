@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Langtrykk på kartflaten starter en markering (#762).
 //
 // Bakgrunn: gesten skal LANDE i den eksisterende sikte-flyten fra #700, ikke

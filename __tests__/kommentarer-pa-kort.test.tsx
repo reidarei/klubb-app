@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * KommentarerPaaKort — de tre tilstandene rundt "knapp uten innhold" (#648).
  *

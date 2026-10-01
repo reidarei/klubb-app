@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useKeyboardOffset, useTastaturHoyde } from '@/components/chat/hooks/useKeyboardOffset'

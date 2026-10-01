@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner #688 sitt kjernescenario: et push-klikk-mål lest fra Cache Storage
 // på /login skal bæres gjennom en vellykket innlogging, i stedet for å falle
 // til agendaen slik #688 beskriver. Testen dekker de fire utfallene som

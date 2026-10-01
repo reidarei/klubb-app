@@ -8,7 +8,11 @@ export default defineConfig({
   // (f.eks. app/(app)/-sider) med en syntaksfeil på JSX-tagger.
   oxc: { jsx: { runtime: 'automatic' } },
   test: {
-    environment: 'jsdom',
+    // node som standard: jsdom-oppsettet kostet ~65 s av vitests ~160 s i CI
+    // mens bare ~20 filer faktisk trenger en DOM. De markerer det selv med
+    // `// @vitest-environment jsdom` øverst i fila — gjør det samme i en ny
+    // test som rendrer komponenter eller rører window/document.
+    environment: 'node',
     include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
     setupFiles: ['__tests__/setup.ts'],
     // Hevet KUN i CI (#659). Bakgrunn: `Start Supabase (bakgrunn)` kjører

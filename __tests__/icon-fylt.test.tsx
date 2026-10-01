@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Pinner `fylt`-modusen på Icon (#550).
  *

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Pinner at app/error.tsx aldri viser rå feiltekst til brukeren.
  *

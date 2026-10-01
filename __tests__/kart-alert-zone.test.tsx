@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Alert zone-innrammingen rundt de varslende symbolene i kartets
 // symbolvelger (#763). Vitest, ikke e2e: CI-budsjettet for september er
 // tomt, og flyten trenger ingen ekte nettleser — samme begrunnelse som i

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Pinner at FilterChip-radene ikke får overlappende treffområder når de brytes.
  *

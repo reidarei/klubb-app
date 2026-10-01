@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Pinner at «Om deg» på /profil (#683) aldri rendrer en blank verdi-celle.
  *

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner ANKOMST-BESLUTNINGEN for en delt steds-lenke (#753) — ikke selve
 // flyvningen, som ikke finnes å observere i jsdom (se lib/kart-ankomst.ts).
 

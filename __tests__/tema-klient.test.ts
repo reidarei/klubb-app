@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { lesTemaFraStorage, resolveSystemTema, resolveTema } from '@/lib/tema-klient'
 import { TEMA_STORAGE_KEY } from '@/lib/konstanter'

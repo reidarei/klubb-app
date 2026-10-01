@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Pinner refresh-kontrakten på kartet (#718).
  *

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Pinner open-redirect-vakten i lib/pending-nav.ts (#688). lokalSti() er den
 // eneste porten et push-klikk-mål (levert via Cache Storage, dermed
 // klientkontrollert) passerer før det brukes i en window.location.assign()
