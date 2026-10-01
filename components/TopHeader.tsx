@@ -238,13 +238,8 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
 
   return (
     <nav style={headerStyle} aria-label="Hovednavigasjon">
-      {/* Bakgrunn + blur på eget lag, bak innholdet (#787). WebKit maler
-          filterlaget for backdrop-filter separat fra elementets øvrige
-          innhold — delte de samme CSS-egenskapene som tabs/avataren, ble
-          selve laget (og alt WebKit regnet som del av det) tegnet uskarpt
-          i PWA-standalone. `<nav>` er sticky og danner dermed sin egen
-          stablingskontekst, så zIndex: -1 holder laget bak barna uten å
-          hoppe ut bak andre sticky-elementer på siden. */}
+      {/* Bakgrunn + blur på eget lag bak innholdet. <nav> er sticky og danner
+          egen stablingskontekst, så zIndex: -1 holder laget bak fanene. */}
       <span
         aria-hidden="true"
         style={{
@@ -255,6 +250,23 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
           background: 'var(--bg-header)',
           backdropFilter: 'var(--blur-nav)',
           WebkitBackdropFilter: 'var(--blur-nav)',
+        }}
+      />
+      {/* iOS 26+ tegner en egen uskarp «Liquid Glass»-kant over toppen av
+          installerte webapper (black-translucent + viewport-fit=cover), ~40 pt
+          ned forbi statuslinja — der fanene og avataren står (#787). WebKit
+          dropper den når en fast, farget boks dekker toppkanten. Høyden er 0
+          utenfor standalone, så stripen finnes bare i den installerte appen. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 'env(safe-area-inset-top)',
+          background: 'var(--bg)',
+          pointerEvents: 'none',
         }}
       />
       <div style={innerStyle}>
