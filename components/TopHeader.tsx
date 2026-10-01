@@ -207,9 +207,6 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     right: 0,
     zIndex: 30,
     paddingTop: 'env(safe-area-inset-top)',
-    background: 'var(--bg-header)',
-    backdropFilter: 'var(--blur-nav)',
-    WebkitBackdropFilter: 'var(--blur-nav)',
     borderBottom: '0.5px solid var(--border-subtle)',
   }
 
@@ -241,6 +238,25 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
 
   return (
     <nav style={headerStyle} aria-label="Hovednavigasjon">
+      {/* Bakgrunn + blur på eget lag, bak innholdet (#787). WebKit maler
+          filterlaget for backdrop-filter separat fra elementets øvrige
+          innhold — delte de samme CSS-egenskapene som tabs/avataren, ble
+          selve laget (og alt WebKit regnet som del av det) tegnet uskarpt
+          i PWA-standalone. `<nav>` er sticky og danner dermed sin egen
+          stablingskontekst, så zIndex: -1 holder laget bak barna uten å
+          hoppe ut bak andre sticky-elementer på siden. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: -1,
+          pointerEvents: 'none',
+          background: 'var(--bg-header)',
+          backdropFilter: 'var(--blur-nav)',
+          WebkitBackdropFilter: 'var(--blur-nav)',
+        }}
+      />
       <div style={innerStyle}>
         {/* Tabs */}
         <div
