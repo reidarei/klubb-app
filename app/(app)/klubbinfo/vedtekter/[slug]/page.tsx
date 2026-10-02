@@ -1,7 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import Icon from '@/components/ui/Icon'
 import VedtektVisning from './VedtektVisning'
 import { kanAdministrere } from '@/lib/roller'
@@ -32,14 +32,13 @@ export default async function VedtektSide({ params }: { params: Promise<{ slug: 
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <div style={{ marginTop: 12, marginBottom: 20 }}>
-        <Link
+        <TilbakeLenke
           href="/klubbinfo"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 4,
             color: 'var(--text-tertiary)',
-            textDecoration: 'none',
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '1.6px',
@@ -51,7 +50,7 @@ export default async function VedtektSide({ params }: { params: Promise<{ slug: 
           <Icon name="chevron" size={12} color="var(--text-tertiary)" />
           <span style={{ transform: 'scaleX(-1)', display: 'inline-block' }} />
           Klubbinfo
-        </Link>
+        </TilbakeLenke>
         <div
           style={{
             fontFamily: 'var(--font-mono)',

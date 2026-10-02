@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react'
 import { formaterDato } from '@/lib/dato'
 import { markerAlleVarslerLest } from '@/lib/actions/varsler'
 import SegmentPiller from '@/components/ui/SegmentPiller'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export type VarselRad = {
   id: string
@@ -50,6 +51,16 @@ type Props = {
 //
 // «Viktig»/«Alt» er BEVISST lokal useState, ikke URL-state (#612) — dette er
 // en personlig innboks, ikke noe man deler som lenke.
+// Skjul/vis-overskriften er ~15 px høy (10 px mono); usynlig utvidelse til 44+ px (#700).
+// ASYMMETRISK: mest opp (24), lite ned (6) — rett under ligger Viktig/Alt-pillene, og to
+// treffbokser som overlapper stjeler hverandres ytterpunkter. Oppover er det luft (24 px seksjonsmarg).
+const OVERSKRIFT_TREFF = {
+  paddingTop: 24,
+  paddingBottom: 6,
+  marginTop: -24,
+  marginBottom: -6,
+}
+
 export default function VarslerListe({
   varslerViktig: initialVarslerViktig,
   varslerAlt: initialVarslerAlt,
@@ -110,7 +121,8 @@ export default function VarslerListe({
           color: 'var(--text-tertiary)',
           textTransform: 'uppercase',
           letterSpacing: '1.6px',
-          marginBottom: 10,
+          // 12 (var 10): treffboksen under overskriften (6 px) skal ikke overlappe Viktig/Alt-boksen (#700)
+          marginBottom: 12,
           display: 'flex',
           alignItems: 'center',
           gap: 10,
@@ -124,7 +136,9 @@ export default function VarslerListe({
           style={{
             background: 'transparent',
             border: 'none',
-            padding: 0,
+            ...OVERSKRIFT_TREFF,
+            position: 'relative',
+            zIndex: 1,
             color: 'inherit',
             font: 'inherit',
             letterSpacing: 'inherit',
@@ -160,7 +174,7 @@ export default function VarslerListe({
       {!kollapset && (
         <div id="varsler-innhold">
           {/* Segment: Viktig / Alt */}
-          <div style={{ marginBottom: 12, padding: '0 4px' }}>
+          <div style={{ marginBottom: 13, padding: '0 4px' }}>
             <SegmentPiller
               valg={[
                 { key: 'viktig', label: 'Viktig' },
@@ -184,10 +198,10 @@ export default function VarslerListe({
               padding: '0 4px',
             }}
           >
-            <button
+            <PilleKnapp
               type="button"
               onClick={() => setKunUleste(v => !v)}
-              style={{
+              pilleStil={{
                 background: kunUleste ? 'var(--accent-soft)' : 'transparent',
                 border: '0.5px solid var(--border-subtle)',
                 borderRadius: 999,
@@ -198,16 +212,17 @@ export default function VarslerListe({
                 color: kunUleste ? 'var(--accent)' : 'var(--text-tertiary)',
                 letterSpacing: '-0.1px',
               }}
+              synligHoyde={30}
               aria-pressed={kunUleste}
             >
               {kunUleste ? 'Viser uleste' : 'Vis kun uleste'}
-            </button>
+            </PilleKnapp>
 
-            <button
+            <PilleKnapp
               type="button"
               onClick={markerAlleLest}
               disabled={totalUlest === 0 || isPending}
-              style={{
+              pilleStil={{
                 background: 'transparent',
                 border: 'none',
                 padding: '6px 4px',
@@ -218,9 +233,10 @@ export default function VarslerListe({
                 opacity: totalUlest === 0 || isPending ? 0.5 : 1,
                 letterSpacing: '-0.1px',
               }}
+              synligHoyde={28}
             >
               Marker alle som lest
-            </button>
+            </PilleKnapp>
           </div>
 
           {visning.length === 0 ? (

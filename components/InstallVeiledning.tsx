@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Icon from '@/components/ui/Icon'
 import { KLUBB_KORTNAVN } from '@/lib/klubb-config'
+import { PilleKnapp } from '@/components/ui/TreffPille'
+import Treffflate from '@/components/ui/Treffflate'
 
 const AVVIST_NOKKEL = 'install-veiledning-avvist'
 
@@ -242,41 +244,33 @@ export default function InstallVeiledning() {
               >
                 Få eget app-ikon og slipp nettleser-rammen rundt.
               </div>
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={installerAndroid}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   border: 'none',
                   background: 'var(--accent)',
                   color: 'var(--accent-foreground)',
                   fontSize: 13,
-                  fontWeight: 600
+                  fontWeight: 600,
                 }}
+                synligHoyde={33}
               >
                 Installer
-              </button>
+              </PilleKnapp>
             </>
           )}
         </div>
-        <button
-          type="button"
+        <Treffflate
+          synlig={26}
           onClick={avvis}
           aria-label="Lukk"
-          style={{
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--text-tertiary)',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
+          style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}
         >
           <Icon name="x" size={18} color="currentColor" strokeWidth={2} />
-        </button>
+        </Treffflate>
       </div>
     </div>
   )

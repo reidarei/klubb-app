@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { norskAar } from '@/lib/dato'
 import KaaringerVisning from './KaaringerVisning'
 import { kanAdministrere } from '@/lib/roller'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 const KLUBBEN_START_AAR = 2008
 
@@ -102,10 +102,9 @@ export default async function Kaaringer() {
             </h1>
           </div>
           {erAdmin && (
-            <Link
+            <PilleLenke
               href="/kaaringspoll/ny"
-              style={{
-                display: 'inline-block',
+              pilleStil={{
                 padding: '8px 16px',
                 background: 'var(--accent-soft)',
                 border: '0.5px solid var(--border-strong)',
@@ -117,9 +116,10 @@ export default async function Kaaringer() {
                 textDecoration: 'none',
                 whiteSpace: 'nowrap',
               }}
+              synligHoyde={35}
             >
               Ny kåring
-            </Link>
+            </PilleLenke>
           )}
         </div>
       </div>

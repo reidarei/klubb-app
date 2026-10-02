@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import ChatBildeGalleri, { type ChatBilde } from '@/components/album/ChatBildeGalleri'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 
@@ -47,7 +47,7 @@ export default async function ChatBilderSide() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <div style={{ padding: '12px 4px 6px' }}>
-        <Link
+        <TilbakeLenke
           href="/album"
           style={{
             fontFamily: 'var(--font-mono)',
@@ -56,11 +56,10 @@ export default async function ChatBilderSide() {
             letterSpacing: '1.4px',
             fontWeight: 600,
             textTransform: 'uppercase',
-            textDecoration: 'none',
           }}
         >
           ← Album
-        </Link>
+        </TilbakeLenke>
         <h1
           style={{
             fontFamily: 'var(--font-display)',

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import { FOND_KONTOEIER } from '@/lib/klubb-config'
+import Treffflate from '@/components/ui/Treffflate'
 
 // Forklaring av hvordan renter fordeles mellom innskyterne.
 //
@@ -87,21 +88,14 @@ export default function RentefordelingBoks({ onLukk }: { onLukk: () => void }) {
           >
             Slik fordeles rentene
           </h2>
-          <button
-            type="button"
+          <Treffflate
+            synlig={26}
             onClick={onLukk}
             aria-label="Lukk"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--text-tertiary)',
-              padding: 4,
-              display: 'flex',
-              flexShrink: 0,
-            }}
+            style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}
           >
             <Icon name="x" size={18} color="currentColor" strokeWidth={2} />
-          </button>
+          </Treffflate>
         </div>
 
         <p style={avsnitt}>

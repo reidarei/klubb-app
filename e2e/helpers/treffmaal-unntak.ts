@@ -40,6 +40,18 @@ export const TREFFMAAL_UNNTAK: TreffmaalUnntak[] = [
       'Markeringer-lista i kartpanelet (panel-handtak) viser samme markeringer som rader ' +
       'med et fullbredde, 44 px høyt treffområde hver.',
   },
+  {
+    rute: /^\/arrangementer\/[^/]+$/,
+    selektor: '[data-testid="paameldt-avatar"]',
+    grunn:
+      'Påmeldt-avatarene (50 px) ligger bevisst overlappende i en stabel (-12 px) — å spre dem ' +
+      'ville gjort raden dobbelt så bred og dyttet «+ N til»/«Vis liste» ned. Hver avatar er ' +
+      'altså 50×50, men den overlappende naboen dekker et av målepunktene.',
+    issue: 700,
+    alternativVei:
+      '«Vis liste» ved siden av stabelen åpner en modal med ALLE svar som fullbredde rader, ' +
+      'hver lenket til medlemsprofilen med et 44 px høyt treffområde.',
+  },
 ]
 
 // Kjente dekningshull i vakten selv (#700 PR 2) — rapportert, ikke rødt.
@@ -55,7 +67,4 @@ export const KJENTE_MANGLER: string[] = [
   'album-chatten-lightbox.spec.ts sin lightbox-test skipper uten minst to bilder i ' +
     'klubb-chatten på test-instansen.',
   '/kaaringspoll/[id]/tiebreak er ikke i RUTER (se begrunnelse i e2e/helpers/ruter.ts).',
-  '/poll/ny: skjemafelt + Legg til/Fjern alternativ er under 44 px — dybde-kallet i ' +
-    'poll.spec.ts står i rapport-modus (bruddBlokkerer: false) og snus til hardt i PR 3 ' +
-    'sammen med felles felthøyde.',
 ]

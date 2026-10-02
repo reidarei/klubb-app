@@ -14,6 +14,7 @@ import Placeholder from '@/components/ui/Placeholder'
 import BildeBytterKnapp from '@/components/BildeBytterKnapp'
 import TypeVelger, { type MalValg } from '@/components/arrangement/TypeVelger'
 import { formaterDato, datetimeLocalTilIso } from '@/lib/dato'
+import Rad from '@/components/ui/FeltRad'
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -42,25 +43,6 @@ const accentStil: CSSProperties = {
   fontSize: 19,
   fontWeight: 500,
   letterSpacing: '-0.3px',
-}
-
-function Rad({
-  last,
-  children,
-}: {
-  last?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 function defaultStart(purredato: string | null): string {

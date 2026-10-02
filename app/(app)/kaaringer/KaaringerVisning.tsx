@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import SetVinnerModal from '@/components/SetVinnerModal'
+import { PilleKnapp } from '@/components/ui/TreffPille'
+import Treffflate from '@/components/ui/Treffflate'
 
 type Mal = { id: string; navn: string }
 
@@ -62,24 +64,17 @@ export default function KaaringerVisning({
           borderRadius: 'var(--radius)',
         }}
       >
-        <button
-          type="button"
+        <Treffflate
+          synlig={24}
           onClick={() => kanBakover && setAar(aarListe[idx + 1])}
           disabled={!kanBakover}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-tertiary)',
-            padding: 4,
-            display: 'flex',
-            opacity: kanBakover ? 1 : 0.3,
-          }}
+          style={{ color: 'var(--text-tertiary)', opacity: kanBakover ? 1 : 0.3 }}
           aria-label="Forrige år"
         >
           <span style={{ display: 'inline-block', transform: 'rotate(180deg)' }}>
             <Icon name="chevron" size={16} color="var(--text-tertiary)" />
           </span>
-        </button>
+        </Treffflate>
         <div
           style={{
             fontFamily: 'var(--font-display)',
@@ -91,22 +86,15 @@ export default function KaaringerVisning({
         >
           {aar}
         </div>
-        <button
-          type="button"
+        <Treffflate
+          synlig={24}
           onClick={() => kanFremover && setAar(aarListe[idx - 1])}
           disabled={!kanFremover}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-tertiary)',
-            padding: 4,
-            display: 'flex',
-            opacity: kanFremover ? 1 : 0.3,
-          }}
+          style={{ color: 'var(--text-tertiary)', opacity: kanFremover ? 1 : 0.3 }}
           aria-label="Neste år"
         >
           <Icon name="chevron" size={16} color="var(--text-tertiary)" />
-        </button>
+        </Treffflate>
       </div>
 
       {/* Kort */}
@@ -239,10 +227,13 @@ export default function KaaringerVisning({
                 </div>
 
                 {erAdmin && (
-                  <button
+                  <PilleKnapp
                     type="button"
                     onClick={() => setApentMalId(mal.id)}
                     style={{
+                      flexShrink: 0,
+                    }}
+                    pilleStil={{
                       padding: '6px 10px',
                       background: 'transparent',
                       border: '0.5px solid var(--border)',
@@ -253,11 +244,11 @@ export default function KaaringerVisning({
                       letterSpacing: '1.4px',
                       textTransform: 'uppercase',
                       fontWeight: 600,
-                      flexShrink: 0,
                     }}
+                    synligHoyde={25}
                   >
                     {vinnerNavn ? 'Endre' : 'Sett'}
-                  </button>
+                  </PilleKnapp>
                 )}
               </div>
             </div>

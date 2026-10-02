@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import VarselToggle from '@/components/VarselToggle'
 import TestEpostVelger from './TestEpostVelger'
 import IssuesListe, { hentAapneIssues } from './IssuesListe'
@@ -20,6 +20,7 @@ import { SYMBOLER_VARSLER } from '@/lib/markering-symboler'
 import { osloUkestart } from '@/lib/dato'
 import { AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
 import { BURSDAGSBILDE_PAA } from '@/lib/config'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 export default async function Innstillinger() {
   const [supabase, profil, bruker] = await Promise.all([
@@ -218,12 +219,13 @@ export default async function Innstillinger() {
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <Link
+          <TilbakeLenke
             href="/klubbinfo"
-            style={{ color: 'inherit', textDecoration: 'none' }}
+            plassOver={6}
+            style={{ color: 'inherit' }}
           >
             Klubbinfo
-          </Link>
+          </TilbakeLenke>
           <span>/</span>
           <span>Innstillinger</span>
         </div>
@@ -493,10 +495,10 @@ export default async function Innstillinger() {
           Tur-arrangører ber her om dagstilgang til passinfo. Forespørselen
           godkjennes eller avslås — godkjent gir 24 timers tilgang.
         </p>
-        <Link
+        <PilleLenke
           href="/innstillinger/pass-godkjenninger"
-          style={{
-            display: 'inline-flex',
+          pilleStil={{
+            display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '8px 14px',
@@ -509,9 +511,10 @@ export default async function Innstillinger() {
             fontWeight: 500,
             textDecoration: 'none',
           }}
+          synligHoyde={34}
         >
           Åpne forespørsel-side →
-        </Link>
+        </PilleLenke>
       </InnstillingsKort>
       )}
 
@@ -535,10 +538,10 @@ export default async function Innstillinger() {
           Se og styr det KI-genererte bursdagsbildet som vises på
           bursdagskortet — generer på nytt eller fjern.
         </p>
-        <Link
+        <PilleLenke
           href="/innstillinger/bursdagsbilde"
-          style={{
-            display: 'inline-flex',
+          pilleStil={{
+            display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '8px 14px',
@@ -551,9 +554,10 @@ export default async function Innstillinger() {
             fontWeight: 500,
             textDecoration: 'none',
           }}
+          synligHoyde={34}
         >
           Åpne bursdagsbilde-side →
-        </Link>
+        </PilleLenke>
       </InnstillingsKort>
 
       {/* Ønsker fra brukerne */}
@@ -691,13 +695,15 @@ export default async function Innstillinger() {
                 )
               })}
             </div>
-            <Link
+            <PilleLenke
               href="/innstillinger/vitals"
               style={{
-                display: 'inline-flex',
+                marginTop: 14,
+              }}
+              pilleStil={{
+                display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                marginTop: 14,
                 padding: '8px 14px',
                 background: 'var(--accent-soft)',
                 border: '0.5px solid var(--accent)',
@@ -708,9 +714,10 @@ export default async function Innstillinger() {
                 fontWeight: 500,
                 textDecoration: 'none',
               }}
+              synligHoyde={34}
             >
               Per rute, enhet og filter →
-            </Link>
+            </PilleLenke>
           </>
         )}
       </InnstillingsKort>
@@ -751,13 +758,15 @@ export default async function Innstillinger() {
               Snitt {snittDau} unike (per enhet) per dag siste {AKTIVITET_SNITT_DAGER} dager,
               {' '}{wau} unike siste fullførte uke. Anonym telling.
             </p>
-            <Link
+            <PilleLenke
               href="/innstillinger/bruk"
               style={{
-                display: 'inline-flex',
+                marginTop: 10,
+              }}
+              pilleStil={{
+                display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                marginTop: 10,
                 padding: '8px 14px',
                 background: 'var(--accent-soft)',
                 border: '0.5px solid var(--accent)',
@@ -768,9 +777,10 @@ export default async function Innstillinger() {
                 fontWeight: 500,
                 textDecoration: 'none',
               }}
+              synligHoyde={34}
             >
               Se trend →
-            </Link>
+            </PilleLenke>
           </>
         )}
       </InnstillingsKort>

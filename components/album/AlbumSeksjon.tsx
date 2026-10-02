@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
@@ -9,6 +8,7 @@ import AlbumLightbox from '@/components/album/AlbumLightbox'
 import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import { opprettAlbum } from '@/lib/actions/album'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { TekstLenke } from '@/components/ui/TilbakeLenke'
 
 export type AlbumBildeForGrid = {
   id: string
@@ -77,7 +77,7 @@ export default function AlbumSeksjon({
           Album
         </h3>
         {album && (
-          <Link
+          <TekstLenke
             href={`/album/${album.id}`}
             style={{
               fontFamily: 'var(--font-mono)',
@@ -86,11 +86,10 @@ export default function AlbumSeksjon({
               letterSpacing: '1.4px',
               fontWeight: 600,
               textTransform: 'uppercase',
-              textDecoration: 'none',
             }}
           >
             Se alle ({album.bilder.length})
-          </Link>
+          </TekstLenke>
         )}
       </div>
 

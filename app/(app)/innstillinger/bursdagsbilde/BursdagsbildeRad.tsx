@@ -9,6 +9,7 @@ import { genererBursdagsbildeNaa } from './actions'
 import { slettBursdagsbilde } from '@/lib/actions/bursdagsbilde'
 import { formaterDato } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   profilId: string
@@ -164,11 +165,11 @@ export default function BursdagsbildeRad({
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
+          <PilleKnapp
             type="button"
             onClick={handleGenerer}
             disabled={noePaagaar || !harProfilbilde}
-            style={{
+            pilleStil={{
               padding: '8px 14px',
               background: 'var(--accent)',
               border: 'none',
@@ -179,26 +180,28 @@ export default function BursdagsbildeRad({
               fontWeight: 600,
               opacity: !harProfilbilde ? 0.5 : 1,
             }}
+            synligHoyde={32}
           >
             {genererer ? 'Genererer …' : 'Generer'}
-          </button>
+          </PilleKnapp>
           {miniatyr && (
-            <button
+            <PilleKnapp
               type="button"
               onClick={handleSlett}
               disabled={noePaagaar}
-              style={{
+              pilleStil={{
                 padding: '8px 14px',
                 background: 'transparent',
                 border: '0.5px solid var(--border)',
                 borderRadius: 999,
                 color: 'var(--danger)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 12
+                fontSize: 12,
               }}
+              synligHoyde={34}
             >
               {fjerner ? 'Fjerner …' : 'Fjern bildet'}
-            </button>
+            </PilleKnapp>
           )}
         </div>
       </div>

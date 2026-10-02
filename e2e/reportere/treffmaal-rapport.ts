@@ -8,7 +8,7 @@ import { TREFFMAAL_UNNTAK, KJENTE_MANGLER } from '../helpers/treffmaal-unntak'
  * åpner et panel/sheet/lightbox og måler der). Rapporten er INFORMASJON, ikke
  * en egen assertion: det er forventTreffbar() sine egne expect()-kall som gjør
  * testene røde, denne skriver bare en lesbar oppsummering til
- * $GITHUB_STEP_SUMMARY (eller konsollen lokalt).
+ * $GITHUB_STEP_SUMMARY i CI, og alltid til konsollen.
  */
 
 export type Maaling = {
@@ -73,11 +73,10 @@ export default class TreffmaalRapport implements Reporter {
   onEnd(_fullResult: FullResult) {
     const markdown = byggTreffmaalRapport(this.samler.alle())
     const summaryFil = process.env.GITHUB_STEP_SUMMARY
-    if (summaryFil) {
-      fs.appendFileSync(summaryFil, markdown + '\n')
-    } else {
-      console.log(markdown)
-    }
+    if (summaryFil) fs.appendFileSync(summaryFil, markdown + '\n')
+    // Alltid også til stdout: step summary kan ikke hentes med `gh run view --log`,
+    // så uten dette er bruddlista kun lesbar i nettleseren (#700).
+    console.log(markdown)
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { leggTilArrangoransvarForAar } from '@/lib/actions/arrangoransvar'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export default function LeggTilAarKnapp({ aar }: { aar: number }) {
   const [isPending, startTransition] = useTransition()
@@ -20,11 +21,14 @@ export default function LeggTilAarKnapp({ aar }: { aar: number }) {
 
   return (
     <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <button
+      <PilleKnapp
         type="button"
         onClick={handleKlikk}
         disabled={isPending}
         style={{
+          alignSelf: 'flex-start',
+        }}
+        pilleStil={{
           padding: '12px 18px',
           borderRadius: 999,
           background: 'var(--accent-soft)',
@@ -35,11 +39,11 @@ export default function LeggTilAarKnapp({ aar }: { aar: number }) {
           fontWeight: 600,
           letterSpacing: '1.4px',
           textTransform: 'uppercase',
-          alignSelf: 'flex-start',
         }}
+        synligHoyde={40}
       >
         {isPending ? 'Oppretter…' : `Legg til arrangøransvar for ${aar}`}
-      </button>
+      </PilleKnapp>
       {feil && (
         <span
           style={{

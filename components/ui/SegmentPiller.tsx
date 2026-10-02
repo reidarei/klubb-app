@@ -20,7 +20,9 @@ import { treffflateRundt } from '@/components/ui/Treffflate'
 // Synlig pillehøyde (#700): padding 6px topp/bunn + ~15 px tekstlinje ved
 // fontSize 12. Kun vertikal utvidelse — bredden er tekst-drevet og ligger
 // allerede godt over 44 px for alle labels i bruk i dag («Alt», «Viktig», …).
-const SYNLIG_HOYDE = 27
+// Målt pillehøyde er 32 px (ikke 27): da blir boksen 44 px og ikke 50 — mindre usynlig overlapp
+// mot naboer over/under (en nabo som overlapper stjeler treffpunkter, #700).
+const SYNLIG_HOYDE = 32
 const TREFF = treffflateRundt({ hoyde: SYNLIG_HOYDE })
 
 export default function SegmentPiller<T extends string>({

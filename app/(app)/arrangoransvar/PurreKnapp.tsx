@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { purreAnsvarlig } from '@/lib/actions/arrangoransvar'
 import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export default function PurreKnapp({
   ansvarId,
@@ -65,11 +66,11 @@ export default function PurreKnapp({
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-        <button
+        <PilleKnapp
           type="button"
           onClick={aapneModal}
           disabled={sendt || isPending}
-          style={{
+          pilleStil={{
             padding: '6px 12px',
             borderRadius: 999,
             background: sendt ? 'transparent' : 'var(--accent-soft)',
@@ -82,9 +83,10 @@ export default function PurreKnapp({
             textTransform: 'uppercase',
             whiteSpace: 'nowrap',
           }}
+          synligHoyde={27}
         >
           {label}
-        </button>
+        </PilleKnapp>
         {feil && (
           <span
             style={{
@@ -209,11 +211,11 @@ export default function PurreKnapp({
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={lukkModal}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'transparent',
@@ -223,16 +225,17 @@ export default function PurreKnapp({
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase'
+                  textTransform: 'uppercase',
                 }}
+                synligHoyde={31}
               >
                 Avbryt
-              </button>
-              <button
+              </PilleKnapp>
+              <PilleKnapp
                 type="button"
                 onClick={handleSend}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'var(--accent)',
@@ -245,9 +248,10 @@ export default function PurreKnapp({
                   textTransform: 'uppercase',
                   opacity: isPending ? 0.7 : 1,
                 }}
+                synligHoyde={29}
               >
                 {isPending ? 'Sender…' : 'Send purring'}
-              </button>
+              </PilleKnapp>
             </div>
           </div>
         </div>

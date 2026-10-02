@@ -4,6 +4,7 @@ import { useState } from 'react'
 import SectionLabel from '@/components/ui/SectionLabel'
 import PollStemming from './PollStemming'
 import PollResultat from './PollResultat'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Valg = { id: string; tekst: string }
 
@@ -52,10 +53,10 @@ export default function PollStemtVisning({
 
       {!visStemming && (
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-          <button
+          <PilleKnapp
             type="button"
             onClick={() => setVisStemming(true)}
-            style={{
+            pilleStil={{
               padding: '8px 18px',
               borderRadius: 999,
               background: 'transparent',
@@ -64,11 +65,12 @@ export default function PollStemtVisning({
               fontFamily: 'var(--font-body)',
               fontSize: 13,
               fontWeight: 500,
-              letterSpacing: '0.2px'
+              letterSpacing: '0.2px',
             }}
+            synligHoyde={35}
           >
             Endre svar
-          </button>
+          </PilleKnapp>
         </div>
       )}
 

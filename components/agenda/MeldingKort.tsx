@@ -23,6 +23,7 @@ import { Linkified } from '@/lib/linkify'
 import { bildeSrc } from '@/lib/bilde-utils'
 import { lesFondsrapport } from '@/lib/fondsrapport'
 import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
+import Treffflate from '@/components/ui/Treffflate'
 
 export type MeldingKortData = {
   id: string
@@ -346,46 +347,32 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 e.stopPropagation() hindrer at klikket trigger Link-navigasjon
                 til meldingssiden. (#312) */}
             {kanFlytte && !melding.tidligere && (
-              <button
-                type="button"
+              <Treffflate
+                synlig={24}
                 aria-label="Flytt innlegget til Tidligere"
                 onClick={e => {
                   e.preventDefault()
                   e.stopPropagation()
                   arkiver()
                 }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 4,
-                  color: 'var(--text-tertiary)',
-                  flexShrink: 0,
-                  lineHeight: 0,
-                }}
+                style={{ color: 'var(--text-tertiary)', flexShrink: 0, lineHeight: 0 }}
               >
                 <Icon name="chevronDown" size={16} />
-              </button>
+              </Treffflate>
             )}
             {kanFlytte && melding.tidligere && (
-              <button
-                type="button"
+              <Treffflate
+                synlig={24}
                 aria-label="Hent innlegget tilbake fra Tidligere"
                 onClick={e => {
                   e.preventDefault()
                   e.stopPropagation()
                   avarkiver()
                 }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 4,
-                  color: 'var(--text-tertiary)',
-                  flexShrink: 0,
-                  lineHeight: 0,
-                }}
+                style={{ color: 'var(--text-tertiary)', flexShrink: 0, lineHeight: 0 }}
               >
                 <Icon name="chevronUp" size={16} />
-              </button>
+              </Treffflate>
             )}
           </div>
 

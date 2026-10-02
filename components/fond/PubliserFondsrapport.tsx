@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom'
 import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
 import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
+import Treffflate from '@/components/ui/Treffflate'
 import { Linkified } from '@/lib/linkify'
 import { useTastaturHoyde } from '@/components/chat/hooks/useKeyboardOffset'
 import {
@@ -26,6 +27,7 @@ import {
 } from '@/lib/actions/fondsrapport'
 import { heleKr, lesFondsrapport } from '@/lib/fondsrapport'
 import { formaterDato } from '@/lib/dato'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // redirect() i publiserFondsrapport kaster en spesiell NEXT_REDIRECT-feil
 // som må bobles videre til Next sin runtime, ikke fanges som en ekte feil —
@@ -165,9 +167,9 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
 
   return (
     <>
-      <button ref={triggerRef} type="button" onClick={aapne} style={triggerKnapp}>
+      <PilleKnapp ref={triggerRef} onClick={aapne} pilleStil={triggerKnapp} synligHoyde={36}>
         Publiser kvartalsrapport
-      </button>
+      </PilleKnapp>
 
       {montert &&
         apen &&
@@ -222,20 +224,14 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
                 >
                   Publiser kvartalsrapport
                 </span>
-                <button
-                  type="button"
+                <Treffflate
+                  synlig={32}
                   onClick={lukk}
                   aria-label="Lukk"
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--text-secondary)',
-                    padding: 6,
-                    display: 'flex',
-                  }}
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   <Icon name="x" size={20} color="currentColor" strokeWidth={2} />
-                </button>
+                </Treffflate>
               </div>
 
               {/* ÉN scroll-boks: kvartal, sjekkliste, hilsen (i normal
@@ -316,7 +312,7 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
 
                 {/* Hilsen — normal flyt, ingen sticky/fixed */}
                 <div style={{ ...mono, marginTop: 16, marginBottom: 8 }}>Hilsen (valgfritt)</div>
-                <textarea
+                <textarea className="skjemafelt"
                   ref={textareaRef}
                   value={hilsen}
                   onChange={e => setHilsen(e.target.value.slice(0, maksHilsen))}
@@ -466,7 +462,7 @@ const mono: CSSProperties = {
 }
 
 const triggerKnapp: CSSProperties = {
-  display: 'inline-block',
+  display: 'block',
   padding: '8px 14px',
   background: 'transparent',
   border: '1px solid var(--border)',

@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
@@ -98,7 +98,7 @@ export default async function SamtaleDetalj({
     <div style={{ padding: '0 20px 20px' }}>
       <ChatAutoScrollScript />
       <header style={{ marginTop: 12, marginBottom: 22 }}>
-        <Link
+        <TilbakeLenke
           href="/samtaler"
           style={{
             fontFamily: 'var(--font-mono)',
@@ -106,7 +106,6 @@ export default async function SamtaleDetalj({
             color: 'var(--text-tertiary)',
             letterSpacing: '1.4px',
             textTransform: 'uppercase',
-            textDecoration: 'none',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
@@ -115,7 +114,7 @@ export default async function SamtaleDetalj({
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
           Samtaler
-        </Link>
+        </TilbakeLenke>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar

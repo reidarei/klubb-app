@@ -53,7 +53,7 @@ export default function TypeVelger({ valg, valgtKey, onValg }: Props) {
   return (
     <div>
       <div style={monoLabel}>Arrangement</div>
-      <select value={valgtKey} onChange={handleChange} style={inputStil}>
+      <select className="skjemafelt" value={valgtKey} onChange={handleChange} style={inputStil}>
         {valg.map(v => (
           <option key={v.key} value={v.key}>
             {v.mal_navn}

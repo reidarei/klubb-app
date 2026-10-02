@@ -14,6 +14,7 @@ import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Segment from '@/components/ui/Segment'
 import { ToggleRad } from '@/components/ui/ToggleSwitch'
 import { STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
+import Rad from '@/components/ui/FeltRad'
 
 type Medlem = {
   id: string
@@ -61,19 +62,6 @@ const accentInputStil: React.CSSProperties = {
   fontWeight: 500,
   letterSpacing: '-0.3px',
   color: 'var(--accent)',
-}
-
-function Rad({ children, last }: { children: React.ReactNode; last?: boolean }) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 export default function RedigerMedlemSkjema({

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import MedlemRad from '@/components/klubbinfo/MedlemRad'
 import SectionLabel from '@/components/ui/SectionLabel'
+import { PilleKnapp } from '@/components/ui/TreffPille'
+import { FELT_I_PILLE_STIL } from '@/components/ui/Treffflate'
 import { tittelFor } from '@/lib/roller'
 import { sorterMedlemmer, STANDARD_SORTERING, type MedlemSortering } from '@/lib/medlem-sortering'
 
@@ -76,15 +78,23 @@ export default function MedlemmerListe({
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 13,
+              ...FELT_I_PILLE_STIL,
             }}
           />
         </div>
-        <button
-          type="button"
+        {/* Pillen er 42 px høy (søkefeltets høyde); PilleKnapp legger usynlig treffflate rundt (#700) */}
+        <PilleKnapp
           onClick={() =>
             setSortering(s => (s === 'alfabetisk' ? 'narvaer' : 'alfabetisk'))
           }
-          style={{
+          aria-label="Endre sortering"
+          synligHoyde={42}
+          style={{ alignSelf: 'center' }}
+          pilleStil={{
+            height: 42,
+            boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
             padding: '0 14px',
             borderRadius: 999,
             border: '0.5px solid var(--border)',
@@ -93,12 +103,11 @@ export default function MedlemmerListe({
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '1.5px',
-            textTransform: 'uppercase'
+            textTransform: 'uppercase',
           }}
-          aria-label="Endre sortering"
         >
           {sortering === 'alfabetisk' ? 'A–Å' : '%'}
-        </button>
+        </PilleKnapp>
       </div>
 
       {/* Aktive */}

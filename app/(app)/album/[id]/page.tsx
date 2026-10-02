@@ -1,7 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import AlbumDetalj from '@/components/album/AlbumDetalj'
 import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import AlbumTittel from '@/components/album/AlbumTittel'
@@ -92,7 +92,7 @@ export default async function AlbumSide({
       <TillatLandskap />
       <div style={{ paddingTop: 20, marginBottom: 16 }}>
         {arrangement ? (
-          <Link
+          <TilbakeLenke
             href={`/arrangementer/${arrangement.id}`}
             style={{
               fontFamily: 'var(--font-mono)',
@@ -101,13 +101,12 @@ export default async function AlbumSide({
               letterSpacing: '1.4px',
               fontWeight: 600,
               textTransform: 'uppercase',
-              textDecoration: 'none',
             }}
           >
             ← {arrangement.tittel}
-          </Link>
+          </TilbakeLenke>
         ) : (
-          <Link
+          <TilbakeLenke
             href="/album"
             style={{
               fontFamily: 'var(--font-mono)',
@@ -116,11 +115,10 @@ export default async function AlbumSide({
               letterSpacing: '1.4px',
               fontWeight: 600,
               textTransform: 'uppercase',
-              textDecoration: 'none',
             }}
           >
             ← Album
-          </Link>
+          </TilbakeLenke>
         )}
         <AlbumTittel albumId={album.id} initialTittel={album.tittel} kanRedigere={kanRedigere} />
         <div

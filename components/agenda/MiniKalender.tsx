@@ -12,6 +12,7 @@ import { byggMaanedsGrid, harInnhold, harBursdag, byggTurMarkering, type TurPeri
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import { KLUBB_STIFTET } from '@/lib/klubb-config'
 import Icon, { type IkonNavn } from '@/components/ui/Icon'
+import Treffflate from '@/components/ui/Treffflate'
 
 // Kort månedsnavn til mikro-labelen. Småbokstaver med vilje: CSS textTransform
 // versaliserer visuelt, mens skjermlesere får normal tekst (all-caps kan leses
@@ -80,14 +81,13 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
 
   const kanBakover = maanedOffset > MIN_OFFSET
 
+  // Synlig ikon 19×15; <Treffflate> gir 44 px treffflate. Knappen må stables OVER prikke-cellene
+  // (de er position:relative og ville ellers stjålet treffpunktene i overlappen) — cellene er ikke interaktive (#700).
+  const CHEVRON_SYNLIG = { bredde: 19, hoyde: 15 }
   const chevronKnapp: CSSProperties = {
-    background: 'transparent',
-    border: 'none',
     color: 'var(--text-tertiary)',
-    // Rommelig trykkflate rundt et lite ikon — viktigere på mobil enn desktop.
-    padding: '2px 4px',
-    display: 'flex',
-    alignItems: 'center',
+    position: 'relative',
+    zIndex: 1,
     lineHeight: 0,
   }
 
@@ -104,8 +104,8 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
       }}
     >
       {/* Venstre velger — flankerer kalenderen (admin-feedback på #429) */}
-      <button
-        type="button"
+      <Treffflate
+        synlig={CHEVRON_SYNLIG}
         style={{
           ...chevronKnapp,
           ...(kanBakover ? {} : { opacity: 0.3 }),
@@ -116,7 +116,7 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
       >
         {/* chevron peker høyre; roteres for venstre. aria-hidden: dekor. */}
         <Icon name="chevron" size={11} style={{ transform: 'rotate(180deg)' }} aria-hidden="true" focusable="false" />
-      </button>
+      </Treffflate>
 
       {/* Prikke-grid: 7 kolonner (man–søn), én prikk per dag */}
       <div
@@ -242,14 +242,14 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
       </div>
 
       {/* Høyre velger */}
-      <button
-        type="button"
+      <Treffflate
+        synlig={CHEVRON_SYNLIG}
         style={chevronKnapp}
         onClick={() => setMaanedOffset(o => o + 1)}
         aria-label="Neste måned"
       >
         <Icon name="chevron" size={11} aria-hidden="true" focusable="false" />
-      </button>
+      </Treffflate>
 
       {/* Månedslabel til høyre, midtstilt i høyden (ytre flex har alignItems
           center). aria-live annonserer TEKST-endringer, ikke aria-label —

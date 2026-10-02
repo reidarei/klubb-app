@@ -141,7 +141,7 @@ function MalRad({ mal }: { mal: Mal }) {
     return (
       <div className="py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <div className="flex gap-2 items-center mb-2">
-          <input
+          <input className="skjemafelt"
             value={navn}
             onChange={e => setNavn(e.target.value)}
             style={inputStil}
@@ -159,12 +159,12 @@ function MalRad({ mal }: { mal: Mal }) {
         </div>
         <div className="flex gap-2 items-center">
           <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Purring:</span>
-          <select value={maaned ?? ''} onChange={e => handleMaanedEndring(e.target.value)} style={selectStil}>
+          <select className="skjemafelt" value={maaned ?? ''} onChange={e => handleMaanedEndring(e.target.value)} style={selectStil}>
             <option value="">Ingen</option>
             {MAANEDER.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
           </select>
           {maaned && (
-            <select value={dag} onChange={e => setDag(parseInt(e.target.value))} style={selectStil}>
+            <select className="skjemafelt" value={dag} onChange={e => setDag(parseInt(e.target.value))} style={selectStil}>
               {Array.from({ length: antallDager }, (_, i) => (
                 <option key={i + 1} value={i + 1}>{i + 1}.</option>
               ))}
@@ -228,7 +228,7 @@ function NyMalForm() {
 
   return (
     <div className="flex gap-2 items-center pt-3 mt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <input
+      <input className="skjemafelt"
         value={navn}
         onChange={e => setNavn(e.target.value)}
         placeholder="Nytt arrangement…"

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
+import Rad from '@/components/ui/FeltRad'
 
 const labelStil: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -34,25 +35,6 @@ const accentInputStil: React.CSSProperties = {
   fontWeight: 500,
   letterSpacing: '-0.3px',
   color: 'var(--accent)',
-}
-
-function Rad({
-  children,
-  last,
-}: {
-  children: React.ReactNode
-  last?: boolean
-}) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 export default function NyttMedlem() {

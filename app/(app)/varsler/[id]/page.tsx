@@ -1,7 +1,8 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import { PilleLenke } from '@/components/ui/TreffPille'
 import { formaterDato } from '@/lib/dato'
 import MarkerLestEffekt from '@/components/varsler/MarkerLestEffekt'
 
@@ -28,7 +29,7 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
     <div style={{ padding: '0 20px 20px' }}>
       {skalMarkereLest && <MarkerLestEffekt varselId={varsel.id} />}
       <div style={{ marginTop: 12, marginBottom: 20 }}>
-        <Link
+        <TilbakeLenke
           href="/profil"
           style={{
             fontFamily: 'var(--font-mono)',
@@ -37,11 +38,10 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
             color: 'var(--text-tertiary)',
             letterSpacing: '1.6px',
             textTransform: 'uppercase',
-            textDecoration: 'none',
           }}
         >
           ← Profil
-        </Link>
+        </TilbakeLenke>
       </div>
 
       <div
@@ -85,10 +85,10 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
       </p>
 
       {varsel.url && (
-        <Link
+        <PilleLenke
           href={varsel.url}
-          style={{
-            display: 'inline-block',
+          style={{ marginBottom: 20 }}
+          pilleStil={{
             padding: '11px 20px',
             background: 'var(--accent)',
             color: 'var(--accent-foreground)',
@@ -96,12 +96,10 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
             fontFamily: 'var(--font-body)',
             fontSize: 13,
             fontWeight: 600,
-            textDecoration: 'none',
-            marginBottom: 20,
           }}
         >
           Gå til saken
-        </Link>
+        </PilleLenke>
       )}
 
       {varsel.opprettet && (

@@ -38,7 +38,7 @@ export default function TurFelt({
         <button
           type="button"
           onClick={() => hemmelig && onToggle()}
-          className="flex-1 py-1.5 rounded-xl text-xs font-semibold transition-colors"
+          className="flex-1 py-3 rounded-xl text-xs font-semibold transition-colors"
           style={{
             background: !hemmelig ? 'var(--accent)' : 'var(--bg-elevated)',
             border: `1px solid ${!hemmelig ? 'var(--accent)' : 'var(--border)'}`,
@@ -51,7 +51,7 @@ export default function TurFelt({
         <button
           type="button"
           onClick={() => !hemmelig && onToggle()}
-          className="flex-1 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+          className="flex-1 py-3 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
           style={{
             background: hemmelig ? 'var(--bg-elevated-2)' : 'var(--bg-elevated)',
             border: '1px solid var(--border)',

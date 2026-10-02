@@ -15,6 +15,7 @@ import RsvpGlyph from '@/components/arrangement/RsvpGlyph'
 import Treffflate from '@/components/ui/Treffflate'
 import { purreUtenSvar, purreKanskje } from '@/lib/actions/arrangementer'
 import { PURRING_MAKS_LENGDE } from '@/lib/konstanter'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export type RsvpStatus = 'ja' | 'kanskje' | 'nei' | 'ikke_svart'
 
@@ -238,6 +239,7 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
               key={p.profil_id}
               href={`/klubbinfo/medlemmer/${p.profil_id}`}
               aria-label={p.navn}
+              data-testid="paameldt-avatar"
               style={{
                 display: 'block',
                 textDecoration: 'none',
@@ -268,10 +270,11 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
         )}
 
         {/* «Vis liste»-knapp åpner modal med alle svar — alltid synlig (#280, #285). */}
-        <button
-          type="button"
+        <PilleKnapp
           onClick={() => setModalAapen(true)}
-          style={{
+          synligHoyde={36}
+          style={{ marginLeft: 4 }}
+          pilleStil={{
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '1.2px',
@@ -282,11 +285,10 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
             borderRadius: 999,
             padding: '8px 14px',
             minHeight: 36,
-            marginLeft: 4,
           }}
         >
           Vis liste
-        </button>
+        </PilleKnapp>
       </div>
 
       {/* Modal: alle aktive medlemmer gruppert etter RSVP-status (#285). */}
@@ -424,11 +426,14 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                         // purretMaal). Tidligere ble pillen permanent disabled
                         // etter første sending, så admin var låst ute fra å sende
                         // ny purring uten å laste siden på nytt.
-                        <button
+                        <PilleKnapp
                           type="button"
                           onClick={() => aapnePurreModal(status)}
                           disabled={purrePending}
                           style={{
+                            flexShrink: 0,
+                          }}
+                          pilleStil={{
                             fontFamily: 'var(--font-mono)',
                             fontSize: 10,
                             letterSpacing: '1.2px',
@@ -438,11 +443,11 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                             border: '0.5px solid var(--accent)',
                             borderRadius: 999,
                             padding: '4px 10px',
-                            flexShrink: 0,
                           }}
+                          synligHoyde={23}
                         >
                           {purretMaal === status ? 'Purret' : PURRE_TEKST[status].pill}
-                        </button>
+                        </PilleKnapp>
                       )}
                     </div>
                     {/* Rader i gruppen */}
@@ -626,11 +631,11 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={lukkPurreModal}
                 disabled={purrePending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'transparent',
@@ -640,16 +645,17 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase'
+                  textTransform: 'uppercase',
                 }}
+                synligHoyde={31}
               >
                 Avbryt
-              </button>
-              <button
+              </PilleKnapp>
+              <PilleKnapp
                 type="button"
                 onClick={handlePurreSend}
                 disabled={purrePending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'var(--accent)',
@@ -662,9 +668,10 @@ export default function PaameldteListe({ jaListe, alleSvar, arrangementId, arran
                   textTransform: 'uppercase',
                   opacity: purrePending ? 0.7 : 1,
                 }}
+                synligHoyde={29}
               >
                 {purrePending ? 'Sender…' : 'Send purring'}
-              </button>
+              </PilleKnapp>
             </div>
           </div>
         </div>

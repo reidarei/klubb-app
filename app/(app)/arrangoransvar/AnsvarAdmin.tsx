@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { leggTilAnsvarlig, fjernAnsvarlig } from '@/lib/actions/arrangoransvar'
 import Icon from '@/components/ui/Icon'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 
 // Fjern-knappens treffflate vokser inn i radgapet fra begge sider (#700) —
@@ -70,10 +71,10 @@ export default function AnsvarAdmin({
 
   if (!aapen) {
     return (
-      <button
-        type="button"
+      <PilleKnapp
         onClick={() => setAapen(true)}
-        style={{
+        synligHoyde={30}
+        pilleStil={{
           ...pillKnapp,
           background: 'transparent',
           border: '0.5px solid var(--border)',
@@ -81,7 +82,7 @@ export default function AnsvarAdmin({
         }}
       >
         Endre
-      </button>
+      </PilleKnapp>
     )
   }
 
@@ -139,7 +140,7 @@ export default function AnsvarAdmin({
 
       {tilgjengelige.length > 0 && (
         <form onSubmit={handleLeggTil} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select name="ansvarlig_id" defaultValue="" style={selectStil}>
+          <select className="skjemafelt" name="ansvarlig_id" defaultValue="" style={selectStil}>
             <option value="" disabled>Legg til ansvarlig…</option>
             {tilgjengelige.map(m => (
               <option key={m.id} value={m.id}>{m.navn}</option>
@@ -182,19 +183,19 @@ export default function AnsvarAdmin({
         </form>
       )}
 
-      <button
-        type="button"
+      <PilleKnapp
         onClick={() => setAapen(false)}
-        style={{
+        synligHoyde={30}
+        style={{ alignSelf: 'flex-start' }}
+        pilleStil={{
           ...pillKnapp,
-          alignSelf: 'flex-start',
           background: 'transparent',
           border: '0.5px solid var(--border)',
           color: 'var(--text-secondary)',
         }}
       >
         Ferdig
-      </button>
+      </PilleKnapp>
     </div>
   )
 }

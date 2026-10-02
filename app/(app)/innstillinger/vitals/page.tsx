@@ -2,8 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import { kanAdministrere } from '@/lib/roller'
-import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 type VitalsRad = {
   rute: string
@@ -290,9 +290,9 @@ export default async function VitalsAdmin({ searchParams }: Props) {
 
 function FilterLenke({ aktiv, href, label }: { aktiv: boolean; href: string; label: string }) {
   return (
-    <Link
+    <PilleLenke
       href={href}
-      style={{
+      pilleStil={{
         padding: '5px 12px',
         borderRadius: 999,
         border: `0.5px solid ${aktiv ? 'var(--accent)' : 'var(--border)'}`,
@@ -305,8 +305,9 @@ function FilterLenke({ aktiv, href, label }: { aktiv: boolean; href: string; lab
         fontWeight: 600,
         textDecoration: 'none',
       }}
+      synligHoyde={25}
     >
       {label}
-    </Link>
+    </PilleLenke>
   )
 }

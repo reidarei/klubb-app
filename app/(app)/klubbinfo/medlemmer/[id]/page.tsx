@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
@@ -7,6 +8,7 @@ import SectionLabel from '@/components/ui/SectionLabel'
 import SendMeldingKnapp from './SendMeldingKnapp'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 export default async function MedlemProfil({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -124,12 +126,13 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <Link
+          <TilbakeLenke
             href="/klubbinfo/medlemmer"
-            style={{ color: 'inherit', textDecoration: 'none' }}
+            plassOver={6}
+            style={{ color: 'inherit' }}
           >
             Medlemmer
-          </Link>
+          </TilbakeLenke>
           <span>/</span>
           <span>{navn}</span>
         </div>
@@ -159,9 +162,9 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             {!erMegSelv && medlem?.aktiv && <SendMeldingKnapp motpartId={id} />}
             {erAdmin && (
-              <Link
+              <PilleLenke
                 href={`/klubbinfo/medlemmer/${id}/rediger`}
-                style={{
+                pilleStil={{
                   padding: '8px 14px',
                   background: 'transparent',
                   border: '1px solid var(--border)',
@@ -172,9 +175,10 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                   fontWeight: 500,
                   textDecoration: 'none',
                 }}
+                synligHoyde={34}
               >
                 Rediger
-              </Link>
+              </PilleLenke>
             )}
           </div>
         </div>
@@ -327,7 +331,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                     {k.navn}
                   </div>
                   {k.arrangementTittel && k.arrangementId && (
-                    <Link
+                    <TilbakeLenke
                       href={`/arrangementer/${k.arrangementId}`}
                       style={{
                         display: 'inline-block',
@@ -336,11 +340,10 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                         fontSize: 13,
                         color: 'var(--accent)',
                         letterSpacing: '-0.1px',
-                        textDecoration: 'none',
                       }}
                     >
                       {k.arrangementTittel}
-                    </Link>
+                    </TilbakeLenke>
                   )}
                   {k.begrunnelse && (
                     <div

@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
-import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
@@ -15,6 +14,7 @@ import { bildeSrc } from '@/lib/bilde-utils'
 import { AI_PAA } from '@/lib/config'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 type CoverObj = { bilde_url: string; thumb_url: string | null }
 type RawAlbumEmbed = {
@@ -227,10 +227,10 @@ export default async function MeldingDetalj({
                 />
               </div>
             )}
-            <Link
+            <PilleLenke
               href={`/album/${albumKort.albumId}`}
-              style={{
-                display: 'inline-flex',
+              pilleStil={{
+                display: 'flex',
                 alignItems: 'center',
                 gap: 6,
                 padding: '7px 14px',
@@ -243,6 +243,7 @@ export default async function MeldingDetalj({
                 fontSize: 13,
                 fontWeight: 500,
               }}
+              synligHoyde={33}
             >
               <Icon name="image" size={14} color="var(--accent)" strokeWidth={1.8} />
               <span>
@@ -253,7 +254,7 @@ export default async function MeldingDetalj({
                   {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
                 </span>
               </span>
-            </Link>
+            </PilleLenke>
           </div>
         )}
 

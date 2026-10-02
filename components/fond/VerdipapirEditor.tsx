@@ -69,7 +69,7 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
     return (
       <div>
         <label style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Type</label>
-        <select
+        <select className="skjemafelt"
           name="type"
           defaultValue={defaultValue}
           style={{

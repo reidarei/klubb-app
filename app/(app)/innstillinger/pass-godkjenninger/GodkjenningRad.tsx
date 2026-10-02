@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { godkjennPassTilgang, avslaaPassTilgang } from '@/lib/actions/pass'
 import { formaterDato } from '@/lib/dato'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   forespørselId: string
@@ -84,27 +85,28 @@ export default function GodkjenningRad({
         {formaterDato(opprettet, 'd. MMM HH:mm')}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button
+        <PilleKnapp
           type="button"
           onClick={handleAvslaa}
           disabled={isPending}
-          style={{
+          pilleStil={{
             padding: '8px 14px',
             background: 'transparent',
             border: '0.5px solid var(--border)',
             borderRadius: 999,
             color: 'var(--danger)',
             fontFamily: 'var(--font-body)',
-            fontSize: 12
+            fontSize: 12,
           }}
+          synligHoyde={34}
         >
           Avslå
-        </button>
-        <button
+        </PilleKnapp>
+        <PilleKnapp
           type="button"
           onClick={handleGodkjenn}
           disabled={isPending}
-          style={{
+          pilleStil={{
             padding: '8px 14px',
             background: 'var(--accent)',
             border: 'none',
@@ -112,11 +114,12 @@ export default function GodkjenningRad({
             color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
-            fontWeight: 600
+            fontWeight: 600,
           }}
+          synligHoyde={32}
         >
           Godkjenn (24t)
-        </button>
+        </PilleKnapp>
       </div>
     </div>
   )

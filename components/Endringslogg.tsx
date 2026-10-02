@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { formaterDato, FORMAT_DATO_AAR } from '@/lib/dato'
 import { ENDRINGSLOGG_SYNLIGE } from '@/lib/konstanter'
 import type { LoggRad } from '@/lib/endringslogg'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   rader: LoggRad[]
@@ -57,12 +58,12 @@ export default function Endringslogg({ rader }: Props) {
       </div>
 
       {finnesFlere && (
-        <button
+        <PilleKnapp
           type="button"
           onClick={() => setUtvidet(v => !v)}
           aria-expanded={utvidet}
           aria-controls="endringslogg-innhold"
-          style={{
+          pilleStil={{
             background: 'transparent',
             border: 'none',
             padding: '10px 4px 0',
@@ -70,10 +71,11 @@ export default function Endringslogg({ rader }: Props) {
             fontFamily: 'var(--font-body)',
             fontSize: 12,
             fontWeight: 500,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
             gap: 6,
           }}
+          synligHoyde={26}
         >
           <span
             aria-hidden="true"
@@ -88,7 +90,7 @@ export default function Endringslogg({ rader }: Props) {
             ▼
           </span>
           <span>{utvidet ? 'Vis færre' : 'Vis eldre'}</span>
-        </button>
+        </PilleKnapp>
       )}
     </div>
   )

@@ -48,7 +48,13 @@ export default function UtseendeValg({ initial }: { initial: TemaValg }) {
   }
 
   return (
-    <section style={{ marginBottom: 20 }}>
+    <section
+      style={{
+        // 28 (var 20): Varsler-overskriften under har 24 px usynlig treffflate oppover og
+        // Segment-cellene 4 px nedover — med 20 overlappet de og stjal et treffpunkt (#700)
+        marginBottom: 28,
+      }}
+    >
       <SectionLabel>Utseende</SectionLabel>
       <Segment
         value={valg}

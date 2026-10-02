@@ -24,6 +24,7 @@ import SectionLabel from '@/components/ui/SectionLabel'
 import TidligereTypeFilter from '@/components/tidligere/TidligereTypeFilter'
 import TidligereFeilBanner from '@/components/tidligere/TidligereFeilBanner'
 import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 
 export const dynamic = 'force-dynamic'
@@ -403,12 +404,12 @@ export default async function TidligereSide({
     <div style={{ padding: '0 20px 40px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 20 }}>
-        <Link
+        <TilbakeLenke
           href="/"
-          style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', textDecoration: 'none', fontSize: 14 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-secondary)', fontSize: 14 }}
         >
           <ChevronLeftIcon style={{ width: 16, height: 16 }} /> Tilbake
-        </Link>
+        </TilbakeLenke>
         <h1
           style={{
             fontFamily: 'var(--font-display)',

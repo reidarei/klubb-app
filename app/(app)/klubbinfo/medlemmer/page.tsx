@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import MedlemmerListe from './MedlemmerListe'
@@ -97,12 +98,13 @@ export default async function Medlemmer() {
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <Link
+          <TilbakeLenke
             href="/klubbinfo"
-            style={{ color: 'inherit', textDecoration: 'none' }}
+            plassOver={6}
+            style={{ color: 'inherit' }}
           >
             Klubbinfo
-          </Link>
+          </TilbakeLenke>
           <span>/</span>
           <span>Medlemmer</span>
         </div>

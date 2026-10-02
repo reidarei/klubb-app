@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { aapneSamtale } from '@/lib/actions/samtaler'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
   const [isPending, startTransition] = useTransition()
@@ -27,11 +28,11 @@ export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
   }
 
   return (
-    <button
+    <PilleKnapp
       type="button"
       onClick={handleKlikk}
       disabled={isPending}
-      style={{
+      pilleStil={{
         padding: '8px 14px',
         background: 'var(--accent-soft)',
         border: '0.5px solid var(--accent)',
@@ -42,8 +43,9 @@ export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
         fontWeight: 500,
         opacity: isPending ? 0.6 : 1,
       }}
+      synligHoyde={34}
     >
       {isPending ? 'Åpner…' : 'Send melding'}
-    </button>
+    </PilleKnapp>
   )
 }

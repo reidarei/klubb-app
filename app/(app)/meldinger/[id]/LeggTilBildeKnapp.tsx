@@ -6,6 +6,7 @@ import { komprimer } from '@/lib/bilde-utils'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import { leggTilMeldingBilde } from '@/lib/actions/meldinger'
 import Icon from '@/components/ui/Icon'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // Legg til bilde(r) på en eksisterende melding etter publisering. Vises kun for
 // forfatteren på egne, ikke-FB, ikke-album-koblede innlegg (se page.tsx) — og
@@ -69,12 +70,12 @@ export default function LeggTilBildeKnapp({
         disabled={isPending}
         style={{ display: 'none' }}
       />
-      <button
+      <PilleKnapp
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={isPending}
-        style={{
-          display: 'inline-flex',
+        pilleStil={{
+          display: 'flex',
           alignItems: 'center',
           gap: 6,
           padding: '7px 14px',
@@ -83,12 +84,13 @@ export default function LeggTilBildeKnapp({
           borderRadius: 999,
           color: 'var(--text-secondary)',
           fontFamily: 'var(--font-body)',
-          fontSize: 12
+          fontSize: 12,
         }}
+        synligHoyde={32}
       >
         <Icon name="image" size={14} color="currentColor" strokeWidth={1.6} />
         {isPending ? 'Laster opp…' : 'Legg til bilde'}
-      </button>
+      </PilleKnapp>
       {feil && (
         <div
           style={{

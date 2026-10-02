@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { treffflateRundt } from '@/components/ui/Treffflate'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 
 // Synlig høyde (#700), kun vertikal utvidelse (jf. SegmentPiller/Segment —
 // bredden er aldri det trange målet på disse to). Tallene er bevisst satt
@@ -60,6 +61,11 @@ export default function SkjemaBar({
           paddingBottom: 4 + AVBRYT_TREFF.utvidY,
           paddingLeft: 0,
           paddingRight: 0,
+          // «Avbryt» er ~42 px bred; uten minWidth bommer pluss-punktet ytterst til høyre (#700).
+          // Venstrejustert så teksten står der den stod — utvidelsen havner mot tittelen, som ikke er klikkbar.
+          minWidth: MIN_TREFFMAAL_PX,
+          textAlign: 'left',
+          flexShrink: 0,
           marginTop: -AVBRYT_TREFF.utvidY,
           marginBottom: -AVBRYT_TREFF.utvidY,
         }}

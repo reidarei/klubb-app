@@ -125,20 +125,12 @@ test.describe('Røyktest — alle sider laster', () => {
       //    til <main> (samme ramme som harInnhold() over) — TopHeader og
       //    bottom-chrome er allerede dekket av egne komponenttester.
       //
-      //    bruddBlokkerer: false — RAPPORT-MODUS, bevisst, inntil PR 3. Etter
-      //    PR 2s egen fiks (ToggleSwitch/SkjemaBar/SegmentPiller/Segment) stod
-      //    32/37 ruter fortsatt røde på tilbake-/brødsmulelenker,
-      //    input/textarea/select-felthøyde og en håndfull småknapper — et
-      //    strukturelt mønster (felles komponent/felthøyde), ikke punktfikser.
-      //    Beslutning i #700: land PR 2 med bredde som rapport (listet i
-      //    treffmaal-rapport.ts' Step Summary), PR 3 bygger komponenten og
-      //    snur flagget til blokkerende. Gulvet under er UPÅVIRKET — det er
-      //    fortsatt hardt. Se `bruddBlokkerer` i e2e/helpers/treffmaal.ts.
+      //    Brudd er blokkerende (#700 PR 4): hvert brudd gjør testen rød. Gulvet under er
+      //    også hardt. Unntak kun via e2e/helpers/treffmaal-unntak.ts (krever alternativ vei).
       await forventTreffbar(page, {
         kontekst: rute.sti,
         gulv: rute.minTreffmaal ?? 1,
         gulvOmraade: 'main',
-        bruddBlokkerer: false,
       })
     })
   }

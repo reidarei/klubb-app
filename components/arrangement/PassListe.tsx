@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
 import { bePassTilgang } from '@/lib/actions/pass'
 import { formaterDato } from '@/lib/dato'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export type PassListeDeltaker = {
   id: string
@@ -127,11 +128,14 @@ export default function PassListe({ arrangementId, deltakere }: Props) {
           </div>
 
           {!d.pass && d.forespørselStatus !== 'venter' && (
-            <button
+            <PilleKnapp
               type="button"
               onClick={() => be(d.id)}
               disabled={aktiv === d.id}
               style={{
+                flexShrink: 0,
+              }}
+              pilleStil={{
                 padding: '8px 12px',
                 background: 'var(--accent-soft)',
                 border: '0.5px solid var(--accent)',
@@ -140,11 +144,11 @@ export default function PassListe({ arrangementId, deltakere }: Props) {
                 fontFamily: 'var(--font-body)',
                 fontSize: 11,
                 fontWeight: 500,
-                flexShrink: 0,
               }}
+              synligHoyde={32}
             >
               {aktiv === d.id ? 'Sender…' : 'Be om passinfo'}
-            </button>
+            </PilleKnapp>
           )}
         </div>
       ))}

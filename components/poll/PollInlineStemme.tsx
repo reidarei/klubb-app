@@ -3,6 +3,7 @@
 import { useState, useTransition, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { stemPaaPoll } from '@/lib/actions/poll'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Valg = { id: string; tekst: string }
 
@@ -161,14 +162,14 @@ export default function PollInlineStemme({
           })}
         </div>
         <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
+          <PilleKnapp
             type="button"
             onClick={e => {
               e.preventDefault()
               e.stopPropagation()
               setVisStemmeUI(true)
             }}
-            style={{
+            pilleStil={{
               padding: '4px 12px',
               borderRadius: 999,
               background: 'transparent',
@@ -178,11 +179,12 @@ export default function PollInlineStemme({
               fontSize: 9,
               letterSpacing: '1.4px',
               textTransform: 'uppercase',
-              fontWeight: 600
+              fontWeight: 600,
             }}
+            synligHoyde={21}
           >
             Endre svar
-          </button>
+          </PilleKnapp>
         </div>
       </div>
     )
@@ -232,14 +234,14 @@ export default function PollInlineStemme({
       </div>
       {harStemt && (
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
+          <PilleKnapp
             type="button"
             onClick={e => {
               e.preventDefault()
               e.stopPropagation()
               setVisStemmeUI(false)
             }}
-            style={{
+            pilleStil={{
               padding: '4px 12px',
               borderRadius: 999,
               background: 'transparent',
@@ -249,11 +251,12 @@ export default function PollInlineStemme({
               fontSize: 9,
               letterSpacing: '1.4px',
               textTransform: 'uppercase',
-              fontWeight: 600
+              fontWeight: 600,
             }}
+            synligHoyde={21}
           >
             Se resultat
-          </button>
+          </PilleKnapp>
         </div>
       )}
     </div>

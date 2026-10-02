@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { formaterDato } from '@/lib/dato'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 
 type GitHubIssue = {
   number: number
@@ -56,6 +57,9 @@ function IssueRad({ issue, i, erLukket }: { issue: GitHubIssue; i: number; erLuk
 
 const PER_SIDE = 10
 
+// Tekstknapper på ~18 px (12 px × 1,5); utvidelsen er usynlig og kanselleres av negativ margin (#700).
+const TEKSTKNAPP_TREFF = treffflateRundt({ hoyde: 16 })
+
 export default function IssuesListeKlient({ aapne }: { aapne: GitHubIssue[] }) {
   const [visLukkede, setVisLukkede] = useState(false)
   const [lukkede, setLukkede] = useState<GitHubIssue[]>([])
@@ -109,8 +113,9 @@ export default function IssuesListeKlient({ aapne }: { aapne: GitHubIssue[] }) {
         <button
           onClick={toggleLukkede}
           disabled={laster}
-          className="text-xs font-medium mb-2"
-          style={{ color: 'var(--text-tertiary)', background: 'none', border: 'none', padding: 0 }}
+          className="text-xs font-medium"
+          // mb-2 (8 px) inn i marginen: utvidelsen kanselleres av den negative marginen
+          style={{ color: 'var(--text-tertiary)', background: 'none', border: 'none', ...TEKSTKNAPP_TREFF.stil, marginBottom: 8 - TEKSTKNAPP_TREFF.utvidY }}
         >
           {laster ? 'Laster…' : visLukkede ? '▾ Skjul lukkede' : '▸ Vis lukkede'}
         </button>
@@ -126,8 +131,8 @@ export default function IssuesListeKlient({ aapne }: { aapne: GitHubIssue[] }) {
               <button
                 onClick={() => hentLukkede(side + 1)}
                 disabled={laster}
-                className="text-xs font-medium mt-2 block"
-                style={{ color: 'var(--accent)', background: 'none', border: 'none', padding: 0 }}
+                className="text-xs font-medium block"
+                style={{ color: 'var(--accent)', background: 'none', border: 'none', ...TEKSTKNAPP_TREFF.stil, marginTop: 8 - TEKSTKNAPP_TREFF.utvidY }}
               >
                 {laster ? 'Laster…' : 'Vis flere'}
               </button>

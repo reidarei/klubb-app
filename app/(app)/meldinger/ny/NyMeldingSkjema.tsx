@@ -13,6 +13,7 @@ import { komprimer, bildeSrc } from '@/lib/bilde-utils'
 import { INNLEGG_MAKS_LENGDE, MELDING_MAKS_BILDER, DATO_FORSLAG_MIN_TEGN } from '@/lib/konstanter'
 import { iDagOslo } from '@/lib/dato'
 import { foreslaaAktuellDato } from '@/lib/actions/dato-forslag'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // Fjern-knappens treffflate vokser inn i grid-gapet (#700) — gapet må dekke
 // veksten, ellers stjeler nabo-miniatyren trykket (CHIP_RAD_GAP-fella).
@@ -404,22 +405,23 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
             />
 
             {kanLeggeTilFlere && (
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '7px 14px',
                   background: 'transparent',
                   border: '0.5px solid var(--border)',
                   borderRadius: 999,
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)',
-                  fontSize: 12
+                  fontSize: 12,
                 }}
+                synligHoyde={32}
               >
                 {bilder.length === 0 ? 'Legg til bilder' : `Legg til flere (${bilder.length}/${MELDING_MAKS_BILDER})`}
-              </button>
+              </PilleKnapp>
             )}
           </div>
         </SkjemaSeksjon>
@@ -431,11 +433,11 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
         <SkjemaSeksjon label="Eller lenk til et album">
           <div style={{ padding: '10px 4px' }}>
             {!valgtAlbum && (
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={() => setAlbumModusApen(true)}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '7px 14px',
                   background: 'transparent',
                   border: '0.5px solid var(--border)',
@@ -443,14 +445,15 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                   color: 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)',
                   fontSize: 12,
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
                   gap: 6,
                 }}
+                synligHoyde={32}
               >
                 <Icon name="image" size={14} color="currentColor" strokeWidth={1.6} />
                 Velg album
-              </button>
+              </PilleKnapp>
             )}
 
             {valgtAlbum && (
@@ -476,11 +479,14 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                 >
                   {valgtAlbum.tittel}
                 </div>
-                <button
+                <PilleKnapp
                   type="button"
                   onClick={fjernAlbumvalg}
                   disabled={isPending}
                   style={{
+                    flexShrink: 0,
+                  }}
+                  pilleStil={{
                     background: 'transparent',
                     border: '0.5px solid var(--border)',
                     borderRadius: 999,
@@ -490,11 +496,11 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
                     fontSize: 10,
                     letterSpacing: '1.2px',
                     textTransform: 'uppercase',
-                    flexShrink: 0,
                   }}
+                  synligHoyde={23}
                 >
                   Bytt
-                </button>
+                </PilleKnapp>
               </div>
             )}
           </div>
@@ -503,7 +509,7 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
 
       <SkjemaSeksjon label="Aktuell dato (valgfritt)">
         <div style={{ padding: '10px 4px' }}>
-          <input
+          <input className="skjemafelt"
             type="date"
             value={aktuellDato}
             onChange={e => {

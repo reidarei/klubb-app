@@ -16,6 +16,7 @@ import SlettMeldingKnapp from './SlettMeldingKnapp'
 import { bildeSrc } from '@/lib/bilde-utils'
 import { lesFondsrapport, splittFondsrapport } from '@/lib/fondsrapport'
 import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Bilde = { id: string; bilde_url: string }
 
@@ -196,7 +197,7 @@ export default function MeldingRediger({
           <div style={{ marginTop: 18 }}>
             <div style={tellerStil_venstre}>Aktuell dato</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
+              <input className="skjemafelt"
                 type="date"
                 value={dato}
                 onChange={e => {
@@ -207,17 +208,17 @@ export default function MeldingRediger({
                 style={datoStil}
               />
               {dato && (
-                <button
-                  type="button"
+                <PilleKnapp
                   onClick={() => {
                     setDato('')
                     setDatoRoert(true)
                   }}
                   disabled={isPending}
-                  style={{ ...sekundaerKnapp, padding: '6px 12px', fontSize: 12 }}
+                  synligHoyde={30}
+                  pilleStil={{ ...sekundaerKnapp, padding: '6px 12px', fontSize: 12 }}
                 >
                   Fjern
-                </button>
+                </PilleKnapp>
               )}
             </div>
             <div style={{ ...tellerStil_venstre, marginTop: 6, textTransform: 'none', letterSpacing: '0.2px' }}>
@@ -332,23 +333,21 @@ export default function MeldingRediger({
         redigerer ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 4 }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" onClick={lagre} disabled={isPending} style={primaerKnapp}>
+              <PilleKnapp onClick={lagre} disabled={isPending} synligHoyde={34} pilleStil={primaerKnapp}>
                 {isPending ? 'Lagrer…' : 'Lagre'}
-              </button>
-              <button type="button" onClick={avbryt} disabled={isPending} style={sekundaerKnapp}>
+              </PilleKnapp>
+              <PilleKnapp onClick={avbryt} disabled={isPending} synligHoyde={34} pilleStil={sekundaerKnapp}>
                 Avbryt
-              </button>
+              </PilleKnapp>
             </div>
             <SlettMeldingKnapp meldingId={meldingId} />
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => settRedigerer(true)}
-            style={sekundaerKnapp}
-          >
+          // Målt pillehøyde ~40 px. Raden under (reaksjons-«+», 26 px med 9 px usynlig utvidelse oppover) må ikke
+          // overlappe treffboksen hit — to overlappende bokser stjeler hverandres ytterpunkter, derfor marginBottom (#700).
+          <PilleKnapp onClick={() => settRedigerer(true)} synligHoyde={40} style={{ marginBottom: 12 }} pilleStil={sekundaerKnapp}>
             Rediger
-          </button>
+          </PilleKnapp>
         )
       )}
     </>

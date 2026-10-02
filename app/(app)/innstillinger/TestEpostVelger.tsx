@@ -39,7 +39,7 @@ export default function TestEpostVelger({
         >
           Test-epost (mottaker i testmodus)
         </div>
-        <select
+        <select className="skjemafelt"
           value={gyldigValgt ?? ''}
           disabled={isPending}
           onChange={e => {

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { komprimer } from '@/lib/bilde-utils'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // "Bytt bilde"-kontroll. Åpner mobilens galleri direkte, komprimerer i
 // nettleseren og leverer den komprimerte File-en til forelderen via
@@ -43,11 +44,12 @@ export default function BildeBytterKnapp({
 
   return (
     <>
-      <button
-        type="button"
+      {/* Pille ~34 px høy; PilleKnapp legger usynlig 44 px treffflate rundt (#700) */}
+      <PilleKnapp
         onClick={() => inputRef.current?.click()}
         disabled={laster}
-        style={{
+        synligHoyde={34}
+        pilleStil={{
           background: 'var(--overlay-soft)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
@@ -63,7 +65,7 @@ export default function BildeBytterKnapp({
         }}
       >
         {laster ? 'Klargjør…' : label}
-      </button>
+      </PilleKnapp>
       <input
         ref={inputRef}
         type="file"

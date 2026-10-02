@@ -102,7 +102,7 @@ export default function KoblNavn({
           >
             {n}
           </span>
-          <select
+          <select className="skjemafelt"
             aria-label={`Koble «${n}» til medlem`}
             value={valg[n] ?? ''}
             onChange={e => setValg(v => ({ ...v, [n]: e.target.value }))}

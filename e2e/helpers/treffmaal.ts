@@ -78,22 +78,12 @@ type Opts = {
   /**
    * Skal `brudd` gjøre TESTEN rød? Default true.
    *
-   * Satt til `false` KUN av bredde-sveipen i sider-laster.spec.ts (#700 PR 2):
-   * etter PR 2s egen fiks (ToggleSwitch/SkjemaBar/SegmentPiller/Segment) var
-   * 32/37 ruter fortsatt røde på tilbake-/brødsmulelenker, input/textarea/
-   * select-felthøyde og en håndfull småknapper — et strukturelt mønster som
-   * krever en felles komponent (tilbake-lenke, felles felthøyde ≥ 44 px), ikke
-   * punktfikser. Beslutning i #700: land PR 2 med bredde i RAPPORT-modus
-   * (bruddet vises i treffmaal-rapport.ts, gjør ikke testen rød) og la PR 3
-   * bygge komponenten og snu denne til `true`. Gulvet (kandidaterIGulvOmraade)
-   * er IKKE påvirket av dette flagget — det forblir hardt uansett.
+   * Alle kallsteder bruker default (`true`) siden #700 PR 4: bredde-sveipen i sider-laster.spec.ts
+   * var en periode i rapport-modus (`false`) mens felles komponenter ble innført. Flagget finnes
+   * fortsatt for et fremtidig midlertidig behov, men er ikke i bruk. Gulvet (kandidaterIGulvOmraade)
+   * er IKKE påvirket av dette flagget — det er alltid hardt.
    *
-   * Dybde-kallene (kart-markering.spec.ts, album-chatten-lightbox.spec.ts,
-   * edit-kommentar.spec.ts, kart-pakke.spec.ts) bruker default (`true`) og
-   * skal ALDRI settes til `false` — de måler en konkret, nylig bygget flate
-   * der et brudd er en reell regresjon, ikke et strukturelt etterslep.
-   * Eneste unntak: poll.spec.ts (/poll/ny) står på `false` fordi bruddene der
-   * er felthøyde-mønsteret PR 3 lukker — snus sammen med det (se KJENTE_MANGLER).
+   * Sett det ikke til `false` for å slippe unna et brudd — bruk et unntak med alternativ vei.
    */
   bruddBlokkerer?: boolean
 }
@@ -380,12 +370,12 @@ export async function forventTreffbar(page: Page, opts: Opts): Promise<Resultat>
           .join('\n'),
     ).toEqual([])
   } else if (fullResultat.brudd.length > 0) {
-    // Rapport-modus (#700 PR 2, se kommentaren på `bruddBlokkerer` over) — et
+    // Rapport-modus (#700, se kommentaren på `bruddBlokkerer` over) — et
     // brudd skal fortsatt være SYNLIG per test, bare ikke gjøre den rød. Både
     // test.info().annotations (vises i denne testens egen rapport) og
     // treffmaal-rapport.ts (samlet markdown via attachmentet over) dekker det.
     test.info().annotations.push({
-      type: 'bredde: kun rapport inntil PR 3, #700',
+      type: 'bredde: kun rapport inntil CI viser 0 brudd, #700',
       description: `${fullResultat.brudd.length} trykkflate(r): ` +
         fullResultat.brudd.map(b => `${b.beskrivelse} (${b.bredde}×${b.hoyde}px)`).join(', '),
     })

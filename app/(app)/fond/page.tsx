@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Card from '@/components/ui/Card'
 import InnskyterRad from '@/components/fond/InnskyterRad'
@@ -14,6 +13,7 @@ import { formaterDato } from '@/lib/dato'
 import { formaterKr, formaterBelop, summerKroner } from '@/lib/belop'
 import { KLUBB_KORTNAVN, FOND_KONTONUMMER, FOND_FAST_TREKK_FORSLAG } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
 
@@ -224,10 +224,9 @@ export default async function FondSide() {
             Synlig pille i profil-sidens stil; den gamle 9px-lenken var usynlig på mobil. */}
         {kanAdministrere(profil?.rolle) && (
           <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Link
+            <PilleLenke
               href="/fond/rediger"
-              style={{
-                display: 'inline-block',
+              pilleStil={{
                 padding: '8px 14px',
                 background: 'transparent',
                 border: '1px solid var(--border)',
@@ -238,9 +237,10 @@ export default async function FondSide() {
                 fontWeight: 500,
                 textDecoration: 'none',
               }}
+              synligHoyde={34}
             >
               Rediger fondet
-            </Link>
+            </PilleLenke>
             {/* Fondsrapport (#785) — admin-only, åpner et ark med kvartalet (fra siste oppgjør),
                 sjekkliste og hilsen. Ikke i NyFAB: kortet tegnes fra teksten i
                 et vanlig innlegg, men publiseringen er en egen, avgrenset flyt.

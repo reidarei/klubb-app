@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
@@ -46,7 +46,7 @@ export default async function FondRediger() {
       {/* Topp */}
       <div style={{ padding: '16px 4px 20px', borderBottom: '0.5px solid var(--border-subtle)', marginBottom: 24 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-tertiary)', letterSpacing: '2.5px', textTransform: 'uppercase', marginBottom: 8 }}>
-          <Link href="/fond" style={{ color: 'inherit', textDecoration: 'none' }}>← Fond</Link>
+          <TilbakeLenke href="/fond" style={{ color: 'inherit' }}>← Fond</TilbakeLenke>
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
           Rediger fond

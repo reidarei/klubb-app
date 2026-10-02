@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { lagrePassInfo } from '@/lib/actions/pass'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   initialNummer?: string
@@ -59,7 +60,7 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
         <div style={labelStil}>Passnummer</div>
-        <input
+        <input className="skjemafelt"
           type="text"
           value={nummer}
           onChange={e => setNummer(e.target.value)}
@@ -70,7 +71,7 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
       </div>
       <div>
         <div style={labelStil}>Utløpsdato</div>
-        <input
+        <input className="skjemafelt"
           type="date"
           value={utloper}
           onChange={e => setUtloper(e.target.value)}
@@ -83,29 +84,34 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-        <button
+        <PilleKnapp
           type="button"
           onClick={onAvbryt}
           disabled={isPending}
           style={{
             flex: 1,
+          }}
+          pilleStil={{
             padding: '10px 0',
             background: 'transparent',
             border: '0.5px solid var(--border)',
             borderRadius: 999,
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
-            fontSize: 13
+            fontSize: 13,
           }}
+          synligHoyde={39}
         >
           Avbryt
-        </button>
-        <button
+        </PilleKnapp>
+        <PilleKnapp
           type="button"
           onClick={handleLagre}
           disabled={isPending}
           style={{
             flex: 1,
+          }}
+          pilleStil={{
             padding: '10px 0',
             background: 'var(--accent)',
             border: 'none',
@@ -116,9 +122,10 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
             fontWeight: 600,
             opacity: isPending ? 0.6 : 1,
           }}
+          synligHoyde={37}
         >
           {isPending ? 'Lagrer…' : 'Lagre'}
-        </button>
+        </PilleKnapp>
       </div>
     </div>
   )

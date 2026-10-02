@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Avatar from '@/components/ui/Avatar'
 import Icon from '@/components/ui/Icon'
-import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
+import Treffflate, { FELT_I_PILLE_STIL, treffflateRundt } from '@/components/ui/Treffflate'
 import { sendChatMelding } from '@/lib/actions/chat'
 import type { ChatScope } from '@/lib/chat-konfig'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -213,8 +213,12 @@ const HEADER_STIL = {
   letterSpacing: '1.4px',
   textTransform: 'uppercase',
   fontWeight: 600,
-  padding: '8px 10px',
-  margin: '0 -10px',
+  // 15 px over/under tekstlinjen (~15 px) gir ≥ 44 px treffflate; -7 px margin holder
+  // layout-fotavtrykket på det gamle (31 px). Stables over naboene som ellers stjeler overlappen (#700).
+  padding: '15px 10px',
+  margin: '-7px -10px',
+  position: 'relative',
+  zIndex: 1,
 } as const
 
 /**
@@ -690,6 +694,7 @@ export default function KommentarerPaaKort({
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
+              ...FELT_I_PILLE_STIL,
             }}
           />
           <Treffflate

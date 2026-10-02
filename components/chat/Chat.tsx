@@ -12,7 +12,7 @@ import { konfigFor, type ChatScope as ChatScopeKonfig } from '@/lib/chat-konfig'
 import { formaterDato, erSammeNorskeDag } from '@/lib/dato'
 import Icon from '@/components/ui/Icon'
 import SectionLabel from '@/components/ui/SectionLabel'
-import Treffflate from '@/components/ui/Treffflate'
+import Treffflate, { FELT_I_PILLE_STIL } from '@/components/ui/Treffflate'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import {
   beregnMentionSøk,
@@ -801,6 +801,7 @@ export default function Chat({
             color: 'var(--text-primary)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
+            ...FELT_I_PILLE_STIL,
           }}
         />
         <Treffflate

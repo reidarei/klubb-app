@@ -52,9 +52,7 @@ test.describe('Poll-flyt', () => {
     // Dybde-kall (#700 PR 2): skjemaet har en ny rad med en «fjern
     // alternativ»-knapp som bredde-sveipen aldri ser (den krever et tredje
     // alternativ, som kun finnes etter dette klikket).
-    // bruddBlokkerer: false (#700) — eneste dybde-kall i rapport-modus: skjemafeltene og
-    // Legg til/Fjern alternativ hører til felles felthøyde i PR 3, som snur dette til true.
-    await forventTreffbar(page, { kontekst: '/poll/ny — tre alternativer', omraade: 'main', bruddBlokkerer: false })
+    await forventTreffbar(page, { kontekst: '/poll/ny — tre alternativer', omraade: 'main' })
 
     // Sett flervalg (Segment-komponenten bruker role="tab")
     await page.getByRole('tab', { name: 'Flervalg' }).click()

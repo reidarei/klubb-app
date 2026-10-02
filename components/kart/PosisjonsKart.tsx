@@ -55,6 +55,7 @@ import MarkeringDetalj from './MarkeringDetalj'
 import StedSok from './StedSok'
 import type { StedTreff } from '@/lib/geokoding'
 import ReisemodusBar, { KART_TOPP_MARGIN, REISEMODUS_BAR_SONE } from './ReisemodusBar'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 // Re-eksportert slik at page.tsx kan importere ALLE kart-typene fra ett sted
 // (samme mønster som Mann/Markering/Punkt under).
 export type { TimeplanArrangement, TimeplanPost }
@@ -1728,59 +1729,57 @@ export default function PosisjonsKart({
           right: KART_TOPP_MARGIN,
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 6,
+          // Radgap 8 (var 6): pillene har 4 px usynlig treffflate opp/ned, og to nabo-rader skal ikke overlappe (#700)
+          columnGap: 6,
+          rowGap: 8,
           pointerEvents: 'none',
           zIndex: Z.KNAPPER,
         }}
       >
         {meg ? (
           <>
-            <button
-              type="button"
+            <KartPille
               onClick={() => hentOgLagre(false)}
               disabled={opptatt}
               data-testid="del-knapp"
-              style={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
+              pilleStil={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
             >
               {/* Tre tilstander, ikke to: teksten skal si hvilken av de to
                   ventetidene som pågår. `jobber` sjekkes først fordi
                   GPS-hentingen kommer først i flyten — refreshen er det som
                   står igjen etterpå. */}
               {jobber ? 'Henter …' : friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
-            </button>
-            <button
-              type="button"
+            </KartPille>
+            <KartPille
               onClick={stoppNaa}
               disabled={opptatt}
               data-testid="stopp-knapp"
-              style={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
+              pilleStil={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
             >
               Slutt å dele
-            </button>
+            </KartPille>
           </>
         ) : (
           <>
-            <button
-              type="button"
+            <KartPille
               onClick={() => hentOgLagre(false)}
               disabled={opptatt}
               data-testid="del-knapp"
-              style={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
+              pilleStil={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
             >
               {jobber ? 'Henter posisjon …' : 'Del posisjonen min'}
-            </button>
+            </KartPille>
             {/* Uten denne har den som følger turen uten å dele egen posisjon
                 ingen vei til friske data etter at pull-to-refresh ble
                 slått av på kartet (#718) — verst i reisemodus, der
                 TopHeader ikke finnes og «naviger bort og tilbake» ikke er
                 et reelt alternativ. Vises kun her: har `meg` verdi, gjør
                 «Oppdater»-pilla i `if (meg)`-grenen over allerede jobben. */}
-            <button
-              type="button"
+            <KartPille
               onClick={friskOppKartet}
               disabled={opptatt}
               data-testid="oppdater-kart-knapp"
-              style={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
+              pilleStil={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
             >
               {/* LÅSEN følger `opptatt`, ikke `friskerOpp`: mens GPS-hentingen
                   fra pilla ved siden av pågår er `meg` fortsatt null, så denne
@@ -1791,19 +1790,18 @@ export default function PosisjonsKart({
                   som samtidig annonserer samme ventetid er støy. Felles lås,
                   egen tekst — ikke «rett» det til én av delene (#718-review). */}
               {friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
-            </button>
+            </KartPille>
           </>
         )}
 
         {steg === 'av' && (
-          <button
-            type="button"
+          <KartPille
             onClick={() => setSteg('sted')}
             data-testid="markering-start"
-            style={PILLE}
+            pilleStil={PILLE}
           >
             Sett markering
-          </button>
+          </KartPille>
         )}
 
         {/* Søk-knappen (#757), samme gate som «Sett markering» over. Rund
@@ -1840,16 +1838,15 @@ export default function PosisjonsKart({
             allerede, og en pille med variabel lengde ville skjøvet de andre
             ned over kartet. */}
         {timeplanArrangement && steg === 'av' && (
-          <button
-            type="button"
+          <KartPille
             onClick={aapneTimeplan}
             aria-expanded={timeplanAapent}
             aria-label={timeplanAapent ? 'Lukk timeplanen' : 'Vis timeplanen'}
             data-testid="timeplan-pille"
-            style={PILLE}
+            pilleStil={PILLE}
           >
             {nesteTimeplanKlokke ? `Timeplan · ${nesteTimeplanKlokke}` : 'Timeplan'}
-          </button>
+          </KartPille>
         )}
 
       </div>
@@ -2472,6 +2469,13 @@ const Z = {
 // Pillene bar mono-uppercase — teknisk og stramt. Sommer-løftet (#713) gjør
 // dem til vanlig skrift i normal setning: lettere å lese på et kart, og
 // mindre «kontrollpanel».
+// Toppradens piller er ~37 px høye; PilleKnapp legger usynlig 44 px treffflate rundt uten å endre utseendet (#700).
+// pointerEvents: auto på det ytre elementet — raden har pointer-events: none, og uten det ville
+// den usynlige utvidelsen (som arver none) ikke tatt imot trykk.
+function KartPille({ pilleStil, children, ...rest }: { pilleStil: React.CSSProperties; children: React.ReactNode } & Omit<React.ComponentProps<'button'>, 'style' | 'children'>) {
+  return <PilleKnapp synligHoyde={37} style={{ pointerEvents: 'auto' }} pilleStil={pilleStil} {...rest}>{children}</PilleKnapp>
+}
+
 const PILLE = {
   fontFamily: 'var(--font-body)',
   fontSize: 12.5,

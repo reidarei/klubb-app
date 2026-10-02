@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
@@ -22,6 +21,7 @@ import { byggAgenda } from '@/lib/agenda-sortering'
 import { kanAdministrere } from '@/lib/roller'
 import { hentAgendaData } from '@/lib/queries/agenda'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
+import { PilleLenke } from '@/components/ui/TreffPille'
 
 // Agenda-forsiden: henter rådata via hentAgendaData (lib/queries/agenda.ts)
 // og delegerer all sortering/gruppering til lib/agenda-sortering.ts. Denne
@@ -323,11 +323,13 @@ export default async function Forside() {
               return <MeldingKort key={t.data.id} melding={t.data} brukerId={user!.id} erAdmin={erAdmin} />
             })}
           </div>
-          <Link
+          <PilleLenke
             href="/tidligere"
             style={{
               display: 'block',
               marginTop: 16,
+            }}
+            pilleStil={{
               padding: '10px 14px',
               textAlign: 'center',
               fontFamily: 'var(--font-mono)',
@@ -340,9 +342,10 @@ export default async function Forside() {
               borderRadius: 999,
               textDecoration: 'none',
             }}
+            synligHoyde={36}
           >
             Se hele historikken →
-          </Link>
+          </PilleLenke>
         </section>
       )}
     </div>

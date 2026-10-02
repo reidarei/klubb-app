@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { formaterDato } from '@/lib/dato'
 import { varselKortNavn } from '@/lib/varsel-typer'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 
 type VarselRad = {
   id: string
@@ -15,6 +16,9 @@ type VarselRad = {
 }
 
 const PER_SIDE = 10
+
+// Tekstknapp på ~18 px (12 px × 1,5); usynlig utvidelse til 44 px (#700).
+const TEKSTKNAPP_TREFF = treffflateRundt({ hoyde: 16 })
 
 export default function VarselLogg({
   initial,
@@ -72,8 +76,8 @@ export default function VarselLogg({
             <button
               onClick={hentFlere}
               disabled={laster}
-              className="text-xs font-medium mt-2 block"
-              style={{ color: 'var(--accent)', background: 'none', border: 'none', padding: 0 }}
+              className="text-xs font-medium block"
+              style={{ color: 'var(--accent)', background: 'none', border: 'none', ...TEKSTKNAPP_TREFF.stil, marginTop: 8 - TEKSTKNAPP_TREFF.utvidY }}
             >
               {laster ? 'Laster…' : `Vis flere (${total - rader.length} igjen)`}
             </button>

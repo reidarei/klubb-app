@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import PassInfoSkjema from './PassInfoSkjema'
 import { formaterDato } from '@/lib/dato'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   nummer: string | null
@@ -134,11 +135,13 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
           </li>
         </ul>
 
-        <button
+        <PilleKnapp
           type="button"
           onClick={() => setRedigerer(true)}
           style={{
             width: '100%',
+          }}
+          pilleStil={{
             padding: '10px 0',
             background: 'var(--accent)',
             border: 'none',
@@ -146,11 +149,12 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
             color: 'var(--accent-foreground)',
             fontFamily: 'var(--font-body)',
             fontSize: 13,
-            fontWeight: 600
+            fontWeight: 600,
           }}
+          synligHoyde={37}
         >
           Fyll ut pass-info
-        </button>
+        </PilleKnapp>
       </div>
     )
   }
@@ -190,10 +194,13 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
             {sladdet(nummer!)} · gyldig til {formaterDato(`${utloper}T12:00:00Z`, 'd. MMM yyyy')}
           </div>
         </div>
-        <button
+        <PilleKnapp
           type="button"
           onClick={() => setRedigerer(true)}
           style={{
+            flexShrink: 0,
+          }}
+          pilleStil={{
             padding: '8px 14px',
             background: 'transparent',
             border: '0.5px solid var(--border)',
@@ -201,11 +208,11 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
             color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
-            flexShrink: 0,
           }}
+          synligHoyde={34}
         >
           Endre
-        </button>
+        </PilleKnapp>
       </div>
       <div
         style={{

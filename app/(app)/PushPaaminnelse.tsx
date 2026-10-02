@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Status = 'laster' | 'vis' | 'skjul'
 
@@ -98,9 +99,12 @@ export default function PushPaaminnelse() {
           Aktiver push på denne enheten
         </div>
       </div>
-      <button
+      <PilleKnapp
         onClick={aktiverPush}
         style={{
+          flexShrink: 0,
+        }}
+        pilleStil={{
           padding: '8px 14px',
           background: 'var(--accent)',
           color: 'var(--accent-foreground)',
@@ -109,11 +113,11 @@ export default function PushPaaminnelse() {
           fontFamily: 'var(--font-body)',
           fontSize: 12,
           fontWeight: 600,
-          flexShrink: 0,
         }}
+        synligHoyde={32}
       >
         Aktiver
-      </button>
+      </PilleKnapp>
     </div>
   )
 }

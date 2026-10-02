@@ -66,7 +66,7 @@ export default function OpplysningTekstfelt({
       maxLength={maksLengde}
       placeholder={placeholder}
       aria-label={ariaLabel}
-      className="opplysning-verdi"
+      className="opplysning-verdi skjemafelt"
       style={{
         ...OPPLYSNING_INPUT_RESET,
         ...opplysningVerdiStil(),

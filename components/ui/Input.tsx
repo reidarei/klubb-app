@@ -19,7 +19,7 @@ export default function Input({
         </label>
       )}
       <input
-        className={`w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors ${className}`}
+        className={`skjemafelt w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors ${className}`}
         style={{
           background: 'var(--bg-elevated-2)',
           border: '1px solid var(--border)',
@@ -51,7 +51,7 @@ export function Textarea({
         </label>
       )}
       <textarea
-        className={`w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors ${className}`}
+        className={`skjemafelt w-full rounded-xl px-4 py-3 text-base focus:outline-none transition-colors ${className}`}
         style={{
           background: 'var(--bg-elevated-2)',
           border: '1px solid var(--border)',

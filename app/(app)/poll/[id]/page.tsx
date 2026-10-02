@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import { PilleLenke } from '@/components/ui/TreffPille'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { kanAdministrere, loeserTiebreak } from '@/lib/roller'
@@ -408,17 +409,16 @@ function KaaringVisning({
         </div>
         {poll.arrangement_id && (
           <div style={{ marginTop: 8 }}>
-            <Link
+            <TilbakeLenke
               href={`/arrangementer/${poll.arrangement_id}`}
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 13,
                 color: 'var(--accent)',
-                textDecoration: 'none',
               }}
             >
               ← Tilbake til arrangementet
-            </Link>
+            </TilbakeLenke>
           </div>
         )}
       </header>
@@ -461,11 +461,10 @@ function KaaringVisning({
               <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, marginTop: 0 }}>
                 Det er likt antall stemmer på topp. Du må velge vinneren.
               </p>
-              <Link
+              <PilleLenke
                 href={`/kaaringspoll/${poll.id}/tiebreak`}
-                style={{
-                  display: 'inline-block',
-                  marginTop: 8,
+                style={{ marginTop: 8 }}
+                pilleStil={{
                   padding: '10px 18px',
                   background: 'var(--accent)',
                   color: 'var(--accent-foreground)',
@@ -473,11 +472,10 @@ function KaaringVisning({
                   fontFamily: 'var(--font-body)',
                   fontSize: 14,
                   fontWeight: 600,
-                  textDecoration: 'none',
                 }}
               >
                 Velg vinner
-              </Link>
+              </PilleLenke>
             </div>
           ) : (
             <p

@@ -78,7 +78,7 @@ function MalRad({ mal }: { mal: Mal }) {
   if (redigerer) {
     return (
       <div className="flex gap-2 items-center py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <input
+        <input className="skjemafelt"
           value={navn}
           onChange={e => setNavn(e.target.value)}
           style={inputStil}
@@ -143,7 +143,7 @@ function NyMalForm() {
 
   return (
     <div className="flex gap-2 items-center pt-3 mt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <input
+      <input className="skjemafelt"
         value={navn}
         onChange={e => setNavn(e.target.value)}
         placeholder="Ny kåringmal…"

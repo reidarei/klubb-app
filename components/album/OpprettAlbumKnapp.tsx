@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { opprettAlbum } from '@/lib/actions/album'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // Knapp + dialog for å opprette nytt album uten arrangement-tilknytning.
 // Album med arrangement opprettes inline på arrangement-detaljsiden via
@@ -97,7 +98,7 @@ export default function OpprettAlbumKnapp() {
             >
               Nytt album
             </h2>
-            <input
+            <input className="skjemafelt"
               type="text"
               value={tittel}
               onChange={e => setTittel(e.target.value)}
@@ -122,25 +123,26 @@ export default function OpprettAlbumKnapp() {
               }}
             />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={lukk}
-                style={{
+                pilleStil={{
                   padding: '8px 14px',
                   borderRadius: 999,
                   border: '0.5px solid var(--border)',
                   background: 'transparent',
                   color: 'var(--text-secondary)',
-                  fontSize: 13
+                  fontSize: 13,
                 }}
+                synligHoyde={35}
               >
                 Avbryt
-              </button>
-              <button
+              </PilleKnapp>
+              <PilleKnapp
                 type="button"
                 onClick={lagre}
                 disabled={!tittel.trim() || pending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   border: 'none',
@@ -150,9 +152,10 @@ export default function OpprettAlbumKnapp() {
                   fontWeight: 600,
                   opacity: !tittel.trim() || pending ? 0.5 : 1,
                 }}
+                synligHoyde={33}
               >
                 {pending ? 'Oppretter…' : 'Opprett'}
-              </button>
+              </PilleKnapp>
             </div>
           </div>
         </div>

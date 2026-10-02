@@ -7,6 +7,7 @@ import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Icon from '@/components/ui/Icon'
 import { formaterDato, datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
+import Rad from '@/components/ui/FeltRad'
 
 type Mal = {
   id: string
@@ -39,19 +40,6 @@ const inputStil: CSSProperties = {
   fontSize: 14,
   outline: 'none',
   padding: 0,
-}
-
-function Rad({ last, children }: { last?: boolean; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 // Default svarfrist: én uke frem kl 20:00.

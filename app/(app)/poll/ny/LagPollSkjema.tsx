@@ -7,7 +7,10 @@ import SkjemaBar from '@/components/ui/SkjemaBar'
 import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
 import Segment from '@/components/ui/Segment'
 import Icon from '@/components/ui/Icon'
+import Treffflate from '@/components/ui/Treffflate'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
+import Rad from '@/components/ui/FeltRad'
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -36,19 +39,6 @@ const accentStil: CSSProperties = {
   fontSize: 19,
   fontWeight: 500,
   letterSpacing: '-0.3px',
-}
-
-function Rad({ last, children }: { last?: boolean; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 // Default svarfrist: én uke frem kl 20:00. Gir brukeren et fornuftig
@@ -164,21 +154,14 @@ export default function LagPollSkjema() {
                 maxLength={120}
               />
               {alternativer.length > 2 && (
-                <button
-                  type="button"
+                <Treffflate
+                  synlig={22}
                   onClick={() => fjernAlternativ(i)}
                   aria-label="Fjern alternativ"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 4,
-                    color: 'var(--text-tertiary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
+                  style={{ color: 'var(--text-tertiary)' }}
                 >
                   <Icon name="x" size={14} />
-                </button>
+                </Treffflate>
               )}
             </div>
           </Rad>
@@ -191,6 +174,9 @@ export default function LagPollSkjema() {
               style={{
                 background: 'none',
                 border: 'none',
+                // Ekte høyde, ikke usynlig utvidelse: raden ligger rett under et 44 px felt med bare 8 px
+                // mellom, og en utvidelse ville stjålet nederste kant av feltet over (CHIP_RAD_GAP, #508).
+                minHeight: MIN_TREFFMAAL_PX,
                 padding: 0,
                 color: 'var(--accent)',
                 fontFamily: 'var(--font-body)',

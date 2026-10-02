@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { varslOmArrangement } from '@/lib/actions/arrangementer'
 import { VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // Speil av PurreKnapp.tsx (#267 + integrator-funn) — modal med valgfri
 // hilsen før varselet sendes. Se #282 for bakgrunn.
@@ -82,12 +83,12 @@ export default function VarsleNuKnapp({
 
   return (
     <>
-      <button
+      <PilleKnapp
         ref={triggerRef}
         type="button"
         onClick={aapneModal}
         disabled={sendt || isPending}
-        style={{
+        pilleStil={{
           padding: '8px 14px',
           borderRadius: 999,
           background: 'var(--overlay-control-bg)',
@@ -95,19 +96,20 @@ export default function VarsleNuKnapp({
           WebkitBackdropFilter: 'blur(16px)',
           border: '0.5px solid var(--border)',
           color:
-            sendt
-              ? 'var(--success)'
-              : isPending
-              ? 'var(--text-secondary)'
-              : 'var(--text-primary)',
+              sendt
+                ? 'var(--success)'
+                : isPending
+                ? 'var(--text-secondary)'
+                : 'var(--text-primary)',
           fontFamily: 'var(--font-body)',
           fontSize: 12,
           fontWeight: 500,
           opacity: isPending ? 0.6 : 1,
         }}
+        synligHoyde={34}
       >
         {tekst}
-      </button>
+      </PilleKnapp>
 
       {modalAapen && (
         // Overlay: klikk utenfor kortet lukker modalen
@@ -221,11 +223,11 @@ export default function VarsleNuKnapp({
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={lukkModal}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'transparent',
@@ -235,16 +237,17 @@ export default function VarsleNuKnapp({
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '1.4px',
-                  textTransform: 'uppercase'
+                  textTransform: 'uppercase',
                 }}
+                synligHoyde={31}
               >
                 Avbryt
-              </button>
-              <button
+              </PilleKnapp>
+              <PilleKnapp
                 type="button"
                 onClick={handleSend}
                 disabled={isPending}
-                style={{
+                pilleStil={{
                   padding: '8px 16px',
                   borderRadius: 999,
                   background: 'var(--accent)',
@@ -257,9 +260,10 @@ export default function VarsleNuKnapp({
                   textTransform: 'uppercase',
                   opacity: isPending ? 0.7 : 1,
                 }}
+                synligHoyde={29}
               >
                 {isPending ? 'Sender…' : 'Send varsel'}
-              </button>
+              </PilleKnapp>
             </div>
           </div>
         </div>

@@ -69,7 +69,7 @@ export default function InnskuddEditor({ innskudd, profiler }: Props) {
     return (
       <div>
         <label style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Innskyter</label>
-        <select
+        <select className="skjemafelt"
           name="profil_id"
           defaultValue={defaultValue}
           required

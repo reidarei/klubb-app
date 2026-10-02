@@ -108,3 +108,14 @@ export default function Treffflate({ synlig, style, children, ...buttonProps }: 
     </button>
   )
 }
+
+// Tekstfelt INNE i en synlig pille (chat, kommentar, søk): pillen skal ikke vokse, men feltet
+// (~18–20 px høyt) skal ha ≥ 44 px treffflate. Usynlig vertikal padding med lik negativ margin
+// holder layout-høyden uendret; padding er en del av <input>, så trykk i den fokuserer feltet (#700).
+// Brukes IKKE på felt i normal skjemaflyt — de bruker klassen `skjemafelt` (globals.css).
+export const FELT_I_PILLE_STIL: CSSProperties = {
+  paddingTop: 13,
+  paddingBottom: 13,
+  marginTop: -13,
+  marginBottom: -13,
+}

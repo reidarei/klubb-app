@@ -1,6 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
-import Link from 'next/link'
 import AnsvarAdmin from './AnsvarAdmin'
 import PurreKnapp from './PurreKnapp'
 import LeggTilAarKnapp from './LeggTilAarKnapp'
@@ -9,6 +8,7 @@ import { norskAar, norskDag, norskDatoNaa } from '@/lib/dato'
 import { isBefore } from 'date-fns'
 import { kanAdministrere } from '@/lib/roller'
 import { utkastAnkerId } from '@/components/agenda/UtkastKort'
+import { TekstLenke } from '@/components/ui/TilbakeLenke'
 
 type AnsvarRad = {
   id: string
@@ -229,7 +229,7 @@ export default async function Arrangoransvar() {
                     </div>
                     <div style={{ marginTop: 4 }}>
                       {lenketArr ? (
-                        <Link
+                        <TekstLenke
                           href={`/arrangementer/${lenketArr.id}`}
                           style={{
                             fontFamily: 'var(--font-mono)',
@@ -238,11 +238,10 @@ export default async function Arrangoransvar() {
                             letterSpacing: '1.4px',
                             fontWeight: 600,
                             textTransform: 'uppercase',
-                            textDecoration: 'none',
                           }}
                         >
                           {statusTekst} →
-                        </Link>
+                        </TekstLenke>
                       ) : (
                         <span
                           style={{

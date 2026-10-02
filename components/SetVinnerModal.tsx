@@ -133,7 +133,7 @@ export default function SetVinnerModal({
                 {type === 'profil' ? 'Herr' : 'Arrangement'}
               </p>
             ) : (
-              <select value={type} onChange={e => { setType(e.target.value as 'profil' | 'arrangement'); setId('') }} style={inputStil}>
+              <select className="skjemafelt" value={type} onChange={e => { setType(e.target.value as 'profil' | 'arrangement'); setId('') }} style={inputStil}>
                 <option value="profil">Herr</option>
                 <option value="arrangement">Arrangement</option>
               </select>
@@ -142,7 +142,7 @@ export default function SetVinnerModal({
 
           <div>
             <label className="block text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>Velg vinner</label>
-            <select value={id} onChange={e => setId(e.target.value)} style={inputStil}>
+            <select className="skjemafelt" value={id} onChange={e => setId(e.target.value)} style={inputStil}>
               <option value="">— Velg —</option>
               {options.map(o => (
                 <option key={o.id} value={o.id}>
@@ -154,7 +154,7 @@ export default function SetVinnerModal({
 
           <div>
             <label className="block text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>Begrunnelse (valgfritt)</label>
-            <input
+            <input className="skjemafelt"
               type="text"
               value={begrunnelse}
               onChange={e => setBegrunnelse(e.target.value)}

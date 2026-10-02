@@ -582,3 +582,20 @@ a {
     --header-topp: calc(env(safe-area-inset-top, 0px) + 18px);
   }
 }
+
+/* Felles felthøyde (#700 PR 3): skjemafelt (tekstfelt, nedtrekk, tekstområder) er
+   minst 44 px høye — samme terskel som MIN_TREFFMAAL_PX i lib/konstanter.ts (CSS
+   kan ikke importere den, så tallet står her også). OPT-IN via klassen
+   `skjemafelt`, på feltet selv eller på en beholder (FeltRad, Input). Bevisst ikke
+   global: en regel på alle felt i <main> blåste opp felt som bor INNE i en synlig
+   pille (chat-komponisten, kommentarfelt, kartpanelets chat, søk) — der er det
+   pillen som er treffflaten. Et for lite skjemafelt fanges av treffmål-vakten; et
+   felt som vokser ut av pillen sin fanges ikke av noen. Avkryssing, radio, fil,
+   range og farge har egne flater og er utelatt. */
+:is(.skjemafelt, .skjemafelt *):is(
+    input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='file'], [type='range'], [type='color']),
+    select,
+    textarea
+  ) {
+  min-height: 44px;
+}

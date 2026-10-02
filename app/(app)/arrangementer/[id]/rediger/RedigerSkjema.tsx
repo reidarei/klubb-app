@@ -15,6 +15,7 @@ import BildeBytterKnapp from '@/components/BildeBytterKnapp'
 import TypeVelger, { type MalValg } from '@/components/arrangement/TypeVelger'
 import { isoTilDatetimeLocal, datetimeLocalTilIso } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
+import Rad from '@/components/ui/FeltRad'
 
 type Arrangement = {
   id: string
@@ -57,25 +58,6 @@ const accentStil: CSSProperties = {
   fontSize: 19,
   fontWeight: 500,
   letterSpacing: '-0.3px',
-}
-
-function Rad({
-  last,
-  children,
-}: {
-  last?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
 }
 
 export default function RedigerSkjema({

@@ -13,6 +13,8 @@ import BildeCropper from '@/components/ui/BildeCropper'
 import OpplysningRad, { opplysningVerdiStil, OPPLYSNING_INPUT_RESET } from '@/components/profil/OpplysningRad'
 import OpplysningTekstfelt from '@/components/profil/OpplysningTekstfelt'
 import { STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
+import Rad from '@/components/ui/FeltRad'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Props = {
   navn: string
@@ -78,25 +80,6 @@ function RedigerRad({
 }
 
 // Rad brukes fortsatt i «Sikkerhet» — den seksjonen er URØRT av #685.
-function Rad({
-  children,
-  last,
-}: {
-  children: React.ReactNode
-  last?: boolean
-}) {
-  return (
-    <div
-      style={{
-        padding: '10px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
 export default function RedigerProfilForm({
   navn: navnInit,
   visningsnavn: visnInit,
@@ -310,7 +293,7 @@ export default function RedigerProfilForm({
             // det som gir tastaturbrukeren markeringen tilbake
             // (#685-review). Feltet har verken ramme eller bakgrunn, så uten
             // klassen er det umulig å se hvor fokus står.
-            className="opplysning-verdi"
+            className="opplysning-verdi skjemafelt"
             style={{
               ...OPPLYSNING_INPUT_RESET,
               fontFamily: 'var(--font-display)',
@@ -322,11 +305,11 @@ export default function RedigerProfilForm({
             }}
           />
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <button
+            <PilleKnapp
               type="button"
               onClick={() => filInputRef.current?.click()}
               disabled={isPending}
-              style={{
+              pilleStil={{
                 background: 'none',
                 border: 'none',
                 padding: 0,
@@ -335,14 +318,15 @@ export default function RedigerProfilForm({
                 fontSize: 12,
                 fontWeight: 500,
               }}
+              synligHoyde={16}
             >
               {isPending ? 'Lagrer…' : previewUrl ? 'Bytt bilde' : 'Last opp bilde'}
-            </button>
+            </PilleKnapp>
             {previewUrl && !isPending && (
-              <button
+              <PilleKnapp
                 type="button"
                 onClick={handleFjernBilde}
-                style={{
+                pilleStil={{
                   background: 'none',
                   border: 'none',
                   padding: 0,
@@ -351,9 +335,10 @@ export default function RedigerProfilForm({
                   fontSize: 12,
                   fontWeight: 500,
                 }}
+                synligHoyde={16}
               >
                 Fjern
-              </button>
+              </PilleKnapp>
             )}
           </div>
           {bildeFeil && (
@@ -393,7 +378,7 @@ export default function RedigerProfilForm({
               onChange={e => setVisningsnavn(e.target.value)}
               placeholder={navn}
               aria-label={ariaLabel}
-              className="opplysning-verdi"
+              className="opplysning-verdi skjemafelt"
               style={{ ...OPPLYSNING_INPUT_RESET, ...opplysningVerdiStil() }}
             />
           )}
@@ -405,7 +390,7 @@ export default function RedigerProfilForm({
               value={fodselsdato}
               onChange={e => setFodselsdato(e.target.value)}
               aria-label={ariaLabel}
-              className="opplysning-verdi"
+              className="opplysning-verdi skjemafelt"
               // width: 'auto' overstyrer resettens 100 % (#685-review): en
               // <input type="date"> ignorerer text-align — UA-ens shadow-DOM
               // legger delfeltene ut som en intern flex-boks — så en kontroll
@@ -426,7 +411,7 @@ export default function RedigerProfilForm({
               onChange={e => setTelefon(e.target.value)}
               placeholder="Ikke satt"
               aria-label={ariaLabel}
-              className="opplysning-verdi"
+              className="opplysning-verdi skjemafelt"
               style={{ ...OPPLYSNING_INPUT_RESET, ...opplysningVerdiStil() }}
             />
           )}

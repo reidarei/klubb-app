@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { oppdaterPaamelding } from '@/lib/actions/paameldinger'
 import RsvpGlyph from './RsvpGlyph'
+import { PilleKnapp } from '@/components/ui/TreffPille'
 
 type Status = 'ja' | 'kanskje' | 'nei'
 
@@ -109,7 +110,7 @@ export default function RsvpBlokk({
           </div>
         </div>
 
-        <button
+        <PilleKnapp
           onClick={() => setRedigerer(true)}
           // Test-hook for e2e — panelet skjuler valg-knappene i "valgt"-modus,
           // så e2e må klikke Endre først. Vi eksponerer også hvilket svar som
@@ -117,6 +118,9 @@ export default function RsvpBlokk({
           data-svar={aktivtSvar}
           data-testid="rsvp-endre"
           style={{
+            flexShrink: 0,
+          }}
+          pilleStil={{
             padding: '8px 14px',
             borderRadius: 999,
             border: '0.5px solid var(--border)',
@@ -126,11 +130,11 @@ export default function RsvpBlokk({
             fontSize: 12,
             fontWeight: 500,
             letterSpacing: '0.1px',
-            flexShrink: 0,
           }}
+          synligHoyde={34}
         >
           Endre
-        </button>
+        </PilleKnapp>
       </div>
     )
   }
@@ -158,9 +162,9 @@ export default function RsvpBlokk({
         </span>
         <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
         {aktivtSvar && (
-          <button
+          <PilleKnapp
             onClick={() => setRedigerer(false)}
-            style={{
+            pilleStil={{
               background: 'transparent',
               border: 'none',
               color: 'var(--text-tertiary)',
@@ -171,9 +175,10 @@ export default function RsvpBlokk({
               padding: 0,
               fontWeight: 600,
             }}
+            synligHoyde={11}
           >
             Avbryt
-          </button>
+          </PilleKnapp>
         )}
       </div>
 

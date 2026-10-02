@@ -17,6 +17,8 @@ import { kanAdministrere } from '@/lib/roller'
 import { Linkified } from '@/lib/linkify'
 import { logg } from '@/lib/logg'
 import { bildeSrc } from '@/lib/bilde-utils'
+import { PilleAnker, PilleLenke } from '@/components/ui/TreffPille'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 
 type Paamelding = {
   profil_id: string
@@ -45,6 +47,8 @@ function tidsLinje(iso: string): string {
   const s = formaterDato(iso, `EEEE d. MMMM${medAar} 'kl.' HH:mm`)
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+const TILBAKE_TREFF = treffflateRundt({ hoyde: 36, bredde: 36 })
 
 export default async function ArrangementDetaljer({
   params,
@@ -279,6 +283,8 @@ export default async function ArrangementDetaljer({
         />
 
         {/* Tilbake-knapp */}
+        {/* Ytre lenke = usynlig 44 px treffflate (#700 PR 3), indre sirkel = den synlige
+            36 px knappen. Negativ margin gjør at sirkelen står der den stod før. */}
         <Link
           href="/"
           aria-label="Tilbake"
@@ -286,25 +292,37 @@ export default async function ArrangementDetaljer({
             position: 'absolute',
             top: 14,
             left: 16,
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            background: 'var(--overlay-control-bg)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '0.5px solid var(--border)',
+            width: 36 + 2 * TILBAKE_TREFF.utvidX,
+            height: 36 + 2 * TILBAKE_TREFF.utvidY,
+            marginTop: -TILBAKE_TREFF.utvidY,
+            marginLeft: -TILBAKE_TREFF.utvidX,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             textDecoration: 'none',
           }}
         >
-          <Icon
-            name="chevron"
-            size={16}
-            color="var(--text-primary)"
-            style={{ transform: 'rotate(180deg)' }}
-          />
+          <span
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: 'var(--overlay-control-bg)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '0.5px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon
+              name="chevron"
+              size={16}
+              color="var(--text-primary)"
+              style={{ transform: 'rotate(180deg)' }}
+            />
+          </span>
         </Link>
 
         {/* Rediger-pill + Varsle */}
@@ -321,9 +339,9 @@ export default async function ArrangementDetaljer({
             <VarsleNuKnapp arrangementId={id} arrangementTittel={arr.tittel} />
           )}
           {kanRedigere && (
-            <Link
+            <PilleLenke
               href={`/arrangementer/${id}/rediger`}
-              style={{
+              pilleStil={{
                 padding: '8px 14px',
                 borderRadius: 999,
                 background: 'var(--overlay-control-bg)',
@@ -336,9 +354,10 @@ export default async function ArrangementDetaljer({
                 fontWeight: 500,
                 textDecoration: 'none',
               }}
+              synligHoyde={34}
             >
               Rediger
-            </Link>
+            </PilleLenke>
           )}
         </div>
 
@@ -511,10 +530,12 @@ export default async function ArrangementDetaljer({
         </div>
 
         {/* Legg til i kalender */}
-        <a
+        <PilleAnker
           href={`/api/arrangementer/${id}/ics`}
-          style={{
-            display: 'inline-flex',
+          style={{ marginBottom: 26 }}
+          synligHoyde={36}
+          pilleStil={{
+            display: 'flex',
             alignItems: 'center',
             gap: 8,
             padding: '10px 14px',
@@ -524,13 +545,11 @@ export default async function ArrangementDetaljer({
             color: 'var(--text-primary)',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
-            textDecoration: 'none',
-            marginBottom: 26,
           }}
         >
           <Icon name="calendar" size={14} color="var(--accent)" strokeWidth={1.5} />
           Legg til i kalender
-        </a>
+        </PilleAnker>
 
         {/* Beskrivelse */}
         {arr.beskrivelse && (

@@ -15,6 +15,8 @@ import { lesTemaFraCookie } from '@/lib/tema-server'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 import { formaterKr, summerKroner } from '@/lib/belop'
 import LoggUtKnapp from './LoggUtKnapp'
+import { PilleLenke } from '@/components/ui/TreffPille'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 
 const KLUBBEN_START_AAR = 2007
 
@@ -198,9 +200,12 @@ export default async function Profil() {
           </h1>
         </div>
 
-        <Link
+        <PilleLenke
           href="/profil/rediger"
           style={{
+            flexShrink: 0,
+          }}
+          pilleStil={{
             padding: '8px 14px',
             background: 'transparent',
             border: '1px solid var(--border)',
@@ -210,11 +215,11 @@ export default async function Profil() {
             fontSize: 12,
             fontWeight: 500,
             textDecoration: 'none',
-            flexShrink: 0,
           }}
+          synligHoyde={34}
         >
           Rediger
-        </Link>
+        </PilleLenke>
       </header>
 
       {/* Profil-hero — kompakt rad (#589). Identiteten lå tidligere som et
@@ -289,6 +294,10 @@ export default async function Profil() {
                 flexShrink: 0,
                 textDecoration: 'none',
                 display: 'block',
+                // Blokka er ~35 px høy; usynlig vertikal treffflate (padding + lik negativ margin) opp til 44 px (#700)
+                ...treffflateRundt({ hoyde: 33 }).stil,
+                position: 'relative',
+                zIndex: 1,
               }}
             >
               <div

@@ -117,7 +117,7 @@ export default function VedtektVisning({
             }}
           >
             <div style={labelStil}>Vedtaksdato</div>
-            <input
+            <input className="skjemafelt"
               type="date"
               value={vedtaksdato}
               onChange={e => setVedtaksdato(e.target.value)}
