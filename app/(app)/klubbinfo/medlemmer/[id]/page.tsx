@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TekstLenke from '@/components/ui/TekstLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
@@ -112,6 +113,9 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
     <div style={{ padding: '0 20px 20px' }}>
       {/* Breadcrumb + tittel */}
       <div style={{ padding: '12px 4px 22px', marginBottom: 8 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo/medlemmer" til="Medlemmer" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -126,15 +130,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <TilbakeLenke
-            href="/klubbinfo/medlemmer"
-            plassOver={6}
-            style={{ color: 'inherit' }}
-          >
-            Medlemmer
-          </TilbakeLenke>
-          <span>/</span>
-          <span>{navn}</span>
+          {navn}
         </div>
 
         <div
@@ -331,7 +327,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                     {k.navn}
                   </div>
                   {k.arrangementTittel && k.arrangementId && (
-                    <TilbakeLenke
+                    <TekstLenke
                       href={`/arrangementer/${k.arrangementId}`}
                       style={{
                         display: 'inline-block',
@@ -343,7 +339,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
                       }}
                     >
                       {k.arrangementTittel}
-                    </TilbakeLenke>
+                    </TekstLenke>
                   )}
                   {k.begrunnelse && (
                     <div

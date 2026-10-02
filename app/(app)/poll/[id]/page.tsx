@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { PilleLenke } from '@/components/ui/TreffPille'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
@@ -361,6 +361,13 @@ function KaaringVisning({
     <div style={{ padding: '0 20px 20px' }}>
       {!erAvsluttet && <PollRealtime pollId={poll.id} />}
 
+      {/* Pila øverst til venstre, før vinner-banneret — samme plassering som på de andre sidene (#700) */}
+      {poll.arrangement_id && (
+        <div style={{ marginTop: 12, marginBottom: 12 }}>
+          <TilbakeKnapp href={`/arrangementer/${poll.arrangement_id}`} til="arrangementet" />
+        </div>
+      )}
+
       {erAvgjort && vinner && (
         <VinnerBanner
           navn={vinner.navn}
@@ -407,20 +414,6 @@ function KaaringVisning({
         >
           {erAvsluttet ? `Avsluttet ${datoLang}` : `Svarfrist ${datoLang}`}
         </div>
-        {poll.arrangement_id && (
-          <div style={{ marginTop: 8 }}>
-            <TilbakeLenke
-              href={`/arrangementer/${poll.arrangement_id}`}
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 13,
-                color: 'var(--accent)',
-              }}
-            >
-              ← Tilbake til arrangementet
-            </TilbakeLenke>
-          </div>
-        )}
       </header>
 
       {/* Tilstandsspesifikk seksjon */}

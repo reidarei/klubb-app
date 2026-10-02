@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import ChatBildeGalleri, { type ChatBilde } from '@/components/album/ChatBildeGalleri'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 
@@ -47,19 +47,7 @@ export default async function ChatBilderSide() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <div style={{ padding: '12px 4px 6px' }}>
-        <TilbakeLenke
-          href="/album"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.4px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-          }}
-        >
-          ← Album
-        </TilbakeLenke>
+        <TilbakeKnapp href="/album" til="Album" />
         <h1
           style={{
             fontFamily: 'var(--font-display)',

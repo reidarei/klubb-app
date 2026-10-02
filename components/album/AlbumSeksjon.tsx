@@ -8,7 +8,7 @@ import AlbumLightbox from '@/components/album/AlbumLightbox'
 import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import { opprettAlbum } from '@/lib/actions/album'
 import { bildeSrc } from '@/lib/bilde-utils'
-import { TekstLenke } from '@/components/ui/TilbakeLenke'
+import TekstLenke from '@/components/ui/TekstLenke'
 
 export type AlbumBildeForGrid = {
   id: string

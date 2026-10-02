@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { treffflateRundt } from '@/components/ui/Treffflate'
 
+// Tilbake-navigasjon er IKKE en tekstlenke: bruk TilbakeKnapp (rund pil).
 // Konservativt LAVERE enn reell linjehøyde (små mono-tekster er ~13–17 px): gir litt mer
 // usynlig utvidelse enn strengt nødvendig, så en finjustering av skrift/linjehøyde ikke
 // kan sende lenken under 44 px (samme grep som SkjemaBar, #700).
@@ -36,11 +37,11 @@ type Props = {
 }
 
 /**
- * Tilbake-/brødsmulelenke med usynlig 44 px treffflate (#700 PR 3): padding oppe og nede
+ * Frittstående tekstlenke («Se alle (3) →») med usynlig 44 px treffflate (#700 PR 3): padding oppe og nede
  * som kanselleres av lik negativ margin, så teksten står nøyaktig der den stod før.
  * Bredde: minWidth 44, teksten står venstrejustert, utvidelsen havner til høyre.
  */
-export default function TilbakeLenke({ href, children, style, plassOver }: Props) {
+export default function TekstLenke({ href, children, style, plassOver }: Props) {
   const tall = (v: unknown) => (typeof v === 'number' ? v : 0)
   const opp = plassOver === undefined ? TREFF.utvidY : Math.min(TREFF.utvidY, plassOver)
   const ned = TREFF.utvidY * 2 - opp
@@ -68,5 +69,3 @@ export default function TilbakeLenke({ href, children, style, plassOver }: Props
   )
 }
 
-/** Samme komponent for andre frittstående tekstlenker («Se alle (3) →»); navnet sier hva den brukes til. */
-export const TekstLenke = TilbakeLenke

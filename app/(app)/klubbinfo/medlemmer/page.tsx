@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import MedlemmerListe from './MedlemmerListe'
@@ -84,6 +84,9 @@ export default async function Medlemmer() {
           borderBottom: '0.5px solid var(--border-subtle)',
         }}
       >
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -98,15 +101,7 @@ export default async function Medlemmer() {
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <TilbakeLenke
-            href="/klubbinfo"
-            plassOver={6}
-            style={{ color: 'inherit' }}
-          >
-            Klubbinfo
-          </TilbakeLenke>
-          <span>/</span>
-          <span>Medlemmer</span>
+          Medlemmer
         </div>
         <h2
           style={{

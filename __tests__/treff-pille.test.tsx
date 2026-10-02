@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-// Pinner TreffPille/TilbakeLenke (#700 PR 3): usynlig utvidelse på det ytre elementet,
+// Pinner TreffPille/TekstLenke (#700 PR 3): usynlig utvidelse på det ytre elementet,
 // kallerens vertikale marger legges SAMMEN med den negative treffflate-marginen,
 // og det synlige (bakgrunn/kant) havner på det indre laget.
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, cleanup, screen } from '@testing-library/react'
 import { PilleKnapp, PilleLenke, PilleAnker } from '@/components/ui/TreffPille'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TekstLenke from '@/components/ui/TekstLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { treffflateRundt } from '@/components/ui/Treffflate'
 import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 
@@ -56,14 +57,24 @@ describe('PilleLenke / PilleAnker', () => {
   })
 })
 
-describe('TilbakeLenke', () => {
+describe('TekstLenke', () => {
   it('utvider usynlig i høyden med lik negativ margin og har minWidth 44', () => {
     const { utvidY } = treffflateRundt({ hoyde: 12 })
-    render(<TilbakeLenke href="/x" style={{ marginBottom: 14 }}>← Tilbake</TilbakeLenke>)
+    render(<TekstLenke href="/x" style={{ marginBottom: 14 }}>Se alle</TekstLenke>)
     const a = screen.getByRole('link')
     expect(a.style.paddingTop).toBe(`${utvidY}px`)
     expect(a.style.marginTop).toBe(`${-utvidY}px`)
     expect(a.style.marginBottom).toBe(`${14 - utvidY}px`)
     expect(a.style.minWidth).toBe(`${MIN_TREFFMAAL_PX}px`)
+  })
+})
+
+describe('TilbakeKnapp', () => {
+  it('er 44 px i flyten uten vertikal negativ margin, med tilgjengelig navn', () => {
+    render(<TilbakeKnapp href="/album" til="Album" />)
+    const a = screen.getByRole('link', { name: 'Tilbake til Album' })
+    expect(a.style.width).toBe(`${MIN_TREFFMAAL_PX}px`)
+    expect(a.style.height).toBe(`${MIN_TREFFMAAL_PX}px`)
+    expect(a.style.marginTop).toBe('')
   })
 })

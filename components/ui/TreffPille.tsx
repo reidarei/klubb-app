@@ -40,7 +40,7 @@ function ytreGeometri(synligHoyde: number, style: YtreStil = {}): CSSProperties 
     border: 'none',
     color: 'inherit',
     font: 'inherit',
-    // Egen stabling over nabo-blokker, samme begrunnelse som TilbakeLenke (#700):
+    // Egen stabling over nabo-blokker, samme begrunnelse som TekstLenke (#700):
     // den usynlige utvidelsen overlapper naboene og ellers vinner de hit-testen der.
     position: 'relative',
     zIndex: 1,

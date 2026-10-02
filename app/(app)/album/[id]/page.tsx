@@ -1,7 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import AlbumDetalj from '@/components/album/AlbumDetalj'
 import AlbumOpplaster from '@/components/album/AlbumOpplaster'
 import AlbumTittel from '@/components/album/AlbumTittel'
@@ -92,33 +92,9 @@ export default async function AlbumSide({
       <TillatLandskap />
       <div style={{ paddingTop: 20, marginBottom: 16 }}>
         {arrangement ? (
-          <TilbakeLenke
-            href={`/arrangementer/${arrangement.id}`}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1.4px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-            }}
-          >
-            ← {arrangement.tittel}
-          </TilbakeLenke>
+          <TilbakeKnapp href={`/arrangementer/${arrangement.id}`} til={arrangement.tittel} />
         ) : (
-          <TilbakeLenke
-            href="/album"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1.4px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-            }}
-          >
-            ← Album
-          </TilbakeLenke>
+          <TilbakeKnapp href="/album" til="Album" />
         )}
         <AlbumTittel albumId={album.id} initialTittel={album.tittel} kanRedigere={kanRedigere} />
         <div

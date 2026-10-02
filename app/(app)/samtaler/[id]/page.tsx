@@ -1,4 +1,4 @@
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
@@ -98,23 +98,9 @@ export default async function SamtaleDetalj({
     <div style={{ padding: '0 20px 20px' }}>
       <ChatAutoScrollScript />
       <header style={{ marginTop: 12, marginBottom: 22 }}>
-        <TilbakeLenke
-          href="/samtaler"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.4px',
-            textTransform: 'uppercase',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          Samtaler
-        </TilbakeLenke>
+        <div style={{ marginBottom: 8 }}>
+          <TilbakeKnapp href="/samtaler" til="Samtaler" />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar

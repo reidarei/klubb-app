@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import VarselToggle from '@/components/VarselToggle'
 import TestEpostVelger from './TestEpostVelger'
 import IssuesListe, { hentAapneIssues } from './IssuesListe'
@@ -204,6 +204,9 @@ export default async function Innstillinger() {
           borderBottom: '0.5px solid var(--border-subtle)',
         }}
       >
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -219,15 +222,7 @@ export default async function Innstillinger() {
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          <TilbakeLenke
-            href="/klubbinfo"
-            plassOver={6}
-            style={{ color: 'inherit' }}
-          >
-            Klubbinfo
-          </TilbakeLenke>
-          <span>/</span>
-          <span>Innstillinger</span>
+          Innstillinger
         </div>
         <h2
           style={{

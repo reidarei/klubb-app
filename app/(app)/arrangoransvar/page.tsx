@@ -8,7 +8,7 @@ import { norskAar, norskDag, norskDatoNaa } from '@/lib/dato'
 import { isBefore } from 'date-fns'
 import { kanAdministrere } from '@/lib/roller'
 import { utkastAnkerId } from '@/components/agenda/UtkastKort'
-import { TekstLenke } from '@/components/ui/TilbakeLenke'
+import TekstLenke from '@/components/ui/TekstLenke'
 
 type AnsvarRad = {
   id: string

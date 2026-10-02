@@ -1,7 +1,7 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
-import TilbakeLenke from '@/components/ui/TilbakeLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { PilleLenke } from '@/components/ui/TreffPille'
 import { formaterDato } from '@/lib/dato'
 import MarkerLestEffekt from '@/components/varsler/MarkerLestEffekt'
@@ -29,19 +29,7 @@ export default async function VarselSide({ params }: { params: Promise<{ id: str
     <div style={{ padding: '0 20px 20px' }}>
       {skalMarkereLest && <MarkerLestEffekt varselId={varsel.id} />}
       <div style={{ marginTop: 12, marginBottom: 20 }}>
-        <TilbakeLenke
-          href="/profil"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            fontWeight: 600,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.6px',
-            textTransform: 'uppercase',
-          }}
-        >
-          ← Profil
-        </TilbakeLenke>
+        <TilbakeKnapp href="/profil" til="Profil" />
       </div>
 
       <div
