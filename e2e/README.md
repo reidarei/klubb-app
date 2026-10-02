@@ -170,3 +170,7 @@ npx playwright test --project=rls
 ```
 
 (Full e2e: `npx playwright test` runs both RLS and the main test suite.)
+
+## Touch target size validation
+
+`forventTreffbar()` in `e2e/helpers/treffmaal.ts` verifies that interactive elements have a finger-friendly touch area (44 px on the short side). See CLAUDE.md § Policy: Trykkflater for detailed rationale, how to fix a too-small target, and how exceptions are documented. Tests run on every route (via `sider-laster.spec.ts` for width, default state) plus depth tests in specs that open panels/sheets/pickers.
