@@ -1,4 +1,14 @@
 import type { ReactNode } from 'react'
+import { treffflateRundt } from '@/components/ui/Treffflate'
+
+// Synlig høyde (#700), kun vertikal utvidelse (jf. SegmentPiller/Segment —
+// bredden er aldri det trange målet på disse to). Tallene er bevisst satt
+// LAVERE enn reell rendret høyde (Avbryt ~28 px, Lagre ~32 px med dagens
+// padding/fontSize): det gir noe MER usynlig treffflate enn strengt
+// nødvendig i stedet for å risikere å lande under 44 px på en finjustering
+// av skrifttype/linjehøyde vi ikke kontrollerer presist her.
+const AVBRYT_TREFF = treffflateRundt({ hoyde: 24 })
+const LAGRE_TREFF = treffflateRundt({ hoyde: 28 })
 
 type Props = {
   overtittel: string
@@ -43,7 +53,15 @@ export default function SkjemaBar({
           color: 'var(--text-secondary)',
           fontFamily: 'var(--font-body)',
           fontSize: 14,
-          padding: '4px 0',
+          // 4px er den ORIGINALE, synlige avstanden — treffflate-utvidelsen
+          // legges PÅ TOPP av den og kanselleres av samme negative margin
+          // (#700), så teksten står i nøyaktig samme punkt som før.
+          paddingTop: 4 + AVBRYT_TREFF.utvidY,
+          paddingBottom: 4 + AVBRYT_TREFF.utvidY,
+          paddingLeft: 0,
+          paddingRight: 0,
+          marginTop: -AVBRYT_TREFF.utvidY,
+          marginBottom: -AVBRYT_TREFF.utvidY,
         }}
       >
         {avbrytLabel}
@@ -85,18 +103,30 @@ export default function SkjemaBar({
           onClick={onLagre}
           disabled={laster}
           style={{
-            background: 'var(--accent)',
-            color: 'var(--accent-foreground)',
-            padding: '7px 14px',
+            // Usynlig knapp: bakgrunn/kant/padding sitter på den synlige
+            // pillen (span under), ikke her — ellers ville treffflate-
+            // utvidelsen blåst opp selve pillen (#700).
+            background: 'transparent',
             border: 'none',
-            borderRadius: 999,
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            fontWeight: 600,
-            opacity: laster ? 0.7 : 1,
+            padding: 0,
+            ...LAGRE_TREFF.stil,
           }}
         >
-          {laster ? 'Lagrer…' : lagreLabel}
+          <span
+            style={{
+              display: 'block',
+              background: 'var(--accent)',
+              color: 'var(--accent-foreground)',
+              padding: '7px 14px',
+              borderRadius: 999,
+              fontFamily: 'var(--font-body)',
+              fontSize: 13,
+              fontWeight: 600,
+              opacity: laster ? 0.7 : 1,
+            }}
+          >
+            {laster ? 'Lagrer…' : lagreLabel}
+          </span>
         </button>
       )}
     </div>

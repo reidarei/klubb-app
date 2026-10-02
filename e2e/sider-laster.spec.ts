@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
 import { lesFeilLoggGrense } from './helpers/feil-logg-grense'
+import { RUTER } from './helpers/ruter'
+import { forventTreffbar } from './helpers/treffmaal'
 
 /**
  * Røyktest: hver rute i appen skal LASTE.
@@ -22,73 +24,13 @@ import { lesFeilLoggGrense } from './helpers/feil-logg-grense'
  * Særlig relevant mot GRANT-klippen 30. oktober 2026 (CLAUDE.md § Policy:
  * Migrasjoner): en manglende GRANT gir `42501` selv når RLS tillater raden.
  * En side som aldri lastes, får aldri sin 42501 oppdaget.
+ *
+ * Siden #700 PR 2 gjør hver rute-test i tillegg en BREDDE-sjekk av
+ * trykkflater (se forventTreffbar() i e2e/helpers/treffmaal.ts): at knapper,
+ * lenker og andre kontroller i default-tilstanden har et finger-stort
+ * treffområde. RUTER og seed-ID-ene er flyttet til e2e/helpers/ruter.ts, delt
+ * med den vakten.
  */
-
-// Seedede ID-er fra supabase/seed.sql. Endres en av dem der, må den endres
-// her i samme commit — de er deterministiske nettopp for å kunne lenkes til.
-const ARRANGEMENT = '00000000-0000-4000-9000-000000000001'
-const MELDING = '00000000-0000-4000-9300-000000000000'
-const POLL = '00000000-0000-4000-9400-000000000000'
-const MEDLEM = '00000000-0000-4000-8000-000000000002' // Petter Prøve
-const ALBUM = '00000000-0000-4000-9800-000000000020'
-const SAMTALE = '00000000-0000-4000-9800-000000000010'
-const VARSEL = '00000000-0000-4000-9800-000000000030'
-
-type Rute = {
-  sti: string
-  // Forventet overskrift, der teksten er statisk og verifisert. Utelates for
-  // sider med dynamisk overskrift (medlemsnavn, arrangementstittel) — der
-  // holder den generiske «en ikke-tom overskrift finnes»-sjekken.
-  overskrift?: string | RegExp
-}
-
-// Listesider og skjemaer — alle uten ruteparameter.
-const RUTER: Rute[] = [
-  { sti: '/', overskrift: undefined }, // agenda; overskriften er klubbnavnet (env-styrt)
-  { sti: '/chat', overskrift: 'Samtalen' },
-  { sti: '/samtaler', overskrift: 'Samtaler' },
-  { sti: '/album', overskrift: 'Bilder' },
-  { sti: '/album/chatten', overskrift: 'Fra chatten' },
-  { sti: '/arrangoransvar', overskrift: 'Arrangøransvar' },
-  { sti: '/tidligere', overskrift: 'Hele historikken' },
-  { sti: '/kaaringer', overskrift: 'Hall of Fame' },
-  { sti: '/stedene', overskrift: /Vi har vært verden rundt/ },
-  { sti: '/kart' }, // ingen overskrift: kartet er fullskjerm (#704)
-  { sti: '/fond' },
-  { sti: '/fond/rediger' },
-  { sti: '/klubbinfo' },
-  { sti: '/klubbinfo/medlemmer' },
-  { sti: '/klubbinfo/medlemmer/ny' },
-  { sti: '/klubbinfo/statistikk', overskrift: 'Statistikk' },
-  { sti: '/innspill', overskrift: 'Innspill' },
-  { sti: '/innstillinger' },
-  { sti: '/innstillinger/bruk', overskrift: 'Aktivitet' },
-  { sti: '/innstillinger/vitals', overskrift: 'Ytelsesmålinger' },
-  // /innstillinger/pass-godkjenninger står bevisst ikke her: den er
-  // generalsekretær-only (#582), og testbrukeren er vanlig admin — ruta
-  // redirecter derfor. Dekkes av egen test i innstillinger.spec.ts.
-  { sti: '/profil', overskrift: 'Din profil' },
-  { sti: '/profil/rediger' },
-  { sti: '/om-appen', overskrift: 'Om appen' },
-  { sti: '/arrangementer/ny' },
-  { sti: '/meldinger/ny' },
-  { sti: '/poll/ny' },
-  { sti: '/kaaringspoll/ny' },
-
-  // Detaljsider. Hver av dem treffer innholds-grenen fordi seed.sql har en
-  // matchende rad — uten den ville notFound() gitt 404 og testen ville
-  // bekreftet feil gren (se seed-vakten, prefiks 9800).
-  { sti: `/arrangementer/${ARRANGEMENT}` },
-  { sti: `/arrangementer/${ARRANGEMENT}/rediger` },
-  { sti: `/meldinger/${MELDING}` },
-  { sti: `/poll/${POLL}` },
-  { sti: `/klubbinfo/medlemmer/${MEDLEM}` },
-  { sti: `/klubbinfo/medlemmer/${MEDLEM}/rediger` },
-  { sti: '/klubbinfo/vedtekter/regler' },
-  { sti: `/album/${ALBUM}` },
-  { sti: `/samtaler/${SAMTALE}` },
-  { sti: `/varsler/${VARSEL}` },
-]
 
 // Minste mengde synlig tekst i <main> før vi tror siden faktisk rendret noe.
 // 40 tegn ligger godt over et tomt skall (som er 0) og godt under den minste
@@ -169,6 +111,35 @@ test.describe('Røyktest — alle sider laster', () => {
           page.getByRole('heading', { name: rute.overskrift }).first(),
         ).toBeVisible({ timeout: 15_000 })
       }
+
+      // 4b. Enkelte ruter kan tilfredsstille harInnhold() med en LOADING-
+      //    fallback i stedet for den ekte siden (#700 PR 2) — se
+      //    `ventPaaSelektor` i e2e/helpers/ruter.ts. Uten denne ventingen
+      //    måler treffmaal-sjekket under et tomt skjelett, ikke siden selv.
+      if (rute.ventPaaSelektor) {
+        await page.waitForSelector(rute.ventPaaSelektor, { timeout: 15_000 })
+      }
+
+      // 5. Trykkflater (#700 PR 2): hvert interaktivt element i default-
+      //    tilstanden skal ha et finger-stort treffområde. Gulvet avgrenses
+      //    til <main> (samme ramme som harInnhold() over) — TopHeader og
+      //    bottom-chrome er allerede dekket av egne komponenttester.
+      //
+      //    bruddBlokkerer: false — RAPPORT-MODUS, bevisst, inntil PR 3. Etter
+      //    PR 2s egen fiks (ToggleSwitch/SkjemaBar/SegmentPiller/Segment) stod
+      //    32/37 ruter fortsatt røde på tilbake-/brødsmulelenker,
+      //    input/textarea/select-felthøyde og en håndfull småknapper — et
+      //    strukturelt mønster (felles komponent/felthøyde), ikke punktfikser.
+      //    Beslutning i #700: land PR 2 med bredde som rapport (listet i
+      //    treffmaal-rapport.ts' Step Summary), PR 3 bygger komponenten og
+      //    snur flagget til blokkerende. Gulvet under er UPÅVIRKET — det er
+      //    fortsatt hardt. Se `bruddBlokkerer` i e2e/helpers/treffmaal.ts.
+      await forventTreffbar(page, {
+        kontekst: rute.sti,
+        gulv: rute.minTreffmaal ?? 1,
+        gulvOmraade: 'main',
+        bruddBlokkerer: false,
+      })
     })
   }
 
@@ -275,12 +246,5 @@ test.describe('Røyktest — alle sider laster', () => {
   })
 })
 
-// Ikke med i listen, med begrunnelse:
-// - /kaaringspoll/[id]/tiebreak — krever en poll med tiebreak_status =
-//   'venter_paa_tiebreak'. De fire seedede kåringspollene (#520) står som
-//   'avgjort' med vilje, og å endre en av dem ville brutt
-//   kaaring-varsel-retry.spec.ts. Trenger en egen fixture; egen sak.
-// - /bli-utvikler og /arrangementer/tidligere — rene omdirigeringer/statiske
-//   sider uten databasespørringer, og dermed utenfor det denne speccen skal
-//   beskytte.
-// - /login — dekket av auth.setup.ts, som feiler høylytt hvis den ryker.
+// Hvilke ruter som bevisst IKKE er med i RUTER, og hvorfor, står som kommentar
+// i e2e/helpers/ruter.ts — samme sted listen selv nå bor.

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
 import { harTestCreds } from './helpers/auth'
+import { forventTreffbar } from './helpers/treffmaal'
 
 const UT_DIR = path.join('.screenshots', 'edit-kommentar')
 
@@ -61,6 +62,13 @@ test.describe('Redigere egne meldinger inline', () => {
       await expect(redigerKnapp).toBeVisible({ timeout: 2_000 })
     }).toPass({ timeout: 20_000 })
     await page.screenshot({ path: path.join(UT_DIR, '02-picker.png'), fullPage: true })
+
+    // Dybde-kall (#700 PR 2): pickeren er bak en gest (høyreklikk/long-press)
+    // og dekkes derfor ikke av bredde-sveipen i sider-laster.spec.ts.
+    await forventTreffbar(page, {
+      kontekst: '/chat — melding-picker åpen',
+      omraade: '[data-testid="chat-melding-picker"]',
+    })
 
     // Klikk Rediger
     await redigerKnapp.click()

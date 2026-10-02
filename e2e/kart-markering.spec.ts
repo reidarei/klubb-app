@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { harTestCreds, loggInn, SEED_PASSORD } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
 import { ventPaaServerAction } from './helpers/server-action'
+import { forventTreffbar } from './helpers/treffmaal'
 import { KART_MARKERING_MAKS_LENGDE } from '../lib/konstanter'
 import { MARKERING_SYMBOLER, STANDARD_SYMBOL, symbolEmoji } from '../lib/markering-symboler'
 
@@ -121,6 +122,13 @@ test.describe('kartmarkeringer (#697)', () => {
 
     await expect(min.getByTestId('markering-fjern')).toHaveCount(1)
     await expect(annen.getByTestId('markering-fjern')).toHaveCount(1)
+
+    // Dybde-kall (#700 PR 2): listepanelet er lukket som default og dekkes
+    // derfor ikke av bredde-sveipen i sider-laster.spec.ts.
+    await forventTreffbar(page, {
+      kontekst: '/kart — listepanel åpent',
+      omraade: '[data-testid="kart-panel"]',
+    })
   })
 
   test.describe('som vanlig medlem', () => {
@@ -986,6 +994,13 @@ test.describe('kartmarkeringer (#697)', () => {
     // snakkeboble som er 44 px høy dekker for mye kart. Bredden bærer målet.
     expect(boks!.width).toBeGreaterThanOrEqual(44)
     expect(boks!.height).toBeGreaterThanOrEqual(28)
+
+    // Dybde-kall (#700 PR 2): samme flate, men den generelle vakten — fanger
+    // andre nål-/etikett-relaterte brudd enn den håndskrevne målingen over.
+    await forventTreffbar(page, {
+      kontekst: '/kart — markørlaget',
+      omraade: '.leaflet-marker-pane, .leaflet-tooltip-pane',
+    })
 
     await admin!.from('kart_markering').delete().eq('tekst', EGEN).throwOnError()
   })

@@ -101,6 +101,12 @@ export default defineConfig({
   // CI-instansen er fersk hver gang (ingen lokal flakiness-historikk å lene seg
   // på), så vi tillater én retry der. Lokalt vil vi se feilen umiddelbart.
   retries: process.env.CI ? 1 : 0,
+  // Eksplisitt reporter erstatter Playwrights default (som ville vært 'list'
+  // lokalt / 'dot' pluss github-annotations i CI) — vi vil ha BÅDE den
+  // vanlige test-outputen OG trykkflate-rapporten (#700 PR 2), som samler
+  // forventTreffbar()-resultater fra hele kjøringen og skriver dem til
+  // $GITHUB_STEP_SUMMARY (eller konsollen lokalt) i onEnd().
+  reporter: [[process.env.CI ? 'dot' : 'list'], ['./e2e/reportere/treffmaal-rapport.ts']],
   use: {
     baseURL: BASE_URL,
     // I CI vil vi ikke fylle artefakt-opplastingen med skjermbilder fra de

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
+import { forventTreffbar } from './helpers/treffmaal'
 
 /**
  * Kart-pakken (#719, #720, #721, #722, #725, #726, #728, #732) — logikk,
@@ -151,6 +152,13 @@ test.describe('kart-pakken (#719, #721, #722, #725, #726)', () => {
     // MENS det glir, og testen blir en funksjon av maskinens fart i stedet for
     // av koden (se valget av startpunkt under).
     await page.waitForTimeout(400)
+
+    // Dybde-kall (#700 PR 2): listepanelet er lukket som default og dekkes
+    // derfor ikke av bredde-sveipen i sider-laster.spec.ts.
+    await forventTreffbar(page, {
+      kontekst: '/kart — listepanel åpent (kart-pakke)',
+      omraade: '[data-testid="kart-panel"]',
+    })
 
     const flate = (await page.getByTestId('kart-flate').boundingBox())!
 

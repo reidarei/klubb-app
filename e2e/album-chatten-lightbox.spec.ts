@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
+import { forventTreffbar } from './helpers/treffmaal'
 
 // AlbumLightbox på /album/chatten (#623) — bytter ut BildeLightbox (én src,
 // ingen navigasjon) med den sveipbare/pil-navigerbare AlbumLightbox, lastet
@@ -41,6 +42,13 @@ test.describe('Album — Fra chatten — lightbox (#623)', () => {
     // falsy-fellen) åpner overlayet.
     await miniatyrer.first().click()
     await expect(dialog).toBeVisible()
+
+    // Dybde-kall (#700 PR 2): lightboxen er bak et klikk og dekkes derfor
+    // ikke av bredde-sveipen i sider-laster.spec.ts.
+    await forventTreffbar(page, {
+      kontekst: '/album/chatten — lightbox åpen',
+      omraade: '[role="dialog"][aria-label="Bilde i full skjerm"]',
+    })
 
     const teller = dialog.getByText(/^\d+ \/ \d+$/)
     await expect(teller).toBeVisible()
@@ -90,6 +98,13 @@ test.describe('Chat — bilde-lightbox er nå AlbumLightbox (#625)', () => {
     const dialog = page.getByRole('dialog', { name: 'Bilde i full skjerm' })
     await bildeKnapp.first().click()
     await expect(dialog).toBeVisible()
+
+    // Dybde-kall (#700 PR 2): lightboxen er bak et klikk og dekkes derfor
+    // ikke av bredde-sveipen i sider-laster.spec.ts.
+    await forventTreffbar(page, {
+      kontekst: '/chat — bilde-lightbox åpen',
+      omraade: '[role="dialog"][aria-label="Bilde i full skjerm"]',
+    })
 
     // Ett bilde sendt inn til AlbumLightbox -> ingen teller, ingen piler.
     await expect(dialog.getByText(/^\d+ \/ \d+$/)).toHaveCount(0)

@@ -415,6 +415,7 @@ export default function ChatMeldingRad({
                   <button
                     key={emoji}
                     type="button"
+                    data-testid="chat-reaksjonschip"
                     onClick={() => handlers.toggleReaksjon(m.id, emoji)}
                     style={{
                       display: 'inline-flex',
@@ -472,6 +473,7 @@ export default function ChatMeldingRad({
                   gikk utenfor en 375 px-skjerm. Handlingene får egen pille
                   under, nærmest bobla. */}
               <div
+                data-testid="chat-melding-picker"
                 style={{
                   position: 'absolute',
                   bottom: 'calc(100% + 6px)',

@@ -1,6 +1,7 @@
 'use client'
 
 import Avatar from '@/components/ui/Avatar'
+import { treffflateRundt } from '@/components/ui/Treffflate'
 import { formaterDato, FORMAT_KLOKKE } from '@/lib/dato'
 import { POSISJON_DELING_TIMER, POSISJON_FERSK_MINUTTER, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { formatDistanceToNowStrict } from 'date-fns'
@@ -84,6 +85,22 @@ const PILLE = {
   whiteSpace: 'nowrap',
   boxShadow: 'var(--shadow-popover)',
 } as const
+
+// Rad-knappen under (navn + relativ tid) har INGEN synlig bakgrunn/kant —
+// padding+negativ margin kan derfor legges direkte på selve knappen (#700,
+// målt til 40 px høy i kart-pakke.spec.ts). Egen konstant, ikke PILLE_TREFF:
+// innholdshøyden her (avatar 32 px + linjeavstand) er en annen enn pillenes.
+const KART_RAD_TREFF = treffflateRundt({ hoyde: 40 })
+
+// Synlig pillehøyde (#700, målt i kart-pakke.spec.ts/kart-markering.spec.ts
+// sine forventTreffbar()-kall): padding 8px topp/bunn + ~21 px tekstlinje ved
+// fontSize 12.5 gir 37 px — under 44. PILLE har synlig bakgrunn/kant/skygge,
+// så padding må IKKE legges direkte på den synlige pillen (ville blåst den
+// opp visuelt) — se mønsteret i SegmentPiller.tsx: en usynlig ytre knapp
+// bærer den vertikale treffflate-utvidelsen, en indre <span> bærer PILLE sin
+// visning. Kun vertikal (ingen `bredde`): pling-/ping-/fjern-tekstene gjør
+// pillene allerede brede nok.
+const PILLE_TREFF = treffflateRundt({ hoyde: 37 })
 
 export default function KartListePanel({
   visHandtak,
@@ -257,9 +274,11 @@ export default function KartListePanel({
                   minWidth: 0,
                   background: 'none',
                   border: 'none',
-                  padding: 0,
+                  paddingLeft: 0,
+                  paddingRight: 0,
                   textAlign: 'left',
                   color: 'inherit',
+                  ...KART_RAD_TREFF.stil,
                 }}
               >
                 <Avatar name={m.navn} src={m.bildeUrl} rolle={m.rolle} size={32} />
@@ -316,12 +335,22 @@ export default function KartListePanel({
                       data-plinget={nettopp ? 'ja' : 'nei'}
                       aria-label={nettopp ? `${m.navn} er plinget` : `Pling ${m.navn} om hvor han er`}
                       style={{
-                        ...PILLE,
-                        opacity: nettopp ? 0.55 : 1,
-                        color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        ...PILLE_TREFF.stil,
                       }}
                     >
-                      {nettopp ? 'Plinget' : 'Pling'}
+                      <span
+                        style={{
+                          ...PILLE,
+                          display: 'block',
+                          opacity: nettopp ? 0.55 : 1,
+                          color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        {nettopp ? 'Plinget' : 'Pling'}
+                      </span>
                     </button>
                   )
                 })()}
@@ -340,9 +369,11 @@ export default function KartListePanel({
               onClick={() => setPingAapent(a => !a)}
               aria-expanded={pingAapent}
               data-testid="ping-en-herre-knapp"
-              style={PILLE}
+              style={{ background: 'transparent', border: 'none', padding: 0, ...PILLE_TREFF.stil }}
             >
-              {pingAapent ? 'Skjul' : 'Ping en herre'}
+              <span style={{ ...PILLE, display: 'block' }}>
+                {pingAapent ? 'Skjul' : 'Ping en herre'}
+              </span>
             </button>
             {pingAapent &&
               pingKandidater.map(k => (
@@ -384,12 +415,22 @@ export default function KartListePanel({
                         data-plinget={nettopp ? 'ja' : 'nei'}
                         aria-label={nettopp ? `${k.navn} er plinget` : `Pling ${k.navn} om hvor han er`}
                         style={{
-                          ...PILLE,
-                          opacity: nettopp ? 0.55 : 1,
-                          color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          ...PILLE_TREFF.stil,
                         }}
                       >
-                        {nettopp ? 'Plinget' : 'Pling'}
+                        <span
+                          style={{
+                            ...PILLE,
+                            display: 'block',
+                            opacity: nettopp ? 0.55 : 1,
+                            color: nettopp ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          {nettopp ? 'Plinget' : 'Pling'}
+                        </span>
                       </button>
                     )
                   })()}
@@ -457,9 +498,9 @@ export default function KartListePanel({
                 onClick={() => onFjernMarkering(mk.id)}
                 aria-label={`Fjern markeringen \u00ab${mk.tekst}\u00bb`}
                 data-testid="markering-fjern"
-                style={PILLE}
+                style={{ background: 'transparent', border: 'none', padding: 0, ...PILLE_TREFF.stil }}
               >
-                Fjern
+                <span style={{ ...PILLE, display: 'block' }}>Fjern</span>
               </button>
             )}
           </div>

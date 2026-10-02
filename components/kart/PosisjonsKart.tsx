@@ -988,6 +988,11 @@ export default function PosisjonsKart({
           icon: L.divIcon({ html: '', className: 'kart-markering-anker', iconSize: [1, 1] }),
           alt: mk.tekst,
           title: `${mk.tekst} — ${mk.avNavn}, ${relativTid(mk.opprettet)}`,
+          // #700: ankeret selv har ingen handling (klikket er bundet til
+          // bobla/tooltipen under, se .bindTooltip under) — uten dette fikk et
+          // 1×1 element `.leaflet-interactive`-klassen av Leaflets default og
+          // ble en reell, umulig-å-treffe trykkflate (jf. #702-mønsteret).
+          interactive: false,
         })
           .bindTooltip(
             // Halen er et EGET element, ikke Leaflets ::before. Den innebygde

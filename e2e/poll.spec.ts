@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { setTestPollId, ryddTestPoll, pollIdFraUrl } from './helpers/rydd-test-poll'
 import { harTestCreds } from './helpers/auth'
+import { forventTreffbar } from './helpers/treffmaal'
 
 /**
  * Visuell + funksjonell verifisering av poll-funksjonaliteten (#86).
@@ -47,6 +48,13 @@ test.describe('Poll-flyt', () => {
     // Legg til et tredje alternativ
     await page.getByRole('button', { name: 'Legg til alternativ' }).click()
     await altInputs.nth(2).fill('Kanskje')
+
+    // Dybde-kall (#700 PR 2): skjemaet har en ny rad med en «fjern
+    // alternativ»-knapp som bredde-sveipen aldri ser (den krever et tredje
+    // alternativ, som kun finnes etter dette klikket).
+    // bruddBlokkerer: false (#700) — eneste dybde-kall i rapport-modus: skjemafeltene og
+    // Legg til/Fjern alternativ hører til felles felthøyde i PR 3, som snur dette til true.
+    await forventTreffbar(page, { kontekst: '/poll/ny — tre alternativer', omraade: 'main', bruddBlokkerer: false })
 
     // Sett flervalg (Segment-komponenten bruker role="tab")
     await page.getByRole('tab', { name: 'Flervalg' }).click()
