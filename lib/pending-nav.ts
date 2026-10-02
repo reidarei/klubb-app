@@ -44,9 +44,10 @@ export type PendingNav = {
   /**
    * Satt til true idet klienten har logget push.klikk.navigert for denne
    * entryen. Hindrer dobbel-logging når entryen skrives tilbake for et nytt
-   * forsøk (samme klikk_id ville ellers kollidert med varsel_logg sin
-   * dedup-indeks, eller — for feil_logg som ikke deduper på dette feltet —
-   * gitt to rader for samme klikk).
+   * forsøk. På målsiden velger den push.klikk.landet i stedet for en ny
+   * push.klikk.navigert (#626) — feil_logg deduper per (event, klikk_id,
+   * forsok) siden migrasjon 154, så en ny navigert-rad ville enten blitt
+   * slukt eller dobbelttalt klikket.
    */
   navigert?: boolean
 }

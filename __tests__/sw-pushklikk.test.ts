@@ -494,7 +494,35 @@ describe('check-pending-nav (kjernen i #626)', () => {
       medWaitUntil({ data: { type: 'check-pending-nav' }, ports: [port] }),
     )
 
-    expect(port.postMessage).toHaveBeenCalledWith({ type: 'navigate', url: `${ORIGIN}/chat` })
+    // klikk_id må følge med på kanal-svaret (#626) — uten den mister
+    // telemetrien korrelasjonen til push.klikk for klienter som havner i
+    // denne (legacy) grenen.
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'navigate', url: `${ORIGIN}/chat`, klikk_id: expect.any(String) }),
+    )
+  })
+
+  it('videresender forsok og navigert fra entryen til klienten (#626, telemetri)', async () => {
+    const deltCacheStorage = lagFakeCacheStorage()
+    const cache = await deltCacheStorage.open(NAV_CACHE)
+    await cache.put(
+      NAV_NOKKEL,
+      new FakeResponse(
+        JSON.stringify({ url: `${ORIGIN}/chat`, ts: Date.now(), klikk_id: 'k-1', forsok: 2, navigert: true }),
+      ),
+    )
+
+    const { dispatch } = lastSwInstans({ deltCacheStorage })
+    const port = { postMessage: vi.fn() }
+    await dispatch('message', medWaitUntil({ data: { type: 'check-pending-nav' }, ports: [port] }))
+
+    expect(port.postMessage).toHaveBeenCalledWith({
+      type: 'navigate',
+      url: `${ORIGIN}/chat`,
+      klikk_id: 'k-1',
+      forsok: 2,
+      navigert: true,
+    })
   })
 
   it('svarer ikke på en foreldet entry (eldre enn 30 s)', async () => {

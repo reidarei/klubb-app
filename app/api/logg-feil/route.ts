@@ -213,7 +213,9 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     // Burst-dedup: unique-constraint-brudd betyr at nøyaktig samme feil
-    // allerede er logget dette minuttet (fra denne profilen). 204 = stille.
+    // allerede er logget dette minuttet (fra denne profilen), eller — for
+    // push-telemetri med klikk_id — samme (event, klikk_id, forsok) alt finnes
+    // (migrasjon 154). 204 = stille.
     // PostgreSQL-kode 23505 = unique_violation.
     if (error.code === '23505') {
       return new NextResponse(null, { status: 204 })

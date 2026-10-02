@@ -90,7 +90,8 @@
 //   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
 //   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
 //   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer klikk_id (#688, korrelasjons-ID generert i notificationclick — binder raden til den påfølgende push.klikk.navigert/push.klikk.innlogging), maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
-//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk endte i navigasjon (#676). Bærer kilde (broadcast/cache/kanal/login — sistnevnte fra #688), allerede_paa_maal, synlighet, klikk_id og forsok (hvilket navigasjonsforsøk raden gjelder, #688). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
+//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk FORSØKER en navigasjon (#676). Bærer kilde (broadcast/cache/kanal/login — sistnevnte fra #688), allerede_paa_maal, synlighet, klikk_id og forsok (hvilket navigasjonsforsøk raden gjelder, #688), og maal (sti-en vi navigerer TIL, #626). `url` på raden settes automatisk av sendFeilBeacon til window.location.href — det er AVREISESIDEN, ikke målet; en tidligere lesning av denne raden forvekslet de to (#626, tabellen i issue-kommentaren 2026-09-19 var feiltolket telemetri, rettet 2026-10-01). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
+//   push.klikk.landet           — warn: KLIENTEN bekrefter at en navigasjon fra en tidligere side faktisk landet på målet (#626). Bærer klikk_id, kilde, forsok og maal. push.klikk minus (push.klikk.landet + push.klikk.navigert med allerede_paa_maal: true) = det reelle tapet.
 //   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
 //   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
 //   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
@@ -490,7 +491,7 @@ async function skrivFeilLoggRad(
       // seg oppå trykket ved å vente ubegrenset på en ledig tilkobling.
       .abortSignal(AbortSignal.timeout(1000))
 
-    // 23505 er burst-dedupen i feil_logg_profil_event_minutt_uq (mig. 122),
+    // 23505 er burst-dedupen i feil_logg_profil_event_minutt_uq (mig. 122/154),
     // altså at vi allerede har en rad for (profil, event, minutt). Det er
     // indeksen som gjør jobben sin, ikke en feil — logger vi den som feilet
     // insert, blir stdout full av støy hver gang noe feiler to ganger på

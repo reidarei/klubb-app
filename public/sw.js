@@ -409,12 +409,17 @@ self.addEventListener('notificationclick', (event) => {
 // klikk re-trigger ved en senere app-åpning — speiler PUSH_KLIKK_VINDU_MS i
 // lib/konstanter.ts (denne fila er statisk og kan ikke importere TS).
 //
-// Bevisst URØRT av #688 (forsøksteller, klikk_id, utsatt konsumering): en
-// klient som havner her har PER DEFINISJON ingen Cache Storage-tilgang, så
-// det finnes ingenting å bevare for et senere forsøk uansett. Denne grenen er
-// legacy for en gammel cachet bundle, ikke hovedstien — ny logikk hører hjemme
-// i lesPendingNav()/skrivPendingNav() i lib/pending-nav.ts, som denne fallback-
-// klienten uansett aldri kaller.
+// Bevisst URØRT av #688 (forsøksteller, utsatt konsumering): en klient som
+// havner her har PER DEFINISJON ingen Cache Storage-tilgang, så det finnes
+// ingenting å bevare for et senere forsøk uansett. Denne grenen er legacy for
+// en gammel cachet bundle, ikke hovedstien, men nås likevel med dagens kode
+// (3 av 88 focus-klikk i telemetrien, #626) — ny logikk hører hjemme i
+// lesPendingNav()/skrivPendingNav() i lib/pending-nav.ts. `klikk_id`, `forsok`
+// og `navigert` SENDES derimot videre (#626) — KUN til telemetrien: uten dem
+// mister klienten korrelasjonen til det opprinnelige push.klikk-klikket, og en
+// landing via denne veien logges som en ny navigasjon i stedet for som landet.
+// Klienten lar dem bevisst ikke styre loop-/ferskhetslogikken (se
+// sjekkViaMessageChannel i ServiceWorkerRegistrering.tsx).
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'check-pending-nav') return
   const port = event.ports[0]
@@ -434,15 +439,16 @@ self.addEventListener('message', (event) => {
       } finally {
         await cache.delete(NAV_NOKKEL)
       }
-      const { url, ts } = data ?? {}
+      const { url, ts, klikk_id: klikkId, forsok, navigert } = data ?? {}
       if (typeof url === 'string' && Date.now() - ts < 30_000) {
         // Foretrekk MessageChannel-port (fungerer selv når klienten ikke er
         // kontrollert av SW, f.eks. ved cold-start). Fallback til
         // event.source for nettlesere som ikke sender port med.
+        const svar = { type: 'navigate', url, klikk_id: klikkId, forsok, navigert }
         if (port) {
-          port.postMessage({ type: 'navigate', url })
+          port.postMessage(svar)
         } else if (event.source) {
-          event.source.postMessage({ type: 'navigate', url })
+          event.source.postMessage(svar)
         }
       }
     } catch {

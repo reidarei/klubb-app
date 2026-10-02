@@ -235,9 +235,24 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
       'push.klikk.navigert',
       'push-klikk levert via cache',
       undefined,
-      { kilde: 'cache', allerede_paa_maal: false, synlighet: document.visibilityState, klikk_id: 'klikk-abc', forsok: 1 },
+      {
+        kilde: 'cache',
+        allerede_paa_maal: false,
+        synlighet: document.visibilityState,
+        klikk_id: 'klikk-abc',
+        forsok: 1,
+        maal: '/chat',
+      },
       'warn',
     )
+    // #626: `maal` er stien vi navigerer TIL (/chat) — IKKE avreisesiden
+    // (window.location.href, som på denne siden er /). Den forrige
+    // kommentaren i loggPushNavigasjon ble lest som om `url`-feltet på raden
+    // (satt av den ekte sendFeilBeacon til window.location.href) var målet;
+    // dette er nøyaktig forvekslingen som ga feiltolket telemetri.
+    const [, , , kontekst] = vi.mocked(sendFeilBeacon).mock.calls[0]
+    expect(kontekst).toMatchObject({ maal: '/chat' })
+    expect((kontekst as { maal?: string })?.maal).not.toBe(window.location.pathname)
   })
 
   it('KRITISK: navigerer likevel selv om navigator.serviceWorker.ready aldri resolver (reg.active utilgjengelig)', async () => {
@@ -292,15 +307,24 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
       'push.klikk.navigert',
       'push-klikk levert via cache',
       undefined,
-      { kilde: 'cache', allerede_paa_maal: true, synlighet: document.visibilityState, klikk_id: 'klikk-xyz', forsok: undefined },
+      {
+        kilde: 'cache',
+        allerede_paa_maal: true,
+        synlighet: document.visibilityState,
+        klikk_id: 'klikk-xyz',
+        forsok: undefined,
+        maal: '/',
+      },
       'warn',
     )
   })
 
-  // navigert: true hindrer dobbel-logging (#688): raden ble alt skrevet av
-  // den FORRIGE sidens navigerTil() rett før assign — en ny logging her ville
-  // kollidert med varsel_logg sin dedup-indeks og dobbelttalt samme klikk.
-  it('landing: navigert:true på entryen hindrer en ny push.klikk.navigert-logging, men entry konsumeres fortsatt', async () => {
+  // navigert: true betyr at raden alt ble logget som push.klikk.navigert fra
+  // den FORRIGE sidens navigerTil() rett før assign — denne landingen skal nå
+  // logges som sin EGEN hendelse (push.klikk.landet, #626) i stedet for en ny
+  // push.klikk.navigert, som ville kollidert med varsel_logg sin dedup-indeks
+  // og dobbelttalt samme klikk.
+  it('landing: navigert:true på entryen gir ÉN push.klikk.landet med riktig klikk_id/maal, og INGEN ny push.klikk.navigert', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
       url: window.location.href,
@@ -318,6 +342,14 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(assign).not.toHaveBeenCalled()
     expect(cache.delete).toHaveBeenCalledWith(NAV_NOKKEL)
     expect(loggedeEventer()).not.toContain('push.klikk.navigert')
+    expect(loggedeEventer().filter(e => e === 'push.klikk.landet')).toHaveLength(1)
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.landet',
+      expect.any(String),
+      undefined,
+      { kilde: 'cache', klikk_id: 'klikk-xyz', forsok: 1, maal: '/' },
+      'warn',
+    )
   })
 
   // Loop-bryter (item 6): et mål forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten
@@ -393,6 +425,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
         synlighet: document.visibilityState,
         klikk_id: 'klikk-bc',
         forsok: 2,
+        maal: '/',
       },
       'warn',
     )
@@ -400,8 +433,9 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
 
   // Samme sti, men entryen er alt logget som navigert fra forrige side.
   // Dobbel-logging-guarden må fortsatt gjelde når kilden er broadcast — mot
-  // den gamle koden var den død kode her (entry var alltid null).
-  it('landing via BROADCAST med navigert:true: ingen ny logging, entry konsumeres', async () => {
+  // den gamle koden var den død kode her (entry var alltid null). Landingen
+  // logges nå som push.klikk.landet (#626) i stedet for ingenting.
+  it('landing via BROADCAST med navigert:true: push.klikk.landet logget, ingen ny push.klikk.navigert', async () => {
     stubLocation()
     const cache = lagFakeCache({
       url: window.location.href,
@@ -420,6 +454,13 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
 
     expect(cache.delete).toHaveBeenCalledWith(NAV_NOKKEL)
     expect(loggedeEventer()).not.toContain('push.klikk.navigert')
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.landet',
+      expect.any(String),
+      undefined,
+      { kilde: 'broadcast', klikk_id: 'klikk-bc', forsok: 1, maal: '/' },
+      'warn',
+    )
   })
 
   // Ferskhetssjekken skal IKKE komme før identitetssjekken (review av #688):
@@ -450,6 +491,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
         synlighet: document.visibilityState,
         klikk_id: 'klikk-sen',
         forsok: undefined,
+        maal: '/',
       },
       'warn',
     )
@@ -514,6 +556,30 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(loggedeEventer().filter(e => e === 'push.klikk.navigert')).toHaveLength(1)
   })
 
+  // Samme race som over, men med navigert:true på entryen — landingLogget skal
+  // fortsatt gi maks ÉN rad uansett hvilken av de to nye grenene (landet vs.
+  // navigert) som rammes (#626).
+  it('RACE: cache-poll og broadcast lander samtidig på en navigert:true-entry — kun ÉN push.klikk.landet', async () => {
+    stubLocation()
+    const cache = lagFakeCache(
+      { url: window.location.href, ts: Date.now(), klikk_id: 'klikk-race-landet', forsok: 1, navigert: true },
+      5,
+    )
+    vi.stubGlobal('caches', lagCachesMock(cache))
+    const { sw, send } = lagSwMockMedLytter()
+    vi.stubGlobal('navigator', { ...window.navigator, serviceWorker: sw })
+
+    render(<ServiceWorkerRegistrering />)
+    send({ type: 'navigate', url: window.location.href })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(50)
+    await flushMikrotasks()
+
+    expect(cache.delete).toHaveBeenCalledWith(NAV_NOKKEL)
+    expect(loggedeEventer().filter(e => e === 'push.klikk.landet')).toHaveLength(1)
+    expect(loggedeEventer()).not.toContain('push.klikk.navigert')
+  })
+
   it('tom cache faller tilbake til MessageChannel-stien og navigerer på SW-svar', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache(undefined)
@@ -531,6 +597,127 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     await vi.advanceTimersByTimeAsync(2000)
 
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/samtaler/1`)
+  })
+
+  // sw.js sender nå klikk_id med på MessageChannel-svaret (#626) — den grenen
+  // har PER DEFINISJON ingen Cache Storage å lese klikk_id fra selv (cachen er
+  // tom), så uten denne hinten var raden alltid klikk_id-løs. Navigasjonen
+  // selv (assign-målet) skal være uendret av dette.
+  it('MessageChannel-svar med klikk_id: navigasjonen er uendret, men klikk_id følger med i telemetrien', async () => {
+    const assign = stubLocation()
+    const cache = lagFakeCache(undefined)
+    vi.stubGlobal('caches', lagCachesMock(cache))
+    vi.stubGlobal('navigator', {
+      ...window.navigator,
+      serviceWorker: lagSwMock({
+        onCheckPendingNav: (port2) => {
+          port2.postMessage({
+            type: 'navigate',
+            url: `${window.location.origin}/samtaler/1`,
+            klikk_id: 'klikk-kanal',
+          })
+        },
+      }),
+    })
+
+    render(<ServiceWorkerRegistrering />)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(assign).toHaveBeenCalledWith(`${window.location.origin}/samtaler/1`)
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.navigert',
+      'push-klikk levert via kanal',
+      undefined,
+      {
+        kilde: 'kanal',
+        allerede_paa_maal: false,
+        synlighet: document.visibilityState,
+        klikk_id: 'klikk-kanal',
+        forsok: 1,
+        maal: '/samtaler/1',
+      },
+      'warn',
+    )
+  })
+
+  // Review av #626: kanal-svaret mistet navigert/forsok, så en landing via
+  // MessageChannel på målsiden ble logget som en ny push.klikk.navigert.
+  it('MessageChannel-svar med navigert:true på målsiden logger push.klikk.landet med bevart forsok', async () => {
+    const assign = stubLocation()
+    const cache = lagFakeCache(undefined)
+    vi.stubGlobal('caches', lagCachesMock(cache))
+    vi.stubGlobal('navigator', {
+      ...window.navigator,
+      serviceWorker: lagSwMock({
+        onCheckPendingNav: (port2) => {
+          port2.postMessage({
+            type: 'navigate',
+            url: window.location.href,
+            klikk_id: 'klikk-kanal',
+            forsok: 2,
+            navigert: true,
+          })
+        },
+      }),
+    })
+
+    render(<ServiceWorkerRegistrering />)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(assign).not.toHaveBeenCalled()
+    expect(loggedeEventer()).not.toContain('push.klikk.navigert')
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.landet',
+      'push-klikk landet på mål via kanal',
+      undefined,
+      {
+        kilde: 'kanal',
+        klikk_id: 'klikk-kanal',
+        forsok: 2,
+        maal: new URL(window.location.href).pathname,
+      },
+      'warn',
+    )
+  })
+
+  // Navigasjonen skal være uendret fra før #626: kanal-svarets forsok/ts får
+  // IKKE styre loop-brytelsen. Cachen skrives som før (forsok 1, ferskt ts);
+  // kun telemetrien bærer det faktiske forsøksnummeret.
+  it('MessageChannel-svar med eksisterende forsok utenfor målet: cache-skrivingen er uendret, telemetrien teller videre', async () => {
+    vi.setSystemTime(new Date('2026-10-02T10:00:00Z'))
+    const assign = stubLocation()
+    const cache = lagFakeCache(undefined)
+    vi.stubGlobal('caches', lagCachesMock(cache))
+    vi.stubGlobal('navigator', {
+      ...window.navigator,
+      serviceWorker: lagSwMock({
+        onCheckPendingNav: (port2) => {
+          port2.postMessage({
+            type: 'navigate',
+            url: `${window.location.origin}/samtaler/1`,
+            klikk_id: 'klikk-kanal',
+            forsok: 2,
+            navigert: true,
+          })
+        },
+      }),
+    })
+
+    render(<ServiceWorkerRegistrering />)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(assign).toHaveBeenCalledWith(`${window.location.origin}/samtaler/1`)
+    const lagret = await sistLagret(cache)
+    expect(lagret).toMatchObject({ forsok: 1, navigert: true, klikk_id: 'klikk-kanal' })
+    // ts er satt ved skrivingen (ikke arvet fra SW-svaret, som ikke sender den).
+    expect(lagret?.ts).toBeGreaterThanOrEqual(new Date('2026-10-02T10:00:00Z').getTime())
+    expect(sendFeilBeacon).toHaveBeenCalledWith(
+      'push.klikk.navigert',
+      'push-klikk levert via kanal',
+      undefined,
+      expect.objectContaining({ kilde: 'kanal', klikk_id: 'klikk-kanal', forsok: 3, allerede_paa_maal: false }),
+      'warn',
+    )
   })
 })
 

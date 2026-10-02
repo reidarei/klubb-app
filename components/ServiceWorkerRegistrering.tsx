@@ -18,6 +18,10 @@ import {
 // tellingen, ikke at push-klikket slutter å virke.
 const NAV_SKRIV_TIMEOUT_MS = 1000
 
+// Feltene SW-en sender med i check-pending-nav-svaret (kanal-stien, #626).
+// Kun telemetri — skal aldri styre forsøkstelling, ferskhet eller navigasjon.
+type KanalTelemetri = Pick<PendingNav, 'klikk_id' | 'forsok' | 'navigert'>
+
 export default function ServiceWorkerRegistrering() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
@@ -103,8 +107,9 @@ export default function ServiceWorkerRegistrering() {
       raw: string,
       kilde: 'broadcast' | 'cache' | 'kanal',
       entryHint?: PendingNav,
+      kanalTelemetri?: KanalTelemetri,
     ): Promise<void> {
-      const neste = navKjede.then(() => navigerTilIndre(raw, kilde, entryHint))
+      const neste = navKjede.then(() => navigerTilIndre(raw, kilde, entryHint, kanalTelemetri))
       // Kjeden må ikke forgiftes av en avvisning (alle senere kall ville
       // arvet den), men den RETURNERTE promisen beholder den — det er den
       // kallstedene rapporterer på.
@@ -121,6 +126,7 @@ export default function ServiceWorkerRegistrering() {
       raw: string,
       kilde: 'broadcast' | 'cache' | 'kanal',
       entryHint?: PendingNav,
+      kanalTelemetri?: KanalTelemetri,
     ) {
       const sti = lokalSti(raw)
       if (sti === null) return // Ugyldig eller kryss-origin — ignorer.
@@ -135,17 +141,28 @@ export default function ServiceWorkerRegistrering() {
         // under ble alltid sann, raden ble logget uten klikk_id/forsok, og
         // oppføringen ble revet bort under føttene på cache-pollen som
         // HADDE den (review av #688).
-        const entry = entryHint ?? (await lesPendingNav())
+        // Kanal-stien: SW-en har alt slettet raden, så lesPendingNav() finner
+        // tomt — feltene fra SW-svaret er eneste kilde. Her styrer de kun
+        // hvilken hendelse som logges, aldri en navigasjon (#626).
+        const entry: KanalTelemetri | null =
+          entryHint ?? kanalTelemetri ?? (await lesPendingNav())
         // Konsumer entryen: vi STÅR på målet, ingenting mer å bevare.
         await slettPendingNav()
-        // `navigert: true` betyr at raden alt er logget som navigert fra
-        // en TIDLIGERE side (item 7 under skrev den rett før assign) — en
-        // ny logging her ville kollidert med varsel_logg sin dedup-indeks
-        // og dobbelttalt samme klikk. `landingLogget` er samme vern mot to
-        // samtidige kilder i SAMME sidevisning.
-        if (entry?.navigert !== true && !landingLogget) {
+        // `navigert: true` betyr at raden alt er logget som navigert fra en
+        // TIDLIGERE side (item 7 under skrev den rett før assign) — det er
+        // selve bekreftelsen på at en tidligere navigasjon faktisk landet, og
+        // logges derfor som sin egen hendelse (push.klikk.landet) i stedet for
+        // en ny push.klikk.navigert, som ville kollidert med feil_logg sin
+        // per-klikk-dedup (migrasjon 154) eller dobbelttalt samme klikk. `landingLogget` er samme
+        // vern mot to samtidige kilder i SAMME sidevisning — gjelder begge
+        // grenene under, så maks én rad logges uansett hvilken.
+        if (!landingLogget) {
           landingLogget = true
-          loggPushNavigasjon(kilde, true, entry?.klikk_id, entry?.forsok)
+          if (entry?.navigert === true) {
+            loggPushLanding(kilde, entry.klikk_id, entry.forsok, sti)
+          } else {
+            loggPushNavigasjon(kilde, true, entry?.klikk_id, entry?.forsok, sti)
+          }
         }
         return
       }
@@ -155,8 +172,19 @@ export default function ServiceWorkerRegistrering() {
       // og en ny rad ville bare dobbelttalt klikket.
       if (committetMaal === target) return
 
+      // `kanalTelemetri` brukes BEVISST ikke her (#626): på main nullstilte
+      // kanal-stien forsøk og tidsstempel (entry var alltid tom), og å la
+      // SW-svarets forsok/ts styre loop-brytelsen ville endret navigasjonen.
+      // Kun klikk_id lånes, og den er ren korrelasjon.
       const entry = entryHint ?? (await lesPendingNav())
       const nesteForsok = (entry?.forsok ?? 0) + 1
+      const klikkId = entry?.klikk_id ?? kanalTelemetri?.klikk_id
+      // Telemetriens forsøksnummer følger det FAKTISKE forsøket, også når
+      // cachen over nullstilles: med per-klikk-dedupen (migrasjon 154) ville
+      // et gjentatt forsok=1 for samme klikk_id ellers blitt slukt som duplikat.
+      const loggForsok = kanalTelemetri?.forsok !== undefined && !entry
+        ? kanalTelemetri.forsok + 1
+        : nesteForsok
 
       // Tilbakeskrivingen må fullføre FØR assign — ellers river navigasjonen
       // ned realmet før cache.put er ferdig, og loop-brytelsen
@@ -173,7 +201,7 @@ export default function ServiceWorkerRegistrering() {
           // uansett faller ut på PUSH_KLIKK_VINDU_MS. Friskes den opp, blir
           // PUSH_KLIKK_MAKS_FORSOK eneste bremsen — og den er ikke garantert.
           ts: entry?.ts ?? Date.now(),
-          klikk_id: entry?.klikk_id,
+          klikk_id: klikkId,
           forsok: nesteForsok,
           navigert: true,
         }).finally(() => {
@@ -183,7 +211,7 @@ export default function ServiceWorkerRegistrering() {
       })
 
       committetMaal = target
-      loggPushNavigasjon(kilde, false, entry?.klikk_id, nesteForsok)
+      loggPushNavigasjon(kilde, false, klikkId, loggForsok, sti)
       window.location.assign(target)
     }
 
@@ -192,10 +220,16 @@ export default function ServiceWorkerRegistrering() {
       alleredePaaMaal: boolean,
       klikkId?: string,
       forsok?: number,
+      maal?: string,
     ) {
-      // Nøkkelnavnene (kilde/allerede_paa_maal/synlighet/klikk_id/forsok) må
-      // matche KONTEKST_WHITELIST i lib/logg-sanitering.ts — parameteret over
-      // kan forbli camelCase, det er kun objekt-nøkkelen som teller (#681).
+      // Nøkkelnavnene (kilde/allerede_paa_maal/synlighet/klikk_id/forsok/maal)
+      // må matche KONTEKST_WHITELIST i lib/logg-sanitering.ts — parameteret
+      // over kan forbli camelCase, det er kun objekt-nøkkelen som teller
+      // (#681). `url` på denne raden settes automatisk av sendFeilBeacon til
+      // window.location.href — det er siden vi navigerer FRA, ikke dit vi
+      // skal. `maal` er sti-en vi faktisk navigerer TIL, så begge står på
+      // samme rad (en tidligere kommentar her ble lest som om `url` var
+      // målet — se #626 for hvordan den feiltolkningen oppsto).
       sendFeilBeacon(
         'push.klikk.navigert',
         `push-klikk levert via ${kilde}`,
@@ -206,6 +240,26 @@ export default function ServiceWorkerRegistrering() {
           synlighet: document.visibilityState,
           klikk_id: klikkId,
           forsok,
+          maal,
+        },
+        'warn',
+      )
+    }
+
+    // `push.klikk.landet` (#626): bekrefter at en TIDLIGERE navigasjon (den
+    // som logget push.klikk.navigert fra avreisesiden) faktisk endte opp på
+    // målet. Egen hendelse fremfor en ny push.klikk.navigert-rad — raden over
+    // er allerede logget for dette klikket, og en ny ville dobbelttalt det.
+    function loggPushLanding(kilde: string, klikkId: string | undefined, forsok: number | undefined, maal: string) {
+      sendFeilBeacon(
+        'push.klikk.landet',
+        `push-klikk landet på mål via ${kilde}`,
+        undefined,
+        {
+          kilde,
+          klikk_id: klikkId,
+          forsok,
+          maal,
         },
         'warn',
       )
@@ -225,11 +279,24 @@ export default function ServiceWorkerRegistrering() {
       channel.port1.onmessage = (event) => {
         const data = event.data
         if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
+        // SW-en i check-pending-nav-grenen har allerede slettet cache-raden
+        // (den leser og sletter atomisk, public/sw.js) før den svarer her, så
+        // et eget lesPendingNav()-kall i navigerTil ville funnet tomt. Den
+        // sender nå klikk_id/forsok/navigert med isteden (#626). De går inn
+        // som TELEMETRI, ikke som en fabrikkert PendingNav: en entryHint ville
+        // latt SW-svaret styre forsøkstelling og tidsstempel, og dermed endret
+        // navigasjonen sammenlignet med før. Validert her, fordi meldingen
+        // kan komme fra en eldre SW som ikke sender feltene.
+        const kanalTelemetri: KanalTelemetri = {
+          klikk_id: typeof data.klikk_id === 'string' ? data.klikk_id : undefined,
+          forsok: typeof data.forsok === 'number' ? data.forsok : undefined,
+          navigert: data.navigert === true || undefined,
+        }
         // Samme .catch() som broadcast-søsteren over: callbacken awaiter ikke
         // den async navigerTil, så en avvist promise ville blitt en unhandled
         // rejection. Asymmetri her inviterer til feil antakelse om at den ene
         // stien er tryggere enn den andre (review av #688).
-        navigerTil(data.url, 'kanal').catch((err: unknown) => {
+        navigerTil(data.url, 'kanal', undefined, kanalTelemetri).catch((err: unknown) => {
           sendFeilBeacon(
             'klient.sw.pendingnav.feilet',
             err instanceof Error ? err.message : String(err),

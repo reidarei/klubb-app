@@ -379,6 +379,7 @@ export const PUSH_TELEMETRI_RATE_LIMIT_PER_MIN = 20
 export const PUSH_TELEMETRI_EVENTS = [
   'push.klikk',
   'push.klikk.navigert',
+  'push.klikk.landet',
   'push.klikk.innlogging',
   'klient.pushklikk.foreldet',
   'klient.pushklikk.oppgitt',
