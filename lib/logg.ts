@@ -342,7 +342,7 @@ function normaliserFeil(err: unknown): {
       // Regex-en grupperer konsistent på snake_case-identifikatorer, men den
       // kan like gjerne treffe constraint-navn som selve tabell-navnet —
       // derfor navngir vi feltet «identifikator» videre.
-      const identMatch = String(e.message).match(/"([^"]+?_[^"]+?)"/)
+      const identMatch = e.message.match(/"([^"]+?_[^"]+?)"/)
       return {
         code: e.code,
         tabell: identMatch?.[1],
@@ -352,8 +352,20 @@ function normaliserFeil(err: unknown): {
         status,
       }
     }
-    // Ikke-PostgREST-feil: meldingsformen holdes uendret (String(err) gir
-    // «Error: …»), kun navn/noekler/status kommer i tillegg.
+    // Et vanlig objekt (IKKE en Error-instans) med en lesbar `message`, men
+    // uten PostgREST sin `code` — typisk en gateway-/transport-feil (Kong,
+    // undici) i CI. Falt tidligere til String(err) under, som for et vanlig
+    // objekt uten egen toString() gir «[object Object]» — meldingsteksten
+    // gikk tapt (#800, sett i stdout som `melding:"[object Object]"`).
+    // `err instanceof Error` er bevisst utelatt her: en Error-instans skal
+    // fortsatt gå til String(err) under (se den grenen for hvorfor).
+    if (!(err instanceof Error) && typeof e.message === 'string') {
+      return { melding: e.message, navn, noekler, status }
+    }
+    // Ikke-PostgREST-feil: for en Error-instans gir String(err) klassenavnet
+    // foran meldingen («TypeError: fetch failed»), som er ønsket — se
+    // __tests__/logg-render-feil.test.ts. For et objekt uten lesbar `message`
+    // gir den «[object Object]», men da har vi ingen bedre tekst å vise uansett.
     return { melding: String(err), navn, noekler, status }
   }
   // err er ikke et objekt (streng, tall, boolean, null, undefined) — kastet

@@ -223,11 +223,41 @@ test.describe('Røyktest — alle sider laster', () => {
       // og en klient-warn skal ikke gjøre en test som heter «server-feil» rød.
       const { data, error } = await supabase
         .from('feil_logg')
-        .select('id, event')
+        .select('id, event, kontekst')
         .gt('id', grense)
         .eq('nivaa', 'error')
         .order('id', { ascending: true })
       if (error) throw new Error(`Kunne ikke lese feil_logg: ${error.message}`)
+
+      // Kong → PostgREST i den lokale/selvhostede teststacken har vist seg å
+      // gi en sporadisk 502/503/504 (gateway-transient) som ALDRI er sett i
+      // prod (#711 punkt 2, #800: én forekomst totalt der). Den slår ut som
+      // en ekte server-feil her, men sier ingenting om appens egen kode —
+      // det er gatewayen mellom Kong og PostgREST som er treg/kald, ikke en
+      // regresjon. Rader med en av disse statusene skilles derfor ut som
+      // ikke-fatale (warn + annotation) i stedet for å telle som et treff.
+      // Prod-alarmen (lib/logg.ts, ALARM_IGNORERTE_EVENTS) røres IKKE av
+      // dette — den filtreringen gjelder kun denne lokale e2e-vakten.
+      const GATEWAY_TRANSIENT_STATUSER = [502, 503, 504]
+
+      type Rad = { id: number; event: string; kontekst: unknown }
+      const erGatewayTransient = (rad: Rad) => {
+        const status = (rad.kontekst as { status?: unknown } | null)?.status
+        return typeof status === 'number' && GATEWAY_TRANSIENT_STATUSER.includes(status)
+      }
+
+      const alle = (data ?? []) as Rad[]
+      const transiente = alle.filter(erGatewayTransient)
+      const ekte = alle.filter(rad => !erGatewayTransient(rad))
+
+      if (transiente.length > 0) {
+        const liste = transiente.map(r => `${r.event} (id ${r.id})`).join(', ')
+        console.warn(`[sider-laster] gateway-transient (502/503/504), behandlet som ikke-fatal: ${liste}`)
+        test.info().annotations.push({
+          type: 'gateway-transient',
+          description: liste,
+        })
+      }
 
       // Merk hva vakten faktisk garanterer: unik-indeksen
       // feil_logg_profil_event_minutt_uq (migrasjon 122) deduperer på
@@ -236,7 +266,7 @@ test.describe('Røyktest — alle sider laster', () => {
       // «minst én rad per event per minutt», ikke «én rad per feil». Det er
       // nok for en vakt som spør «logget noe seg i det hele tatt?», og
       // indeksen skal ikke omgås for å skjerpe tellingen.
-      const hendelser = (data ?? []).map(r => r.event)
+      const hendelser = ekte.map(r => r.event)
       expect(
         hendelser,
         `Sidene svarte 200 og rendret innhold, men disse server-feilene ble logget til feil_logg i løpet av kjøringen (grense id > ${grense}): ${hendelser.join(', ')}`,

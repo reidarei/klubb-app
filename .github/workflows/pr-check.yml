@@ -522,8 +522,14 @@ jobs:
           echo "### Docker-containere som har avsluttet (exited)"
           docker ps -a --filter status=exited || true
 
-      - name: Last opp Playwright-rapport ved feil
-        if: failure() && steps.omfang.outputs.e2e == 'true'
+      # #800: `if: failure()` ga aldri noe artefakt for en FLAKY test — retry
+      # i config.ts gjorde jobben grønn, og skjermbildet + error-context.md
+      # fra det mislykkede første forsøket ble aldri lastet opp. `always()`
+      # laster opp uansett utfall; `if-no-files-found: ignore` fordi en helt
+      # grønn kjøring (ingen retries brukt) ikke produserer noen av mappene.
+      # (Trace er bevisst av i CI — se playwright.config.ts.)
+      - name: Last opp Playwright-artefakter (feil og flaky)
+        if: always() && steps.omfang.outputs.e2e == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -531,3 +537,4 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 3
+          if-no-files-found: ignore

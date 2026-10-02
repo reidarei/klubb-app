@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { harTestCreds, loggInn, SEED_PASSORD } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
+import { ventPaaServerAction } from './helpers/server-action'
 import { KART_MARKERING_MAKS_LENGDE } from '../lib/konstanter'
 import { MARKERING_SYMBOLER, STANDARD_SYMBOL, symbolEmoji } from '../lib/markering-symboler'
 
@@ -171,50 +172,70 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('fjerning fra panelet tar bort både nåla og raden', async ({ page }) => {
-    await page.goto('/kart')
-    await expect(page.locator('.kart-markering-etikett')).toHaveCount(2, { timeout: 15_000 })
+    // Egen, unikt navngitt markering i stedet for `.first()` på de delte
+    // seed-radene (#800): testen skal verifisere fjerning, ikke tilfeldig
+    // treffe HVILKEN av de to seedede radene Leaflet happener å tegne først.
+    // Uten en egen rad måtte testen legge seed-dataen tilbake for hånd etter
+    // hvert kjøring — nå rydder afterAll den som alt annet med «Playwright —»-
+    // prefiks, og ingen tilbakeleggingsblokk er nødvendig.
+    const EGEN = 'Playwright — fjern-panel'
+    const admin = adminKlient('kart-markering')
+    test.skip(!admin, 'Ingen admin-klient')
+    await admin!.from('kart_markering').insert({
+      opprettet_av: megId!,
+      lat: 59.93, lng: 10.74,
+      tekst: EGEN,
+      symbol: STANDARD_SYMBOL,
+      utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    }).throwOnError()
 
-    await page.locator('.kart-markering-etikett').first().click()
-    await page.getByTestId('markering-panel').getByTestId('markering-panel-fjern').click()
+    await page.goto('/kart')
+    const boble = page.locator('.kart-markering-etikett', { hasText: EGEN })
+    await expect(boble).toBeVisible({ timeout: 15_000 })
+    await boble.click()
+
+    // Fjern-klikket er server actionen — selve mutasjonen, ikke bare
+    // panelet som lukker seg (#800, se e2e/helpers/server-action.ts).
+    await ventPaaServerAction(page, () =>
+      page.getByTestId('markering-panel').getByTestId('markering-panel-fjern').click(),
+    )
 
     // Panelet lukker seg selv — ellers ville det blitt stående og pekt på noe
-    // som ikke finnes.
-    await expect(page.getByTestId('markering-panel')).toHaveCount(0)
-    await expect(page.locator('.kart-markering-etikett')).toHaveCount(1)
-
-    // Legg begge tilbake, så testrekkefølgen ikke påvirker naboene.
-    const admin = adminKlient('kart-markering')
-    if (admin && megId) {
-      await admin.from('kart_markering').delete().like('tekst', 'Playwright —%').throwOnError()
-      const om4t = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
-      await admin.from('kart_markering').insert([
-        { opprettet_av: megId, lat: 59.9139, lng: 10.7522, tekst: TEKST_MIN, utloper: om4t },
-        { opprettet_av: PETTER, lat: 59.9165, lng: 10.758, tekst: TEKST_ANNEN, utloper: om4t },
-      ]).throwOnError()
-    }
+    // som ikke finnes. 15 s: statusen beviser at serveren er ferdig, ikke at
+    // React har committet det nye treet til DOM-en (#800).
+    await expect(page.getByTestId('markering-panel')).toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('.kart-markering-etikett', { hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
+    // De seedede radene fra beforeAll skal stå urørt.
+    await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_MIN })).toHaveCount(1)
+    await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_ANNEN })).toHaveCount(1)
   })
 
   test('fjerning tar bort markeringen', async ({ page }) => {
+    // Samme grunn som testen over: egen rad, ikke avhengig av at TEKST_MIN
+    // fortsatt ligger der en annen test etterlot den (#800).
+    const EGEN = 'Playwright — fjern-liste'
+    const admin = adminKlient('kart-markering')
+    test.skip(!admin, 'Ingen admin-klient')
+    await admin!.from('kart_markering').insert({
+      opprettet_av: megId!,
+      lat: 59.94, lng: 10.75,
+      tekst: EGEN,
+      symbol: STANDARD_SYMBOL,
+      utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+    }).throwOnError()
+
     await page.goto('/kart')
     await aapnePanel(page)
-    const min = page.getByTestId('markering-rad').filter({ hasText: TEKST_MIN })
-    await expect(min).toHaveCount(1)
+    const rad = page.getByTestId('markering-rad').filter({ hasText: EGEN })
+    await expect(rad).toHaveCount(1)
 
-    await min.getByTestId('markering-fjern').click()
+    await ventPaaServerAction(page, () => rad.getByTestId('markering-fjern').click())
 
-    await expect(page.getByTestId('markering-rad').filter({ hasText: TEKST_MIN })).toHaveCount(0)
+    // 15 s: statusen beviser server ferdig, ikke DOM-commit (#800).
+    await expect(page.getByTestId('markering-rad').filter({ hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
     // Og nåla skal være borte fra kartet, ikke bare raden i lista — de to
     // tegnes fra samme data, og at de kan komme i utakt var nettopp bugen i #694.
-    await expect(page.locator('.kart-markering-etikett')).toHaveCount(1)
-
-    // Legg den tilbake, så de andre testene i fila ikke avhenger av rekkefølge.
-    const admin = adminKlient('kart-markering')
-    if (admin && megId) {
-      await admin.from('kart_markering').insert({
-        opprettet_av: megId, lat: 59.9139, lng: 10.7522, tekst: TEKST_MIN,
-        utloper: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-      }).throwOnError()
-    }
+    await expect(page.locator('.kart-markering-etikett', { hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
   })
 
   test('flyten er peke først, skrive etterpå', async ({ page }) => {
@@ -271,9 +292,10 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(bekreft).toBeEnabled({ timeout: 15_000 })
     await bekreft.click()
     await page.getByTestId('markering-tekst').fill('Playwright — fra siktet')
-    await page.getByTestId('markering-lagre').click()
+    await ventPaaServerAction(page, () => page.getByTestId('markering-lagre').click())
 
     await aapnePanel(page)
+    // 15 s: statusen beviser server ferdig, ikke DOM-commit (#800).
     await expect(
       page.getByTestId('markering-rad').filter({ hasText: 'Playwright — fra siktet' }),
     ).toHaveCount(1, { timeout: 15_000 })
@@ -345,9 +367,10 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.getByTestId(`symbol-${STANDARD_SYMBOL}`)).toHaveAttribute('aria-pressed', 'false')
 
     await page.getByTestId('markering-tekst').fill('Playwright — med symbol')
-    await page.getByTestId('markering-lagre').click()
+    await ventPaaServerAction(page, () => page.getByTestId('markering-lagre').click())
 
     const valgtEmoji = ANNET_SYMBOL!.emoji
+    // 15 s: statusen beviser server ferdig, ikke DOM-commit (#800).
     await expect(page.locator('.kart-markering-etikett', { hasText: 'Playwright — med symbol' }))
       .toContainText(valgtEmoji, { timeout: 15_000 })
 

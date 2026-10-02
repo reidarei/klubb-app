@@ -282,6 +282,35 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     expect((rad.kontekst as Record<string, unknown>).noekler).toBe('message')
   })
 
+  // #800: en gateway-/transport-feil (f.eks. Kong-timeout i CI) er et vanlig
+  // objekt med `message` og ofte `status`, men uten PostgREST sin `code`. Før
+  // fiksen falt den til String(err) i stdout-loggen, som for et vanlig objekt
+  // uten egen toString() gir «[object Object]» — meldingsteksten gikk tapt
+  // der den faktisk vises (console.log, ikke feil_logg, som aldri persisterer
+  // melding uansett).
+  it('en gateway-feil uten code viser den FAKTISKE meldingen i stdout, ikke [object Object]', async () => {
+    const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
+    fangInsert()
+
+    await logg.feil('test.event', { message: 'Gateway Time-out', status: 504 })
+
+    const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
+    const feilLinje = linjer.find(l => l.nivaa === 'error')
+    expect(feilLinje.melding).toBe('Gateway Time-out')
+    expect(feilLinje.status).toBe(504)
+  })
+
+  it('en Error-instans beholder String(err)-formen («Navn: melding»), uendret av #800-fiksen', async () => {
+    const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
+    fangInsert()
+
+    await logg.feil('test.event', new TypeError('fetch failed'))
+
+    const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
+    const feilLinje = linjer.find(l => l.nivaa === 'error')
+    expect(feilLinje.melding).toBe('TypeError: fetch failed')
+  })
+
   it('et objekt uten egne nøkler (f.eks. et bokstavelig throw {}) faller ikke tilbake til {}', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()

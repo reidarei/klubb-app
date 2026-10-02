@@ -77,7 +77,7 @@ export async function markerSamtaleLest(samtaleId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const { error } = await supabase
+  const { error, status } = await supabase
     .from('samtale_chat')
     .update({ lest: true })
     .eq('samtale_id', samtaleId)
@@ -85,7 +85,9 @@ export async function markerSamtaleLest(samtaleId: string) {
     .eq('lest', false)
 
   if (error) {
-    await logg.feil('samtaler.marker_lest.oppdatering.feilet', error, { ctx: { code: error.code } })
+    // status er DB-svarets HTTP-status (fra Supabase-klienten), ikke rutas
+    // egen — samme begrunnelse som vitals.insert.feilet (#711 runde 2, #800).
+    await logg.feil('samtaler.marker_lest.oppdatering.feilet', error, { ctx: { code: error.code, status } })
   }
 
   // Ingen revalidatePath her: /profil er dynamisk rendret (createServerClient()),

@@ -108,6 +108,12 @@ export default defineConfig({
     // (bl.a. brukt av visuell.spec.ts til side-ved-side-sammenligning).
     screenshot: process.env.CI ? 'only-on-failure' : 'on',
     viewport: { width: 390, height: 844 }, // iPhone 14-størrelse
+    // Bevisst INGEN global trace i CI (#800). `retain-on-first-failure` ble
+    // prøvd, og chrome-headless-shell krasjet da med SIGSEGV i
+    // `browser.newContext` 3 ganger per kjøring (0 i de 11 kjøringene før) —
+    // kun på traced førsteforsøk, aldri på de utracede retryene. Hvorfor
+    // tracing utløser krasjet er ikke avklart. Trenger du trace for å
+    // diagnostisere, slå det på lokalt (`--trace on`), ikke globalt her.
   },
   // webServer defineres kun når test-instansen er konfigurert — uten den
   // skipper alle specs uansett, og en dev-server mot tomme env-verdier ville

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
+import { ventPaaServerAction } from './helpers/server-action'
 
 /**
  * Reisemodus (#723, #724).
@@ -105,7 +106,7 @@ test.describe('reisemodus (#723)', () => {
     await page.goto('/kart')
     await expect(page.getByTestId('reisemodus-toggle')).toBeVisible({ timeout: 15_000 })
 
-    await page.getByTestId('reisemodus-toggle').click()
+    await ventPaaServerAction(page, () => page.getByTestId('reisemodus-toggle').click())
     await page.waitForURL('**/', { timeout: 15_000 })
 
     await expect(page.getByLabel('Hovednavigasjon')).toBeVisible()
@@ -133,13 +134,22 @@ test.describe('reisemodus (#723)', () => {
     // Slår AV mens vi står på /chat. Ingen redirect skal skje — verifisert
     // ved at vi fortsatt står på /chat etter at toggle-tilstanden er oppdatert
     // (en eventuell redirect() ville navigert FØR revalideringen er ferdig).
-    await toggle.click()
+    //
+    // Eksplisitt timeout beholdt (avvik fra planen, som ba om å fjerne den):
+    // ventPaaServerAction() beviser at SERVEREN er ferdig (statuskoden er
+    // satt FØR responsen strømmes, se helperens kommentar), men ikke at
+    // REACT har committet den nye `aria-checked`-verdien til DOM-en — det er
+    // et eget, kort skritt etterpå for denne IKKE-redirectende grenen (av på
+    // /chat). Målt empirisk med `--repeat-each=8`: standard assertion-
+    // timeout (5000 ms) ga ~1 av 9 kjøringer rødt her; 10 000 ms er fortsatt
+    // billig og dekker gapet.
+    await ventPaaServerAction(page, () => toggle.click())
     await expect(toggle).toHaveAttribute('aria-checked', 'false', { timeout: 10_000 })
     await expect(page).toHaveURL(/\/chat$/)
 
     // Slår PÅ igjen — skal alltid gå til /kart, uansett hvor vi sto («han ber
     // eksplisitt om kartet»).
-    await toggle.click()
+    await ventPaaServerAction(page, () => toggle.click())
     await page.waitForURL('**/kart', { timeout: 15_000 })
     await expect(page.getByTestId('reisemodus-bar')).toBeVisible()
   })
