@@ -176,6 +176,9 @@ varsel_logg (alle utsendte push/epost loggføres)
 feil_logg (klient-side JavaScript-feil med 30-dagers retention)
 app_innstillinger (admin-kontrollerte on/off-flagg for funksjoner)
 
+kart_markering (kartmerker plottet på reisekart — sted, symbol, timestamp)
+kart_symbol_tilpasning (admin-tilpasset navn og emoji for varslende kartmarkeringer)
+
 fond_eiendom, fond_verdipapir, fond_kontant, fond_innskudd ─ fond_verdi_historikk
   (Fond-styring: eiendommer, verdipapirer, kontantbeholdning,
    medlemsinnskudd og verdihistorikk. Admin-editering.)
