@@ -3,6 +3,7 @@ import { MapPinIcon } from '@heroicons/react/24/outline'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import Icon, { IkonNavn } from '@/components/ui/Icon'
+import AdminMerke from '@/components/ui/AdminMerke'
 import { kanAdministrere } from '@/lib/roller'
 import { naa } from '@/lib/dato'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
@@ -108,15 +109,16 @@ export default async function Klubbinfo() {
       href: '/klubbinfo/statistikk',
     },
     {
+      icon: 'info',
+      title: 'Om appen',
+      href: '/om-appen',
+    },
+    // Nederst: admin-flaten er siste valg på siden, og merkes med admin-skjoldet.
+    {
       icon: 'cog',
       title: 'Innstillinger',
       href: '/innstillinger',
       kunAdmin: true,
-    },
-    {
-      icon: 'info',
-      title: 'Om appen',
-      href: '/om-appen',
     },
   ]
 
@@ -286,7 +288,7 @@ export default async function Klubbinfo() {
             >
               <Icon name={r.icon} size={18} color="var(--text-secondary)" strokeWidth={1.4} />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
               <div
                 style={{
                   fontFamily: 'var(--font-display)',
@@ -299,6 +301,7 @@ export default async function Klubbinfo() {
               >
                 {r.title}
               </div>
+              {r.kunAdmin && <AdminMerke size={16} />}
             </div>
             {r.meta && (
               <span

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getProfil, getInnloggetBruker } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
+import AdminMerke from '@/components/ui/AdminMerke'
 import VarselToggle from '@/components/VarselToggle'
 import TestEpostVelger from './TestEpostVelger'
 import IssuesListe, { hentAapneIssues } from './IssuesListe'
@@ -252,32 +253,7 @@ export default async function Innstillinger() {
           gap: 10,
         }}
       >
-        <div
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            background: 'var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--accent-foreground)"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" />
-          </svg>
-        </div>
+        <AdminMerke size={26} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
