@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/react-ping-rettelse.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -13,7 +14,8 @@
     "test:tz": "node scripts/tz-test.mjs",
     "stamp-versjon": "node scripts/stamp-versjon.mjs",
     "verifiser-deploy": "node --env-file-if-exists=.env.local scripts/verifiser-deploy.mjs",
-    "sjekk-miljo": "node --env-file=.env.local scripts/sjekk-miljo.mjs"
+    "sjekk-miljo": "node --env-file=.env.local scripts/sjekk-miljo.mjs",
+    "postinstall": "node scripts/react-ping-rettelse.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
