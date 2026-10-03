@@ -33,7 +33,7 @@ export default async function Statistikk() {
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 26 }}>
         <div style={{ marginBottom: 4 }}>
-          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+          <TilbakeKnapp href="/klubbinfo/medlemmer" til="Medlemmer" />
         </div>
         <div
           style={{

@@ -24,13 +24,14 @@ export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
 
-  // Fire count-spørringer i parallell — sekvensielt ville lagt tre ekstra
+  // Fem count-spørringer i parallell — sekvensielt ville lagt fire ekstra
   // rundturer til Supabase på responstiden (jf. ytelseskravet).
   const [
     { count: antallMedlemmer },
     { count: antallAlbumBilder },
     { count: antallChatBilder },
     { count: antallTurer },
+    { count: antallKaaringer },
   ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
       // Antall BILDER, ikke antall album — raden heter «Bilder». Chat-bildene
@@ -52,6 +53,8 @@ export default async function Klubbinfo() {
         .eq('type', 'tur')
         .not('destinasjon', 'is', null)
         .lt('start_tidspunkt', naa()),
+      // Antall kårede vinnere gjennom historien (én rad per kåring per år).
+      supabase.from('kaaring_vinnere').select('id', { count: 'exact', head: true }),
     ])
 
   const antallBilder = (antallAlbumBilder ?? 0) + (antallChatBilder ?? 0)
@@ -72,25 +75,10 @@ export default async function Klubbinfo() {
       href: '/klubbinfo/medlemmer',
     },
     {
-      icon: 'list',
-      title: 'Arrangøransvar',
-      href: '/arrangoransvar',
-    },
-    {
-      icon: 'trophy',
-      title: 'Kåringer',
-      href: '/kaaringer',
-    },
-    {
       icon: 'image',
       title: 'Bilder',
       meta: antallBilder ? String(antallBilder) : undefined,
       href: '/album',
-    },
-    {
-      icon: 'map',
-      title: 'Kart',
-      href: '/kart',
     },
     {
       icon: 'mapPin',
@@ -99,14 +87,25 @@ export default async function Klubbinfo() {
       href: '/stedene',
     },
     {
+      icon: 'trophy',
+      title: 'Kåringer',
+      meta: antallKaaringer ? String(antallKaaringer) : undefined,
+      href: '/kaaringer',
+    },
+    {
+      icon: 'list',
+      title: 'Arrangøransvar',
+      href: '/arrangoransvar',
+    },
+    {
+      icon: 'map',
+      title: 'Kart',
+      href: '/kart',
+    },
+    {
       icon: 'doc',
       title: 'Vedtekter',
       href: '/klubbinfo/vedtekter/vedtekter',
-    },
-    {
-      icon: 'chart',
-      title: 'Statistikk',
-      href: '/klubbinfo/statistikk',
     },
     {
       icon: 'info',

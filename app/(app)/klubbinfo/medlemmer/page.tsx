@@ -154,6 +154,29 @@ export default async function Medlemmer() {
           Inviter nytt medlem
         </Link>
       )}
+
+      {/* Statistikk bor her, ikke som egen rad på Klubb — den handler om gutta. */}
+      <Link
+        href="/klubbinfo/statistikk"
+        style={{
+          display: 'block',
+          marginTop: erAdmin ? 12 : 32,
+          width: '100%',
+          padding: '16px 0',
+          borderRadius: 999,
+          background: 'transparent',
+          color: 'var(--text-primary)',
+          border: '0.5px solid var(--border-strong)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 14,
+          fontWeight: 600,
+          letterSpacing: '0.2px',
+          textAlign: 'center',
+          textDecoration: 'none',
+        }}
+      >
+        Mer statistikk
+      </Link>
     </div>
   )
 }
