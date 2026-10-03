@@ -26,6 +26,7 @@ import type { VertexFeilKlasse } from '@/lib/vertex'
 import { finnBursdagsbarn, alderIAar } from '@/lib/bursdag'
 import { iDagOslo, iMorgenOslo } from '@/lib/dato'
 import { BURSDAGSBILDE_PAA } from '@/lib/config'
+import { hentAppFlaggStrengt, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 import { BURSDAG_VINDU_SLOTS } from '@/lib/konstanter'
 import { utledSlotIndex, parseSlotOverride, UgyldigSlotIndexFeil } from '@/lib/cron-slot'
 import { logg } from '@/lib/logg'
@@ -155,6 +156,14 @@ async function handle(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+
+  // Klubbens av/på-bryter (Innstillinger → Funksjoner). Strengt oppslag: en
+  // feilet lesing kaster (synlig 500 i workflowen, neste slot prøver igjen)
+  // i stedet for å gjette — og manglende rad betyr av, aldri et Vertex-kall.
+  if ((await hentAppFlaggStrengt(admin, BURSDAGSBILDE)) !== true) {
+    return NextResponse.json({ ok: true, utfall: 'skrudd_av' })
+  }
+
   const erSisteSlot = slotIndex === BURSDAG_VINDU_SLOTS - 1
 
   let hovedResultat: PassResultat | null = null

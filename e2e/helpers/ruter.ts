@@ -25,10 +25,10 @@ export type Rute = {
   // elementer er mistenkelig, men vi skal ikke gjette et høyere tall enn
   // kalibreringen faktisk har bekreftet. Satt eksplisitt til
   // max(1, floor(målt / 2)) på ruter der en kjøring har vist ≥ 4 kandidater.
-  // Satt eksplisitt til 0 på rene lese-sider UTEN en eneste interaktiv
-  // kandidat i <main> — se kommentaren på /klubbinfo/statistikk og
-  // /innstillinger/bruk under. Et gulv på 1 der ville aldri kunne bli grønt,
-  // uansett hvor lenge man venter.
+  // Settes eksplisitt til 0 kun på rene lese-sider UTEN en eneste interaktiv
+  // kandidat i <main> — ingen i dag (/klubbinfo/statistikk og
+  // /innstillinger/bruk har fått tilbake-pil). Et gulv på 1 der ville aldri
+  // kunne bli grønt, uansett hvor lenge man venter.
   minTreffmaal?: number
   // CSS-selektor å vente på (page.waitForSelector) FØR treffmaal-sjekken
   // kjøres — kun for ruter der <main> sin generiske innholds-sjekk
@@ -70,7 +70,7 @@ export const RUTER: Rute[] = [
   // KANDIDAT_SELEKTOR). Et ekte gulv på 1 ville aldri kunne bli grønt her.
   { sti: '/innspill', overskrift: 'Innspill' },
   { sti: '/innstillinger' },
-  { sti: '/innstillinger/bruk', overskrift: 'Aktivitet', minTreffmaal: 0 },
+  { sti: '/innstillinger/bruk', overskrift: 'Aktivitet' },
   { sti: '/innstillinger/vitals', overskrift: 'Ytelsesmålinger' },
   // /innstillinger/pass-godkjenninger står bevisst ikke her: den er
   // generalsekretær-only (#582), og testbrukeren er vanlig admin — ruta

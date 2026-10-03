@@ -9,9 +9,15 @@ import { byggEndringslogg } from '@/lib/endringslogg'
 import { POSISJON_DELING_TIMER } from '@/lib/konstanter'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
+import { createServerClient } from '@/lib/supabase/server'
+import { hentAppFlagg, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 
-export default function OmAppen() {
+export default async function OmAppen() {
   const endringsRader = byggEndringslogg(ENDRINGER, versjon.versjon)
+  // Teksten skal si det som faktisk skjer: credentials OG klubbens bryter.
+  // Oppslaget hoppes over når credentials mangler (da er svaret uansett nei).
+  const bursdagsbildePaa =
+    BURSDAGSBILDE_PAA && (await hentAppFlagg(await createServerClient(), BURSDAGSBILDE, false))
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -162,11 +168,11 @@ export default function OmAppen() {
         )}
         {/* Egen KI-flate, egen leverandør (Google), egen jurisdiksjon fra
          * AI-funksjoner-avsnittet over — betinget av sitt EGET flagg
-         * (BURSDAGSBILDE_PAA), aldri slått sammen med AI_PAA. Bevisst
+         * (BURSDAGSBILDE_PAA + bryteren), aldri slått sammen med AI_PAA. Bevisst
          * taus om AT bursdagsgratulasjonen i klubbchatten er automatisert —
          * det er en egen, ubeslektet mekanisme (se CLAUDE.md § Policy:
          * AI-funksjoner). */}
-        {BURSDAGSBILDE_PAA && (
+        {bursdagsbildePaa && (
           <Avsnitt overskrift="Bursdagsbilde">
             Dagen før bursdagen din sendes profilbildet ditt, sammen med
             navnet ditt, alderen du fyller og eventuelle stikkord du har lagt

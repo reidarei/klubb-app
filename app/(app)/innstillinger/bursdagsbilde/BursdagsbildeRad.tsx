@@ -60,6 +60,10 @@ export default function BursdagsbildeRad({
           setFeil('Funksjonen er AV på denne instansen — mangler Vertex-credentials. Se statuslinjen øverst.')
           return
         }
+        if (resultat.utfall === 'skrudd_av') {
+          setFeil('Bursdagsbilde er skrudd av under Innstillinger → Funksjoner.')
+          return
+        }
         if (resultat.utfall === 'feilet' || resultat.utfall === 'avvist') {
           setFeil(`Genereringen endte i status «${resultat.utfall}» (${resultat.klasse})`)
         }

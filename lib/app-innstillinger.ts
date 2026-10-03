@@ -12,6 +12,11 @@ export const REISEMODUS = 'reisemodus'
 // Kill-switch for møtemodus (#780) — samme mønster som REISEMODUS, fallback
 // false, se lib/moetemodus.ts.
 export const MOETEMODUS = 'moetemodus'
+// Av/på for KI-generering av bursdagsbilde (#641). Kommer I TILLEGG til
+// BURSDAGSBILDE_PAA (lib/config.ts): credentials avgjør om instansen KAN
+// generere, flagget om klubben VIL. Fallback false — et KI-kall mot en
+// ekstern leverandør skal aldri skje fordi flagget ikke lot seg lese.
+export const BURSDAGSBILDE = 'bursdagsbilde'
 
 // Registret over kjente funksjonsflagg med metadata. Nye flagg legges til her.
 // beskrivelse tas med i upsert (se oppdaterAppInnstilling) for INSERT-grenens
@@ -32,6 +37,7 @@ export const KJENTE_FLAGG = {
   [CHAT_FANE]: { beskrivelse: 'Vis Chat-fanen for alle medlemmer' },
   [REISEMODUS]: { beskrivelse: 'Vis reisemodus (fullskjerm kart) mens en tur med sluttid pågår' },
   [MOETEMODUS]: { beskrivelse: 'Vis møtemodus (fullskjerm kart) fra møtestart til kl. 06 dagen etter' },
+  [BURSDAGSBILDE]: { beskrivelse: 'Lag KI-generert bursdagsbilde til bursdagskortet' },
 } as const
 
 export type Flaggnoekkel = keyof typeof KJENTE_FLAGG

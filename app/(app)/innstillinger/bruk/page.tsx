@@ -6,6 +6,7 @@ import { osloUkestart } from '@/lib/dato'
 import { AKTIVITET_GRAF_UKER, AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
 import SectionLabel from '@/components/ui/SectionLabel'
 import BarGraf from './BarGraf'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 type DagRad = { dag: string; unike: number; treff: number }
 type UkeRad = { uke_start: string; unike: number }
@@ -62,6 +63,9 @@ export default async function AktivitetAdmin() {
   return (
     <div style={{ padding: '20px 20px 120px' }}>
       <header style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)',

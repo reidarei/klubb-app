@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { godkjennerPassTilgang } from '@/lib/roller'
 import GodkjenningRad from './GodkjenningRad'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 type ForespørselRad = {
   id: string
@@ -42,6 +43,9 @@ export default async function PassGodkjenningerSide() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+        </div>
         <h1
           style={{
             fontFamily: 'var(--font-display)',

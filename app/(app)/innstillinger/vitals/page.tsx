@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { kanAdministrere } from '@/lib/roller'
 import SectionLabel from '@/components/ui/SectionLabel'
 import { PilleLenke } from '@/components/ui/TreffPille'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 type VitalsRad = {
   rute: string
@@ -90,6 +91,9 @@ export default async function VitalsAdmin({ searchParams }: Props) {
   return (
     <div style={{ padding: '20px 20px 120px' }}>
       <header style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+        </div>
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)',
           letterSpacing: '1.6px', textTransform: 'uppercase', marginBottom: 6, fontWeight: 600,

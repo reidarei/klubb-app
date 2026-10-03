@@ -12,14 +12,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { genererBursdagsbilde, type BursdagsbildeUtfall } from '@/lib/bursdagsbilde-generering'
 import { alderIAar } from '@/lib/bursdag'
 import { BURSDAGSBILDE_PAA } from '@/lib/config'
+import { hentAppFlaggStrengt, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 import { revalidatePath } from 'next/cache'
 
-// Admin-flatens utfall = genereringens utfall + 'av'. Egen variant fremfor
+// Admin-flatens utfall = genereringens utfall + 'av' (mangler credentials)
+// og 'skrudd_av' (klubbens bryter under Funksjoner står av). Egen variant fremfor
 // et kast: Next maskerer feilmeldinger fra server actions i prod-bygg, så
 // en throw ville gitt admin en digest-hash i stedet for grunnen. Varianten
 // bor her og ikke i BursdagsbildeUtfall fordi genererBursdagsbilde() aldri
-// kan returnere den — cron-ruta har sin egen guard mot samme flagg.
-export type AdminGenereringUtfall = BursdagsbildeUtfall | { utfall: 'av' }
+// kan returnere dem — cron-ruta har sine egne guards mot de samme flaggene.
+export type AdminGenereringUtfall = BursdagsbildeUtfall | { utfall: 'av' } | { utfall: 'skrudd_av' }
 
 export async function genererBursdagsbildeNaa(
   profilId: string,
@@ -35,6 +37,9 @@ export async function genererBursdagsbildeNaa(
   if (!BURSDAGSBILDE_PAA) return { utfall: 'av' }
 
   const admin = createAdminClient()
+
+  // Samme bryter som cron-ruta: står den av, genereres heller ikke manuelt.
+  if ((await hentAppFlaggStrengt(admin, BURSDAGSBILDE)) !== true) return { utfall: 'skrudd_av' }
 
   const { data: profil, error: profilFeil } = await admin
     .from('profiles')

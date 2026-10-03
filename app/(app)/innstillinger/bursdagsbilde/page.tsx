@@ -12,7 +12,9 @@ import { iDagOslo } from '@/lib/dato'
 // mot et dårlig bilde, brutt for nettopp den mannen.
 import { nesteFeiringsdato } from '@/lib/bursdagsbilde'
 import { BURSDAGSBILDE_PAA, GOOGLE_CLOUD_LOCATION, GOOGLE_VERTEX_MODELL } from '@/lib/config'
+import { hentAppFlagg, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 import BursdagsbildeRad from './BursdagsbildeRad'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 // Server actions kalt fra denne ruta (genererBursdagsbildeNaa) arver
 // rute-segmentets maxDuration — samme 60 s som cron-ruta, siden ett ekte
@@ -43,6 +45,8 @@ export default async function BursdagsbildeSide() {
   if (!kanAdministrere(profil?.rolle)) redirect('/innstillinger')
 
   const iDag = iDagOslo()
+  // Kun visning i statuslinja — selve sperren sitter i action og cron.
+  const bryterPaa = await hentAppFlagg(supabase, BURSDAGSBILDE, false)
 
   const { data: medlemmer, error: medlemmerFeil } = await supabase
     .from('profiles')
@@ -74,6 +78,9 @@ export default async function BursdagsbildeSide() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -114,7 +121,7 @@ export default async function BursdagsbildeSide() {
           letterSpacing: '0.4px',
         }}
       >
-        Funksjon: {BURSDAGSBILDE_PAA ? 'PÅ' : 'AV'} · location: {GOOGLE_CLOUD_LOCATION || '—'} · modell:{' '}
+        Funksjon: {BURSDAGSBILDE_PAA ? 'PÅ' : 'AV'} · bryter: {bryterPaa ? 'PÅ' : 'AV'} · location: {GOOGLE_CLOUD_LOCATION || '—'} · modell:{' '}
         {GOOGLE_VERTEX_MODELL}
       </div>
 

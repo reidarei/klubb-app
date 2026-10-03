@@ -15,7 +15,7 @@ import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
 import FunksjonToggle from '@/components/innstillinger/FunksjonToggle'
 import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, rollerMed, godkjennerPassTilgang } from '@/lib/roller'
-import { hentAppFlagg, FOND_FANE, CHAT_FANE, REISEMODUS, MOETEMODUS } from '@/lib/app-innstillinger'
+import { hentAppFlagg, FOND_FANE, CHAT_FANE, REISEMODUS, MOETEMODUS, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { SYMBOLER_VARSLER } from '@/lib/markering-symboler'
 import { osloUkestart } from '@/lib/dato'
@@ -52,6 +52,7 @@ export default async function Innstillinger() {
     chatFaneAktiv,
     reisemodusAktiv,
     moetemodusAktiv,
+    bursdagsbildeAktiv,
     { data: aktivitetDagerRaw, error: aktivitetDagerFeil },
     { data: aktivitetUkerRaw, error: aktivitetUkerFeil },
   ] = await Promise.all([
@@ -108,6 +109,8 @@ export default async function Innstillinger() {
     hentAppFlagg(supabase, REISEMODUS, false),
     // Samme fail-closed begrunnelse som REISEMODUS over (#780).
     hentAppFlagg(supabase, MOETEMODUS, false),
+    // Fail-closed: et KI-kall skal aldri skje fordi flagget ikke lot seg lese.
+    hentAppFlagg(supabase, BURSDAGSBILDE, false),
     admin
       .from('aktivitet_dag')
       .select('unike')
@@ -363,6 +366,7 @@ export default async function Innstillinger() {
           chatFaneAktiv ? 'Chat: synlig for alle' : 'Chat: kun admin',
           reisemodusAktiv ? 'Reisemodus: på' : 'Reisemodus: av',
           moetemodusAktiv ? 'Møtemodus: på' : 'Møtemodus: av',
+          ...(BURSDAGSBILDE_PAA ? [bursdagsbildeAktiv ? 'Bursdagsbilde: på' : 'Bursdagsbilde: av'] : []),
         ].join(' · ')}
         beskrivelse="Skru funksjoner av og på for alle medlemmer. Fond- og Chat-fanen er alltid synlige for admin; reisemodus og møtemodus er av for alle når bryterne er av."
       >
@@ -390,8 +394,18 @@ export default async function Innstillinger() {
           noekkel={MOETEMODUS}
           aktiv={moetemodusAktiv}
           beskrivelse="Møtemodus (fullskjerm kart) fra møtestart til kl. 06 dagen etter"
-          last
+          last={!BURSDAGSBILDE_PAA}
         />
+        {/* Bare når instansen har Vertex-credentials — uten dem finnes det
+            ingenting å skru på, og en bryter som ikke gjør noe er en løgn. */}
+        {BURSDAGSBILDE_PAA && (
+          <FunksjonToggle
+            noekkel={BURSDAGSBILDE}
+            aktiv={bursdagsbildeAktiv}
+            beskrivelse="KI-generert bursdagsbilde på bursdagskortet"
+            last
+          />
+        )}
       </InnstillingsKort>
 
       {/* Automatisering — per-admin toggles */}
@@ -495,7 +509,13 @@ export default async function Innstillinger() {
           når funksjonen er av. */}
       <InnstillingsKort
         tittel="Bursdagsbilde"
-        oppsummering={BURSDAGSBILDE_PAA ? 'KI-generering på' : 'Av — mangler Vertex-credentials'}
+        oppsummering={
+          !BURSDAGSBILDE_PAA
+            ? 'Av — mangler Vertex-credentials'
+            : bursdagsbildeAktiv
+              ? 'KI-generering på'
+              : 'Av — skrudd av under Funksjoner'
+        }
       >
         <p
           style={{
