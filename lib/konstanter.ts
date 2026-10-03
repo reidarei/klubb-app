@@ -583,6 +583,15 @@ export const NOMINATIM_MIN_AVSTAND_MS = 1000
 // framfor et likelydende sted på andre siden av kloden.
 export const STED_SOK_VIEWBOX_GRADER = 0.5
 
+// «Nærmeste pub» (#727): søkeradius rundt utgangspunktet, i meter. 5 km dekker
+// byen med god margin; finnes ingen pub innenfor, er svaret «ingen i nærheten»
+// heller enn en pub man ikke gidder gå til.
+export const PUB_SOK_RADIUS_M = 5000
+
+// Overpass-spørringens egen tidsgrense (sekunder) — serveren gir opp etter
+// dette. Klientens GEOKODING_TIMEOUT_MS (5 s) er den som faktisk teller.
+export const OVERPASS_TIMEOUT_SEK = 5
+
 // Lenke-forhåndsvisning i chatten. Serveren henter siden et medlem lenket
 // til og leser tittel/bilde ut av <head>. Tidsgrensen holder et tregt
 // nettsted fra å henge kortet; bytegrensen holder oss unna å laste ned

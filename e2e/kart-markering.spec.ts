@@ -246,6 +246,22 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.locator('.kart-markering-etikett', { hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
   })
 
+  test('stedsøket med «Nærmeste pub» er treffbart', async ({ page }) => {
+    // Dybde-kall (#727, Policy: Trykkflater): søkeflaten ligger bak
+    // «Søk etter et sted» og er usynlig for bredde-sveipen. Knappene MÅLES
+    // bare — «Nærmeste pub» trykkes ikke, så e2e kaller aldri Overpass.
+    await page.goto('/kart')
+    await expect(page.getByTestId('posisjonskart')).toBeVisible()
+    await page.getByTestId('sted-sok-start').click()
+    await expect(page.getByTestId('sted-sok-felt')).toBeVisible()
+    await expect(page.getByTestId('sted-sok-pub')).toBeVisible()
+
+    await forventTreffbar(page, {
+      kontekst: '/kart — stedsøk åpent',
+      omraade: '[data-testid="kart-steg-flate"]',
+    })
+  })
+
   test('flyten er peke først, skrive etterpå', async ({ page }) => {
     // Rekkefølgen ER funksjonen (#702). Ett steg åpnet tekstfeltet med én
     // gang; tastaturet sprang opp og dekket kartet, og man skrev inn teksten

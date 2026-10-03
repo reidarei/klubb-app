@@ -127,7 +127,11 @@ export default function OmAppen() {
         <Avsnitt overskrift="Stedssøk på kartet">
           Søker du etter et sted på kartet, eller skriver en adresse i
           timeplanen, sendes søketeksten fra appens server til OpenStreetMap
-          (Nominatim) for å finne stedet. Hvem du er følger ikke med.
+          (Nominatim) for å finne stedet. Hvem du er følger ikke med. Trykker du
+          «Nærmeste pub», sendes koordinatene til kartets midtpunkt til den
+          offentlige Overpass-tjenesten (overpass-api.de, drevet av den tyske
+          foreningen FOSSGIS), som søker i OpenStreetMap-data. Hvem du er
+          følger ikke med, og koordinatene lagres ikke hos oss.
         </Avsnitt>
         {/* Lenkekort i chatten (#782): serveren henter siden, men bildet i
          * kortet lastes rett fra nettstedet av telefonen — derfor kan

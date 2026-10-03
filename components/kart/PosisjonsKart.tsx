@@ -1912,6 +1912,7 @@ export default function PosisjonsKart({
           et tomt felt her ville spist kartplass uten grunn. */}
       {(steg !== 'av' || feil || plinget) && (
         <div
+          data-testid="kart-steg-flate"
           style={{
             position: 'absolute',
             left: 10,

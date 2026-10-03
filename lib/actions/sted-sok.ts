@@ -1,7 +1,7 @@
 'use server'
 
 import { ensureInnlogget } from '@/lib/auth'
-import { sokSteder, type Koordinat, type StedSokUtfall } from '@/lib/geokoding'
+import { finnNaermestePub, sokSteder, type Koordinat, type StedSokUtfall } from '@/lib/geokoding'
 import { logg } from '@/lib/logg'
 import {
   STED_SOK_MIN_LENGDE,
@@ -101,4 +101,30 @@ export async function sokSted(q: string, naer: Koordinat | null): Promise<SokSte
   const nytt = hentFraNominatim(sok, naer, noekkel).finally(() => iFlyt.delete(noekkel))
   iFlyt.set(noekkel, nytt)
   return nytt
+}
+
+/**
+ * «Nærmeste pub» fra kartsøket (#727). Kalles kun ved eksplisitt trykk. Ingen
+ * cache og ingen struping (Overpass er ikke Nominatim, og ett kall per trykk
+ * er langt under grensene). Koordinatene logges ALDRI.
+ */
+export async function naermestePub(fra: Koordinat | null): Promise<SokStedResultat> {
+  await ensureInnlogget()
+  // Server action-argumenter er klientstyrt: utenfor gyldig område ville vi
+  // bygget en Overpass-spørring Overpass selv avviser. Samme svar som manglende punkt.
+  if (
+    !fra ||
+    !Number.isFinite(fra.lat) ||
+    !Number.isFinite(fra.lng) ||
+    fra.lat < -90 ||
+    fra.lat > 90 ||
+    fra.lng < -180 ||
+    fra.lng > 180
+  ) {
+    return { utfall: 'ugyldig', melding: 'Fant ikke hvor kartet er akkurat nå.' }
+  }
+  const svar = await finnNaermestePub(fra)
+  if (svar.utfall === 'tidsavbrudd') logg.warn('kart.pub.tidsavbrudd')
+  if (svar.utfall === 'feil') await logg.feil('kart.pub.feilet', new Error('Overpass-søk feilet'))
+  return svar
 }

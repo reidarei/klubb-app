@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { sokSted } from '@/lib/actions/sted-sok'
+import { naermestePub, sokSted } from '@/lib/actions/sted-sok'
 import type { StedTreff } from '@/lib/geokoding'
 import { STED_SOK_MAKS_LENGDE } from '@/lib/konstanter'
 import { meldKlientfeil } from '@/lib/klient-logg'
@@ -17,7 +17,7 @@ type Koordinat = { lat: number; lng: number }
 // KUN søk på eksplisitt Enter/knapp — ALDRI i en onChange-handler. Nominatims
 // bruksvilkår forbyr autocomplete-søk (typisk 1 req/s for hele appen), og et
 // søk-mens-du-skriver ville brutt det på første tastetrykk.
-type Status = 'klar' | 'soker' | 'treff' | 'ingen' | 'tidsavbrudd' | 'feil' | 'ugyldig'
+type Status = 'klar' | 'soker' | 'treff' | 'ingen' | 'tidsavbrudd' | 'feil' | 'ugyldig' | 'ingen_pub'
 
 type Props = {
   /** Kartets senter NÅ — lest ved innsending, ikke bufret, så søket vekter mot der man faktisk ser. */
@@ -122,6 +122,38 @@ export default function StedSok({
     }
     setKandidater([])
     setStatus(svar.utfall)
+  }
+
+  // «Nærmeste pub» (#727): samme flyt som et adressetreff — pubben blir det
+  // valgte treffet (kartet flyr dit, treffnål). Utgangspunkt er kartets senter
+  // (hentNaer), ikke en ny GPS-forespørsel: deler man posisjonen sentreres
+  // kartet på en selv, og vi unngår en uventet tillatelsesdialog.
+  async function finnPub() {
+    if (soker) return
+    setStatus('soker')
+    setUgyldigMelding(null)
+    let svar: Awaited<ReturnType<typeof naermestePub>>
+    try {
+      svar = await naermestePub(hentNaer())
+    } catch (err: unknown) {
+      meldKlientfeil('klient.kart.pub.feilet', err)
+      setKandidater([])
+      setStatus('feil')
+      return
+    }
+    if (svar.utfall === 'treff') {
+      setKandidater(svar.treff)
+      setStatus('treff')
+      velgKandidat(svar.treff[0])
+      return
+    }
+    if (svar.utfall === 'ugyldig') {
+      setStatus('ugyldig')
+      setUgyldigMelding(svar.melding)
+      return
+    }
+    setKandidater([])
+    setStatus(svar.utfall === 'ingen' ? 'ingen_pub' : svar.utfall)
   }
 
   function velgKandidat(treff: StedTreff) {
@@ -310,6 +342,12 @@ export default function StedSok({
         </div>
       )}
 
+      {status === 'ingen_pub' && (
+        <div role="status" data-testid="sted-sok-ingen-pub" style={HJELPETEKST}>
+          Fant ingen pub i nærheten.
+        </div>
+      )}
+
       {(status === 'tidsavbrudd' || status === 'feil') && (
         <div role="alert" data-testid="sted-sok-feil" style={{ ...HJELPETEKST, color: 'var(--danger)' }}>
           Søket svarer ikke akkurat nå. Prøv igjen.
@@ -325,6 +363,15 @@ export default function StedSok({
       {/* Avbryt skal alltid finnes, også mens søket pågår — ellers er man
           fanget i søke-steget til et treff er valgt (#757-review). */}
       <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={finnPub}
+          disabled={soker}
+          data-testid="sted-sok-pub"
+          style={{ ...PILLE, opacity: soker ? 0.6 : 1 }}
+        >
+          Nærmeste pub
+        </button>
         <button type="button" onClick={onAvbryt} data-testid="sted-sok-avbryt" style={PILLE}>
           Avbryt
         </button>

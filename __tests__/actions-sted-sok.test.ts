@@ -12,12 +12,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockEnsureInnlogget, mockSokSteder, mockLoggWarn, mockLoggFeil } = vi.hoisted(() => {
+const { mockEnsureInnlogget, mockSokSteder, mockFinnNaermestePub, mockLoggWarn, mockLoggFeil } = vi.hoisted(() => {
   const mockEnsureInnlogget = vi.fn().mockResolvedValue({ supabase: {}, user: { id: 'bruker-1' } })
   const mockSokSteder = vi.fn()
+  const mockFinnNaermestePub = vi.fn()
   const mockLoggWarn = vi.fn()
   const mockLoggFeil = vi.fn().mockResolvedValue(undefined)
-  return { mockEnsureInnlogget, mockSokSteder, mockLoggWarn, mockLoggFeil }
+  return { mockEnsureInnlogget, mockSokSteder, mockFinnNaermestePub, mockLoggWarn, mockLoggFeil }
 })
 
 vi.mock('@/lib/auth', () => ({
@@ -26,6 +27,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/geokoding', () => ({
   sokSteder: (...args: unknown[]) => mockSokSteder(...args),
+  finnNaermestePub: (...args: unknown[]) => mockFinnNaermestePub(...args),
 }))
 
 vi.mock('@/lib/logg', () => ({
@@ -43,7 +45,7 @@ vi.mock('@/lib/konstanter', async importOriginal => ({
   NOMINATIM_MIN_AVSTAND_MS: 0,
 }))
 
-import { sokSted } from '@/lib/actions/sted-sok'
+import { naermestePub, sokSted } from '@/lib/actions/sted-sok'
 
 const ETT_TREFF = {
   utfall: 'treff' as const,
@@ -171,5 +173,29 @@ describe('sokSted() — logging', () => {
     slipp()
     expect((await svar).utfall).toBe('feil')
     expect(ferdig).toBe(true)
+  })
+})
+
+describe('naermestePub() — koordinatvalidering (#727)', () => {
+  it('avviser koordinater utenfor gyldig område uten å kalle Overpass', async () => {
+    mockFinnNaermestePub.mockClear()
+    for (const fra of [
+      { lat: 91, lng: 10 },
+      { lat: -90.5, lng: 10 },
+      { lat: 59.9, lng: 180.1 },
+      { lat: 59.9, lng: -181 },
+      { lat: Number.NaN, lng: 10 },
+    ]) {
+      expect((await naermestePub(fra)).utfall).toBe('ugyldig')
+    }
+    expect(await naermestePub(null)).toMatchObject({ utfall: 'ugyldig' })
+    expect(mockFinnNaermestePub).not.toHaveBeenCalled()
+  })
+
+  it('slipper gyldige yttergrenser gjennom', async () => {
+    mockFinnNaermestePub.mockClear()
+    mockFinnNaermestePub.mockResolvedValue({ utfall: 'ingen' })
+    expect((await naermestePub({ lat: 90, lng: -180 })).utfall).toBe('ingen')
+    expect(mockFinnNaermestePub).toHaveBeenCalledOnce()
   })
 })

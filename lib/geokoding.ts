@@ -1,5 +1,11 @@
 import { BASE_URL, VAPID_CONTACT_EMAIL } from '@/lib/config'
-import { GEOKODING_TIMEOUT_MS, STED_SOK_MAKS_TREFF, STED_SOK_VIEWBOX_GRADER } from '@/lib/konstanter'
+import {
+  GEOKODING_TIMEOUT_MS,
+  OVERPASS_TIMEOUT_SEK,
+  PUB_SOK_RADIUS_M,
+  STED_SOK_MAKS_TREFF,
+  STED_SOK_VIEWBOX_GRADER,
+} from '@/lib/konstanter'
 
 export type Koordinat = { lat: number; lng: number }
 
@@ -158,5 +164,103 @@ export async function sokSteder(q: string, naer?: Koordinat): Promise<StedSokUtf
       return { utfall: 'tidsavbrudd' }
     }
     return { utfall: 'feil' }
+  }
+}
+
+// ── Nærmeste pub (#727) ────────────────────────────────────────────────────
+// Overpass (OSM) framfor Nominatim: Nominatims søk rangerer på «importance»,
+// ikke avstand, så «nærmeste» ville krevd gjetting. Overpass `around:` gir alle
+// puber innen radius, og vi finner den nærmeste selv med haversine. Nøkkelfritt,
+// samme User-Agent-regel som Nominatim.
+
+type OverpassElement = {
+  type?: string
+  id?: number
+  lat?: number
+  lon?: number
+  center?: { lat?: number; lon?: number }
+  tags?: { name?: string; 'addr:street'?: string; 'addr:housenumber'?: string; 'addr:city'?: string }
+}
+
+// Storcirkel-avstand i meter.
+function avstandMeter(a: Koordinat, b: Koordinat): number {
+  const R = 6371000
+  const rad = (g: number) => (g * Math.PI) / 180
+  const dLat = rad(b.lat - a.lat)
+  const dLng = rad(b.lng - a.lng)
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+// Ren logikk (testet): velger nærmeste element med gyldige koordinater.
+// Noder har lat/lon direkte, bygninger (ways) har `center`.
+export function naermesteFraOverpass(elementer: OverpassElement[], fra: Koordinat): StedTreff | null {
+  let best: { treff: StedTreff; avstand: number } | null = null
+  for (const el of elementer) {
+    const lat = el.lat ?? el.center?.lat
+    const lng = el.lon ?? el.center?.lon
+    if (typeof lat !== 'number' || typeof lng !== 'number') continue
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
+    const avstand = avstandMeter(fra, { lat, lng })
+    if (best && avstand >= best.avstand) continue
+    const t = el.tags ?? {}
+    const adresse = [
+      [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' '),
+      t['addr:city'],
+    ]
+      .filter(Boolean)
+      .join(', ')
+    const avstandTekst =
+      avstand < 1000
+        ? `${Math.round(avstand / 10) * 10} m unna`
+        : `${(avstand / 1000).toFixed(1).replace('.', ',')} km unna`
+    best = {
+      avstand,
+      treff: {
+        id: `${el.type ?? 'osm'}/${el.id ?? `${lat},${lng}`}`,
+        navn: t.name || 'Pub (uten navn)',
+        beskrivelse: adresse ? `${adresse} · ${avstandTekst}` : avstandTekst,
+        lat,
+        lng,
+      },
+    }
+  }
+  return best?.treff ?? null
+}
+
+// Server-side only. Diskriminert utfall som sokSteder() — brukeren venter på
+// svar og må få vite om det feilet. Koordinatene logges aldri.
+export async function finnNaermestePub(fra: Koordinat): Promise<StedSokUtfall> {
+  // `out center;` og ikke `out center tags;`: «tags»-verbositeten utelater
+  // geometrien, så noder kom uten lat/lon og ble stille hoppet over (#727-review).
+  // Default-verbositet gir lat/lon for noder og center for ways/relations.
+  const query =
+    `[out:json][timeout:${OVERPASS_TIMEOUT_SEK}];` +
+    `nwr["amenity"="pub"](around:${PUB_SOK_RADIUS_M},${fra.lat},${fra.lng});out center;`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), GEOKODING_TIMEOUT_MS)
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'User-Agent': nominatimUserAgent(),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ data: query }).toString(),
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`Overpass svarte ${res.status}`)
+    const data = (await res.json()) as { elements?: unknown }
+    if (!Array.isArray(data.elements)) throw new Error('Uventet svarformat fra Overpass')
+    const treff = naermesteFraOverpass(data.elements as OverpassElement[], fra)
+    return treff ? { utfall: 'treff', treff: [treff] } : { utfall: 'ingen' }
+  } catch (err) {
+    if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
+      return { utfall: 'tidsavbrudd' }
+    }
+    return { utfall: 'feil' }
+  } finally {
+    clearTimeout(timer)
   }
 }
