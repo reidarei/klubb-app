@@ -16,7 +16,7 @@ const PATHS: Record<IkonNavn, React.ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
   mapPin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z" /><circle cx="12" cy="10" r="3" /></>,
   // Brettet kart — posisjonskartet under Klubb (#693). Eget ikon og ikke mapPin:
-  // den er allerede tatt av «Turene», og to like ikoner i samme liste gjør
+  // den er allerede tatt av «Turer», og to like ikoner i samme liste gjør
   // radene umulige å skille på et blikk.
   map: <><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z" /><path d="M8 2v16M16 6v16" /></>,
   // Agenda-familien (plane/beer/flute/medal) er tegnet som LUKKEDE silhuetter

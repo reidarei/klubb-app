@@ -82,7 +82,7 @@ export default async function Klubbinfo() {
     },
     {
       icon: 'mapPin',
-      title: 'Turene',
+      title: 'Turer',
       meta: antallTurer ? String(antallTurer) : undefined,
       href: '/stedene',
     },

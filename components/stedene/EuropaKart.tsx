@@ -221,7 +221,7 @@ export default function EuropaKart({ steder }: Props) {
                   {/* Lenke til turens bildealbum (kun turer som faktisk har ett).
                       Ordet «Bilder» er borte: minibunken viser allerede at det
                       er bilder, og etiketten forklarte det bare en gang til.
-                      Antallet blir igjen — det er eneste stedet på Turene du
+                      Antallet blir igjen — det er eneste stedet på Turer du
                       ser hvor mye som ligger bak. */}
                   {t.album && (
                     <Link
