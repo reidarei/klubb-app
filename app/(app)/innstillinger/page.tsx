@@ -406,6 +406,31 @@ export default async function Innstillinger() {
             last
           />
         )}
+        {/* Admin-siden for bursdagsbildene (#641) — se, generer på nytt, fjern.
+            Vises uansett BURSDAGSBILDE_PAA, så statuslinja der (location/modell)
+            er tilgjengelig også når funksjonen er av. */}
+        <div style={{ marginTop: 12 }}>
+          <PilleLenke
+            href="/innstillinger/bursdagsbilde"
+            pilleStil={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              background: 'var(--accent-soft)',
+              border: '0.5px solid var(--accent)',
+              borderRadius: 999,
+              color: 'var(--accent)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              fontWeight: 500,
+              textDecoration: 'none',
+            }}
+            synligHoyde={34}
+          >
+            Bursdagsbilder →
+          </PilleLenke>
+        </div>
       </InnstillingsKort>
 
       {/* Automatisering — per-admin toggles */}
@@ -502,54 +527,6 @@ export default async function Innstillinger() {
         </PilleLenke>
       </InnstillingsKort>
       )}
-
-      {/* Bursdagsbilde (#641) — admin-only (ikke generalsekretær-only, i
-          motsetning til pass-godkjenninger). Vises uansett BURSDAGSBILDE_PAA
-          slik at admin kan se location/modell-status og oppsummeringen selv
-          når funksjonen er av. */}
-      <InnstillingsKort
-        tittel="Bursdagsbilde"
-        oppsummering={
-          !BURSDAGSBILDE_PAA
-            ? 'Av — mangler Vertex-credentials'
-            : bursdagsbildeAktiv
-              ? 'KI-generering på'
-              : 'Av — skrudd av under Funksjoner'
-        }
-      >
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-            margin: '0 0 12px',
-          }}
-        >
-          Se og styr det KI-genererte bursdagsbildet som vises på
-          bursdagskortet — generer på nytt eller fjern.
-        </p>
-        <PilleLenke
-          href="/innstillinger/bursdagsbilde"
-          pilleStil={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 14px',
-            background: 'var(--accent-soft)',
-            border: '0.5px solid var(--accent)',
-            borderRadius: 999,
-            color: 'var(--accent)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12,
-            fontWeight: 500,
-            textDecoration: 'none',
-          }}
-          synligHoyde={34}
-        >
-          Åpne bursdagsbilde-side →
-        </PilleLenke>
-      </InnstillingsKort>
 
       {/* Ønsker fra brukerne */}
       {(() => {
