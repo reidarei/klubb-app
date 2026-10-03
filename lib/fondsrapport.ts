@@ -396,23 +396,28 @@ export function endringPst(naa: number, forrige: number): number | null {
 export type KontantEndring = {
   /** 'uendret' er egen tilstand: 0 kr skal ikke tegnes som grønn ▲ «+0 %». */
   retning: 'opp' | 'ned' | 'uendret'
-  /** Pilletekst uten pil, f.eks. «1 234 kr · +5 % siden Q2» eller «±0 kr siden Q2». */
-  tekst: string
+  /** Første linje i pillen, uten pil: «1 234 kr» eller «±0 kr». */
+  belop: string
+  /** Andre linje: «+5 % siden Q2», eller bare «siden Q2» når prosent ikke gir mening. */
+  sammenligning: string
 }
 
 /**
- * Endringspillen på kortet. Null-sjekken går på AVRUNDET beløp, så en endring
- * som vises som «0 kr» aldri får farge eller pil. Minus i prosent er U+2212.
+ * Endringspillen på kortet — to linjer, så pillen blir smal nok til at
+ * smultringen får plass ved siden av saldoen. Null-sjekken går på AVRUNDET
+ * beløp, så en endring som vises som «0 kr» aldri får farge eller pil.
+ * Minus i prosent er U+2212.
  */
 export function kontantEndring(naa: number, forrige: number, forrigeKvartal: Kvartal): KontantEndring {
   const diff = naa - forrige
+  const siden = `siden Q${forrigeKvartal}`
   if (Math.round(diff) === 0) {
-    return { retning: 'uendret', tekst: `±0 kr siden Q${forrigeKvartal}` }
+    return { retning: 'uendret', belop: '±0 kr', sammenligning: siden }
   }
+  // Forrige saldo 0 gir udefinert prosent — da står bare «siden Qn».
   const pst = endringPst(naa, forrige)
-  const pstDel =
-    pst === null ? '' : ` · ${pst >= 0 ? '+' : '−'}${Math.round(Math.abs(pst))} % siden Q${forrigeKvartal}`
-  return { retning: diff > 0 ? 'opp' : 'ned', tekst: `${heleKr(Math.abs(diff))}${pstDel}` }
+  const sammenligning = pst === null ? siden : `${pst >= 0 ? '+' : '−'}${Math.round(Math.abs(pst))} % ${siden}`
+  return { retning: diff > 0 ? 'opp' : 'ned', belop: heleKr(Math.abs(diff)), sammenligning }
 }
 
 /**

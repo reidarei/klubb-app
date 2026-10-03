@@ -284,16 +284,16 @@ describe('visningshjelpere', () => {
   })
 
   it('kontantEndring: 0 kr er nøytral — ingen pil-retning, ingen prosent', () => {
-    expect(kontantEndring(24701, 24701, 2)).toEqual({ retning: 'uendret', tekst: '±0 kr siden Q2' })
+    expect(kontantEndring(24701, 24701, 2)).toEqual({ retning: 'uendret', belop: '±0 kr', sammenligning: 'siden Q2' })
     // Avrunder til 0 kr på kortet → også nøytral
     expect(kontantEndring(1000.3, 1000, 2).retning).toBe('uendret')
   })
 
   it('kontantEndring: opp og ned får fortegn i prosent (U+2212 for minus)', () => {
-    expect(kontantEndring(1200, 1000, 2)).toEqual({ retning: 'opp', tekst: '200 kr · +20 % siden Q2' })
-    expect(kontantEndring(900, 1000, 3)).toEqual({ retning: 'ned', tekst: '100 kr · −10 % siden Q3' })
-    // Forrige 0 → udefinert prosent, kun beløp
-    expect(kontantEndring(500, 0, 4)).toEqual({ retning: 'opp', tekst: '500 kr' })
+    expect(kontantEndring(1200, 1000, 2)).toEqual({ retning: 'opp', belop: '200 kr', sammenligning: '+20 % siden Q2' })
+    expect(kontantEndring(900, 1000, 3)).toEqual({ retning: 'ned', belop: '100 kr', sammenligning: '−10 % siden Q3' })
+    // Forrige 0 → udefinert prosent, kun beløp + «siden Qn»
+    expect(kontantEndring(500, 0, 4)).toEqual({ retning: 'opp', belop: '500 kr', sammenligning: 'siden Q4' })
   })
 
   it('fargeToken deler siste token blant eiere utover FONDSRAPPORT_EGNE_FARGER', () => {

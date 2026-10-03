@@ -91,76 +91,67 @@ export default function FondsrapportBlokk({ rapport, brukerId }: Props) {
         </div>
       </div>
 
-      {/* Hovedtall */}
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          letterSpacing: '1.4px',
-          textTransform: 'uppercase',
-          marginBottom: 4,
-        }}
-      >
-        Kontanter på konto
-      </div>
-      <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 40,
-          fontWeight: 400,
-          color: 'var(--text-primary)',
-          letterSpacing: '-1px',
-          lineHeight: 1,
-          fontVariantNumeric: 'tabular-nums',
-          marginBottom: 12,
-        }}
-      >
-        {heleKr(rapport.kontanter)}
-      </div>
+      {/* Saldo og endring til venstre, smultring til høyre. Endringen står på to
+          linjer nettopp for at sirkelen skal få plass ved siden av på mobilbredde. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Hovedtall */}
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '1.4px',
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Kontanter på konto
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 40,
+              fontWeight: 400,
+              color: 'var(--text-primary)',
+              letterSpacing: '-1px',
+              lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+              marginBottom: 12,
+            }}
+          >
+            {heleKr(rapport.kontanter)}
+          </div>
 
-      {/* Endring siden forrige kvartal */}
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '5px 10px',
-          borderRadius: 999,
-          background: pill.bakgrunn,
-          border: `0.5px solid ${pill.border}`,
-          color: pill.farge,
-          fontFamily: 'var(--font-body)',
-          fontSize: 12,
-          fontWeight: 600,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {pill.pil && <span aria-hidden="true">{pill.pil}</span>}
-        {endring.tekst}
-      </div>
+          {/* Endring siden forrige kvartal — beløp og prosent på hver sin linje */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'baseline',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 14,
+              background: pill.bakgrunn,
+              border: `0.5px solid ${pill.border}`,
+              color: pill.farge,
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: 1.35,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {pill.pil && <span aria-hidden="true">{pill.pil}</span>}
+            <span>
+              <span style={{ display: 'block' }}>{endring.belop}</span>
+              <span style={{ display: 'block', fontWeight: 500 }}>{endring.sammenligning}</span>
+            </span>
+          </div>
+        </div>
 
-      {/* Hårstrek */}
-      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '18px 0 14px' }} />
-
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          letterSpacing: '1.4px',
-          textTransform: 'uppercase',
-          marginBottom: 12,
-        }}
-      >
-        Hvem eier kontantene
-      </div>
-
-      {/* Sirkelen over lista, ikke ved siden av: side om side ble det ikke plass
-          til navnene på mobilbredde. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Smultring */}
-        <div style={{ position: 'relative', width: 112, height: 112, flexShrink: 0, alignSelf: 'center' }}>
+        <div style={{ position: 'relative', width: 112, height: 112, flexShrink: 0 }}>
           {/* Dekorativ — samme info står i eierlista under (som AndelSirkel) */}
           <svg viewBox="0 0 42 42" width="100%" height="100%" aria-hidden="true">
             <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="var(--border-subtle)" strokeWidth="5" />
@@ -205,85 +196,101 @@ export default function FondsrapportBlokk({ rapport, brukerId }: Props) {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Liste */}
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {rapport.linjer.map((l, i) => {
-            const andelPst = totalLinjer > 0 ? (l.belop / totalLinjer) * 100 : 0
-            const egen = refFor(brukerId) === l.ref
-            const e = endringVisning(l.endring)
-            return (
-              <div
-                key={l.ref}
+      {/* Hårstrek */}
+      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '18px 0 14px' }} />
+
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--text-tertiary)',
+          letterSpacing: '1.4px',
+          textTransform: 'uppercase',
+          marginBottom: 12,
+        }}
+      >
+        Hvem eier kontantene
+      </div>
+
+      {/* Liste */}
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rapport.linjer.map((l, i) => {
+          const andelPst = totalLinjer > 0 ? (l.belop / totalLinjer) * 100 : 0
+          const egen = refFor(brukerId) === l.ref
+          const e = endringVisning(l.endring)
+          return (
+            <div
+              key={l.ref}
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 8,
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+              }}
+            >
+              <span
+                aria-hidden="true"
                 style={{
-                  display: 'flex',
-                  alignItems: 'baseline',
-                  gap: 8,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: fargeToken(i),
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  color: egen ? 'var(--accent)' : 'var(--text-primary)',
+                  fontWeight: egen ? 600 : 500,
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: fargeToken(i),
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    color: egen ? 'var(--accent)' : 'var(--text-primary)',
-                    fontWeight: egen ? 600 : 500,
-                  }}
-                >
-                  {l.navn}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: e.farge,
-                    flexShrink: 0,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {e.tekst}
-                </span>
-                <span
-                  style={{
-                    fontVariantNumeric: 'tabular-nums',
-                    color: 'var(--text-secondary)',
-                    flexShrink: 0,
-                    minWidth: 58,
-                    textAlign: 'right',
-                  }}
-                >
-                  {heleKr(l.belop)}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: 'var(--text-tertiary)',
-                    flexShrink: 0,
-                    minWidth: 30,
-                    textAlign: 'right',
-                  }}
-                >
-                  {andelTekst(andelPst)}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+                {l.navn}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: e.farge,
+                  flexShrink: 0,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {e.tekst}
+              </span>
+              <span
+                style={{
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--text-secondary)',
+                  flexShrink: 0,
+                  minWidth: 58,
+                  textAlign: 'right',
+                }}
+              >
+                {heleKr(l.belop)}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: 'var(--text-tertiary)',
+                  flexShrink: 0,
+                  minWidth: 30,
+                  textAlign: 'right',
+                }}
+              >
+                {andelTekst(andelPst)}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
