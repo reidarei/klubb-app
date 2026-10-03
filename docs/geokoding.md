@@ -109,3 +109,7 @@ node --env-file=.env.local scripts/geokod-eksisterende-turer.mjs
 
 Det finner turer med `destinasjon` men uten `lat`/`lng`, geokoder dem strupt til
 1 req/sek, og oppdaterer radene.
+
+## Nærmeste pub (#727)
+
+«Nærmeste pub» i kartsøket (`StedSok`) bruker **Overpass** (OpenStreetMap, nøkkelfri), ikke Nominatim: Nominatim rangerer på «importance», ikke avstand. `finnNaermestePub()` i `lib/geokoding.ts` henter alle `amenity=pub` innen `PUB_SOK_RADIUS_M` rundt kartets sentrum og velger nærmeste med haversine (`naermesteFraOverpass()`). Server-side, samme User-Agent og tidsavbrudd som geokodingen, fail-soft. Koordinatene logges ikke.
