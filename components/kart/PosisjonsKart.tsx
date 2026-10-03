@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import type { Map as LeafletMap, LayerGroup, Marker as LeafletMarker, LatLng } from 'leaflet'
@@ -237,7 +237,7 @@ function sporPrikkHtml(navn: string): string {
 
 export default function PosisjonsKart({
   menn,
-  markeringer,
+  markeringer: markeringerFraServer,
   megId,
   fallbackSenter,
   underArrangement,
@@ -256,6 +256,17 @@ export default function PosisjonsKart({
   const kartRef = useRef<HTMLDivElement>(null)
   const kartetRef = useRef<LeafletMap | null>(null)
   const lagRef = useRef<LayerGroup | null>(null)
+
+  // Markeringer jeg selv har fjernet. Prop-en kommer fra serveren via RSC-
+  // revalidering etter slettMarkering(), men i CI (2 vCPU) ble den revaliderte
+  // siden i blant aldri committet i nettleseren, så raden sto igjen (#800).
+  // Fjerningen skal derfor ikke vente på den: svaret fra actionen er nok.
+  // Idene blir liggende — en slettet id kommer aldri tilbake fra serveren.
+  const [fjernedeMarkeringer, setFjernedeMarkeringer] = useState<ReadonlySet<string>>(new Set())
+  const markeringer = useMemo(
+    () => markeringerFraServer.filter(m => !fjernedeMarkeringer.has(m.id)),
+    [markeringerFraServer, fjernedeMarkeringer],
+  )
 
   const [jobber, setJobber] = useState(false)
   const [feil, setFeil] = useState<string | null>(null)
@@ -1524,6 +1535,7 @@ export default function PosisjonsKart({
         setFeil(svar.melding)
         return
       }
+      setFjernedeMarkeringer(f => new Set(f).add(id))
       setValgtMarkering(null)
     } catch {
       setFeil('Klarte ikke fjerne markeringen. Prøv igjen.')
