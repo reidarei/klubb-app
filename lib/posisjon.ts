@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { unstable_rethrow } from 'next/navigation'
 import { naa } from '@/lib/dato'
 import { DbFeil, logg } from '@/lib/logg'
+import { MOETEMODUS_FOER_START_TIMER } from '@/lib/konstanter'
 
 export type PaagaaendeArrangement = {
   id: string
@@ -61,17 +62,22 @@ export type NyligStartetArrangementRad = {
 export async function hentNyligStartedeArrangementerStrengt(
   supabase: SupabaseClient,
 ): Promise<NyligStartetArrangementRad[]> {
-  const naaIso = naa()
   // Bred nedre grense, kun for å holde spørringen bounded. Den ekte
   // avgrensningen (hva som faktisk «pågår») gjøres av kalleren, per predikat.
   const eldsteAktuelle = new Date(
     Date.now() - PAAGAAENDE_MAKS_DAGER * 24 * 60 * 60 * 1000,
   ).toISOString()
+  // Øvre grense er nå + møtemodus-forløpet, ikke nå: møtemodus slår seg på
+  // FØR start. Radene kan derfor inneholde arrangementer som ikke har startet —
+  // hvert predikat som betyr «har startet» må sjekke start_tidspunkt <= nå selv.
+  const senesteStart = new Date(
+    Date.now() + MOETEMODUS_FOER_START_TIMER * 60 * 60 * 1000,
+  ).toISOString()
 
   const { data, error } = await supabase
     .from('arrangementer')
     .select('id, tittel, type, start_tidspunkt, slutt_tidspunkt')
-    .lte('start_tidspunkt', naaIso)
+    .lte('start_tidspunkt', senesteStart)
     .gte('start_tidspunkt', eldsteAktuelle)
     .order('start_tidspunkt', { ascending: false })
     .limit(20)
@@ -125,10 +131,12 @@ export async function finnPaagaaendeArrangementStrengt(
   // Med sluttid: pågår til sluttiden. Uten sluttid: antatt varighet fra start —
   // den grenen MÅ ha en cap, ellers ville et gammelt arrangement uten sluttid
   // stått som «pågående» for alltid.
+  // start <= nå: radene kan inneholde møter som ennå ikke har startet (møtemodus-forløpet).
   const kandidat = data.find(a =>
-    a.slutt_tidspunkt
+    a.start_tidspunkt <= naaIso &&
+    (a.slutt_tidspunkt
       ? a.slutt_tidspunkt >= naaIso
-      : a.start_tidspunkt >= tidligstStart,
+      : a.start_tidspunkt >= tidligstStart),
   )
   return kandidat
     ? { id: kandidat.id, tittel: kandidat.tittel, type: kandidat.type, sluttTidspunkt: kandidat.slutt_tidspunkt }

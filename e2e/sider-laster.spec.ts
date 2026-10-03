@@ -230,9 +230,20 @@ test.describe('Røyktest — alle sider laster', () => {
       // nok for en vakt som spør «logget noe seg i det hele tatt?», og
       // indeksen skal ikke omgås for å skjerpe tellingen.
       const hendelser = ekte.map(r => r.event)
+      // Selve feilen (melding, url, status, stack-start) skal stå i assert-
+      // meldingen — hendelsesnavnet alene (f.eks. klient.window.feilet) sier
+      // ikke hva som gikk galt, og CI-loggen er ofte eneste sted vi ser det (#800).
+      const detaljer = ekte.map(r => {
+        const k = (r.kontekst ?? {}) as Record<string, unknown>
+        const felt = ['message', 'name', 'status', 'code', 'url', 'ressurs']
+          .filter(n => k[n] !== undefined && k[n] !== null && k[n] !== '')
+          .map(n => `${n}=${String(k[n]).slice(0, 300)}`)
+        const stack = typeof k.stack === 'string' ? `\n    stack: ${k.stack.slice(0, 600)}` : ''
+        return `  - ${r.event} (id ${r.id}) ${felt.join(' | ')}${stack}`
+      })
       expect(
         hendelser,
-        `Sidene svarte 200 og rendret innhold, men disse server-feilene ble logget til feil_logg i løpet av kjøringen (grense id > ${grense}): ${hendelser.join(', ')}`,
+        `Sidene svarte 200 og rendret innhold, men disse server-feilene ble logget til feil_logg i løpet av kjøringen (grense id > ${grense}):\n${detaljer.join('\n')}`,
       ).toEqual([])
     })
   })

@@ -1,6 +1,6 @@
 import type { NyligStartetArrangementRad } from '@/lib/posisjon'
 import { osloKlokkeslettDagenEtter } from '@/lib/dato'
-import { MOETEMODUS_SLUTT_KLOKKE } from '@/lib/konstanter'
+import { MOETEMODUS_FOER_START_TIMER, MOETEMODUS_SLUTT_KLOKKE } from '@/lib/konstanter'
 
 // Cookie som bærer id-en til møtet brukeren har slått møtemodus AV for, per
 // enhet — samme mønster som REISEMODUS_COOKIE i lib/reisemodus.ts (#780).
@@ -15,7 +15,7 @@ export type MoetemodusKandidat = {
 
 /**
  * Møtemodus = et arrangement av type «møte» der møtemodus-vinduet (møtets
- * START → MOETEMODUS_SLUTT_KLOKKE dagen ETTER startdatoen) ikke er passert.
+ * START minus MOETEMODUS_FOER_START_TIMER → MOETEMODUS_SLUTT_KLOKKE dagen ETTER startdatoen) ikke er passert.
  * Møtets eget slutt_tidspunkt ignoreres BEVISST (se #780):
  * et møte som starter 00:30 skal likevel vare til kl. 06 NESTE morgen, ikke
  * samme natt.
@@ -36,8 +36,12 @@ export function velgMoete(
   rader: NyligStartetArrangementRad[],
   naaIso: string,
 ): MoetemodusKandidat | null {
+  const forloepMs = MOETEMODUS_FOER_START_TIMER * 60 * 60 * 1000
   const rad = rader.find(
-    a => a.type === 'moete' && naaIso < osloKlokkeslettDagenEtter(a.start_tidspunkt, MOETEMODUS_SLUTT_KLOKKE),
+    a =>
+      a.type === 'moete' &&
+      Date.parse(a.start_tidspunkt) - forloepMs <= Date.parse(naaIso) &&
+      naaIso < osloKlokkeslettDagenEtter(a.start_tidspunkt, MOETEMODUS_SLUTT_KLOKKE),
   )
   if (!rad) return null
   return {

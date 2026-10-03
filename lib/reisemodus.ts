@@ -24,7 +24,13 @@ export function velgReiseTur(
 ): NyligStartetArrangementRad | null {
   return (
     rader.find(
-      a => a.type === 'tur' && a.slutt_tidspunkt !== null && a.slutt_tidspunkt >= naaIso,
+      // start <= nå: radene kan inneholde arrangementer som ikke har startet ennå
+      // (møtemodus-forløpet, se MOETEMODUS_FOER_START_TIMER) — en tur gjør ikke det.
+      a =>
+        a.type === 'tur' &&
+        a.start_tidspunkt <= naaIso &&
+        a.slutt_tidspunkt !== null &&
+        a.slutt_tidspunkt >= naaIso,
     ) ?? null
   )
 }

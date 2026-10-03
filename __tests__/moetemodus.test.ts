@@ -50,6 +50,12 @@ function rad(overrides: Partial<NyligStartetArrangementRad> & { id: string }): N
 }
 
 describe('velgMoete (#780)', () => {
+  it('møtemodus slår seg på to timer FØR start, ikke tidligere', () => {
+    const kommende = rad({ id: 'm1', start_tidspunkt: '2026-09-26T17:00:00Z' })
+    expect(velgMoete([kommende], '2026-09-26T15:00:00Z')?.id).toBe('m1')
+    expect(velgMoete([kommende], '2026-09-26T14:59:59Z')).toBeNull()
+  })
+
   it('møtet fanges når «nå» er FØR kl. 06 dagen etter', () => {
     const startet = rad({ id: 'm1', tittel: 'Styremøte', start_tidspunkt: '2026-09-26T17:00:00Z' })
     // Vinduet slutter 2026-09-27T04:00:00.000Z — vi spør 30 min før.

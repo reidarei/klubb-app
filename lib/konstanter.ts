@@ -37,6 +37,11 @@ export const PASS_TILGANG_TIMER = 24
 // Møtets eget slutt_tidspunkt ignoreres bevisst; se lib/moetemodus.ts.
 export const MOETEMODUS_SLUTT_KLOKKE = '06:00'
 
+// Møtemodus slår seg på så mange timer FØR møtets start.
+// Rådataspørringen i lib/posisjon.ts henter derfor også arrangementer som starter
+// innen dette vinduet — andre predikater over de radene må selv kreve start <= nå.
+export const MOETEMODUS_FOER_START_TIMER = 2
+
 // Retry-vindu (i dager) for kåringsvinner-varselet: cronen leter etter
 // avsluttede-men-uvarslede kåringspoller helt til riktig markør for pollens utfall er satt
 // (vinner_varslet_paa eller tiebreak_varslet_paa, se #521)
