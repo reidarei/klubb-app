@@ -63,12 +63,11 @@ export const RUTER: Rute[] = [
   { sti: '/klubbinfo' },
   { sti: '/klubbinfo/medlemmer' },
   { sti: '/klubbinfo/medlemmer/ny' },
-  // minTreffmaal: 0 — rene lese-sider, verifisert i kildekoden (#700 PR 2):
-  // statistikk er tall/stolper i <div>-er uten en eneste <a>/<button>/
-  // [role=...], og «Aktivitet» sin eneste kandidat ville vært BarGraf sin
-  // role="img" (ikke i KANDIDAT_SELEKTOR). Et ekte gulv på 1 ville aldri
-  // kunne bli grønt her — ikke fordi vakten ikke MÅLER dem riktig.
-  { sti: '/klubbinfo/statistikk', overskrift: 'Statistikk', minTreffmaal: 0 },
+  // Statistikk fikk tilbake-pil (#700) og har dermed en kandidat — vanlig gulv.
+  { sti: '/klubbinfo/statistikk', overskrift: 'Statistikk' },
+  // minTreffmaal: 0 under — ren lese-side, verifisert i kildekoden (#700 PR 2):
+  // «Aktivitet» sin eneste kandidat ville vært BarGraf sin role="img" (ikke i
+  // KANDIDAT_SELEKTOR). Et ekte gulv på 1 ville aldri kunne bli grønt her.
   { sti: '/innspill', overskrift: 'Innspill' },
   { sti: '/innstillinger' },
   { sti: '/innstillinger/bruk', overskrift: 'Aktivitet', minTreffmaal: 0 },

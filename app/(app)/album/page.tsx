@@ -4,6 +4,7 @@ import Link from 'next/link'
 import OpprettAlbumKnapp from '@/components/album/OpprettAlbumKnapp'
 import BildeBunke from '@/components/album/BildeBunke'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 // Album-oversikt — alle album i klubben. Standalone-album og arrangement-
 // koblede vises samme sted, sortert nyeste først. Kortet vises som en bunke
@@ -73,6 +74,9 @@ export default async function AlbumOversikt() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <div style={{ padding: '12px 4px 22px' }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',

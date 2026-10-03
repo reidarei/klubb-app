@@ -5,6 +5,7 @@ import { formaterDato } from '@/lib/dato'
 import { projiser } from '@/lib/europa-kart-data'
 import { fyllHullAar, erHullRad } from '@/lib/reiserute'
 import EuropaKart, { type Sted, type AlbumKort } from '@/components/stedene/EuropaKart'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 // Visuelt skjult, men lest av skjermlesere. Samme mønster som MiniKalender —
 // display:none/visibility:hidden ville tatt teksten ut av tilgjengelighetstreet.
@@ -116,6 +117,9 @@ export default async function Stedene() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',

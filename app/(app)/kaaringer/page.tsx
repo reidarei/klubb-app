@@ -4,6 +4,7 @@ import { norskAar } from '@/lib/dato'
 import KaaringerVisning from './KaaringerVisning'
 import { kanAdministrere } from '@/lib/roller'
 import { PilleLenke } from '@/components/ui/TreffPille'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 const KLUBBEN_START_AAR = 2008
 
@@ -65,6 +66,9 @@ export default async function Kaaringer() {
     <div style={{ padding: '0 20px 20px' }}>
       {/* Header */}
       <div style={{ marginBottom: 28, marginTop: 12 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             display: 'flex',

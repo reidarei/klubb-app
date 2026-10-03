@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import SectionLabel from '@/components/ui/SectionLabel'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 type StatRad = { id: string; navn: string; totalt: number; siste12: number; arrangert: number }
 type StatistikkData = {
@@ -31,6 +32,9 @@ export default async function Statistikk() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 26 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',

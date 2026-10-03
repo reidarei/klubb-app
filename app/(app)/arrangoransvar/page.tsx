@@ -9,6 +9,7 @@ import { isBefore } from 'date-fns'
 import { kanAdministrere } from '@/lib/roller'
 import { utkastAnkerId } from '@/components/agenda/UtkastKort'
 import TekstLenke from '@/components/ui/TekstLenke'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 type AnsvarRad = {
   id: string
@@ -84,6 +85,9 @@ export default async function Arrangoransvar() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 26 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
@@ -95,7 +99,7 @@ export default async function Arrangoransvar() {
             marginBottom: 6,
           }}
         >
-          Klubbinfo / Ansvar
+          Ansvar
         </div>
         <h1
           style={{

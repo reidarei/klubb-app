@@ -8,6 +8,7 @@ import { AI_PAA, BURSDAGSBILDE_PAA } from '@/lib/config'
 import { byggEndringslogg } from '@/lib/endringslogg'
 import { POSISJON_DELING_TIMER } from '@/lib/konstanter'
 import { ENDRINGER } from '@/lib/endringslogg-data'
+import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 
 export default function OmAppen() {
   const endringsRader = byggEndringslogg(ENDRINGER, versjon.versjon)
@@ -15,6 +16,9 @@ export default function OmAppen() {
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 26 }}>
+        <div style={{ marginBottom: 4 }}>
+          <TilbakeKnapp href="/klubbinfo" til="Klubbinfo" />
+        </div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
