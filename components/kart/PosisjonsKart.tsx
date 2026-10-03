@@ -33,10 +33,8 @@ import { byggStedLenke } from '@/lib/kart-lenke'
 import type { PingKandidat } from '@/lib/kart-deltakere'
 import {
   type KlubbSymbol,
-  SYMBOLER_STILLE,
-  SYMBOLER_VARSLER,
+  MARKERING_SYMBOLER,
   STANDARD_SYMBOL,
-  symbolEmoji,
   type MarkeringSymbol,
 } from '@/lib/markering-symboler'
 
@@ -86,8 +84,10 @@ export type Markering = {
   lat: number
   lng: number
   tekst: string
-  /** Nøkkel fra MARKERING_SYMBOLER — emojien slås opp i koden, ikke i DB. */
+  /** Nøkkel fra MARKERING_SYMBOLER — det er denne som lagres i DB. */
   symbol: string
+  /** Emojien for symbolet, slått opp server-side (admin kan ha tilpasset den). */
+  emoji: string
   opprettet: string
   avNavn: string
   /** Styrer om fjern-knappen vises. RLS avgjør uansett om slettingen går. */
@@ -97,6 +97,12 @@ export type Markering = {
 type Props = {
   menn: Mann[]
   markeringer: Markering[]
+  /**
+   * Symbolregisteret med admin-tilpasset navn/emoji lagt på
+   * (lib/kart-symbol-tilpasning.ts). Valgfri: tester og en klubb uten
+   * tilpasninger får registeret som det står i lib/klubb-symboler.ts.
+   */
+  symboler?: readonly KlubbSymbol[]
   /** Innlogget brukers profil-id — skiller «meg» fra «de andre» på kartet. */
   megId: string
   /**
@@ -238,6 +244,7 @@ function sporPrikkHtml(navn: string): string {
 export default function PosisjonsKart({
   menn,
   markeringer: markeringerFraServer,
+  symboler = MARKERING_SYMBOLER,
   megId,
   fallbackSenter,
   underArrangement,
@@ -1011,7 +1018,7 @@ export default function PosisjonsKart({
             // pila lot seg ikke få fram her uansett border-verdier — bobla ble
             // stående som et avrundet rektangel (#708-oppfølging). Et eget
             // element gir full kontroll over form, farge og hvor spissen lander.
-            `<span class="kart-boble-symbol" aria-hidden="true">${esc(symbolEmoji(mk.symbol))}</span><span class="kart-boble-tekst">${esc(mk.tekst)}</span><span class="kart-boble-hale" aria-hidden="true"></span>`,
+            `<span class="kart-boble-symbol" aria-hidden="true">${esc(mk.emoji)}</span><span class="kart-boble-tekst">${esc(mk.tekst)}</span><span class="kart-boble-hale" aria-hidden="true"></span>`,
             {
               permanent: true,
               // `top` gir Leaflets innebygde pil som peker NED mot punktet —
@@ -1601,6 +1608,8 @@ export default function PosisjonsKart({
   // KlubbSymbol og ikke (typeof MARKERING_SYMBOLER)[number]: de partisjonerte
   // listene er typet som KlubbSymbol, ikke som medlemmer av register-unionen
   // (se lib/markering-symboler.ts for hvorfor).
+  const symbolerStille = symboler.filter(s => s.varsel === null)
+  const symbolerVarsler = symboler.filter(s => s.varsel !== null)
   function symbolKnapp(sym: KlubbSymbol) {
     const valgt = markeringSymbol === sym.id
     return (
@@ -2015,8 +2024,8 @@ export default function PosisjonsKart({
                   Alert zone-rammen rundt de varslende (#763). Partisjonen
                   leses av sym.varsel — ingen liste over enkeltsymboler her. */}
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }} role="group" aria-label="Symbol">
-                {SYMBOLER_STILLE.map(symbolKnapp)}
-                {SYMBOLER_VARSLER.length > 0 && (
+                {symbolerStille.map(symbolKnapp)}
+                {symbolerVarsler.length > 0 && (
                   <div
                     data-testid="alert-zone"
                     role="group"
@@ -2030,13 +2039,13 @@ export default function PosisjonsKart({
                       border: '1px solid var(--warning-border)',
                       borderRadius: 'var(--radius-small)',
                       // Basis lik sonens EGEN bredde-kostnad (padding, ramme,
-                      // indre gaps — se SONE_EKSTRA), grow lik antall knapper
+                      // indre gaps — se soneEkstra()), grow lik antall knapper
                       // inni. Da fordeler flexbox den FRIE plassen likt over
                       // alle knapper i raden, stille som innrammede — uten
                       // denne basisen spiser sonens egen ramme/padding av
                       // veksten før knappene inni får sin andel, og de
                       // innrammede ender smalere enn naboene sine.
-                      flex: `${SYMBOLER_VARSLER.length} 1 ${SONE_EKSTRA}px`,
+                      flex: `${symbolerVarsler.length} 1 ${soneEkstra(symbolerVarsler.length)}px`,
                     }}
                   >
                     {/* Absolutt posisjonert så den "kutter" rammens
@@ -2065,7 +2074,7 @@ export default function PosisjonsKart({
                     >
                       Alert zone
                     </span>
-                    {SYMBOLER_VARSLER.map(symbolKnapp)}
+                    {symbolerVarsler.map(symbolKnapp)}
                   </div>
                 )}
               </div>
@@ -2531,7 +2540,7 @@ const SONE_PAD = 5
 // for hele regnestykket): (antall indre knapper − 1) gap-er mellom dem à
 // 8px, pluss padding på begge sider, pluss 2px for rammens 1px border på
 // hver kant.
-const SONE_EKSTRA = (SYMBOLER_VARSLER.length - 1) * 8 + 2 * SONE_PAD + 2
+const soneEkstra = (antall: number) => (antall - 1) * 8 + 2 * SONE_PAD + 2
 
 // Seksjonsetikettene sto som 9 px mono-uppercase med 2 px sperring — et
 // arkiv-uttrykk. Nå display-fonten i normal setning: samme rolle, lettere

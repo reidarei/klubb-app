@@ -18,6 +18,7 @@ import { kanAdministrere, rollerMed, godkjennerPassTilgang } from '@/lib/roller'
 import { hentAppFlagg, FOND_FANE, CHAT_FANE, REISEMODUS, MOETEMODUS, BURSDAGSBILDE } from '@/lib/app-innstillinger'
 import { VARSEL_REKKEFOLGE, varselPanelNavn } from '@/lib/varsel-typer'
 import { SYMBOLER_VARSLER } from '@/lib/markering-symboler'
+import { hentKartSymboler } from '@/lib/kart-symbol-tilpasning'
 import { osloUkestart } from '@/lib/dato'
 import { AKTIVITET_SNITT_DAGER } from '@/lib/konstanter'
 import { BURSDAGSBILDE_PAA } from '@/lib/config'
@@ -53,6 +54,7 @@ export default async function Innstillinger() {
     reisemodusAktiv,
     moetemodusAktiv,
     bursdagsbildeAktiv,
+    kartSymboler,
     { data: aktivitetDagerRaw, error: aktivitetDagerFeil },
     { data: aktivitetUkerRaw, error: aktivitetUkerFeil },
   ] = await Promise.all([
@@ -111,6 +113,7 @@ export default async function Innstillinger() {
     hentAppFlagg(supabase, MOETEMODUS, false),
     // Fail-closed: et KI-kall skal aldri skje fordi flagget ikke lot seg lese.
     hentAppFlagg(supabase, BURSDAGSBILDE, false),
+    hentKartSymboler(supabase),
     admin
       .from('aktivitet_dag')
       .select('unike')
@@ -329,6 +332,11 @@ export default async function Innstillinger() {
           return ia - ib
         })
         const aktiveCount = sortert.filter(s => s.aktiv).length
+        // Kart-alertene får navnet admin har gitt symbolet på /innstillinger/kart,
+        // ikke registerets standardtekst.
+        const symbolPanel = new Map(
+          kartSymboler.flatMap(s => (s.varsel ? [[s.varsel.type, s.varsel.panel] as const] : [])),
+        )
         return (
           <InnstillingsKort
             tittel="Varsler — kontrollpanel"
@@ -341,7 +349,7 @@ export default async function Innstillinger() {
                   <VarselToggle
                     noekkel={inn.noekkel}
                     aktiv={inn.aktiv}
-                    beskrivelse={varselPanelNavn(inn.noekkel, inn.beskrivelse)}
+                    beskrivelse={symbolPanel.get(inn.noekkel) ?? varselPanelNavn(inn.noekkel, inn.beskrivelse)}
                     last={i === arr.length - 1 || inn.noekkel === 'test_modus'}
                   />
                   {/* For test_modus er beskrivelse-feltet selve test-eposten */}
@@ -409,7 +417,7 @@ export default async function Innstillinger() {
         {/* Admin-siden for bursdagsbildene (#641) — se, generer på nytt, fjern.
             Vises uansett BURSDAGSBILDE_PAA, så statuslinja der (location/modell)
             er tilgjengelig også når funksjonen er av. */}
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           <PilleLenke
             href="/innstillinger/bursdagsbilde"
             pilleStil={{
@@ -429,6 +437,27 @@ export default async function Innstillinger() {
             synligHoyde={34}
           >
             Bursdagsbilder →
+          </PilleLenke>
+          {/* Navn og emoji på de varslende kartmarkeringene. */}
+          <PilleLenke
+            href="/innstillinger/kart"
+            pilleStil={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 14px',
+              background: 'var(--accent-soft)',
+              border: '0.5px solid var(--accent)',
+              borderRadius: 999,
+              color: 'var(--accent)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              fontWeight: 500,
+              textDecoration: 'none',
+            }}
+            synligHoyde={34}
+          >
+            Kart →
           </PilleLenke>
         </div>
       </InnstillingsKort>

@@ -458,6 +458,13 @@ export const POSISJON_FERSK_MINUTTER = 30
 // lengre tekst ville uansett ikke fått plass uten å dekke kartet under.
 export const KART_MARKERING_MAKS_LENGDE = 60
 
+// Admin-styrt navn og emoji på de varslende kartsymbolene (/innstillinger/kart).
+// Speiler check-constraintene i migrasjon 156. Navnet er kort fordi det står
+// i versaler under emojien i en smal symbolknapp; emoji-grensen er i code
+// points (en sammensatt emoji kan være ~10), «én emoji» sjekkes for seg.
+export const KART_SYMBOL_NAVN_MAKS = 16
+export const KART_SYMBOL_EMOJI_MAKS = 16
+
 // Levetid for en markering satt UTENOM et arrangement. Pågår et arrangement med
 // sluttid, arver markeringen den i stedet. 12 timer dekker en kveld og natta
 // etter, og er kort nok til at kartet ikke fylles opp av gamle nåler ingen

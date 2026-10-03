@@ -72,6 +72,7 @@ export const RUTER: Rute[] = [
   { sti: '/innstillinger' },
   { sti: '/innstillinger/bruk', overskrift: 'Aktivitet' },
   { sti: '/innstillinger/vitals', overskrift: 'Ytelsesmålinger' },
+  { sti: '/innstillinger/kart', overskrift: 'Kart' },
   // /innstillinger/pass-godkjenninger står bevisst ikke her: den er
   // generalsekretær-only (#582), og testbrukeren er vanlig admin — ruta
   // redirecter derfor. Dekkes av egen test i innstillinger.spec.ts.

@@ -65,10 +65,15 @@ const { settMarkering } = await import('@/lib/actions/kart-markering')
 /** Chainen profiles-oppslaget går gjennom — vi leser filtrene av den. */
 let profilChain: Record<string, unknown>
 
-function rigg({ profiler = ANDRE.map(id => ({ id })), profilFeil = null as unknown }) {
+function rigg({
+  profiler = ANDRE.map(id => ({ id })),
+  profilFeil = null as unknown,
+  tilpasninger = [] as unknown[],
+}) {
   profilChain = lagChain(profiler, profilFeil)
   mockFrom.mockImplementation((tabell: string) => {
     if (tabell === 'profiles') return profilChain
+    if (tabell === 'kart_symbol_tilpasning') return lagChain(tilpasninger)
     return lagChain([])
   })
 }
@@ -199,6 +204,17 @@ describe.skipIf(!HAR_VARSLENDE)('settMarkering — varsel per symbol (#759/#767)
     // symboler).
     expect(new Set(titler).size).toBe(titler.length)
     expect(new Set(typer).size).toBe(typer.length)
+  })
+
+  // /innstillinger/kart: admin har døpt om symbolet. Varseltittelen følger
+  // navnet, typen (databasenøkkelen) står urørt.
+  it('tittelen følger navnet admin har gitt symbolet', async () => {
+    const [{ id, varsel }] = SYMBOLER_VARSLER.map(s => ({ id: s.id, varsel: s.varsel }))
+    rigg({ tilpasninger: [{ symbol: id, etikett: 'Hjort', emoji: '🦌' }] })
+    const res = await settMarkering(59.9139, 10.7522, 'Noe å se', id)
+    expect(res).toEqual({ ok: true })
+    expect(sisteVarsel().tittel).toBe('HJORT ALERT!')
+    expect(sisteVarsel().type).toBe(varsel.type)
   })
 
   it('en varsel-feil velter ikke markeringen, men logges', async () => {

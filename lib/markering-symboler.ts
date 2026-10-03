@@ -130,9 +130,3 @@ export function symbolEmoji(id: string | null | undefined): string {
 export function erGyldigSymbol(id: string): id is MarkeringSymbol {
   return MARKERING_SYMBOLER.some(s => s.id === id)
 }
-
-/** Varsel-oppsettet for et symbol, eller null hvis symbolet ikke varsler noen. */
-export function symbolVarsel(id: string): SymbolVarsel | null {
-  const treff = MARKERING_SYMBOLER.find(s => s.id === id)
-  return treff?.varsel ?? null
-}

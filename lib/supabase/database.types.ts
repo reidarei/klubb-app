@@ -968,6 +968,27 @@ export type Database = {
           },
         ]
       }
+      kart_symbol_tilpasning: {
+        Row: {
+          emoji: string
+          etikett: string
+          oppdatert: string
+          symbol: string
+        }
+        Insert: {
+          emoji: string
+          etikett: string
+          oppdatert?: string
+          symbol: string
+        }
+        Update: {
+          emoji?: string
+          etikett?: string
+          oppdatert?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
       klubb_chat: {
         Row: {
           bilde_url: string | null

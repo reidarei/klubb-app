@@ -9,6 +9,7 @@ import { hentKartmodus } from '@/lib/kartmodus'
 import { POSISJON_SPOR_TIMER, POSISJON_PUNKT_MAKS } from '@/lib/konstanter'
 import { parseStedParam } from '@/lib/kart-lenke'
 import { beregnPingKandidater } from '@/lib/kart-deltakere'
+import { hentKartSymboler, emojiI } from '@/lib/kart-symbol-tilpasning'
 import PosisjonsKart, {
   type Mann,
   type Markering,
@@ -66,6 +67,7 @@ export default async function Kart({ searchParams }: Props) {
     { data: markeringRader, error: markeringFeil },
     paagaaende,
     aktueltArrangement,
+    symboler,
   ] = await Promise.all([
     supabase
       .from('posisjon_deling')
@@ -91,6 +93,9 @@ export default async function Kart({ searchParams }: Props) {
     // spørringsfeil i stedet for å returnere null, så en feilet spørring
     // aldri leses som «ingen aktuelt arrangement» (se lib/timeplan.ts).
     finnAktuellArrangement(supabase),
+    // Admin-styrt navn og emoji på de varslende symbolene (/innstillinger/kart).
+    // Fail-open: en feilet spørring gir registerets standardnavn, ikke en feilside.
+    hentKartSymboler(supabase),
   ])
 
   // Klubbchatten i venstrepanelet (#709). Hentes her og ikke i komponenten:
@@ -257,6 +262,9 @@ export default async function Kart({ searchParams }: Props) {
         lng: m.lng,
         tekst: m.tekst,
         symbol: m.symbol,
+        // Slått opp her og ikke i klienten: emojien kan være tilpasset av admin,
+        // og tilpasningen bor i databasen.
+        emoji: emojiI(symboler, m.symbol),
         opprettet: m.opprettet,
         avNavn: pr?.visningsnavn || pr?.navn || 'Ukjent',
         erMin: m.opprettet_av === bruker!.id,
@@ -331,6 +339,7 @@ export default async function Kart({ searchParams }: Props) {
     <PosisjonsKart
       menn={menn}
       markeringer={markeringer}
+      symboler={symboler}
       // Non-null: (app)-ruter ligger bak auth-guarden i middleware.ts, så en
       // uinnlogget bruker når aldri denne render-en. Samme antakelse som
       // /arrangoransvar og /chat gjør.

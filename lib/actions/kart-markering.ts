@@ -5,7 +5,8 @@ import { ensureInnlogget } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { KART_MARKERING_MAKS_LENGDE, KART_MARKERING_TIMER } from '@/lib/konstanter'
 import { finnPaagaaendeArrangement } from '@/lib/posisjon'
-import { erGyldigSymbol, STANDARD_SYMBOL, symbolVarsel } from '@/lib/markering-symboler'
+import { erGyldigSymbol, STANDARD_SYMBOL } from '@/lib/markering-symboler'
+import { hentKartSymboler } from '@/lib/kart-symbol-tilpasning'
 import { logg } from '@/lib/logg'
 import { sendVarsel } from '@/lib/varsler'
 import { byggStedLenke } from '@/lib/kart-lenke'
@@ -59,7 +60,12 @@ export async function settMarkering(
   }
   const valgtSymbol = erGyldigSymbol(symbol) ? symbol : STANDARD_SYMBOL
 
-  const paagaaende = await finnPaagaaendeArrangement(supabase)
+  // Symbolregisteret med admin-tilpasset navn (/innstillinger/kart) hentes
+  // parallelt — varseltittelen skal følge navnet admin har gitt symbolet.
+  const [paagaaende, symboler] = await Promise.all([
+    finnPaagaaendeArrangement(supabase),
+    hentKartSymboler(supabase),
+  ])
 
   // Har arrangementet en sluttid, følger markeringen den. Uten sluttid (eller
   // uten arrangement) faller vi til timesvinduet — ellers ville en markering
@@ -91,7 +97,7 @@ export async function settMarkering(
   // .catch() er ufravikelig: markeringen ER lagret på dette punktet, og en
   // varsel-feil skal ikke få brukeren til å tro at markeringen ikke ble satt
   // (CLAUDE.md § Policy: Varsler — regel for nye kallsteder).
-  const varsel = symbolVarsel(valgtSymbol)
+  const varsel = symboler.find(s => s.id === valgtSymbol)?.varsel ?? null
   if (varsel) {
     // Alle aktive UNNTATT den som markerte — han vet jo at han gjorde det,
     // og et pling om sin egen markering leses som at noen andre fant noe.

@@ -2,7 +2,6 @@
 
 import { formatDistanceToNowStrict } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { symbolEmoji } from '@/lib/markering-symboler'
 import { aapneVeibeskrivelse } from '@/lib/kart-navigasjon'
 import { avstandM, formaterAvstand } from '@/lib/geo-avstand'
 import type { Markering } from './PosisjonsKart'
@@ -106,7 +105,7 @@ export default function MarkeringDetalj({
           }}
         >
           <span aria-hidden="true" style={{ marginRight: 6 }}>
-            {symbolEmoji(mk.symbol)}
+            {mk.emoji}
           </span>
           {mk.tekst}
         </div>
