@@ -219,7 +219,7 @@ export function naermesteFraOverpass(elementer: OverpassElement[], fra: Koordina
       avstand,
       treff: {
         id: `${el.type ?? 'osm'}/${el.id ?? `${lat},${lng}`}`,
-        navn: t.name || 'Pub (uten navn)',
+        navn: t.name || 'Utested (uten navn)',
         beskrivelse: adresse ? `${adresse} · ${avstandTekst}` : avstandTekst,
         lat,
         lng,
@@ -229,15 +229,42 @@ export function naermesteFraOverpass(elementer: OverpassElement[], fra: Koordina
   return best?.treff ?? null
 }
 
+// «Pub» betyr her ethvert sted å ta en øl eller et glass vin. I Norge er de
+// fleste slike steder merket `amenity=bar` i OSM, ikke `pub` — kun `pub` ga
+// rundt en tredjedel av treffene i Oslo sentrum. Kategoriene under tas med uansett navn.
+const DRIKKESTED_KATEGORIER = ['pub', 'bar', 'biergarten']
+
+// Restauranter/kafeer tas med KUN når navnet røper et drikkested — vanlige
+// europeiske ord for det (taverna, bodega, Weinstube, enoteca, cervecería …).
+// «pub»/«bar» krever ordslutt etter seg, så «Barcelona» og «Republic» slipper
+// unna, mens «Vinbaren» og «Gastropub» treffer. POSIX-regex i Overpass: ingen \b.
+const DRIKKESTED_NAVN =
+  '(pub(ben)?|bar(en)?)([^a-z]|$)|tavern|bodega|brasserie|kneipe|bier|beer|wein|wine|' +
+  'enotec|vinotec|vinothek|cervecer|bryggeri|brewery|brauerei|brouwerij|[Øø]l(hall|stue|kaf)'
+
+// …men ikke de «bar»-ene som serverer kaffe, sushi eller burger. `caf(e|é)` og
+// ikke `caf[eé]`: Overpass-regex er bytebasert, og é er to bytes i UTF-8.
+const IKKE_DRIKKESTED_NAVN =
+  'kaffe|coffee|espresso|caf(e|é)bar|sushi|noodle|nudel|lunsj|ramen|burger|juice|' +
+  'smoothie|salat|salad|poke|bakeri|backstube|is ?bar|frozen|gyoza|eiscaf'
+
 // Server-side only. Diskriminert utfall som sokSteder() — brukeren venter på
 // svar og må få vite om det feilet. Koordinatene logges aldri.
 export async function finnNaermestePub(fra: Koordinat): Promise<StedSokUtfall> {
+  const rundt = `(around:${PUB_SOK_RADIUS_M},${fra.lat},${fra.lng})`
+  // Navne-regexen kjøres på et FERDIG avgrenset sett (`.mat`), ikke som filter
+  // direkte i around-spørringen: der skanner Overpass hele name-indeksen, og
+  // spørringen tok >10 s mot ~2,5 s med settet (målt mot Oslo sentrum).
   // `out center;` og ikke `out center tags;`: «tags»-verbositeten utelater
   // geometrien, så noder kom uten lat/lon og ble stille hoppet over (#727-review).
   // Default-verbositet gir lat/lon for noder og center for ways/relations.
   const query =
     `[out:json][timeout:${OVERPASS_TIMEOUT_SEK}];` +
-    `nwr["amenity"="pub"](around:${PUB_SOK_RADIUS_M},${fra.lat},${fra.lng});out center;`
+    `(nwr["amenity"="restaurant"]${rundt};nwr["amenity"="cafe"]${rundt};)->.mat;` +
+    '(' +
+    DRIKKESTED_KATEGORIER.map(k => `nwr["amenity"="${k}"]${rundt};`).join('') +
+    `nwr.mat["name"~"${DRIKKESTED_NAVN}",i]["name"!~"${IKKE_DRIKKESTED_NAVN}",i];` +
+    ');out center;'
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), GEOKODING_TIMEOUT_MS)
   try {

@@ -38,7 +38,7 @@ describe('naermesteFraOverpass()', () => {
       [{ type: 'node', id: 1, lat: 59.9139, lon: 10.7522, tags: { 'addr:street': 'Storgata', 'addr:housenumber': '5', 'addr:city': 'Oslo' } }],
       fra,
     )
-    expect(treff?.navn).toBe('Pub (uten navn)')
+    expect(treff?.navn).toBe('Utested (uten navn)')
     expect(treff?.beskrivelse).toContain('Storgata 5, Oslo')
   })
 })
@@ -73,7 +73,10 @@ describe('finnNaermestePub()', () => {
     expect(url).toBe('https://overpass-api.de/api/interpreter')
     expect((init.headers as Record<string, string>)['User-Agent']).toContain('klubben.test')
     const query = new URLSearchParams(String(init.body)).get('data') ?? ''
-    expect(query).toContain('amenity')
+    // Bar og biergarten teller som pub; restauranter kun via navnet, filtrert
+    // på et avgrenset sett (`.mat`) — se kommentaren i geokoding.ts.
+    for (const k of ['pub', 'bar', 'biergarten']) expect(query).toContain(`nwr["amenity"="${k}"]`)
+    expect(query).toMatch(/nwr\.mat\["name"~"[^"]*bodega[^"]*",i\]\["name"!~"[^"]*kaffe[^"]*",i\]/)
     // `out center tags;` utelater node-koordinatene — se kommentaren i geokoding.ts.
     expect(query).toMatch(/out center;$/)
   })
