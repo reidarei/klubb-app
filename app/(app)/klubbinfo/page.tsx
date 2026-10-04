@@ -1,10 +1,10 @@
-import Link from 'next/link'
 import { MapPinIcon } from '@heroicons/react/24/outline'
 import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
-import Icon, { IkonNavn } from '@/components/ui/Icon'
-import AdminMerke from '@/components/ui/AdminMerke'
-import { kanAdministrere } from '@/lib/roller'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { PanelGruppe, PanelRad } from '@/components/innstillinger/PanelRad'
+import { hentAapneIssues } from '@/app/(app)/innstillinger/IssuesListe'
+import { kanAdministrere, godkjennerPassTilgang } from '@/lib/roller'
 import { naa } from '@/lib/dato'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 import versjon from '@/lib/versjon.json'
@@ -23,6 +23,11 @@ const STIFTET_TEKST = format(
 export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
   const erAdmin = kanAdministrere(profil?.rolle)
+
+  // «N venter» på Kontrollpanel-raden — samme to kilder som «Saker som venter»
+  // i kontrollpanelet. Hentes bare for admin, så ingen andre betaler oppslaget.
+  // Startes før count-spørringene under og awaites etter, så de går parallelt.
+  const venterPromise = erAdmin ? hentVenterPaaAdmin(godkjennerPassTilgang(profil?.rolle)) : Promise.resolve(0)
 
   // Fem count-spørringer i parallell — sekvensielt ville lagt fire ekstra
   // rundturer til Supabase på responstiden (jf. ytelseskravet).
@@ -58,70 +63,7 @@ export default async function Klubbinfo() {
     ])
 
   const antallBilder = (antallAlbumBilder ?? 0) + (antallChatBilder ?? 0)
-
-  type Rad = {
-    icon: IkonNavn
-    title: string
-    meta?: string
-    href: string
-    kunAdmin?: boolean
-  }
-
-  const rader: Rad[] = [
-    {
-      icon: 'users',
-      title: 'Medlemmer',
-      meta: antallMedlemmer ? String(antallMedlemmer) : undefined,
-      href: '/klubbinfo/medlemmer',
-    },
-    {
-      icon: 'image',
-      title: 'Bilder',
-      meta: antallBilder ? String(antallBilder) : undefined,
-      href: '/album',
-    },
-    {
-      icon: 'mapPin',
-      title: 'Turer',
-      meta: antallTurer ? String(antallTurer) : undefined,
-      href: '/stedene',
-    },
-    {
-      icon: 'trophy',
-      title: 'Kåringer',
-      meta: antallKaaringer ? String(antallKaaringer) : undefined,
-      href: '/kaaringer',
-    },
-    {
-      icon: 'list',
-      title: 'Arrangøransvar',
-      href: '/arrangoransvar',
-    },
-    {
-      icon: 'map',
-      title: 'Kart',
-      href: '/kart',
-    },
-    {
-      icon: 'doc',
-      title: 'Vedtekter',
-      href: '/klubbinfo/vedtekter/vedtekter',
-    },
-    {
-      icon: 'info',
-      title: 'Om appen',
-      href: '/om-appen',
-    },
-    // Nederst: admin-flaten er siste valg på siden, og merkes med admin-skjoldet.
-    {
-      icon: 'cog',
-      title: 'Kontrollpanel',
-      href: '/innstillinger',
-      kunAdmin: true,
-    },
-  ]
-
-  const synligeRader = rader.filter(r => !r.kunAdmin || erAdmin)
+  const venterPaaAdmin = await venterPromise
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -155,25 +97,6 @@ export default async function Klubbinfo() {
             <MapPinIcon aria-hidden="true" style={{ width: 11, height: 11 }} />
             {KLUBB_STED}
           </span>
-        </div>
-
-        {/* Diskret divider med versjonsnummer høyrejustert. Plassert her etter
-            at headeren ble strippet for versjon i #190 — klubb-siden er nå
-            kanonisk sted for app-versjon. */}
-        <div
-          style={{
-            borderTop: '0.5px solid var(--border-subtle)',
-            margin: '0 0 16px',
-            paddingTop: 6,
-            display: 'flex',
-            justifyContent: 'flex-end',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 9,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.5px',
-          }}
-        >
-          {versjon.versjon}
         </div>
 
         <h2
@@ -241,84 +164,59 @@ export default async function Klubbinfo() {
         ))}
       </div>
 
-      {/* Seksjons-label */}
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          letterSpacing: '2px',
-          textTransform: 'uppercase',
-          marginBottom: 14,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          fontWeight: 600,
-        }}
-      >
-        Innhold
-        <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
-      </div>
+      <PanelGruppe tittel="Gjengen">
+        <PanelRad
+          href="/klubbinfo/medlemmer"
+          ikon="users"
+          farge="blaa"
+          tittel="Medlemmer"
+          undertekst="Kontaktinfo og statistikk"
+          status={antallMedlemmer || undefined}
+        />
+        <PanelRad href="/kaaringer" ikon="trophy" farge="sand" tittel="Kåringer" status={antallKaaringer || undefined} />
+        <PanelRad href="/arrangoransvar" ikon="list" farge="lilla" tittel="Arrangøransvar" />
+        <PanelRad href="/kart" ikon="map" farge="groenn" tittel="Kart" undertekst="Hvor gutta er nå" />
+      </PanelGruppe>
 
-      {/* Magazine-TOC */}
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {synligeRader.map(r => (
-          <Link
-            key={r.title}
-            href={r.href}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-              padding: '18px 4px',
-              borderBottom: '0.5px solid var(--border-subtle)',
-              textDecoration: 'none',
-              color: 'inherit',
-            }}
-          >
-            <div
-              style={{
-                width: 22,
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-              }}
-            >
-              <Icon name={r.icon} size={18} color="var(--text-secondary)" strokeWidth={1.4} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 19,
-                  fontWeight: 500,
-                  color: 'var(--text-primary)',
-                  letterSpacing: '-0.3px',
-                  lineHeight: 1.1,
-                }}
-              >
-                {r.title}
-              </div>
-              {r.kunAdmin && <AdminMerke size={16} />}
-            </div>
-            {r.meta && (
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  color: 'var(--text-secondary)',
-                  marginRight: 4,
-                  letterSpacing: '0.5px',
-                }}
-              >
-                {r.meta}
-              </span>
-            )}
-            <Icon name="chevron" size={14} color="var(--text-tertiary)" />
-          </Link>
-        ))}
-      </div>
+      <PanelGruppe tittel="Minner">
+        <PanelRad href="/album" ikon="image" farge="rosa" tittel="Bilder" status={antallBilder || undefined} />
+        <PanelRad href="/stedene" ikon="mapPin" farge="turkis" tittel="Turer" status={antallTurer || undefined} />
+      </PanelGruppe>
+
+      <PanelGruppe tittel="Om klubben">
+        <PanelRad href="/klubbinfo/vedtekter/vedtekter" ikon="doc" farge="gul" tittel="Vedtekter" />
+        {/* Versjonsnummeret bodde tidligere i en egen strek i toppen (#190). */}
+        <PanelRad href="/om-appen" ikon="info" farge="graa" tittel="Om appen" status={versjon.versjon} />
+      </PanelGruppe>
+
+      {erAdmin && (
+        <PanelGruppe tittel="Admin">
+          <PanelRad
+            href="/innstillinger"
+            ikon="cog"
+            farge="sand"
+            tittel="Kontrollpanel"
+            status={venterPaaAdmin > 0 ? `${venterPaaAdmin} venter` : undefined}
+            tone={venterPaaAdmin > 0 ? 'varsle' : 'noeytral'}
+          />
+        </PanelGruppe>
+      )}
     </div>
   )
+}
+
+async function hentVenterPaaAdmin(erGeneralsekretaer: boolean): Promise<number> {
+  const [issues, pass] = await Promise.all([
+    hentAapneIssues(),
+    // Pass-forespørsler avgjøres bare av generalsekretæren (#582).
+    erGeneralsekretaer
+      ? createAdminClient()
+          .from('pass_tilgang_forespørsel')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'venter')
+      : null,
+  ])
+  // Kaster heller enn å vise en brikke som lyver (Policy: Databasespørringer).
+  if (pass?.error) throw new Error(`Kunne ikke telle ventende pass: ${pass.error.message}`)
+  return issues.length + (pass?.count ?? 0)
 }
