@@ -70,7 +70,7 @@ export default function UtkastKort({
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--text-tertiary)',
             letterSpacing: '1.6px',
             fontWeight: 600,

@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon'
 import Pill, { IKveldChip } from '@/components/ui/Pill'
 import Placeholder from '@/components/ui/Placeholder'
 import Avatar from '@/components/ui/Avatar'
-import { formaterDato } from '@/lib/dato'
+import { agendaDato, formaterDato } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
 
 type Deltaker = { navn: string; src?: string | null; rolle?: string | null }
@@ -42,7 +42,7 @@ function statusPill(status: HighlightKortData['minStatus']) {
 
 export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
   const status = statusPill(arr.minStatus)
-  const datoTekst = `${formaterDato(arr.start_tidspunkt, 'd. MMM')} · kl. ${formaterDato(arr.start_tidspunkt, 'HH:mm')}`
+  const datoTekst = `${agendaDato(arr.start_tidspunkt)} · ${formaterDato(arr.start_tidspunkt, 'HH:mm')}`
   const bilde = bildeSrc(arr.bilde_url)
 
   return (
@@ -56,8 +56,8 @@ export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
         background: 'var(--bg-elevated)',
         backdropFilter: 'var(--blur-card)',
         WebkitBackdropFilter: 'var(--blur-card)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius)',
+        border: '0.5px solid var(--border-strong)',
+        borderRadius: 'var(--radius-card)',
         boxShadow: '0 8px 30px var(--accent-soft), 0 0 0 1px var(--border-strong)',
         overflow: 'hidden',
       }}
@@ -89,7 +89,7 @@ export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
           <Pill variant="accent" small>
             {typeLabel(arr.type)}
           </Pill>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{datoTekst}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{datoTekst}</span>
         </div>
 
         <h3
@@ -138,7 +138,7 @@ export default function HighlightKort({ arr }: { arr: HighlightKortData }) {
             <span
               style={{
                 marginLeft: 10,
-                fontSize: 12,
+                fontSize: 13,
                 color: 'var(--text-secondary)',
                 whiteSpace: 'nowrap',
               }}

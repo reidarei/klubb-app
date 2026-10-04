@@ -2,33 +2,29 @@ import type { CSSProperties, ReactNode } from 'react'
 
 type Props = {
   children: ReactNode
-  /** Valgfritt antall som vises mellom label og hairline */
+  /** Valgfritt antall som vises som « · N» etter teksten */
   count?: number
   style?: CSSProperties
 }
 
+// Samme gruppeoverskrift som kontrollpanel/profil/fond: mono 10 px, 600,
+// uppercase, ingen hårstrek, 4 px innrykk.
 export default function SectionLabel({ children, count, style }: Props) {
   return (
     <div
       style={{
         fontFamily: 'var(--font-mono)',
         fontSize: 10,
-        fontWeight: 500,
+        fontWeight: 600,
         color: 'var(--text-tertiary)',
         textTransform: 'uppercase',
         letterSpacing: '1.6px',
-        marginBottom: 10,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
+        margin: '0 0 8px 4px',
         ...style,
       }}
     >
-      <span>{children}</span>
-      {typeof count === 'number' && (
-        <span style={{ color: 'var(--text-secondary)' }}>{count}</span>
-      )}
-      <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
+      {children}
+      {typeof count === 'number' && ` · ${count}`}
     </div>
   )
 }

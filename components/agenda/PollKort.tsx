@@ -2,7 +2,7 @@ import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
 import Card from '@/components/ui/Card'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
-import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { formaterDato, agendaDato } from '@/lib/dato'
 import PollInlineStemme from '@/components/poll/PollInlineStemme'
 import type { ChatProfil } from '@/lib/mention'
 
@@ -40,11 +40,7 @@ type Props = {
 
 function fristLabel(avsluttet: boolean, iso: string): string {
   if (avsluttet) return 'avsluttet'
-  const mnd = formaterDato(iso, 'MMM').toUpperCase()
-  const dag = formaterDato(iso, 'd')
-  const tid = formaterDato(iso, 'HH:mm')
-  const aar = aarHvisAvvik(iso)
-  return `frist ${dag}. ${mnd}${aar ? ` ${aar}` : ''} ${tid}`
+  return `frist ${agendaDato(iso)} · ${formaterDato(iso, 'HH:mm')}`
 }
 
 export default function PollKort({ poll, tidligere = false, kommentarer = [], totaltKommentarer, profiler, brukerId }: Props) {
@@ -61,7 +57,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
           gap: 8,
           marginBottom: 8,
           fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+          fontSize: 12,
           color: 'var(--accent)',
           letterSpacing: '1.6px',
           fontWeight: 600,
@@ -69,7 +65,17 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
         }}
       >
         <span>Avstemming</span>
-        <span style={{ color: 'var(--text-tertiary)', letterSpacing: '1.2px' }}>
+        {/* Fristen i vanlig dato-stil (som arrangementkortene), ikke mono-uppercase. */}
+        <span
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            color: 'var(--text-tertiary)',
+            letterSpacing: 0,
+            fontWeight: 400,
+            textTransform: 'none',
+          }}
+        >
           · {fristLabel(poll.avsluttet, poll.svarfrist)}
         </span>
       </div>
@@ -107,6 +113,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
           padding={false}
           style={{
             borderRadius: 'var(--radius-card)',
+            border: '0.5px solid var(--border)',
           }}
         >
           <div style={{ padding: '14px 16px' }}>
@@ -124,7 +131,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
             <div
               style={{
                 marginTop: 10,
-                fontSize: 11,
+                fontSize: 13,
                 color: 'var(--text-tertiary)',
                 display: 'flex',
                 alignItems: 'center',
@@ -173,6 +180,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
           gap: 0,
           opacity: tidligere ? 'var(--tidligere-opacity)' : 1,
           borderRadius: 'var(--radius-card)',
+          border: '0.5px solid var(--border)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
@@ -193,7 +201,7 @@ export default function PollKort({ poll, tidligere = false, kommentarer = [], to
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              fontSize: 11,
+              fontSize: 13,
               color: 'var(--text-tertiary)',
             }}
           >

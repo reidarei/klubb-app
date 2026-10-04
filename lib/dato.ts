@@ -163,6 +163,20 @@ export function aarHvisAvvik(iso: string): string {
 }
 
 /**
+ * Lesbar agenda-dato i norsk tid: «Fre 12. des», med årstall bare når det
+ * ikke er inneværende år («Fre 12. des 2027»). Brukes på agenda-kortene.
+ * Date-fns' nb-locale gir «fr.» for EEE, så ukedagen tas fra hele navnet.
+ */
+export function agendaDato(iso: string): string {
+  const ukedag = formaterDato(iso, 'EEEE').slice(0, 3)
+  const ukedagStor = ukedag.charAt(0).toUpperCase() + ukedag.slice(1)
+  // Kun et avsluttende punktum: nb skriver «des.», men «mai» har ingen.
+  const dagMnd = formaterDato(iso, 'd. MMM').replace(/\.$/, '')
+  const aar = aarHvisAvvik(iso)
+  return `${ukedagStor} ${dagMnd}${aar ? ` ${aar}` : ''}`
+}
+
+/**
  * Dag-nøkkel i norsk tidssone — «yyyy-MM-dd»-streng for en ISO-dato.
  * Et arrangement kl 00:30 norsk tid skal telle på riktig dag, ikke UTC-dagen
  * før. Brukes av MiniKalender og erSammeNorskeDag. Se #429.

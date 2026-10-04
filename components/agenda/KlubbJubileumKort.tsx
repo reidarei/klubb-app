@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Icon from '@/components/ui/Icon'
-import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { agendaDato } from '@/lib/dato'
 import { KLUBB_KORTNAVN, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2 } from '@/lib/klubb-config'
 
 export type KlubbJubileumData = {
@@ -10,9 +10,7 @@ export type KlubbJubileumData = {
 }
 
 export default function KlubbJubileumKort({ jubileum }: { jubileum: KlubbJubileumData }) {
-  const mnd = formaterDato(jubileum.dato, 'MMM').toUpperCase()
-  const dag = formaterDato(jubileum.dato, 'd')
-  const aar = aarHvisAvvik(jubileum.dato)
+  const datoTekst = agendaDato(jubileum.dato)
 
   return (
     <Link
@@ -23,7 +21,7 @@ export default function KlubbJubileumKort({ jubileum }: { jubileum: KlubbJubileu
         alignItems: 'stretch',
         overflow: 'hidden',
         borderRadius: 'var(--radius-card)',
-        border: '0.5px solid var(--border-subtle)',
+        border: '0.5px solid var(--border)',
         background: 'var(--bg-elevated)',
         textDecoration: 'none',
         color: 'inherit',
@@ -59,17 +57,12 @@ export default function KlubbJubileumKort({ jubileum }: { jubileum: KlubbJubileu
             alignItems: 'center',
             gap: 8,
             marginBottom: 8,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 13,
             color: 'var(--text-tertiary)',
-            letterSpacing: '1.6px',
             fontWeight: 600,
-            textTransform: 'uppercase',
           }}
         >
-          <span>
-            {dag}. {mnd}{aar && ` ${aar}`}
-          </span>
+          <span>{datoTekst}</span>
         </div>
 
         <h3

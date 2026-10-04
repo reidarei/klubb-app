@@ -4,7 +4,7 @@ import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
 import Card from '@/components/ui/Card'
 import KommentarerPaaKort, { type KommentarKortData } from '@/components/agenda/KommentarerPaaKort'
-import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { formaterDato, agendaDato } from '@/lib/dato'
 import { KOMMENTARER_KOLLAPS_DAGER } from '@/lib/konstanter'
 import type { ChatProfil } from '@/lib/mention'
 import { bildeSrc } from '@/lib/bilde-utils'
@@ -70,17 +70,12 @@ function sceneBackground(scene: 'tur' | 'møte' | 'event'): string {
           linear-gradient(135deg, oklch(0.20 0.03 200), oklch(0.13 0.03 220))`
 }
 
-function statusDotFarge(status: ArrangementKortData['minStatus']): string {
-  if (status === 'ja') return 'var(--success)'
-  if (status === 'kanskje') return 'var(--accent)'
-  return 'var(--text-tertiary)'
-}
-
-function statusTekst(status: ArrangementKortData['minStatus']): string {
-  if (status === 'ja') return 'Du er med'
-  if (status === 'kanskje') return 'Du svarte kanskje'
-  if (status === 'nei') return 'Du svarte nei'
-  return 'Ikke svart'
+// Din status som liten brikke. Tokens: success/warning-soft + nøytral for «nei».
+function statusBrikke(status: ArrangementKortData['minStatus']): { tekst: string; bg: string; farge: string } {
+  if (status === 'ja') return { tekst: 'Du kommer', bg: 'var(--success-soft)', farge: 'var(--success)' }
+  if (status === 'kanskje') return { tekst: 'Kanskje', bg: 'var(--warning-soft)', farge: 'var(--warning)' }
+  if (status === 'nei') return { tekst: 'Kommer ikke', bg: 'var(--bg-elevated-2)', farge: 'var(--text-secondary)' }
+  return { tekst: 'Ikke svart', bg: 'var(--warning-soft)', farge: 'var(--warning)' }
 }
 
 type Props = {
@@ -105,10 +100,8 @@ type Props = {
 
 export default function ArrangementKort({ arr, tidligere = false, kommentarer = [], totaltKommentarer, profiler, brukerId, brukerNavn, brukerBildeUrl, brukerRolle, visKommentarer = true }: Props) {
   const iso = arr.start_tidspunkt
-  const mnd = formaterDato(iso, 'MMM').toUpperCase()
-  const dag = formaterDato(iso, 'd')
+  const datoTekst = agendaDato(iso)
   const tid = formaterDato(iso, 'HH:mm')
-  const aar = aarHvisAvvik(iso)
   const scene = sceneFor(arr.type)
   const bilde = bildeSrc(arr.bilde_url)
 
@@ -139,6 +132,7 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
           gap: 0,
           opacity: tidligere ? 'var(--tidligere-opacity)' : 1,
           borderRadius: 'var(--radius-card)',
+          border: '0.5px solid var(--border)',
         }}
       >
         <div
@@ -165,18 +159,13 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
               alignItems: 'center',
               gap: 8,
               marginBottom: 8,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 13,
               color: 'var(--accent)',
-              letterSpacing: '1.6px',
               fontWeight: 600,
-              textTransform: 'uppercase',
             }}
           >
-            <span>
-              {dag}. {mnd}{aar && ` ${aar}`}
-            </span>
-            <span style={{ color: 'var(--text-tertiary)', letterSpacing: '1.2px' }}>· {tid}</span>
+            <span>{datoTekst}</span>
+            <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>· {tid}</span>
             {arr.harAlbum && (
               // role="img" fordi aria-label på en rolleløs span ikke leses
               // pålitelig opp — samme mønster som MessengerBadge/SladdetFelt.
@@ -219,7 +208,7 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
               <Icon name="mapPin" size={11} color="var(--text-tertiary)" />
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   color: 'var(--text-secondary)',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
@@ -237,7 +226,7 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              fontSize: 11,
+              fontSize: 13,
               color: 'var(--text-tertiary)',
             }}
           >
@@ -249,17 +238,21 @@ export default function ArrangementKort({ arr, tidligere = false, kommentarer = 
             ) : (
               <>
                 <span
-                  aria-hidden="true"
                   style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: '50%',
-                    background: statusDotFarge(arr.minStatus),
+                    background: statusBrikke(arr.minStatus).bg,
+                    color: statusBrikke(arr.minStatus).farge,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    whiteSpace: 'nowrap',
                     flexShrink: 0,
                   }}
-                />
+                >
+                  {statusBrikke(arr.minStatus).tekst}
+                </span>
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {arr.antallJa} påmeldt · {statusTekst(arr.minStatus)}
+                  {arr.antallJa} påmeldt
                 </span>
               </>
             )}

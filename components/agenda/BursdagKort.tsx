@@ -3,7 +3,7 @@ import Image from 'next/image'
 import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
 import { SolidChip } from '@/components/ui/Pill'
-import { formaterDato, aarHvisAvvik } from '@/lib/dato'
+import { agendaDato } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
 
 export type BursdagData = {
@@ -39,9 +39,7 @@ export default function BursdagKort({ bursdag, stort }: { bursdag: BursdagData; 
 // i tid. Siden denne komponenten nå kun rendres når stort=false, er den gamle
 // erIDag-forgreningen fjernet til fordel for den nøytrale (dato-visende) stilen.
 function KompaktBursdagKort({ bursdag }: { bursdag: BursdagData }) {
-  const mnd = formaterDato(bursdag.dato, 'MMM').toUpperCase()
-  const dag = formaterDato(bursdag.dato, 'd')
-  const aar = aarHvisAvvik(bursdag.dato)
+  const datoTekst = agendaDato(bursdag.dato)
 
   return (
     <Link
@@ -52,7 +50,7 @@ function KompaktBursdagKort({ bursdag }: { bursdag: BursdagData }) {
         alignItems: 'stretch',
         overflow: 'hidden',
         borderRadius: 'var(--radius-card)',
-        border: '0.5px solid var(--border-subtle)',
+        border: '0.5px solid var(--border)',
         background: 'var(--bg-elevated)',
         textDecoration: 'none',
         color: 'inherit',
@@ -88,15 +86,12 @@ function KompaktBursdagKort({ bursdag }: { bursdag: BursdagData }) {
             alignItems: 'center',
             gap: 8,
             marginBottom: 8,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 13,
             color: 'var(--text-tertiary)',
-            letterSpacing: '1.6px',
             fontWeight: 600,
-            textTransform: 'uppercase',
           }}
         >
-          <span>{`${dag}. ${mnd}${aar ? ` ${aar}` : ''}`}</span>
+          <span>{datoTekst}</span>
         </div>
 
         <h3
@@ -212,7 +207,7 @@ function StortBursdagKort({ bursdag }: { bursdag: BursdagData }) {
             alignItems: 'center',
             gap: 8,
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--accent)',
             letterSpacing: '1.6px',
             fontWeight: 600,

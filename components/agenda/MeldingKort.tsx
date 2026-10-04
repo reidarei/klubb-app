@@ -264,6 +264,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
           gap: 0,
           opacity: melding.tidligere ? 'var(--tidligere-opacity)' : 1,
           borderRadius: 'var(--radius-card)',
+          border: '0.5px solid var(--border)',
         }}
       >
         <div
@@ -310,7 +311,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 suppressHydrationWarning
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 9,
+                  fontSize: 12,
                   color: 'var(--text-tertiary)',
                   letterSpacing: '0.8px',
                   textTransform: 'uppercase',
@@ -322,7 +323,7 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
+                    fontSize: 12,
                     color: 'var(--text-tertiary)',
                     letterSpacing: '0.8px',
                     textTransform: 'uppercase',
