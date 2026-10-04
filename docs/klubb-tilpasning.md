@@ -27,7 +27,7 @@ Alle klubb-spesifikke tekstverdier samles i `lib/klubb-config.ts`. Verdiene lese
 
 Sett disse i `.env.local` lokalt og som Vercel Environment Variables i produksjon.
 
-> **Merk:** Stiftelsesdatoen, stedet og «Om klubben»-teksten kan admin også endre direkte i appen under **Innstillinger → Kontrollpanel → Om klubben**. Env-varene ovenfor er standardverdiene — er de satt, brukes de til å initialisere raden første gang. Merk at `NEXT_PUBLIC_KLUBB_DOMENE` kun er en identifikator — den brukes ikke til å generere live lenker. `BASE_URL` i `lib/config.ts` håndterer actual-URL. Defaults er generiske plassholdere — overstyres disse med dine egne verdier når du setter opp instansen.
+> **Merk:** Stiftelsesdatoen, stedet og «Om klubben»-teksten kan admin også endre direkte i appen under **Klubb → Kontrollpanel → Om klubben**. Env-varene ovenfor er da bare standardverdier: de vises så lenge ingen har lagret noe der, og for felt som står tomme. Merk at `NEXT_PUBLIC_KLUBB_DOMENE` kun er en identifikator — den brukes ikke til å generere live lenker. `BASE_URL` i `lib/config.ts` håndterer actual-URL. Defaults er generiske plassholdere — overstyres disse med dine egne verdier når du setter opp instansen.
 
 ---
 
