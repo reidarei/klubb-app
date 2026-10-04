@@ -27,7 +27,7 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
     await expect(page.getByRole('heading', { name: 'Kontrollpanel' })).toBeVisible()
     const main = page.locator('main')
     for (const navn of [
-      'Ønsker fra brukerne', 'Varsler', 'Funksjoner', 'Kartmarkeringer',
+      'Ønsker fra brukerne', 'Varsler', 'Funksjoner', 'Kartalarmer',
       'Om klubben', 'Faste arrangementer', 'Kåringer', 'Bursdagsbilder', 'Varselhistorikk', 'Bruk', 'Ytelse',
     ]) {
       await expect(main.getByRole('link', { name: new RegExp(`^${navn}`) })).toBeVisible()

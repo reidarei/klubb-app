@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { opprettMelding } from '@/lib/actions/meldinger'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
+import { SkjemaGruppe, SkjemaRad, DatoFelt, TekstRad } from '@/components/ui/Skjema'
 import Icon from '@/components/ui/Icon'
 import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
 import { komprimer, bildeSrc } from '@/lib/bilde-utils'
@@ -18,20 +18,6 @@ import { PilleKnapp } from '@/components/ui/TreffPille'
 // Fjern-knappens treffflate vokser inn i grid-gapet (#700) — gapet må dekke
 // veksten, ellers stjeler nabo-miniatyren trykket (CHIP_RAD_GAP-fella).
 const FJERN_BILDE_TREFF = treffflateRundt({ hoyde: 22, bredde: 22 })
-
-const inputStil: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 15,
-  lineHeight: 1.5,
-  outline: 'none',
-  padding: 0,
-  resize: 'none',
-  minHeight: 180,
-}
 
 type BildeStatus = 'klar' | 'laster' | 'feil'
 
@@ -289,33 +275,19 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
         laster={isPending}
       />
 
-      <SkjemaSeksjon label="Hva vil du dele?">
-        <div style={{ padding: '10px 4px' }}>
-          <textarea
-            value={innhold}
-            onChange={e => setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))}
-            placeholder="Skriv her…"
-            style={inputStil}
-          />
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1.2px',
-              textTransform: 'uppercase',
-              marginTop: 8,
-              textAlign: 'right',
-            }}
-          >
-            {tegnIgjen} tegn igjen
-          </div>
-        </div>
-      </SkjemaSeksjon>
+      <SkjemaGruppe tittel="Hva vil du dele?" hjelp={`${tegnIgjen} tegn igjen`}>
+        <TekstRad
+          minRader={7}
+          value={innhold}
+          onChange={e => setInnhold(e.target.value.slice(0, INNLEGG_MAKS_LENGDE))}
+          placeholder="Skriv her…"
+          aria-label="Hva vil du dele?"
+        />
+      </SkjemaGruppe>
 
       {visUploadSeksjon && (
-        <SkjemaSeksjon label={`Bilder (valgfritt, maks ${MELDING_MAKS_BILDER})`}>
-          <div style={{ padding: '10px 4px' }}>
+        <SkjemaGruppe tittel={`Bilder (valgfritt, maks ${MELDING_MAKS_BILDER})`}>
+          <div style={{ padding: '12px 14px' }}>
             {/* Miniatyrer med X-knapp */}
             {bilder.length > 0 && (
               <div
@@ -424,14 +396,14 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
               </PilleKnapp>
             )}
           </div>
-        </SkjemaSeksjon>
+        </SkjemaGruppe>
       )}
 
       {/* Albumkobling: enten/eller mot egne bilder. Hvis bruker har valgt
           egne bilder allerede, skjules denne — og motsatt. */}
       {(visAlbumvelger || valgtAlbum) && albumer.length > 0 && (
-        <SkjemaSeksjon label="Eller lenk til et album">
-          <div style={{ padding: '10px 4px' }}>
+        <SkjemaGruppe tittel="Eller lenk til et album">
+          <div style={{ padding: valgtAlbum ? '0 14px' : '12px 14px' }}>
             {!valgtAlbum && (
               <PilleKnapp
                 type="button"
@@ -459,13 +431,11 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
             {valgtAlbum && (
               <div
                 style={{
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 'var(--radius-card)',
-                  padding: 12,
-                  background: 'var(--bg-elevated)',
+                  minHeight: 48,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  gap: 12,
                 }}
               >
                 <div
@@ -504,13 +474,24 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
               </div>
             )}
           </div>
-        </SkjemaSeksjon>
+        </SkjemaGruppe>
       )}
 
-      <SkjemaSeksjon label="Aktuell dato (valgfritt)">
-        <div style={{ padding: '10px 4px' }}>
-          <input className="skjemafelt"
-            type="date"
+      <SkjemaGruppe
+        tittel="Aktuell dato (valgfritt)"
+        // Sier eksplisitt at det er en maskin som leser teksten, og at
+        // brukeren kan overstyre. «Fylles ut fra teksten» sa hverken det
+        // ene eller det andre. Konservativ lesning av AI Act art. 50(1) —
+        // se docs/ai-act-vurdering.md § G2.
+        hjelp={
+          aiPaa
+            ? 'Foreslås automatisk av KI ut fra teksten — du kan endre den. Holder innlegget festet øverst til datoen er passert'
+            : 'Holder innlegget festet øverst til datoen er passert'
+        }
+        feil={feil}
+      >
+        <SkjemaRad etikett="Dato">
+          <DatoFelt
             value={aktuellDato}
             onChange={e => {
               setAktuellDato(e.target.value)
@@ -523,29 +504,10 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
             // (ikke UTC), ellers kan «i dag» bli «i går» rundt midnatt norsk tid
             // og skjemaet slipper gjennom en fortidsdato. Se tidssone-policyen.
             min={iDagOslo()}
-            style={{ ...inputStil, colorScheme: 'dark' }}
+            aria-label="Aktuell dato"
           />
-
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '1.2px',
-              textTransform: 'uppercase',
-              marginTop: 6,
-            }}
-          >
-            {/* Sier eksplisitt at det er en maskin som leser teksten, og at
-             * brukeren kan overstyre. «Fylles ut fra teksten» sa hverken det
-             * ene eller det andre. Konservativ lesning av AI Act art. 50(1) —
-             * se docs/ai-act-vurdering.md § G2. */}
-            {aiPaa
-              ? 'Foreslås automatisk av KI ut fra teksten — du kan endre den. Holder innlegget festet øverst til datoen er passert'
-              : 'Holder innlegget festet øverst til datoen er passert'}
-          </div>
-        </div>
-      </SkjemaSeksjon>
+        </SkjemaRad>
+      </SkjemaGruppe>
 
       {/* Modal-aktig album-liste — enkel inline overlay. Lukke ved klikk på
           backdrop eller på et album. Vi bruker ingen <dialog>-tag for å unngå
@@ -664,18 +626,6 @@ export default function NyMeldingSkjema({ albumer, aiPaa }: Props) {
         </div>
       )}
 
-      {feil && (
-        <div
-          style={{
-            color: 'var(--danger)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            padding: '12px 4px',
-          }}
-        >
-          {feil}
-        </div>
-      )}
     </div>
   )
 }

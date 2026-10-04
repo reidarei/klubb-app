@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
 import { opprettAlbum } from '@/lib/actions/album'
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
 import { PilleKnapp } from '@/components/ui/TreffPille'
 
 // Knapp + dialog for å opprette nytt album uten arrangement-tilknytning.
@@ -81,7 +82,8 @@ export default function OpprettAlbumKnapp() {
             style={{
               width: '100%',
               maxWidth: 400,
-              background: 'var(--bg-elevated)',
+              // --bg, ikke --bg-elevated: raden i skjemaet er elevated og måtte ellers forsvunnet.
+              background: 'var(--bg)',
               border: '0.5px solid var(--border)',
               borderRadius: 'var(--radius)',
               padding: 20,
@@ -98,30 +100,21 @@ export default function OpprettAlbumKnapp() {
             >
               Nytt album
             </h2>
-            <input className="skjemafelt"
-              type="text"
-              value={tittel}
-              onChange={e => setTittel(e.target.value)}
-              autoFocus
-              placeholder="Tittel"
-              maxLength={200}
-              onKeyDown={e => {
-                if (e.key === 'Enter') lagre()
-              }}
-              style={{
-                width: '100%',
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: 8,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-body)',
-                fontSize: 15,
-                padding: '10px 12px',
-                outline: 'none',
-                marginBottom: 16,
-                boxSizing: 'border-box',
-              }}
-            />
+            <SkjemaGruppe>
+              <SkjemaRad etikett="Tittel">
+                <RadInput
+                  type="text"
+                  value={tittel}
+                  onChange={e => setTittel(e.target.value)}
+                  autoFocus
+                  placeholder="Tittel"
+                  maxLength={200}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') lagre()
+                  }}
+                />
+              </SkjemaRad>
+            </SkjemaGruppe>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <PilleKnapp
                 type="button"

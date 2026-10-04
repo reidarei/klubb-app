@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef } from 'react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { parseTimeplanTekst } from '@/lib/timeplan-parse'
 import { norskDag, norskDatoNaa } from '@/lib/dato'
 import { TIMEPLAN_ADRESSE_MAKS_LENGDE } from '@/lib/konstanter'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, ValgFelt } from '@/components/ui/Skjema'
 import type { TimeplanArrangement, TimeplanUtkast } from './TimeplanPanel'
 
 type Props = {
@@ -59,7 +60,9 @@ export default function NyTimeplanPost({
   onStartPunktvalg,
   onLeggInn,
 }: Props) {
-  const [tidsvelgerAapen, setTidsvelgerAapen] = useState(false)
+  // Brukes kun for å åpne klokkeslett-velgeren når han trykker «Legg inn» uten
+  // at klokkeslettet kunne tolkes (se forsokSubmit).
+  const gruppeRef = useRef<HTMLDivElement>(null)
 
   const dagAlternativer = beregnDagAlternativer(arrangement)
   const parsed = parseTimeplanTekst(utkast.tekst)
@@ -67,10 +70,15 @@ export default function NyTimeplanPost({
 
   function forsokSubmit() {
     if (!effektivKlokke) {
-      // Ikke avvis — åpne tidschipen med teksten intakt (#716). Mannen har
-      // skrevet noe appen ikke klarte å tolke klokkeslettet av; det er en
-      // reparasjonsvei, ikke en feilmelding.
-      setTidsvelgerAapen(true)
+      // Ikke avvis — åpne klokkeslett-velgeren med teksten intakt (#716). Mannen
+      // har skrevet noe appen ikke klarte å tolke klokkeslettet av; det er en
+      // reparasjonsvei, ikke en feilmelding. showPicker() kan avvises uten
+      // brukerhandling, og da står feltet der uansett.
+      try {
+        gruppeRef.current?.querySelector<HTMLInputElement>('input[type="time"]')?.showPicker()
+      } catch {
+        // Velgeren åpnes ved trykk på raden i stedet.
+      }
       return
     }
     onLeggInn()
@@ -78,132 +86,65 @@ export default function NyTimeplanPost({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {dagAlternativer.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} role="group" aria-label="Dag">
-          {dagAlternativer.map(d => {
-            const valgt = utkast.dato === d.key
-            return (
-              <button
-                key={d.key}
-                type="button"
-                onClick={() => onEndreUtkast({ dato: d.key })}
-                aria-pressed={valgt}
-                data-testid={`timeplan-dag-${d.key}`}
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  padding: '5px 10px',
-                  borderRadius: 'var(--radius-pill)',
-                  border: valgt ? '1px solid var(--accent)' : '0.5px solid var(--border)',
-                  background: valgt ? 'var(--accent-soft)' : 'transparent',
-                  color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)'
-                }}
-              >
-                {d.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      <input
-        type="text"
-        value={utkast.tekst}
-        onChange={e => onEndreUtkast({ tekst: e.target.value })}
-        placeholder="17:00 Middag på Lorry"
-        data-testid="timeplan-tekst"
-        onKeyDown={e => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            forsokSubmit()
-          }
-        }}
-        style={{
-          fontFamily: 'var(--font-body)',
-          // 16px og ikke mindre: iOS zoomer inn på et tekstfelt med mindre
-          // skrift.
-          fontSize: 16,
-          padding: '10px 14px',
-          borderRadius: 'var(--radius-small)',
-          border: '0.5px solid var(--border)',
-          background: 'var(--bg-elevated)',
-          color: 'var(--text-primary)',
-          width: '100%',
-        }}
-      />
-
-      {/* Live-ekko: tolkningen er aldri magi. Trykkbar chip — reparasjonsvei
-          når parsingen bommet, eller når ingen klokke ble skrevet i det hele
-          tatt. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => setTidsvelgerAapen(a => !a)}
-          data-testid="timeplan-klokke-chip"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-pill)',
-            border: '0.5px solid var(--border)',
-            background: effektivKlokke ? 'var(--accent-soft)' : 'transparent',
-            color: effektivKlokke ? 'var(--text-primary)' : 'var(--text-tertiary)'
-          }}
-        >
-          {effektivKlokke
-            ? `${effektivKlokke} · ${parsed.tekst || '…'}`
-            : `Sett klokkeslett${parsed.tekst ? ` · ${parsed.tekst}` : ''}`}
-        </button>
-        {tidsvelgerAapen && (
-          <input
-            type="time"
-            autoFocus
-            value={effektivKlokke ?? ''}
-            data-testid="timeplan-klokke-input"
-            onChange={e => {
-              onEndreUtkast({ manuellKlokke: e.target.value })
-              if (e.target.value) setTidsvelgerAapen(false)
-            }}
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 16,
-              padding: '6px 10px',
-              borderRadius: 'var(--radius-small)',
-              border: '0.5px solid var(--border)',
-              background: 'var(--bg-elevated)',
-              color: 'var(--text-primary)',
-            }}
-          />
-        )}
+      <div ref={gruppeRef}>
+        <SkjemaGruppe>
+          {dagAlternativer.length > 0 && (
+            <SkjemaRad etikett="Dag">
+              <ValgFelt
+                value={utkast.dato}
+                valg={dagAlternativer.map(d => ({ verdi: d.key, etikett: d.label }))}
+                onChange={e => onEndreUtkast({ dato: e.target.value })}
+                data-testid="timeplan-dag"
+                aria-label="Dag"
+              />
+            </SkjemaRad>
+          )}
+          <SkjemaRad etikett="Post">
+            <RadInput
+              type="text"
+              value={utkast.tekst}
+              onChange={e => onEndreUtkast({ tekst: e.target.value })}
+              placeholder="17:00 Middag på Lorry"
+              data-testid="timeplan-tekst"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  forsokSubmit()
+                }
+              }}
+            />
+          </SkjemaRad>
+          {/* Tolkningen er aldri magi: klokkeslettet fra teksten vises her, og
+              raden er reparasjonsveien når parsingen bommet (#716). */}
+          <SkjemaRad etikett="Klokkeslett">
+            <DatoFelt
+              type="time"
+              value={effektivKlokke ?? ''}
+              plassholder="Sett klokkeslett"
+              onChange={e => onEndreUtkast({ manuellKlokke: e.target.value })}
+              data-testid="timeplan-klokke-input"
+              aria-label="Klokkeslett"
+            />
+          </SkjemaRad>
+          {/* Adresse som alternativ til å velge punkt i kartet (#732). Samme
+              blåtur-gate som punkt-knappen under — vakten som faktisk holder er
+              triggeren i migrasjon 149 (den stripper adressen også for en klient
+              som går utenom UI-et); dette er bekvemmelighet, akkurat som for
+              punktet. */}
+          {!arrangement.blaatur && (
+            <SkjemaRad etikett="Adresse">
+              <RadInput
+                type="text"
+                value={utkast.adresse ?? ''}
+                onChange={e => onEndreUtkast({ adresse: e.target.value || null })}
+                maxLength={TIMEPLAN_ADRESSE_MAKS_LENGDE}
+                placeholder="Valgfritt"
+                data-testid="timeplan-adresse"
+              />
+            </SkjemaRad>
+          )}
+        </SkjemaGruppe>
       </div>
-
-      {/* Adresse som alternativ til å velge punkt i kartet (#732). Samme
-          blåtur-gate som punkt-knappen under — vakten som faktisk holder er
-          triggeren i migrasjon 149 (den stripper adressen også for en klient
-          som går utenom UI-et); dette er bekvemmelighet, akkurat som for
-          punktet. */}
-      {!arrangement.blaatur && (
-        <input
-          type="text"
-          value={utkast.adresse ?? ''}
-          onChange={e => onEndreUtkast({ adresse: e.target.value || null })}
-          maxLength={TIMEPLAN_ADRESSE_MAKS_LENGDE}
-          placeholder="Adresse (valgfritt)"
-          data-testid="timeplan-adresse"
-          style={{
-            fontFamily: 'var(--font-body)',
-            // 16px og ikke mindre: iOS zoomer inn på et tekstfelt med mindre
-            // skrift.
-            fontSize: 16,
-            padding: '10px 14px',
-            borderRadius: 'var(--radius-small)',
-            border: '0.5px solid var(--border)',
-            background: 'var(--bg-elevated)',
-            color: 'var(--text-primary)',
-            width: '100%',
-          }}
-        />
-      )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {/* Blåtur: nålen SKJULES her. Vakten som faktisk holder er triggeren

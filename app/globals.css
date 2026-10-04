@@ -633,7 +633,13 @@ a {
   min-height: 44px;
 }
 
-/* Skillelinje mellom radene i en kontrollpanel-gruppe (components/innstillinger/PanelRad.tsx). */
+/* Skillelinje mellom radene i en boks — kontrollpanelet (components/innstillinger/PanelRad.tsx) og skjemaer (components/ui/Skjema.tsx). */
 .panel-liste > * + * {
   border-top: 0.5px solid var(--border-subtle);
+}
+
+/* Raden du skriver i, i et skjema (components/ui/Skjema.tsx): tynn aksentstrek
+   til venstre. Inset-skygge i stedet for kant, så raden ikke flytter seg. */
+.skjema-rad:focus-within {
+  box-shadow: inset 2px 0 0 var(--accent);
 }

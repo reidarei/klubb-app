@@ -29,7 +29,7 @@ test.describe('Kommentarer på arrangement og poll', () => {
 
     const tidsstempel = Date.now()
     const spoersmaal = `Komm-test ${tidsstempel}`
-    await page.fill('input[placeholder="Hva lurer du på?"]', spoersmaal)
+    await page.fill('textarea[placeholder="Hva lurer du på?"]', spoersmaal)
     const altInputs = page.locator('input[placeholder="Alternativ"]')
     await altInputs.nth(0).fill('Ja')
     await altInputs.nth(1).fill('Nei')

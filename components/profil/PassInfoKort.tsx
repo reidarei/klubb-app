@@ -26,33 +26,11 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
 
   if (redigerer) {
     return (
-      <div
-        style={{
-          padding: '14px 16px',
-          background: 'var(--bg-elevated)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 'var(--radius-card)',
-        }}
-      >
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--accent)',
-            letterSpacing: '1.6px',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            marginBottom: 12,
-          }}
-        >
-          Pass-info
-        </div>
-        <PassInfoSkjema
-          initialNummer={nummer ?? ''}
-          initialUtloper={utloper ?? ''}
-          onAvbryt={() => setRedigerer(false)}
-        />
-      </div>
+      <PassInfoSkjema
+        initialNummer={nummer ?? ''}
+        initialUtloper={utloper ?? ''}
+        onAvbryt={() => setRedigerer(false)}
+      />
     )
   }
 

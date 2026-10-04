@@ -39,7 +39,7 @@ test.describe('Poll-flyt', () => {
     // 3. Fyll ut skjema
     const tidsstempel = Date.now()
     const spoersmaal = `Playwright-test ${tidsstempel}`
-    await page.fill('input[placeholder="Hva lurer du på?"]', spoersmaal)
+    await page.fill('textarea[placeholder="Hva lurer du på?"]', spoersmaal)
 
     const altInputs = page.locator('input[placeholder="Alternativ"]')
     await altInputs.nth(0).fill('Ja')
@@ -55,7 +55,7 @@ test.describe('Poll-flyt', () => {
     await forventTreffbar(page, { kontekst: '/poll/ny — tre alternativer', omraade: 'main' })
 
     // Sett flervalg (Segment-komponenten bruker role="tab")
-    await page.getByRole('tab', { name: 'Flervalg' }).click()
+    await page.getByRole('switch', { name: 'Tillat flere svar' }).click()
 
     await page.waitForTimeout(300)
     await page.screenshot({ path: path.join(UT_DIR, '03-ny-poll-utfylt.png'), fullPage: true })

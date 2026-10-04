@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { lagrePassInfo } from '@/lib/actions/pass'
 import { PilleKnapp } from '@/components/ui/TreffPille'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, LagreKnapp } from '@/components/ui/Skjema'
 
 type Props = {
   initialNummer?: string
@@ -35,98 +36,44 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
     })
   }
 
-  const inputStil = {
-    width: '100%',
-    background: 'transparent',
-    border: 'none',
-    color: 'var(--text-primary)',
-    fontFamily: 'var(--font-body)',
-    fontSize: 14,
-    outline: 'none',
-    padding: '8px 0',
-  } as const
-
-  const labelStil = {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 9.5,
-    fontWeight: 600,
-    color: 'var(--text-tertiary)',
-    letterSpacing: '1.6px',
-    textTransform: 'uppercase' as const,
-    marginBottom: 2,
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div>
-        <div style={labelStil}>Passnummer</div>
-        <input className="skjemafelt"
-          type="text"
-          value={nummer}
-          onChange={e => setNummer(e.target.value)}
-          autoComplete="off"
-          maxLength={20}
-          style={{ ...inputStil, borderBottom: '0.5px solid var(--border-subtle)' }}
-        />
-      </div>
-      <div>
-        <div style={labelStil}>Utløpsdato</div>
-        <input className="skjemafelt"
-          type="date"
-          value={utloper}
-          onChange={e => setUtloper(e.target.value)}
-          style={{ ...inputStil, borderBottom: '0.5px solid var(--border-subtle)' }}
-        />
-      </div>
+    <div>
+      {/* Gruppen bærer tittelen selv, så PassInfoKort ikke trenger egen ramme. */}
+      <SkjemaGruppe tittel="Pass-info" feil={feil}>
+        <SkjemaRad etikett="Passnummer">
+          <RadInput
+            type="text"
+            value={nummer}
+            onChange={e => setNummer(e.target.value)}
+            autoComplete="off"
+            maxLength={20}
+            aria-label="Passnummer"
+          />
+        </SkjemaRad>
+        <SkjemaRad etikett="Utløpsdato">
+          <DatoFelt value={utloper} onChange={e => setUtloper(e.target.value)} aria-label="Utløpsdato" />
+        </SkjemaRad>
+      </SkjemaGruppe>
 
-      {feil && (
-        <div style={{ color: 'var(--danger)', fontSize: 12 }}>{feil}</div>
-      )}
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-        <PilleKnapp
-          type="button"
-          onClick={onAvbryt}
-          disabled={isPending}
-          style={{
-            flex: 1,
-          }}
-          pilleStil={{
-            padding: '10px 0',
-            background: 'transparent',
-            border: '0.5px solid var(--border)',
-            borderRadius: 999,
-            color: 'var(--text-secondary)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-          }}
-          synligHoyde={39}
-        >
-          Avbryt
-        </PilleKnapp>
-        <PilleKnapp
-          type="button"
-          onClick={handleLagre}
-          disabled={isPending}
-          style={{
-            flex: 1,
-          }}
-          pilleStil={{
-            padding: '10px 0',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 999,
-            color: 'var(--accent-foreground)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            fontWeight: 600,
-            opacity: isPending ? 0.6 : 1,
-          }}
-          synligHoyde={37}
-        >
-          {isPending ? 'Lagrer…' : 'Lagre'}
-        </PilleKnapp>
-      </div>
+      {/* Validering skjer ved trykk (feilmelding i gruppen), så knappen er alltid aktiv. */}
+      <LagreKnapp onClick={handleLagre} endret lagrer={isPending} />
+      <PilleKnapp
+        type="button"
+        onClick={onAvbryt}
+        disabled={isPending}
+        style={{ width: '100%', marginTop: 8 }}
+        pilleStil={{
+          padding: '10px 0',
+          background: 'transparent',
+          color: 'var(--text-secondary)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 13,
+          textAlign: 'center',
+        }}
+        synligHoyde={39}
+      >
+        Avbryt
+      </PilleKnapp>
     </div>
   )
 }

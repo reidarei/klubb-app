@@ -18,6 +18,7 @@ import Icon from '@/components/ui/Icon'
 import Avatar from '@/components/ui/Avatar'
 import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
 import Treffflate from '@/components/ui/Treffflate'
+import { SkjemaGruppe, TekstRad } from '@/components/ui/Skjema'
 import { Linkified } from '@/lib/linkify'
 import { useTastaturHoyde } from '@/components/chat/hooks/useKeyboardOffset'
 import {
@@ -64,7 +65,8 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Boksen rundt hilsen-feltet — TekstRad eier selve textarea-en, så fokus sjekkes mot boksen.
+  const hilsenRef = useRef<HTMLDivElement>(null)
   const tastaturHoyde = useTastaturHoyde()
   const forrigeTastaturHoyde = useRef(0)
 
@@ -86,7 +88,7 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
     const vokser = tastaturHoyde > forrigeTastaturHoyde.current
     forrigeTastaturHoyde.current = tastaturHoyde
     if (!vokser) return
-    if (document.activeElement === textareaRef.current) scrollTilBunn()
+    if (hilsenRef.current?.contains(document.activeElement)) scrollTilBunn()
   }, [tastaturHoyde])
 
   // Body-scroll-lås mens arket er åpent — samme mønster som AlbumLightbox.
@@ -311,19 +313,21 @@ export default function PubliserFondsrapport({ navn, bildeUrl, rolle, brukerId }
                 )}
 
                 {/* Hilsen — normal flyt, ingen sticky/fixed */}
-                <div style={{ ...mono, marginTop: 16, marginBottom: 8 }}>Hilsen (valgfritt)</div>
-                <textarea className="skjemafelt"
-                  ref={textareaRef}
-                  value={hilsen}
-                  onChange={e => setHilsen(e.target.value.slice(0, maksHilsen))}
-                  onFocus={scrollTilBunn}
-                  disabled={isPending || !utkast}
-                  maxLength={maksHilsen}
-                  placeholder="Noen ord til gutta før tallene…"
-                  style={tekstStil}
-                />
-                <div style={{ ...mono, textAlign: 'right', marginTop: 6, marginBottom: 18 }}>
-                  {maksHilsen - hilsen.length} tegn igjen
+                <div ref={hilsenRef} style={{ marginTop: 16 }}>
+                  <SkjemaGruppe
+                    tittel="Hilsen (valgfritt)"
+                    hjelp={`${maksHilsen - hilsen.length} tegn igjen`}
+                  >
+                    <TekstRad
+                      value={hilsen}
+                      onChange={e => setHilsen(e.target.value.slice(0, maksHilsen))}
+                      onFocus={scrollTilBunn}
+                      disabled={isPending || !utkast}
+                      maxLength={maksHilsen}
+                      placeholder="Noen ord til gutta før tallene…"
+                      aria-label="Hilsen"
+                    />
+                  </SkjemaGruppe>
                 </div>
 
                 {/* Forhåndsvisning (#787): samme ramme og tokens som
@@ -471,21 +475,6 @@ const triggerKnapp: CSSProperties = {
   fontFamily: 'var(--font-body)',
   fontSize: 12,
   fontWeight: 500
-}
-
-const tekstStil: CSSProperties = {
-  width: '100%',
-  background: 'var(--bg-elevated)',
-  border: '0.5px solid var(--border)',
-  borderRadius: 10,
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 15,
-  lineHeight: 1.5,
-  outline: 'none',
-  padding: '10px 12px',
-  resize: 'none',
-  minHeight: 90,
 }
 
 const primaerKnapp: CSSProperties = {

@@ -72,7 +72,7 @@ export const RUTER: Rute[] = [
   { sti: '/innstillinger' },
   { sti: '/innstillinger/bruk', overskrift: 'Aktivitet' },
   { sti: '/innstillinger/vitals', overskrift: 'Ytelsesmålinger' },
-  { sti: '/innstillinger/kart', overskrift: 'Kart' },
+  { sti: '/innstillinger/kart', overskrift: 'Kartalarmer' },
   { sti: '/innstillinger/varsler', overskrift: 'Varsler' },
   { sti: '/innstillinger/funksjoner', overskrift: 'Funksjoner' },
   { sti: '/innstillinger/faste-arrangementer', overskrift: 'Faste arrangementer' },

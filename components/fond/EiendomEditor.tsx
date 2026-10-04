@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
+import { ListeRad } from '@/components/MalAdminDeler'
+import { SendRad } from '@/components/fond/EditorDeler'
 import { opprettEiendom, oppdaterEiendom, slettEiendom } from '@/lib/actions/fond'
 
 type Eiendom = {
@@ -18,119 +20,111 @@ type Props = {
   eiendommer: Eiendom[]
 }
 
+// Feltene er uncontrolled (defaultValue + name) og leses fra FormData ved innsending.
+function Felter({ e }: { e?: Eiendom }) {
+  return (
+    <>
+      <SkjemaRad etikett="Navn">
+        <RadInput name="navn" defaultValue={e?.navn} placeholder={e ? undefined : 'F.eks. Skogshytta, Ljørdalen'} required />
+      </SkjemaRad>
+      <SkjemaRad etikett="Markedsverdi (kr)">
+        <RadInput name="markedsverdi" type="number" min={0} step={0.01} defaultValue={e?.markedsverdi ?? 0} required />
+      </SkjemaRad>
+      <SkjemaRad etikett="Anskaffelsesverdi (kr)">
+        <RadInput name="anskaffelsesverdi" type="number" min={0} step={0.01} defaultValue={e?.anskaffelsesverdi ?? 0} required />
+      </SkjemaRad>
+      <SkjemaRad etikett="Husleie i år (kr)">
+        <RadInput name="husleie_i_aar" type="number" min={0} step={0.01} defaultValue={e?.husleie_i_aar ?? 0} required />
+      </SkjemaRad>
+      {/* Positivt tall — trekkes fra i visningen. Se check-constraint i migrasjon 129. */}
+      <SkjemaRad etikett="Driftskostnader i år (kr)">
+        <RadInput name="driftskostnader_i_aar" type="number" min={0} step={0.01} defaultValue={e?.driftskostnader_i_aar ?? 0} required />
+      </SkjemaRad>
+    </>
+  )
+}
+
+function lesFelter(formData: FormData) {
+  return {
+    navn: formData.get('navn') as string,
+    markedsverdi: parseFloat(formData.get('markedsverdi') as string),
+    anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
+    husleie_i_aar: parseFloat(formData.get('husleie_i_aar') as string),
+    driftskostnader_i_aar: parseFloat(formData.get('driftskostnader_i_aar') as string),
+  }
+}
+
 export default function EiendomEditor({ eiendommer }: Props) {
-  const [feil, setFeil] = useState<string | null>(null)
+  const [feilListe, setFeilListe] = useState<string | null>(null)
+  const [feilNy, setFeilNy] = useState<string | null>(null)
   const [redigerer, setRedigerer] = useState<string | null>(null)
 
   async function handleOpprett(formData: FormData) {
-    setFeil(null)
+    setFeilNy(null)
     try {
-      await opprettEiendom({
-        navn: formData.get('navn') as string,
-        markedsverdi: parseFloat(formData.get('markedsverdi') as string),
-        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
-        husleie_i_aar: parseFloat(formData.get('husleie_i_aar') as string),
-        driftskostnader_i_aar: parseFloat(formData.get('driftskostnader_i_aar') as string),
-      })
+      await opprettEiendom(lesFelter(formData))
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilNy(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
   async function handleOppdater(id: string, formData: FormData) {
-    setFeil(null)
+    setFeilListe(null)
     try {
-      await oppdaterEiendom({
-        id,
-        navn: formData.get('navn') as string,
-        markedsverdi: parseFloat(formData.get('markedsverdi') as string),
-        anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
-        husleie_i_aar: parseFloat(formData.get('husleie_i_aar') as string),
-        driftskostnader_i_aar: parseFloat(formData.get('driftskostnader_i_aar') as string),
-      })
+      await oppdaterEiendom({ id, ...lesFelter(formData) })
       setRedigerer(null)
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilListe(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
   async function handleSlett(id: string) {
     if (!confirm('Slett eiendommen?')) return
-    setFeil(null)
+    setFeilListe(null)
     try {
       await slettEiendom(id)
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilListe(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {feil && (
-        <div style={{ color: 'var(--danger)', fontSize: 13, fontFamily: 'var(--font-body)' }}>{feil}</div>
+    <div>
+      {eiendommer.length > 0 && (
+        <SkjemaGruppe feil={feilListe}>
+          {eiendommer.map(e =>
+            redigerer === e.id ? (
+              // panel-liste på skjemaet: skillelinjene mellom radene gjelder bare direkte barn av gruppen.
+              <form key={e.id} className="panel-liste" action={fd => handleOppdater(e.id, fd)}>
+                <Felter e={e} />
+                <SendRad tekst="Lagre" onAvbryt={() => setRedigerer(null)} />
+              </form>
+            ) : (
+              <ListeRad
+                key={e.id}
+                venstre={
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>{e.navn}</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                      Markedsverdi {e.markedsverdi.toLocaleString('nb')} kr · Anskaffet {e.anskaffelsesverdi.toLocaleString('nb')} kr
+                    </div>
+                  </div>
+                }
+              >
+                <Button variant="secondary" onClick={() => setRedigerer(e.id)}>Rediger</Button>
+                <Button variant="danger" onClick={() => handleSlett(e.id)}>Slett</Button>
+              </ListeRad>
+            ),
+          )}
+        </SkjemaGruppe>
       )}
 
-      {/* Eksisterende eiendommer */}
-      {eiendommer.map(e =>
-        redigerer === e.id ? (
-          <form
-            key={e.id}
-            action={fd => handleOppdater(e.id, fd)}
-            style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10 }}
-          >
-            <Input name="navn" label="Navn" defaultValue={e.navn} required />
-            <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.markedsverdi} required />
-            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={e.anskaffelsesverdi} required />
-            <Input name="husleie_i_aar" label="Husleie i år (kr)" type="number" min={0} step={0.01} defaultValue={e.husleie_i_aar} required />
-            {/* Positivt tall — trekkes fra i visningen. Se check-constraint i migrasjon 129. */}
-            <Input name="driftskostnader_i_aar" label="Driftskostnader i år (kr)" type="number" min={0} step={0.01} defaultValue={e.driftskostnader_i_aar} required />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="submit" variant="primary">Lagre</Button>
-              <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
-            </div>
-          </form>
-        ) : (
-          <div
-            key={e.id}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '10px 14px',
-              background: 'var(--bg-elevated)',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>{e.navn}</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                Markedsverdi {e.markedsverdi.toLocaleString('nb')} kr · Anskaffet {e.anskaffelsesverdi.toLocaleString('nb')} kr
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Button variant="secondary" onClick={() => setRedigerer(e.id)}>Rediger</Button>
-              <Button variant="danger" onClick={() => handleSlett(e.id)}>Slett</Button>
-            </div>
-          </div>
-        )
-      )}
-
-      {/* Legg til ny eiendom */}
-      <form
-        action={handleOpprett}
-        style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10, border: '1px dashed var(--border)' }}
-      >
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-          Legg til eiendom
-        </div>
-        <Input name="navn" label="Navn" placeholder="F.eks. Skogshytta, Ljørdalen" required />
-        <Input name="markedsverdi" label="Markedsverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Input name="husleie_i_aar" label="Husleie i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Input name="driftskostnader_i_aar" label="Driftskostnader i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Button type="submit" variant="primary">Legg til</Button>
-      </form>
+      <SkjemaGruppe tittel="Legg til eiendom" feil={feilNy}>
+        <form className="panel-liste" action={handleOpprett}>
+          <Felter />
+          <SendRad tekst="Legg til" />
+        </form>
+      </SkjemaGruppe>
     </div>
   )
 }

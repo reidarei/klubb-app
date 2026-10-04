@@ -1,59 +1,11 @@
 'use client'
 
-import { useState, useTransition, type ButtonHTMLAttributes, type CSSProperties } from 'react'
+import { useState, useTransition } from 'react'
 import { leggTilKaaringMal, oppdaterKaaringMal, slettKaaringMal } from '@/lib/actions/kaaringmaler'
-import { treffflateRundt } from '@/components/ui/Treffflate'
-import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
-
-// Synlig pille: 26 px høy (text-xs + py-1 + 1 px kant), minWidth 44 (#700).
-const ADMIN_KNAPP_TREFF = treffflateRundt({ hoyde: 26 })
-// Radhøyde ≥ tap-flaten (+1 for borderTop), så knappene i nabo-radene ikke overlapper vertikalt.
-const RAD_MIN_HOYDE = MIN_TREFFMAAL_PX + 1
-
-// Usynlig knapp vokser vertikalt til 44; pillen inni bærer utseendet og får reell
-// minstebredde, så ingen X-utvidelse trengs og gap-1 mellom naboer overlapper ikke.
-function AdminKnapp({
-  stil,
-  children,
-  ...props
-}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style' | 'className' | 'type'> & { stil: CSSProperties }) {
-  return (
-    <button
-      type="button"
-      {...props}
-      style={{
-        ...ADMIN_KNAPP_TREFF.stil,
-        background: 'none',
-        border: 'none',
-        display: 'inline-flex',
-        alignItems: 'center',
-        flexShrink: 0,
-        fontFamily: 'inherit'
-      }}
-    >
-      <span
-        className="text-xs px-2 py-1 rounded-lg"
-        style={{ display: 'block', minWidth: MIN_TREFFMAAL_PX, textAlign: 'center', border: '1px solid transparent', ...stil }}
-      >
-        {children}
-      </span>
-    </button>
-  )
-}
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
+import { AdminKnapp, KNAPP_NORMAL, ListeRad } from '@/components/MalAdminDeler'
 
 type Mal = { id: string; navn: string; rekkefolge: number }
-
-const inputStil: React.CSSProperties = {
-  background: 'var(--bg-elevated-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  borderRadius: '0.75rem',
-  padding: '0.35rem 0.6rem',
-  fontSize: '0.875rem',
-  fontFamily: 'inherit',
-  flex: 1,
-  minWidth: 0,
-}
 
 function MalRad({ mal }: { mal: Mal }) {
   const [redigerer, setRedigerer] = useState(false)
@@ -77,55 +29,51 @@ function MalRad({ mal }: { mal: Mal }) {
 
   if (redigerer) {
     return (
-      <div className="flex gap-2 items-center py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <input className="skjemafelt"
-          value={navn}
-          onChange={e => setNavn(e.target.value)}
-          style={inputStil}
-          autoFocus
-          onKeyDown={e => { if (e.key === 'Enter') handleLagre() }}
-        />
-        <AdminKnapp onClick={handleLagre} disabled={isPending}
-          stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: isPending ? 0.5 : 1 }}>
-          {isPending ? '…' : 'OK'}
-        </AdminKnapp>
-        <AdminKnapp onClick={() => { setNavn(mal.navn); setRedigerer(false) }}
-          stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-          ✕
-        </AdminKnapp>
-      </div>
+      <>
+        <SkjemaRad etikett="Navn">
+          <RadInput
+            value={navn}
+            onChange={e => setNavn(e.target.value)}
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') handleLagre() }}
+          />
+        </SkjemaRad>
+        <ListeRad>
+          <AdminKnapp onClick={() => { setNavn(mal.navn); setRedigerer(false) }} stil={KNAPP_NORMAL}>
+            Avbryt
+          </AdminKnapp>
+          <AdminKnapp onClick={handleLagre} disabled={isPending}
+            stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: isPending ? 0.5 : 1 }}>
+            {isPending ? '…' : 'Lagre'}
+          </AdminKnapp>
+        </ListeRad>
+      </>
     )
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 py-2" style={{ borderTop: '1px solid var(--border-subtle)', minHeight: RAD_MIN_HOYDE }}>
-      <p className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--text-primary)' }}>{mal.navn}</p>
-      <div className="flex gap-1 shrink-0">
-        {bekrefterSlett ? (
-          <>
-            <AdminKnapp onClick={handleSlett} disabled={isPending}
-              stil={{ background: 'var(--danger)', color: 'var(--text-primary)', opacity: isPending ? 0.5 : 1 }}>
-              Slett
-            </AdminKnapp>
-            <AdminKnapp onClick={() => setBekrefterSlett(false)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-              Nei
-            </AdminKnapp>
-          </>
-        ) : (
-          <>
-            <AdminKnapp onClick={() => setRedigerer(true)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-              Rediger
-            </AdminKnapp>
-            <AdminKnapp onClick={() => setBekrefterSlett(true)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--danger)', background: 'none' }}>
-              Slett
-            </AdminKnapp>
-          </>
-        )}
-      </div>
-    </div>
+    <ListeRad venstre={<p className="text-sm truncate" style={{ color: 'var(--text-primary)', margin: 0 }}>{mal.navn}</p>}>
+      {bekrefterSlett ? (
+        <>
+          <AdminKnapp onClick={handleSlett} disabled={isPending}
+            stil={{ background: 'var(--danger)', color: 'var(--text-primary)', opacity: isPending ? 0.5 : 1 }}>
+            Slett
+          </AdminKnapp>
+          <AdminKnapp onClick={() => setBekrefterSlett(false)} stil={KNAPP_NORMAL}>
+            Nei
+          </AdminKnapp>
+        </>
+      ) : (
+        <>
+          <AdminKnapp onClick={() => setRedigerer(true)} stil={KNAPP_NORMAL}>
+            Rediger
+          </AdminKnapp>
+          <AdminKnapp onClick={() => setBekrefterSlett(true)} stil={{ ...KNAPP_NORMAL, color: 'var(--danger)' }}>
+            Slett
+          </AdminKnapp>
+        </>
+      )}
+    </ListeRad>
   )
 }
 
@@ -141,27 +89,36 @@ function NyMalForm() {
     })
   }
 
+  const kanLeggeTil = !isPending && !!navn.trim()
+
   return (
-    <div className="flex gap-2 items-center pt-3 mt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <input className="skjemafelt"
-        value={navn}
-        onChange={e => setNavn(e.target.value)}
-        placeholder="Ny kåringmal…"
-        style={inputStil}
-        onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
-      />
-      <AdminKnapp onClick={handleLeggTil} disabled={isPending || !navn.trim()}
-        stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
-        {isPending ? '…' : '+ Legg til'}
-      </AdminKnapp>
-    </div>
+    <SkjemaGruppe tittel="Ny kåring">
+      <SkjemaRad etikett="Navn">
+        <RadInput
+          value={navn}
+          onChange={e => setNavn(e.target.value)}
+          placeholder="Ny kåringmal…"
+          onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
+        />
+      </SkjemaRad>
+      <ListeRad>
+        <AdminKnapp onClick={handleLeggTil} disabled={!kanLeggeTil}
+          stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: kanLeggeTil ? 1 : 0.5 }}>
+          {isPending ? '…' : '+ Legg til'}
+        </AdminKnapp>
+      </ListeRad>
+    </SkjemaGruppe>
   )
 }
 
 export default function KaaringMalAdmin({ maler }: { maler: Mal[] }) {
   return (
     <div>
-      {maler.map(mal => <MalRad key={mal.id} mal={mal} />)}
+      {maler.length > 0 && (
+        <SkjemaGruppe>
+          {maler.map(mal => <MalRad key={mal.id} mal={mal} />)}
+        </SkjemaGruppe>
+      )}
       <NyMalForm />
     </div>
   )

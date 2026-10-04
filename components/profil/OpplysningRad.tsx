@@ -1,33 +1,15 @@
 import type { CSSProperties, ReactNode } from 'react'
 
 /**
- * Delt visuell primitiv for en «opplysnings-rad»: etikett venstre, verdi
- * (eller et redigerbart felt) høyre, samme linje. Brukt av `/profil`
- * (visning, `EgneOpplysninger.tsx`) og `/profil/rediger` (redigering,
- * `RedigerProfilForm.tsx`) — #685 handlet nettopp om at de to så ut som to
- * forskjellige skjemaer fordi hver hadde sin egen `Rad`/`labelStil`.
+ * Visuell primitiv for en «opplysnings-rad» på /profil (visning, se
+ * `EgneOpplysninger.tsx`): etikett venstre, verdi høyre, samme linje.
  *
- * Bevisst IKKE én komponent med en `redigerbar`-prop: en slik prop ville
- * gjort primitiven til en konfigmatrise (§ Policy: Avatar advarer mot
- * nøyaktig dette), og tvunget `/profil` til å bli en klientkomponent for å
- * holde input-state den ikke trenger. I stedet er `OpplysningRad` ren
- * layout — den vet ingenting om tilstand — og kalleren styrer selv om
- * `children` er statisk tekst eller et `<input>`.
+ * Kun VISNING. Redigeringsskjemaet (`/profil/rediger`) bruker
+ * byggeklossene i `components/ui/Skjema.tsx` (Policy: Skjemaer), med samme
+ * rader i samme rekkefølge (vaktet av e2e/profil-opplysninger.spec.ts).
  *
- * INGEN `'use client'`: komponenten brukes fra `/profil` (server component)
- * så vel som fra `RedigerProfilForm` (klientkomponent) — begge kan importere
- * en ren, tilstandsløs funksjon. Det er også grunnen til at det redigerbare
- * fritekstfeltet (`OpplysningTekstfelt`) bor i sin egen fil: det trenger
- * hooks, og `'use client'` her ville fått `/profil` sitt server-side kall på
- * `opplysningVerdiStil()` til å kaste.
- *
- * ETIKETTEN ER VISUELL, IKKE PROGRAMMATISK: den rendres som en `<div>`, ikke
- * en `<label htmlFor>`, nettopp fordi `/profil` ikke har noen kontroll å
- * knytte den til. Omslutter du et skjemafelt, MÅ feltet derfor ha sitt eget
- * `aria-label` med samme tekst (#685-review) — ellers står kontrollen uten
- * tilgjengelig navn. `RedigerProfilForm` gjør det via den lokale
- * `RedigerRad`-wrapperen, som sender etikettstrengen videre til kontrollen
- * slik at de to ikke kan drifte fra hverandre.
+ * INGEN `'use client'`: brukes fra en server component, og
+ * `opplysningVerdiStil()` kalles direkte derfra.
  */
 export default function OpplysningRad({
   label,
@@ -100,19 +82,4 @@ export function opplysningVerdiStil({
     overflowWrap: 'break-word',
     minWidth: 0,
   }
-}
-
-/** Nullstiller input-defaults slik at feltet arver `opplysningVerdiStil()`
- * i stedet for nettleserens standard input-utseende.
- *
- * `outline: 'none'` gjelder bevisst kun musebruk: feltene har verken ramme
- * eller bakgrunn, så `.opplysning-verdi:focus-visible` i `globals.css` gir
- * tastaturbrukeren en synlig markering tilbake (#685-review). Kallsteder som
- * bruker denne resetten skal derfor også sette `className="opplysning-verdi"`. */
-export const OPPLYSNING_INPUT_RESET: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  outline: 'none',
-  padding: 0,
 }

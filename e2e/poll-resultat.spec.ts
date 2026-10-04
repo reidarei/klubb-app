@@ -24,7 +24,7 @@ test.describe('Resultat etter stemme (#88)', () => {
     await page.goto('/poll/ny')
     await page.waitForLoadState('networkidle')
     const ts = Date.now()
-    await page.fill('input[placeholder="Hva lurer du på?"]', `Res-test ${ts}`)
+    await page.fill('textarea[placeholder="Hva lurer du på?"]', `Res-test ${ts}`)
     const alts = page.locator('input[placeholder="Alternativ"]')
     await alts.nth(0).fill('Ja')
     await alts.nth(1).fill('Nei')

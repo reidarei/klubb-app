@@ -1,45 +1,15 @@
 'use client'
 
-import { useState, useTransition, type CSSProperties } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { opprettPoll } from '@/lib/actions/poll'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
-import Segment from '@/components/ui/Segment'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, TekstRad } from '@/components/ui/Skjema'
+import { ToggleRad } from '@/components/ui/ToggleSwitch'
 import Icon from '@/components/ui/Icon'
 import Treffflate from '@/components/ui/Treffflate'
 import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 import { datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
-import Rad from '@/components/ui/FeltRad'
-
-const monoLabel: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9.5,
-  fontWeight: 600,
-  color: 'var(--text-tertiary)',
-  letterSpacing: '1.6px',
-  textTransform: 'uppercase',
-  marginBottom: 4,
-}
-
-const inputStil: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  outline: 'none',
-  padding: 0,
-}
-
-const accentStil: CSSProperties = {
-  ...inputStil,
-  fontFamily: 'var(--font-display)',
-  fontSize: 19,
-  fontWeight: 500,
-  letterSpacing: '-0.3px',
-}
 
 // Default svarfrist: én uke frem kl 20:00. Gir brukeren et fornuftig
 // utgangspunkt i stedet for tom datoinput.
@@ -109,11 +79,6 @@ export default function LagPollSkjema() {
     })
   }
 
-  const valgOptions = [
-    { value: 'enkel' as const, label: 'Enkeltvalg' },
-    { value: 'fler' as const, label: 'Flervalg' },
-  ]
-
   return (
     <div style={{ padding: '0 20px 20px' }}>
       <SkjemaBar
@@ -125,62 +90,55 @@ export default function LagPollSkjema() {
         laster={isPending}
       />
 
-      {/* Spørsmål */}
-      <SkjemaSeksjon label="Spørsmål">
-        <Rad last>
-          <input
-            type="text"
-            value={spoersmaal}
-            onChange={e => setSpoersmaal(e.target.value)}
-            style={accentStil}
-            placeholder="Hva lurer du på?"
-            maxLength={200}
-          />
-        </Rad>
-      </SkjemaSeksjon>
+      <SkjemaGruppe tittel="Spørsmål">
+        <TekstRad
+          etikett="Spørsmål"
+          minRader={2}
+          value={spoersmaal}
+          onChange={e => setSpoersmaal(e.target.value)}
+          placeholder="Hva lurer du på?"
+          maxLength={200}
+        />
+      </SkjemaGruppe>
 
-      {/* Alternativer */}
-      <SkjemaSeksjon label={`Alternativer (${alternativer.length})`}>
+      {/* Én rad per alternativ; «Legg til alternativ» er siste rad */}
+      <SkjemaGruppe tittel={`Alternativer (${alternativer.length})`}>
         {alternativer.map((alt, i) => (
-          <Rad key={i} last={i === alternativer.length - 1 && alternativer.length >= 10}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={monoLabel}>{i + 1}.</div>
-              <input
-                type="text"
-                value={alt}
-                onChange={e => oppdaterAlternativ(i, e.target.value)}
-                style={{ ...inputStil, flex: 1 }}
-                placeholder="Alternativ"
-                maxLength={120}
-              />
-              {alternativer.length > 2 && (
-                <Treffflate
-                  synlig={22}
-                  onClick={() => fjernAlternativ(i)}
-                  aria-label="Fjern alternativ"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  <Icon name="x" size={14} />
-                </Treffflate>
-              )}
-            </div>
-          </Rad>
+          <SkjemaRad key={i} etikett={`${i + 1}.`}>
+            <RadInput
+              type="text"
+              value={alt}
+              onChange={e => oppdaterAlternativ(i, e.target.value)}
+              placeholder="Alternativ"
+              maxLength={120}
+            />
+            {alternativer.length > 2 && (
+              <Treffflate
+                synlig={22}
+                onClick={() => fjernAlternativ(i)}
+                aria-label="Fjern alternativ"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                <Icon name="x" size={14} />
+              </Treffflate>
+            )}
+          </SkjemaRad>
         ))}
         {alternativer.length < 10 && (
-          <Rad last>
+          <div style={{ padding: '0 14px' }}>
             <button
               type="button"
               onClick={leggTilAlternativ}
               style={{
                 background: 'none',
                 border: 'none',
-                // Ekte høyde, ikke usynlig utvidelse: raden ligger rett under et 44 px felt med bare 8 px
-                // mellom, og en utvidelse ville stjålet nederste kant av feltet over (CHIP_RAD_GAP, #508).
+                // Ekte høyde, ikke usynlig utvidelse: raden ligger rett under en 48 px rad, og en utvidelse
+                // ville stjålet nederste kant av raden over (CHIP_RAD_GAP, #508).
                 minHeight: MIN_TREFFMAAL_PX,
                 padding: 0,
                 color: 'var(--accent)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 13,
+                fontSize: 15,
                 fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
@@ -190,39 +148,20 @@ export default function LagPollSkjema() {
               <Icon name="plus" size={14} color="var(--accent)" />
               Legg til alternativ
             </button>
-          </Rad>
-        )}
-      </SkjemaSeksjon>
-
-      {/* Valgtype + frist */}
-      <SkjemaSeksjon label="Innstillinger">
-        <Rad>
-          <div style={monoLabel}>Valgtype</div>
-          <Segment
-            value={flervalg ? 'fler' : 'enkel'}
-            options={valgOptions}
-            onChange={v => setFlervalg(v === 'fler')}
-          />
-        </Rad>
-        <Rad last>
-          <div style={monoLabel}>Svarfrist</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              type="datetime-local"
-              value={frist}
-              onChange={e => setFrist(e.target.value)}
-              style={{ ...inputStil, flex: 1 }}
-            />
-            <Icon name="calendar" size={15} color="var(--text-tertiary)" />
           </div>
-        </Rad>
-      </SkjemaSeksjon>
+        )}
+      </SkjemaGruppe>
 
-      {feil && (
-        <p style={{ fontSize: 13, color: 'var(--danger)', marginTop: -8, marginBottom: 16 }}>
-          {feil}
-        </p>
-      )}
+      <SkjemaGruppe tittel="Innstillinger" feil={feil}>
+        {/* Bryter, ikke segment: to segmentknapper ved siden av etiketten ble
+            for smale til 44 px trykkflate. */}
+        <SkjemaRad etikett="Flere svar">
+          <ToggleRad on={flervalg} onChange={() => setFlervalg(v => !v)} ariaLabel="Tillat flere svar" />
+        </SkjemaRad>
+        <SkjemaRad etikett="Svarfrist">
+          <DatoFelt type="datetime-local" value={frist} onChange={e => setFrist(e.target.value)} aria-label="Svarfrist" />
+        </SkjemaRad>
+      </SkjemaGruppe>
     </div>
   )
 }

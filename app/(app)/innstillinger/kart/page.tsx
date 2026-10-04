@@ -4,8 +4,7 @@ import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { SYMBOLER_VARSLER } from '@/lib/markering-symboler'
 import { hentKartSymboler } from '@/lib/kart-symbol-tilpasning'
-import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
-import InnstillingsKort from '@/components/innstillinger/InnstillingsKort'
+import UndersideHode from '@/components/innstillinger/UndersideHode'
 import KartSymbolSkjema from './KartSymbolSkjema'
 
 // Kartinnstillinger: navn og emoji på de varslende markeringene. Gjelder
@@ -23,61 +22,29 @@ export default async function KartInnstillinger() {
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
-      <header style={{ marginTop: 12, marginBottom: 22 }}>
-        <div style={{ marginBottom: 4 }}>
-          <TilbakeKnapp href="/innstillinger" til="Kontrollpanel" />
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            fontWeight: 600,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.6px',
-            textTransform: 'uppercase',
-            marginBottom: 6,
-          }}
-        >
-          Kontrollpanel
-        </div>
-        <h1
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 30,
-            fontWeight: 500,
-            letterSpacing: '-0.4px',
-            margin: 0,
-            color: 'var(--text-primary)',
-          }}
-        >
-          Kart
-        </h1>
-      </header>
+      <UndersideHode tittel="Kartalarmer" />
 
-      <InnstillingsKort
-        tittel="Markeringer som varsler"
-        defaultApen
-        oppsummering={varslende.map(v => `${v.gjeldende.emoji} ${v.gjeldende.etikett}`).join(' · ')}
-        beskrivelse="Navn og symbol på markeringene som sender varsel til hele gjengen. Gjelder kartet i både reisemodus og møtemodus — og markeringer som allerede står på kartet."
-      >
-        {varslende.length === 0 ? (
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Klubben har ingen markeringer som varsler.
-          </p>
-        ) : (
-          varslende.map(({ standard, gjeldende }, i) => (
-            <KartSymbolSkjema
-              key={standard.id}
-              symbol={standard.id}
-              etikett={gjeldende.etikett}
-              emoji={gjeldende.emoji}
-              standardEtikett={standard.etikett}
-              standardEmoji={standard.emoji}
-              siste={i === varslende.length - 1}
-            />
-          ))
-        )}
-      </InnstillingsKort>
+      <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, lineHeight: 1.45, color: 'var(--text-secondary)', margin: '0 4px 18px' }}>
+        Markeringene som sender varsel til hele gjengen når noen setter dem på kartet. Her gir du dem navn og symbol. Gjelder kartet i både reisemodus og møtemodus — og markeringer som allerede står på kartet.
+      </p>
+
+      {varslende.length === 0 ? (
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+          Klubben har ingen markeringer som varsler.
+        </p>
+      ) : (
+        varslende.map(({ standard, gjeldende }, i) => (
+          <KartSymbolSkjema
+            key={standard.id}
+            symbol={standard.id}
+            nummer={i + 1}
+            etikett={gjeldende.etikett}
+            emoji={gjeldende.emoji}
+            standardEtikett={standard.etikett}
+            standardEmoji={standard.emoji}
+          />
+        ))
+      )}
     </div>
   )
 }

@@ -10,11 +10,9 @@ import {
 } from '@/lib/actions/profil'
 import { VALGBARE_ROLLER, tittelFor, kanAdministrere, type Rolle } from '@/lib/roller'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
-import Segment from '@/components/ui/Segment'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, ValgFelt, TekstRad } from '@/components/ui/Skjema'
 import { ToggleRad } from '@/components/ui/ToggleSwitch'
 import { STIKKORD_MAKS_LENGDE, MATALLERGIER_MAKS_LENGDE } from '@/lib/konstanter'
-import Rad from '@/components/ui/FeltRad'
 
 type Medlem = {
   id: string
@@ -32,37 +30,6 @@ type Medlem = {
 }
 
 type NaavaerendeGeneralsekretaer = { id: string; navn: string } | null
-
-const labelStil: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9.5,
-  fontWeight: 600,
-  color: 'var(--text-tertiary)',
-  textTransform: 'uppercase',
-  letterSpacing: '1.6px',
-  marginBottom: 4,
-}
-
-const inputBaseStil: React.CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  outline: 'none',
-  padding: 0,
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  color: 'var(--text-primary)',
-  lineHeight: 1.5,
-}
-
-const accentInputStil: React.CSSProperties = {
-  ...inputBaseStil,
-  fontFamily: 'var(--font-display)',
-  fontSize: 19,
-  fontWeight: 500,
-  letterSpacing: '-0.3px',
-  color: 'var(--accent)',
-}
 
 export default function RedigerMedlemSkjema({
   medlem,
@@ -241,232 +208,162 @@ export default function RedigerMedlemSkjema({
       />
 
       {/* Personalia */}
-      <SkjemaSeksjon label="Personalia">
-        <Rad>
-          <div style={labelStil}>Navn</div>
-          <input
-            type="text"
-            value={navn}
-            onChange={e => setNavn(e.target.value)}
-            style={accentInputStil}
-            required
-          />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Visningsnavn</div>
-          <input
+      <SkjemaGruppe tittel="Personalia">
+        <SkjemaRad etikett="Navn">
+          <RadInput type="text" value={navn} onChange={e => setNavn(e.target.value)} required aria-label="Navn" />
+        </SkjemaRad>
+        <SkjemaRad etikett="Visningsnavn">
+          <RadInput
             type="text"
             value={visningsnavn}
             onChange={e => setVisningsnavn(e.target.value)}
-            style={inputBaseStil}
             placeholder={navn}
+            aria-label="Visningsnavn"
           />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Fødselsdato</div>
-          <input
-            type="date"
-            value={fodselsdato}
-            onChange={e => setFodselsdato(e.target.value)}
-            style={{ ...inputBaseStil, colorScheme: 'dark' }}
-          />
-        </Rad>
-        <Rad>
-          <div style={labelStil}>Stikkord</div>
-          <input
-            type="text"
-            value={stikkord}
-            onChange={e => setStikkord(e.target.value)}
-            maxLength={STIKKORD_MAKS_LENGDE}
-            style={inputBaseStil}
-            // «Ikke satt», ikke et eksempel med komma: stikkord er fritekst
-            // siden #685, og den gamle placeholderen antydet et listeformat
-            // som ikke lenger finnes. Samme tekst som i medlemmets eget skjema.
-            placeholder="Ikke satt"
-          />
-        </Rad>
-        <Rad last>
-          <div style={labelStil}>Matallergier</div>
-          <input
-            type="text"
-            value={matallergier}
-            onChange={e => setMatallergier(e.target.value)}
-            maxLength={MATALLERGIER_MAKS_LENGDE}
-            style={inputBaseStil}
-            placeholder="Skalldyr, nøtter …"
-          />
-        </Rad>
-      </SkjemaSeksjon>
+        </SkjemaRad>
+        <SkjemaRad etikett="Fødselsdato">
+          <DatoFelt value={fodselsdato} onChange={e => setFodselsdato(e.target.value)} aria-label="Fødselsdato" />
+        </SkjemaRad>
+        {/* «Ikke satt», ikke et eksempel med komma: stikkord er fritekst
+            siden #685, og den gamle placeholderen antydet et listeformat
+            som ikke lenger finnes. Samme tekst som i medlemmets eget skjema. */}
+        <TekstRad
+          etikett="Stikkord"
+          minRader={1}
+          value={stikkord}
+          onChange={e => setStikkord(e.target.value)}
+          maxLength={STIKKORD_MAKS_LENGDE}
+          placeholder="Ikke satt"
+          aria-label="Stikkord"
+        />
+        <TekstRad
+          etikett="Matallergier"
+          minRader={1}
+          value={matallergier}
+          onChange={e => setMatallergier(e.target.value)}
+          maxLength={MATALLERGIER_MAKS_LENGDE}
+          placeholder="Skalldyr, nøtter …"
+          aria-label="Matallergier"
+        />
+      </SkjemaGruppe>
 
       {/* Kontakt */}
-      <SkjemaSeksjon label="Kontakt">
-        <Rad>
-          <div style={labelStil}>E-post</div>
-          <div style={{ ...inputBaseStil, color: 'var(--text-secondary)' }}>
+      <SkjemaGruppe tittel="Kontakt">
+        <SkjemaRad etikett="E-post">
+          <span
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 15,
+              color: 'var(--text-secondary)',
+              overflowWrap: 'anywhere',
+              textAlign: 'right',
+            }}
+          >
             {medlem.epost}
-          </div>
-        </Rad>
-        <Rad last>
-          <div style={labelStil}>Telefon</div>
-          <input
+          </span>
+        </SkjemaRad>
+        <SkjemaRad etikett="Telefon">
+          <RadInput
             type="tel"
             value={telefon}
             onChange={e => setTelefon(e.target.value)}
-            style={inputBaseStil}
             placeholder="+47 ..."
+            aria-label="Telefon"
           />
-        </Rad>
-      </SkjemaSeksjon>
+        </SkjemaRad>
+      </SkjemaGruppe>
 
-      {/* Tilgang */}
-      <SkjemaSeksjon label="Tilgang">
-        {/* Segment for admin/medlem-rollen */}
-        <div style={{ padding: '10px 4px', borderBottom: '0.5px solid var(--border-subtle)' }}>
-          <div style={{ ...labelStil, marginBottom: 8 }}>Rolle</div>
-          <Segment
+      {/* Tilgang. Rolle og status er to-valgs lister: ValgFelt i stedet for
+          Segment, så de følger skjemastandarden (verdi i aksentfarge, native
+          liste usynlig oppå). */}
+      <SkjemaGruppe tittel="Tilgang">
+        <SkjemaRad etikett="Rolle">
+          <ValgFelt
             value={rolle}
-            onChange={setRolle}
-            options={VALGBARE_ROLLER.map(r => ({ value: r, label: tittelFor(r) }))}
+            onChange={e => setRolle(e.target.value as Rolle)}
+            valg={VALGBARE_ROLLER.map(r => ({ verdi: r, etikett: tittelFor(r) }))}
+            aria-label="Rolle"
           />
-        </div>
+        </SkjemaRad>
+        <SkjemaRad etikett="Status">
+          <ValgFelt
+            value={aktiv}
+            onChange={e => setAktiv(e.target.value as 'aktiv' | 'deaktivert')}
+            valg={[
+              { verdi: 'aktiv', etikett: 'Aktiv' },
+              { verdi: 'deaktivert', etikett: 'Deaktivert' },
+            ]}
+            aria-label="Status"
+          />
+        </SkjemaRad>
+      </SkjemaGruppe>
 
-        {/* ToggleSwitch for generalsekretær-tittelen — separat fra rolle-Segmentet
-            fordi GS er en utmerkelse, ikke en sidestilt status i to-valgs-skjemaet.
-            Confirm skjer ved toggle, ikke ved submit — slik at brukeren ser
-            konsekvensen (hvem som mister tittelen) før han klikker Lagre. */}
-        <div
-          style={{
-            padding: '10px 4px',
-            borderBottom: '0.5px solid var(--border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...labelStil, marginBottom: 2 }}>Generalsekretær</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-              Bare én om gangen. Får gul glød på bildet.
-            </div>
-          </div>
+      {/* Generalsekretær-tittelen er separat fra rolle-valget fordi GS er en
+          utmerkelse, ikke en sidestilt status. Confirm skjer ved toggle, ikke
+          ved submit — så brukeren ser konsekvensen (hvem som mister tittelen)
+          før han klikker Lagre. */}
+      <SkjemaGruppe tittel="Generalsekretær" hjelp="Bare én om gangen. Får gul glød på bildet.">
+        <SkjemaRad etikett="Generalsekretær">
           <ToggleRad
             on={erGeneralsekretaer}
             onChange={handleToggleGs}
             disabled={isPending}
             ariaLabel="Generalsekretær"
           />
-        </div>
+        </SkjemaRad>
+      </SkjemaGruppe>
 
-        {/* Innspill-varsler: hvem som får push/epost om nye innspill (GitHub-
-            issues). Uavhengig av rolle — lagres ved submit sammen med resten
-            av skjemaet, ingen confirm nødvendig. */}
-        <div
-          style={{
-            padding: '10px 4px',
-            borderBottom: '0.5px solid var(--border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...labelStil, marginBottom: 2 }}>Innspill-varsler</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-              Får varsel når noen sender inn et innspill i appen.
-            </div>
-          </div>
+      {/* To uavhengige brytere, uavhengig av rolle. Lagres ved submit sammen
+          med resten av skjemaet, ingen confirm nødvendig. Feilvarsler er egen
+          bryter fra innspill — feilhåndtering, ikke dialog om nye ønsker. */}
+      <SkjemaGruppe
+        tittel="Varsler"
+        hjelp="Innspill: varsel når noen sender inn et innspill i appen. Feil: daglig alarm hvis appen har feil."
+      >
+        <SkjemaRad etikett="Innspill-varsler">
           <ToggleRad
             on={faarIssueVarsler}
             onChange={setFaarIssueVarsler}
             disabled={isPending}
             ariaLabel="Innspill-varsler"
           />
-        </div>
-
-        {/* Feilvarsler: egen bryter fra innspill — dette er
-            feilhåndtering, ikke dialog om nye ønsker. */}
-        <div
-          style={{
-            padding: '10px 4px',
-            borderBottom: '0.5px solid var(--border-subtle)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...labelStil, marginBottom: 2 }}>Feilvarsler</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-              Får daglig alarm hvis appen har feil.
-            </div>
-          </div>
+        </SkjemaRad>
+        <SkjemaRad etikett="Feilvarsler">
           <ToggleRad
             on={faarFeilvarsler}
             onChange={setFaarFeilvarsler}
             disabled={isPending}
             ariaLabel="Feilvarsler"
           />
-        </div>
-
-        <div style={{ padding: '10px 4px' }}>
-          <div style={{ ...labelStil, marginBottom: 8 }}>Status</div>
-          <Segment
-            value={aktiv}
-            onChange={setAktiv}
-            options={[
-              { value: 'aktiv', label: 'Aktiv' },
-              { value: 'deaktivert', label: 'Deaktivert' },
-            ]}
-          />
-        </div>
-      </SkjemaSeksjon>
+        </SkjemaRad>
+      </SkjemaGruppe>
 
       {/* Faresone */}
-      <SkjemaSeksjon label="Faresone">
+      <SkjemaGruppe
+        tittel="Faresone"
+        hjelp="Kan ikke angres. Arrangementer opprettet av medlemmet beholdes."
+      >
         <button
           type="button"
           onClick={handleSlett}
           disabled={isPending}
           style={{
             width: '100%',
+            minHeight: 48,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 4px',
+            padding: '0 14px',
             background: 'none',
             border: 'none',
             textAlign: 'left',
+            fontFamily: 'var(--font-body)',
+            fontSize: 15,
+            color: 'var(--danger)',
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 16,
-                fontWeight: 500,
-                color: 'var(--danger)',
-                letterSpacing: '-0.2px',
-                marginBottom: 2,
-              }}
-            >
-              Slett medlem
-            </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                letterSpacing: '0.1px',
-              }}
-            >
-              Kan ikke angres. Arrangementer opprettet av medlemmet beholdes.
-            </div>
-          </div>
+          Slett medlem
         </button>
-      </SkjemaSeksjon>
+      </SkjemaGruppe>
     </div>
   )
 }

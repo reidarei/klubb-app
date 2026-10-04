@@ -24,7 +24,7 @@ test.describe('Redigere egne meldinger inline', () => {
     await page.waitForLoadState('networkidle')
 
     const ts = Date.now()
-    await page.fill('input[placeholder="Hva lurer du på?"]', `Edit-test ${ts}`)
+    await page.fill('textarea[placeholder="Hva lurer du på?"]', `Edit-test ${ts}`)
     const alts = page.locator('input[placeholder="Alternativ"]')
     await alts.nth(0).fill('A')
     await alts.nth(1).fill('B')

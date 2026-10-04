@@ -1,13 +1,11 @@
 'use client'
 
-import { useState, useTransition, type CSSProperties } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { opprettKaaringspoll } from '@/lib/actions/kaaringspoll'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
-import Icon from '@/components/ui/Icon'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, ValgFelt } from '@/components/ui/Skjema'
 import { formaterDato, datetimeLocalTilIso, osloDagPluss } from '@/lib/dato'
-import Rad from '@/components/ui/FeltRad'
 
 type Mal = {
   id: string
@@ -19,27 +17,6 @@ type ArrangementValg = {
   id: string
   tittel: string
   start_tidspunkt: string
-}
-
-const monoLabel: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9.5,
-  fontWeight: 600,
-  color: 'var(--text-tertiary)',
-  letterSpacing: '1.6px',
-  textTransform: 'uppercase',
-  marginBottom: 4,
-}
-
-const inputStil: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  outline: 'none',
-  padding: 0,
 }
 
 // Default svarfrist: én uke frem kl 20:00.
@@ -133,76 +110,60 @@ export default function OpprettSkjema({
         laster={isPending}
       />
 
-      <SkjemaSeksjon label="Kåring">
-        <Rad last>
-          <div style={monoLabel}>Mal</div>
-          <select
+      <SkjemaGruppe tittel="Kåring">
+        <SkjemaRad etikett="Mal">
+          <ValgFelt
             value={malId}
+            valg={maler.map(m => ({ verdi: m.id, etikett: m.navn }))}
             onChange={e => setMalId(e.target.value)}
-            style={{ ...inputStil, fontSize: 16 }}
-          >
-            {maler.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.navn}
-              </option>
-            ))}
-          </select>
-        </Rad>
-      </SkjemaSeksjon>
+            aria-label="Mal"
+          />
+        </SkjemaRad>
+      </SkjemaGruppe>
 
-      <SkjemaSeksjon label="Innstillinger">
-        <Rad>
-          <div style={monoLabel}>År</div>
-          <input
+      <SkjemaGruppe tittel="Innstillinger">
+        <SkjemaRad etikett="År">
+          <RadInput
             type="number"
             min={2008}
             max={2100}
             value={aar}
             onChange={e => setAar(parseInt(e.target.value || `${defaultAar}`, 10))}
-            style={inputStil}
           />
-        </Rad>
-        <Rad>
-          <div style={monoLabel}>Svarfrist</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              type="datetime-local"
-              value={frist}
-              onChange={e => setFrist(e.target.value)}
-              style={{ ...inputStil, flex: 1 }}
-            />
-            <Icon name="calendar" size={15} color="var(--text-tertiary)" />
-          </div>
-        </Rad>
-        <Rad last>
-          <div style={monoLabel}>Arrangement (valgfritt)</div>
+        </SkjemaRad>
+        <SkjemaRad etikett="Svarfrist">
+          <DatoFelt type="datetime-local" value={frist} onChange={e => setFrist(e.target.value)} aria-label="Svarfrist" />
+        </SkjemaRad>
+        <SkjemaRad etikett="Arrangement">
           {arrangementer.length === 0 ? (
-            <div
+            <span
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 13,
                 color: 'var(--text-tertiary)',
                 fontStyle: 'italic',
+                textAlign: 'right',
               }}
             >
-              Ingen aktuelle arrangementer å koble til — la den stå tom
-            </div>
+              Ingen aktuelle å koble til
+            </span>
           ) : (
-            <select
+            <ValgFelt
               value={arrangementId}
+              valg={[
+                { verdi: '', etikett: '— ikke koblet —' },
+                ...arrangementer.map(a => ({
+                  verdi: a.id,
+                  etikett: `${a.tittel} (${formaterDato(a.start_tidspunkt, 'd. MMM yyyy')})`,
+                })),
+              ]}
               onChange={e => setArrangementId(e.target.value)}
-              style={{ ...inputStil, fontSize: 16 }}
-            >
-              <option value="">— ikke koblet —</option>
-              {arrangementer.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.tittel} ({formaterDato(a.start_tidspunkt, 'd. MMM yyyy')})
-                </option>
-              ))}
-            </select>
+              plassholder="— ikke koblet —"
+              aria-label="Arrangement"
+            />
           )}
-        </Rad>
-      </SkjemaSeksjon>
+        </SkjemaRad>
+      </SkjemaGruppe>
 
       <div
         style={{
@@ -222,7 +183,7 @@ export default function OpprettSkjema({
       </div>
 
       {feil && (
-        <p style={{ fontSize: 13, color: 'var(--danger)', marginTop: 12 }}>{feil}</p>
+        <p role="alert" style={{ fontSize: 13, color: 'var(--danger)', margin: '12px 4px 0' }}>{feil}</p>
       )}
     </div>
   )

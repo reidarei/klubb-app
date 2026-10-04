@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { varslOmArrangement } from '@/lib/actions/arrangementer'
 import { VARSLE_MAKS_LENGDE } from '@/lib/konstanter'
 import { PilleKnapp } from '@/components/ui/TreffPille'
+import { SkjemaGruppe, TekstRad } from '@/components/ui/Skjema'
 
 // Speil av PurreKnapp.tsx (#267 + integrator-funn) — modal med valgfri
 // hilsen før varselet sendes. Se #282 for bakgrunn.
@@ -169,58 +170,19 @@ export default function VarsleNuKnapp({
               denne hvis noe har endret seg — skriv gjerne hva.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <textarea
+            {/* Tegnteller (hjelp) vises alltid slik at brukeren ser grensen.
+                Feilmeldingen står i selve gruppen — uten den ble feil rendret
+                kun utenfor og dermed skjult bak overlayen mens modalen sto åpen. */}
+            <SkjemaGruppe hjelp={`${len}/${VARSLE_MAKS_LENGDE}`} feil={feil}>
+              <TekstRad
                 value={melding}
                 onChange={e => setMelding(e.target.value)}
                 maxLength={VARSLE_MAKS_LENGDE}
                 placeholder="Valgfritt: hva har endret seg?"
-                rows={3}
+                aria-label="Hilsen"
                 autoFocus
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 14,
-                  color: 'var(--text-primary)',
-                  background: 'var(--bg-base)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 10,
-                  padding: '10px 12px',
-                  resize: 'none',
-                  outline: 'none',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  lineHeight: 1.5,
-                }}
               />
-              {/* Tegnteller: vises alltid slik at brukeren ser grensen */}
-              <span
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 11,
-                  color: 'var(--text-tertiary)',
-                  alignSelf: 'flex-end',
-                }}
-              >
-                {len}/{VARSLE_MAKS_LENGDE}
-              </span>
-            </div>
-
-            {/* Feilmelding inne i modalen — uten denne ble feil rendret kun
-                utenfor og dermed skjult bak overlayen mens modalen sto åpen. */}
-            {feil && (
-              <p
-                role="alert"
-                style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  color: 'var(--danger)',
-                  margin: 0,
-                  lineHeight: 1.5,
-                }}
-              >
-                {feil}
-              </p>
-            )}
+            </SkjemaGruppe>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <PilleKnapp

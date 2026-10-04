@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
+import { ListeRad } from '@/components/MalAdminDeler'
+import { ValgRad, SendRad } from '@/components/fond/EditorDeler'
 import { opprettVerdipapir, oppdaterVerdipapir, slettVerdipapir } from '@/lib/actions/fond'
 
 type Verdipapir = {
@@ -18,12 +20,41 @@ type Props = {
   verdipapirer: Verdipapir[]
 }
 
+const TYPER = [
+  { verdi: 'fond', etikett: 'Fond' },
+  { verdi: 'aksje', etikett: 'Aksje' },
+]
+
+// Feltene er uncontrolled (defaultValue + name) og leses fra FormData ved innsending.
+function Felter({ v }: { v?: Verdipapir }) {
+  return (
+    <>
+      <SkjemaRad etikett="Navn">
+        <RadInput name="navn" defaultValue={v?.navn} placeholder={v ? undefined : 'F.eks. DNB Global Indeks'} required />
+      </SkjemaRad>
+      <ValgRad etikett="Type" name="type" defaultValue={v?.type ?? 'fond'} valg={TYPER} />
+      <SkjemaRad etikett="Verdi (kr)">
+        <RadInput name="verdi" type="number" min={0} step={0.01} defaultValue={v?.verdi ?? 0} required />
+      </SkjemaRad>
+      <SkjemaRad etikett="Anskaffelsesverdi (kr)">
+        <RadInput name="anskaffelsesverdi" type="number" min={0} step={0.01} defaultValue={v?.anskaffelsesverdi ?? 0} required />
+      </SkjemaRad>
+      <SkjemaRad etikett="Utbytte i år (kr)">
+        <RadInput name="utbytte_i_aar" type="number" min={0} step={0.01} defaultValue={v?.utbytte_i_aar ?? 0} required />
+      </SkjemaRad>
+    </>
+  )
+}
+
 export default function VerdipapirEditor({ verdipapirer }: Props) {
-  const [feil, setFeil] = useState<string | null>(null)
+  const [feilListe, setFeilListe] = useState<string | null>(null)
+  const [feilNy, setFeilNy] = useState<string | null>(null)
   const [redigerer, setRedigerer] = useState<string | null>(null)
+  // Økes etter vellykket «Legg til»: remonterer skjemaet så ValgRad/DatoRad (state) nullstilles som før.
+  const [nyNokkel, setNyNokkel] = useState(0)
 
   async function handleOpprett(formData: FormData) {
-    setFeil(null)
+    setFeilNy(null)
     try {
       await opprettVerdipapir({
         navn: formData.get('navn') as string,
@@ -32,13 +63,14 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
         anskaffelsesverdi: parseFloat(formData.get('anskaffelsesverdi') as string),
         utbytte_i_aar: parseFloat(formData.get('utbytte_i_aar') as string),
       })
+      setNyNokkel(n => n + 1)
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilNy(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
   async function handleOppdater(id: string, formData: FormData) {
-    setFeil(null)
+    setFeilListe(null)
     try {
       await oppdaterVerdipapir({
         id,
@@ -50,113 +82,59 @@ export default function VerdipapirEditor({ verdipapirer }: Props) {
       })
       setRedigerer(null)
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilListe(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
   async function handleSlett(id: string) {
     if (!confirm('Slett verdipapir?')) return
-    setFeil(null)
+    setFeilListe(null)
     try {
       await slettVerdipapir(id)
     } catch (e) {
-      setFeil(e instanceof Error ? e.message : 'Ukjent feil')
+      setFeilListe(e instanceof Error ? e.message : 'Ukjent feil')
     }
   }
 
-  // Felles skjema-innhold for opprett og rediger
-  function TypeVelger({ defaultValue = 'fond' }: { defaultValue?: string }) {
-    return (
-      <div>
-        <label style={{ display: 'block', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>Type</label>
-        <select className="skjemafelt"
-          name="type"
-          defaultValue={defaultValue}
-          style={{
-            width: '100%',
-            padding: '10px 14px',
-            borderRadius: 10,
-            background: 'var(--bg-elevated-2)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-            fontFamily: 'inherit',
-            fontSize: 15,
-          }}
-        >
-          <option value="fond">Fond</option>
-          <option value="aksje">Aksje</option>
-        </select>
-      </div>
-    )
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {feil && (
-        <div style={{ color: 'var(--danger)', fontSize: 13, fontFamily: 'var(--font-body)' }}>{feil}</div>
+    <div>
+      {verdipapirer.length > 0 && (
+        <SkjemaGruppe feil={feilListe}>
+          {verdipapirer.map(v =>
+            redigerer === v.id ? (
+              // panel-liste på skjemaet: skillelinjene mellom radene gjelder bare direkte barn av gruppen.
+              <form key={v.id} className="panel-liste" action={fd => handleOppdater(v.id, fd)}>
+                <Felter v={v} />
+                <SendRad tekst="Lagre" onAvbryt={() => setRedigerer(null)} />
+              </form>
+            ) : (
+              <ListeRad
+                key={v.id}
+                venstre={
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>
+                      {v.navn} <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>({v.type})</span>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                      Verdi {v.verdi.toLocaleString('nb')} kr · Anskaffet {v.anskaffelsesverdi.toLocaleString('nb')} kr
+                    </div>
+                  </div>
+                }
+              >
+                <Button variant="secondary" onClick={() => setRedigerer(v.id)}>Rediger</Button>
+                <Button variant="danger" onClick={() => handleSlett(v.id)}>Slett</Button>
+              </ListeRad>
+            ),
+          )}
+        </SkjemaGruppe>
       )}
 
-      {verdipapirer.map(v =>
-        redigerer === v.id ? (
-          <form
-            key={v.id}
-            action={fd => handleOppdater(v.id, fd)}
-            style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10 }}
-          >
-            <Input name="navn" label="Navn" defaultValue={v.navn} required />
-            <TypeVelger defaultValue={v.type} />
-            <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={v.verdi} required />
-            <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={v.anskaffelsesverdi} required />
-            <Input name="utbytte_i_aar" label="Utbytte i år (kr)" type="number" min={0} step={0.01} defaultValue={v.utbytte_i_aar} required />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="submit" variant="primary">Lagre</Button>
-              <Button type="button" variant="secondary" onClick={() => setRedigerer(null)}>Avbryt</Button>
-            </div>
-          </form>
-        ) : (
-          <div
-            key={v.id}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '10px 14px',
-              background: 'var(--bg-elevated)',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)' }}>
-                {v.navn} <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>({v.type})</span>
-              </div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                Verdi {v.verdi.toLocaleString('nb')} kr · Anskaffet {v.anskaffelsesverdi.toLocaleString('nb')} kr
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Button variant="secondary" onClick={() => setRedigerer(v.id)}>Rediger</Button>
-              <Button variant="danger" onClick={() => handleSlett(v.id)}>Slett</Button>
-            </div>
-          </div>
-        )
-      )}
-
-      {/* Legg til nytt verdipapir */}
-      <form
-        action={handleOpprett}
-        style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, background: 'var(--bg-elevated-2)', borderRadius: 10, border: '1px dashed var(--border)' }}
-      >
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-          Legg til verdipapir
-        </div>
-        <Input name="navn" label="Navn" placeholder="F.eks. DNB Global Indeks" required />
-        <TypeVelger />
-        <Input name="verdi" label="Verdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Input name="anskaffelsesverdi" label="Anskaffelsesverdi (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Input name="utbytte_i_aar" label="Utbytte i år (kr)" type="number" min={0} step={0.01} defaultValue={0} required />
-        <Button type="submit" variant="primary">Legg til</Button>
-      </form>
+      <SkjemaGruppe tittel="Legg til verdipapir" feil={feilNy}>
+        <form key={nyNokkel} className="panel-liste" action={handleOpprett}>
+          <Felter />
+          <SendRad tekst="Legg til" />
+        </form>
+      </SkjemaGruppe>
     </div>
   )
 }

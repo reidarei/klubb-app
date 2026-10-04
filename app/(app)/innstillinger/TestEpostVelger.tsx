@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { SkjemaRad, ValgFelt } from '@/components/ui/Skjema'
 import { oppdaterTestEpost } from './actions'
 
 // Velger hvilken admin-epost testmodus-varsler rutes til. Selve på/av-
@@ -15,32 +16,18 @@ export default function TestEpostVelger({
   const [isPending, startTransition] = useTransition()
   const [feil, setFeil] = useState<string | null>(null)
   // Hvis lagret verdi ikke matcher en admin (f.eks. gammel fritekst),
-  // viser vi placeholder i stedet for en tom select.
+  // viser vi plassholder i stedet for et valgt navn.
   const gyldigValgt = admins.some(a => a.epost === valgt) ? valgt : null
 
   return (
-    <div style={{ padding: '10px 4px 14px 16px' }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontFamily: 'var(--font-body)',
-            fontSize: 12.5,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.3,
-          }}
-        >
-          Test-epost (mottaker i testmodus)
-        </div>
-        <select className="skjemafelt"
+    // BryterBoks har 12 px sidepadding; raden har sin egen (14 px), så den
+    // trekkes ut til kantene. Linjen skiller den fra bryteren over.
+    <div style={{ margin: '0 -12px', borderTop: '0.5px solid var(--border-subtle)' }}>
+      <SkjemaRad etikett="Test-epost (mottaker i testmodus)">
+        <ValgFelt
           value={gyldigValgt ?? ''}
+          valg={admins.map(a => ({ verdi: a.epost, etikett: a.navn ?? a.epost }))}
+          plassholder="Velg admin…"
           disabled={isPending}
           onChange={e => {
             const epost = e.target.value
@@ -59,31 +46,13 @@ export default function TestEpostVelger({
             })
           }}
           aria-label="Velg test-epost for testmodus"
-          style={{
-            maxWidth: 180,
-            padding: '6px 8px',
-            borderRadius: 8,
-            border: '0.5px solid var(--border-strong)',
-            background: 'var(--bg-elevated, transparent)',
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12.5,
-            opacity: isPending ? 0.6 : 1,
-          }}
-        >
-          {!gyldigValgt && <option value="">Velg admin…</option>}
-          {admins.map(a => (
-            <option key={a.epost} value={a.epost}>
-              {a.navn ?? a.epost}
-            </option>
-          ))}
-        </select>
-      </div>
+        />
+      </SkjemaRad>
       {feil && (
         <p
           role="alert"
           style={{
-            margin: '6px 0 0',
+            margin: '0 14px 10px',
             fontFamily: 'var(--font-body)',
             fontSize: 12,
             color: 'var(--danger)',

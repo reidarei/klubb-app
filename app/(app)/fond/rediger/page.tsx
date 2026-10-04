@@ -100,9 +100,7 @@ export default async function FondRediger() {
       {/* Kontantbeholdning */}
       <section style={{ marginBottom: 28 }}>
         <SectionLabel>Kontantbeholdning</SectionLabel>
-        <Card>
-          <KontantEditor saldo={kontant?.saldo ?? 0} />
-        </Card>
+        <KontantEditor saldo={kontant?.saldo ?? 0} />
       </section>
 
       {/* Innskudd */}

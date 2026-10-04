@@ -3,17 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { settVinnerPaaKaaring, fjernVinnerFraKaaring } from '@/lib/actions/kaaring_vinnere'
 import Button from '@/components/ui/Button'
-
-const inputStil: React.CSSProperties = {
-  background: 'var(--bg-elevated-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  borderRadius: '0.75rem',
-  padding: '0.5rem 0.75rem',
-  width: '100%',
-  fontSize: '0.875rem',
-  fontFamily: 'inherit',
-}
+import { SkjemaGruppe, SkjemaRad, RadInput, ValgFelt } from '@/components/ui/Skjema'
 
 interface SetVinnerModalProps {
   aapen: boolean
@@ -119,51 +109,52 @@ export default function SetVinnerModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto" style={{ background: 'var(--overlay-soft)' }}>
       <div
         className="w-full max-w-lg rounded-b-2xl p-6 pb-8 mt-16"
-        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+        // Bakgrunnen er --bg, ikke --bg-elevated: boksene i skjemaet er elevated og måtte ellers forsvunnet.
+        style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
       >
         <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
           {eksisterendeVinner ? 'Endre vinner' : 'Sett vinner'}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>Vinner-type</label>
+        <form onSubmit={handleSubmit}>
+          <SkjemaGruppe feil={feil}>
             {isFixedType ? (
-              <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                {type === 'profil' ? 'Herr' : 'Arrangement'}
-              </p>
+              <SkjemaRad etikett="Vinner-type">
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--text-primary)' }}>
+                  {type === 'profil' ? 'Herr' : 'Arrangement'}
+                </span>
+              </SkjemaRad>
             ) : (
-              <select className="skjemafelt" value={type} onChange={e => { setType(e.target.value as 'profil' | 'arrangement'); setId('') }} style={inputStil}>
-                <option value="profil">Herr</option>
-                <option value="arrangement">Arrangement</option>
-              </select>
+              <SkjemaRad etikett="Vinner-type">
+                <ValgFelt
+                  value={type}
+                  valg={[
+                    { verdi: 'profil', etikett: 'Herr' },
+                    { verdi: 'arrangement', etikett: 'Arrangement' },
+                  ]}
+                  onChange={e => { setType(e.target.value as 'profil' | 'arrangement'); setId('') }}
+                  aria-label="Vinner-type"
+                />
+              </SkjemaRad>
             )}
-          </div>
-
-          <div>
-            <label className="block text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>Velg vinner</label>
-            <select className="skjemafelt" value={id} onChange={e => setId(e.target.value)} style={inputStil}>
-              <option value="">— Velg —</option>
-              {options.map(o => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>Begrunnelse (valgfritt)</label>
-            <input className="skjemafelt"
-              type="text"
-              value={begrunnelse}
-              onChange={e => setBegrunnelse(e.target.value)}
-              placeholder="f.eks. «Beste påmeldt»"
-              style={inputStil}
-            />
-          </div>
-
-          {feil && <p className="text-sm" style={{ color: 'var(--danger)' }}>{feil}</p>}
+            <SkjemaRad etikett="Vinner">
+              <ValgFelt
+                value={id}
+                valg={options.map(o => ({ verdi: o.id, etikett: o.label }))}
+                onChange={e => setId(e.target.value)}
+                plassholder="— Velg —"
+                aria-label="Velg vinner"
+              />
+            </SkjemaRad>
+            <SkjemaRad etikett="Begrunnelse">
+              <RadInput
+                type="text"
+                value={begrunnelse}
+                onChange={e => setBegrunnelse(e.target.value)}
+                placeholder="valgfritt"
+              />
+            </SkjemaRad>
+          </SkjemaGruppe>
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" fullWidth onClick={() => setAapen(false)}>Avbryt</Button>

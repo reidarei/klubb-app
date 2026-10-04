@@ -17,6 +17,7 @@ import { bildeSrc } from '@/lib/bilde-utils'
 import { lesFondsrapport, splittFondsrapport } from '@/lib/fondsrapport'
 import FondsrapportBlokk from '@/components/fond/FondsrapportBlokk'
 import { PilleKnapp } from '@/components/ui/TreffPille'
+import { SkjemaGruppe, SkjemaRad, DatoFelt, TekstRad } from '@/components/ui/Skjema'
 
 type Bilde = { id: string; bilde_url: string }
 
@@ -174,38 +175,51 @@ export default function MeldingRediger({
 
       {/* TEKST — lesevisning eller redigerbar textarea */}
       {redigerer ? (
-        <div style={{ marginBottom: 16 }}>
-          <textarea
-            value={tekst}
-            onChange={e => setTekst(e.target.value.slice(0, maksTekstLengde))}
-            disabled={isPending}
-            placeholder={fondsrapport ? 'Skriv en hilsen (valgfritt)…' : 'Skriv her…'}
-            style={tekstStil}
-          />
-          <div style={tellerStil}>{maksTekstLengde - tekst.length} tegn igjen</div>
-          {fondsrapport && (
-            <div style={{ ...tellerStil_venstre, marginTop: 6, textTransform: 'none', letterSpacing: '0.2px' }}>
-              Tallene kan ikke endres. Slett og publiser på nytt ved feil.
-            </div>
-          )}
+        <>
+          <SkjemaGruppe
+            tittel="Tekst"
+            hjelp={
+              <>
+                {maksTekstLengde - tekst.length} tegn igjen
+                {fondsrapport && ' · Tallene kan ikke endres. Slett og publiser på nytt ved feil.'}
+              </>
+            }
+          >
+            <TekstRad
+              value={tekst}
+              onChange={e => setTekst(e.target.value.slice(0, maksTekstLengde))}
+              disabled={isPending}
+              placeholder={fondsrapport ? 'Skriv en hilsen (valgfritt)…' : 'Skriv her…'}
+              aria-label="Tekst"
+            />
+          </SkjemaGruppe>
 
           {/* AKTUELL DATO — redigerbar. Ingen `min` her (til forskjell fra
               /meldinger/ny): et eldre innlegg kan ha en passert dato, og en
               min-grense som ligger etter feltets egen verdi gjør feltet
               ugyldig i Safari. En passert dato er uansett harmløs — den
               fester ikke innlegget. */}
-          <div style={{ marginTop: 18 }}>
-            <div style={tellerStil_venstre}>Aktuell dato</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input className="skjemafelt"
-                type="date"
+          <SkjemaGruppe
+            tittel="Aktuell dato"
+            // Sier eksplisitt at det er en maskin som leser teksten —
+            // samme konservative lesning av AI Act art. 50(1) som på
+            // /meldinger/ny. Se docs/ai-act-vurdering.md § G2.
+            hjelp={
+              aiPaa
+                ? 'Lar du feltet stå tomt, foreslår KI en dato ut fra teksten når du lagrer. Holder innlegget festet øverst til datoen er passert.'
+                : 'Holder innlegget festet øverst til datoen er passert.'
+            }
+            feil={feil}
+          >
+            <SkjemaRad etikett="Dato">
+              <DatoFelt
                 value={dato}
                 onChange={e => {
                   setDato(e.target.value)
                   setDatoRoert(true)
                 }}
                 disabled={isPending}
-                style={datoStil}
+                aria-label="Aktuell dato"
               />
               {dato && (
                 <PilleKnapp
@@ -215,22 +229,16 @@ export default function MeldingRediger({
                   }}
                   disabled={isPending}
                   synligHoyde={30}
+                  // Over det usynlige datofeltet, så trykket treffer knappen og ikke datohjulet.
+                  style={{ position: 'relative', zIndex: 2 }}
                   pilleStil={{ ...sekundaerKnapp, padding: '6px 12px', fontSize: 12 }}
                 >
                   Fjern
                 </PilleKnapp>
               )}
-            </div>
-            <div style={{ ...tellerStil_venstre, marginTop: 6, textTransform: 'none', letterSpacing: '0.2px' }}>
-              {/* Sier eksplisitt at det er en maskin som leser teksten —
-                  samme konservative lesning av AI Act art. 50(1) som på
-                  /meldinger/ny. Se docs/ai-act-vurdering.md § G2. */}
-              {aiPaa
-                ? 'Lar du feltet stå tomt, foreslår KI en dato ut fra teksten når du lagrer. Holder innlegget festet øverst til datoen er passert.'
-                : 'Holder innlegget festet øverst til datoen er passert.'}
-            </div>
-          </div>
-        </div>
+            </SkjemaRad>
+          </SkjemaGruppe>
+        </>
       ) : fondsrapport ? (
         <div style={{ marginBottom: 16 }}>
           {fondsrapport.hilsen && (
@@ -315,19 +323,6 @@ export default function MeldingRediger({
         />
       )}
 
-      {feil && (
-        <div
-          style={{
-            color: 'var(--danger)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12,
-            marginBottom: 12,
-          }}
-        >
-          {feil}
-        </div>
-      )}
-
       {/* KONTROLLER — Rediger i visning, Lagre/Avbryt (+ Slett) i redigering */}
       {kanRedigere && (
         redigerer ? (
@@ -352,53 +347,6 @@ export default function MeldingRediger({
       )}
     </>
   )
-}
-
-const tekstStil: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 16,
-  lineHeight: 1.5,
-  outline: 'none',
-  padding: 0,
-  resize: 'none',
-  minHeight: 120,
-}
-
-// Samme mono-etikett som teller, men venstrestilt — brukes til felt-labels.
-const tellerStil_venstre: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  color: 'var(--text-tertiary)',
-  letterSpacing: '1.2px',
-  textTransform: 'uppercase',
-  marginBottom: 8,
-}
-
-const datoStil: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  background: 'var(--bg-elevated)',
-  border: '0.5px solid var(--border)',
-  borderRadius: 10,
-  padding: '9px 12px',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  outline: 'none',
-}
-
-const tellerStil: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 10,
-  color: 'var(--text-tertiary)',
-  letterSpacing: '1.2px',
-  textTransform: 'uppercase',
-  marginTop: 8,
-  textAlign: 'right',
 }
 
 const primaerKnapp: CSSProperties = {

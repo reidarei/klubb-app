@@ -1,21 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { oppdaterArrangement, slettArrangement } from '@/lib/actions/arrangementer'
 import { lastOppBilde, slettBilde } from '@/lib/actions/bilde-opplasting'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
-import Segment from '@/components/ui/Segment'
+import { SkjemaGruppe, SkjemaRad, RadInput, DatoFelt, ValgFelt, TekstRad } from '@/components/ui/Skjema'
 import { MiniToggle } from '@/components/ui/ToggleSwitch'
-import Icon from '@/components/ui/Icon'
 import Placeholder from '@/components/ui/Placeholder'
 import BildeBytterKnapp from '@/components/BildeBytterKnapp'
 import TypeVelger, { type MalValg } from '@/components/arrangement/TypeVelger'
 import { isoTilDatetimeLocal, datetimeLocalTilIso } from '@/lib/dato'
 import { bildeSrc } from '@/lib/bilde-utils'
-import Rad from '@/components/ui/FeltRad'
 
 type Arrangement = {
   id: string
@@ -29,35 +26,6 @@ type Arrangement = {
   pris_per_person: number | null
   sensurerte_felt: Record<string, boolean> | null
   bilde_url: string | null
-}
-
-const monoLabel: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9.5,
-  fontWeight: 600,
-  color: 'var(--text-tertiary)',
-  letterSpacing: '1.6px',
-  textTransform: 'uppercase',
-  marginBottom: 4,
-}
-
-const inputStil: CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  outline: 'none',
-  padding: 0,
-}
-
-const accentStil: CSSProperties = {
-  ...inputStil,
-  fontFamily: 'var(--font-display)',
-  fontSize: 19,
-  fontWeight: 500,
-  letterSpacing: '-0.3px',
 }
 
 export default function RedigerSkjema({
@@ -206,9 +174,9 @@ export default function RedigerSkjema({
     })
   }
 
-  const formatOptions = [
-    { value: 'moete' as const, label: 'Møte' },
-    { value: 'tur' as const, label: 'Tur' },
+  const typeOptions = [
+    { verdi: 'moete', etikett: 'Møte' },
+    { verdi: 'tur', etikett: 'Tur' },
   ]
 
   return (
@@ -281,162 +249,108 @@ export default function RedigerSkjema({
         </div>
       </div>
 
-      {/* Velg arrangement (mal) */}
-      <SkjemaSeksjon label="Velg arrangement">
-        <Rad last={valgt.type !== null}>
-          <TypeVelger valg={valg} valgtKey={valgtKey} onValg={handleValgtMal} />
-        </Rad>
+      <SkjemaGruppe tittel="Velg arrangement">
+        <TypeVelger valg={valg} valgtKey={valgtKey} onValg={handleValgtMal} />
+        {/* Når "Annet" er valgt må brukeren velge møte/tur selv */}
         {valgt.type === null && (
-          <Rad last>
-            <div style={monoLabel}>Format</div>
-            <Segment value={annetType} options={formatOptions} onChange={setAnnetType} />
-          </Rad>
+          <SkjemaRad etikett="Format">
+            <ValgFelt
+              value={annetType}
+              onChange={e => setAnnetType(e.target.value as 'moete' | 'tur')}
+              aria-label="Format"
+              valg={typeOptions}
+            />
+          </SkjemaRad>
         )}
-      </SkjemaSeksjon>
+      </SkjemaGruppe>
 
-      {/* Detaljer */}
-      <SkjemaSeksjon label="Detaljer">
-        <Rad>
-          <div style={monoLabel}>Tittel</div>
-          <input
+      <SkjemaGruppe tittel="Detaljer">
+        <SkjemaRad etikett="Tittel">
+          <RadInput
             type="text"
             value={tittel}
             onChange={e => {
               setTittel(e.target.value)
               setTittelBerørt(true)
             }}
-            style={accentStil}
+            placeholder="Navn på arrangementet"
           />
-        </Rad>
-
-        <Rad>
-          <div style={monoLabel}>{erTur ? 'Oppmøte' : 'Start'}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
-              type="datetime-local"
-              value={start}
-              onChange={e => setStart(e.target.value)}
-              style={{ ...inputStil, flex: 1 }}
-            />
-            <Icon name="calendar" size={15} color="var(--text-tertiary)" />
-          </div>
-        </Rad>
-
+        </SkjemaRad>
+        <SkjemaRad etikett={erTur ? 'Oppmøte' : 'Start'}>
+          <DatoFelt
+            type="datetime-local"
+            value={start}
+            onChange={e => setStart(e.target.value)}
+            aria-label={erTur ? 'Oppmøte' : 'Start'}
+          />
+        </SkjemaRad>
         {erTur && (
-          <Rad>
-            <div style={monoLabel}>Hjemkomst</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                type="datetime-local"
-                value={slutt}
-                onChange={e => setSlutt(e.target.value)}
-                style={{ ...inputStil, flex: 1 }}
-              />
-              <Icon name="calendar" size={15} color="var(--text-tertiary)" />
-            </div>
-          </Rad>
+          <SkjemaRad etikett="Hjemkomst">
+            <DatoFelt
+              type="datetime-local"
+              value={slutt}
+              onChange={e => setSlutt(e.target.value)}
+              aria-label="Hjemkomst"
+            />
+          </SkjemaRad>
         )}
-
-        <Rad last={!erTur}>
-          <div style={monoLabel}>Oppmøtested</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input
+        <SkjemaRad etikett="Oppmøtested">
+          <RadInput
+            type="text"
+            value={oppmoetested}
+            onChange={e => setOppmoetested(e.target.value)}
+            placeholder="—"
+          />
+        </SkjemaRad>
+        {erTur && (
+          <SkjemaRad etikett="Destinasjon">
+            <RadInput
               type="text"
-              value={oppmoetested}
-              onChange={e => setOppmoetested(e.target.value)}
-              style={{ ...inputStil, flex: 1 }}
+              value={destinasjon}
+              onChange={e => setDestinasjon(e.target.value)}
               placeholder="—"
             />
-            <Icon name="mapPin" size={15} color="var(--text-tertiary)" />
-          </div>
-        </Rad>
-
-        {erTur && (
-          <Rad last>
-            <div style={monoLabel}>Destinasjon</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <input
-                type="text"
-                value={destinasjon}
-                onChange={e => setDestinasjon(e.target.value)}
-                style={{ ...inputStil, flex: 1 }}
-                placeholder="—"
-              />
-              <MiniToggle
-                on={!!sensurert['destinasjon']}
-                onChange={() => toggleSensurert('destinasjon')}
-                ariaLabel="Sladd destinasjon"
-              />
-            </div>
-          </Rad>
+            <MiniToggle
+              on={!!sensurert['destinasjon']}
+              onChange={() => toggleSensurert('destinasjon')}
+              ariaLabel="Sladd destinasjon"
+            />
+          </SkjemaRad>
         )}
-      </SkjemaSeksjon>
+      </SkjemaGruppe>
 
-      {/* Kostnad */}
+      {/* Kostnad — kun for tur */}
       {erTur && (
-        <SkjemaSeksjon label="Kostnad">
-          <Rad last>
-            <div style={monoLabel}>Pris per person</div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
-                gap: 10,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1 }}>
-                <input
-                  type="number"
-                  value={pris}
-                  onChange={e => setPris(e.target.value)}
-                  style={{ ...accentStil, flex: 1 }}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: 'var(--text-tertiary)',
-                    letterSpacing: '1.4px',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  kr
-                </span>
-              </div>
-              <MiniToggle
-                on={!!sensurert['pris_per_person']}
-                onChange={() => toggleSensurert('pris_per_person')}
-                ariaLabel="Sladd pris"
-              />
-            </div>
-          </Rad>
-        </SkjemaSeksjon>
+        <SkjemaGruppe tittel="Kostnad">
+          <SkjemaRad etikett="Pris per person">
+            <RadInput
+              type="number"
+              value={pris}
+              onChange={e => setPris(e.target.value)}
+              placeholder="0"
+              inputMode="numeric"
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--text-tertiary)' }}>kr</span>
+            <MiniToggle
+              on={!!sensurert['pris_per_person']}
+              onChange={() => toggleSensurert('pris_per_person')}
+              ariaLabel="Sladd pris"
+            />
+          </SkjemaRad>
+        </SkjemaGruppe>
       )}
 
-      {/* Beskrivelse */}
-      <SkjemaSeksjon label="Beskrivelse">
-        <textarea
+      <SkjemaGruppe tittel="Beskrivelse">
+        <TekstRad
           value={beskrivelse}
           onChange={e => setBeskrivelse(e.target.value)}
-          rows={4}
-          style={{
-            ...inputStil,
-            padding: '4px 0',
-            lineHeight: 1.6,
-            color: 'var(--text-secondary)',
-            resize: 'vertical',
-            minHeight: 88,
-            fontFamily: 'var(--font-body)',
-          }}
           placeholder="Skriv noe om arrangementet…"
+          aria-label="Beskrivelse"
         />
-      </SkjemaSeksjon>
+      </SkjemaGruppe>
 
       {/* Faresone */}
-      <SkjemaSeksjon label="Faresone">
+      <SkjemaGruppe tittel="Faresone">
         {!visSlett ? (
           <div style={{ padding: '16px 4px' }}>
             <button
@@ -509,7 +423,7 @@ export default function RedigerSkjema({
             </div>
           </div>
         )}
-      </SkjemaSeksjon>
+      </SkjemaGruppe>
     </div>
   )
 }

@@ -3,11 +3,9 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/ui/Icon'
-import Treffflate, { treffflateRundt } from '@/components/ui/Treffflate'
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
+import Treffflate from '@/components/ui/Treffflate'
 import { oppdaterAlbumTittel } from '@/lib/actions/album'
-
-// Lagre/Avbryt (36 px) vokser 4 px til hver side (#700) — gapet må dekke begges vekst.
-const KNAPP_TREFF = treffflateRundt({ hoyde: 36, bredde: 36 })
 
 // Album-tittel med inline-redigering for admin og eier. Klikk på rediger-
 // knappen gir et kompakt input + lagre/avbryt-knapper. Lagring kjører via
@@ -83,76 +81,67 @@ export default function AlbumTittel({
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: Math.max(6, KNAPP_TREFF.minsteKolonneGap), marginTop: 6 }}>
-      <input
-        type="text"
-        value={tekst}
-        onChange={e => setTekst(e.target.value)}
-        autoFocus
-        maxLength={200}
-        onKeyDown={e => {
-          if (e.key === 'Enter') lagre()
-        }}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: 'var(--bg-elevated)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 8,
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-display)',
-          fontSize: 24,
-          fontWeight: 500,
-          padding: '6px 10px',
-          outline: 'none',
-          letterSpacing: '-0.4px',
-        }}
-      />
-      <Treffflate
-        synlig={36}
-        onClick={lagre}
-        disabled={pending}
-        aria-label="Lagre"
-      >
-        <span
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            background: 'var(--accent)',
-            color: 'var(--accent-foreground)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pending ? 0.6 : 1,
-          }}
+    <div style={{ marginTop: 6 }}>
+      <SkjemaGruppe>
+        <SkjemaRad etikett="Tittel">
+          <RadInput
+            type="text"
+            value={tekst}
+            onChange={e => setTekst(e.target.value)}
+            autoFocus
+            maxLength={200}
+            onKeyDown={e => {
+              if (e.key === 'Enter') lagre()
+            }}
+            aria-label="Albumtittel"
+          />
+        <Treffflate
+          synlig={36}
+          onClick={lagre}
+          disabled={pending}
+          aria-label="Lagre"
         >
-          <Icon name="checkmark" size={18} color="currentColor" strokeWidth={2.5} />
-        </span>
-      </Treffflate>
-      <Treffflate
-        synlig={36}
-        onClick={() => {
-          setRedigerer(false)
-          setTekst(initialTittel)
-        }}
-        aria-label="Avbryt"
-      >
-        <span
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            border: '0.5px solid var(--border)',
-            color: 'var(--text-tertiary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+          <span
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              color: 'var(--accent-foreground)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pending ? 0.6 : 1,
+            }}
+          >
+            <Icon name="checkmark" size={18} color="currentColor" strokeWidth={2.5} />
+          </span>
+        </Treffflate>
+        <Treffflate
+          synlig={36}
+          onClick={() => {
+            setRedigerer(false)
+            setTekst(initialTittel)
           }}
+          aria-label="Avbryt"
         >
-          <Icon name="x" size={16} color="currentColor" />
-        </span>
-      </Treffflate>
+          <span
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              border: '0.5px solid var(--border)',
+              color: 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="x" size={16} color="currentColor" />
+          </span>
+        </Treffflate>
+        </SkjemaRad>
+      </SkjemaGruppe>
     </div>
   )
 }

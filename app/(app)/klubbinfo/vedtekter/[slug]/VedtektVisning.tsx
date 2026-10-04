@@ -5,45 +5,9 @@ import MarkdownVisning from '@/components/MarkdownVisning'
 import { formaterDato } from '@/lib/dato'
 import { oppdaterVedtekt } from '@/lib/actions/vedtekter'
 import SkjemaBar from '@/components/ui/SkjemaBar'
-import SkjemaSeksjon from '@/components/ui/SkjemaSeksjon'
+import { SkjemaGruppe, SkjemaRad, DatoFelt, TekstRad } from '@/components/ui/Skjema'
 import SectionLabel from '@/components/ui/SectionLabel'
 import Icon from '@/components/ui/Icon'
-
-const labelStil: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9.5,
-  fontWeight: 600,
-  color: 'var(--text-tertiary)',
-  textTransform: 'uppercase',
-  letterSpacing: '1.6px',
-  marginBottom: 6,
-}
-
-const inputStil: React.CSSProperties = {
-  width: '100%',
-  background: 'transparent',
-  border: 'none',
-  outline: 'none',
-  padding: 0,
-  fontFamily: 'var(--font-body)',
-  fontSize: 14,
-  color: 'var(--text-primary)',
-  lineHeight: 1.5,
-}
-
-const textareaMonoStil: React.CSSProperties = {
-  width: '100%',
-  background: 'var(--bg-elevated)',
-  border: '0.5px solid var(--border)',
-  color: 'var(--text-primary)',
-  borderRadius: 12,
-  padding: '12px 14px',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 13,
-  lineHeight: 1.5,
-  resize: 'vertical',
-  outline: 'none',
-}
 
 type Versjon = {
   id: string
@@ -98,58 +62,32 @@ export default function VedtektVisning({
           laster={isPending}
         />
 
-        <SkjemaSeksjon label="Innhold">
-          <div style={{ padding: '6px 0' }}>
-            <textarea
-              value={innhold}
-              onChange={e => setInnhold(e.target.value)}
-              rows={18}
-              style={textareaMonoStil}
-            />
-          </div>
-        </SkjemaSeksjon>
+        <SkjemaGruppe tittel="Innhold">
+          <TekstRad
+            value={innhold}
+            onChange={e => setInnhold(e.target.value)}
+            minRader={18}
+            aria-label="Innhold"
+          />
+        </SkjemaGruppe>
 
-        <SkjemaSeksjon label="Hjemmel">
-          <div
-            style={{
-              padding: '14px 4px',
-              borderBottom: '0.5px solid var(--border-subtle)',
-            }}
-          >
-            <div style={labelStil}>Vedtaksdato</div>
-            <input className="skjemafelt"
-              type="date"
+        <SkjemaGruppe tittel="Hjemmel" feil={feil}>
+          <SkjemaRad etikett="Vedtaksdato">
+            <DatoFelt
               value={vedtaksdato}
               onChange={e => setVedtaksdato(e.target.value)}
-              style={{ ...inputStil, colorScheme: 'dark' }}
+              aria-label="Vedtaksdato"
               required
             />
-          </div>
-          <div style={{ padding: '14px 4px' }}>
-            <div style={labelStil}>Hva ble endret og hvorfor</div>
-            <textarea
-              value={endringsnotat}
-              onChange={e => setEndringsnotat(e.target.value)}
-              rows={3}
-              style={{ ...inputStil, resize: 'vertical' }}
-              required
-              placeholder="Beskriv endringen og hjemmelsgrunnlaget…"
-            />
-          </div>
-        </SkjemaSeksjon>
-
-        {feil && (
-          <div
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 12,
-              color: 'var(--danger)',
-              padding: '0 4px',
-            }}
-          >
-            {feil}
-          </div>
-        )}
+          </SkjemaRad>
+          <TekstRad
+            etikett="Hva ble endret og hvorfor"
+            value={endringsnotat}
+            onChange={e => setEndringsnotat(e.target.value)}
+            required
+            placeholder="Beskriv endringen og hjemmelsgrunnlaget…"
+          />
+        </SkjemaGruppe>
       </>
     )
   }

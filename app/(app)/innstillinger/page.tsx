@@ -163,7 +163,7 @@ export default async function Kontrollpanel() {
           tittel="Funksjoner"
           status={`${funksjonerPaa} av ${flagg.length} på`}
         />
-        <PanelRad href="/innstillinger/kart" ikon="map" farge="blaa" tittel="Kartmarkeringer" />
+        <PanelRad href="/innstillinger/kart" ikon="map" farge="blaa" tittel="Kartalarmer" />
       </PanelGruppe>
 
       <PanelGruppe tittel="Innhold">

@@ -37,6 +37,13 @@ function verdiFor(seksjon: Locator, label: string): Locator {
   return seksjon.locator(`[data-opplysning="${label}"] .opplysning-verdi`)
 }
 
+// Samme felt i skjemaet (/profil/rediger): radene bygges med Skjema.tsx
+// (Policy: Skjemaer) og har ingen data-opplysning, så feltet finnes via sitt
+// tilgjengelige navn (aria-label).
+function feltFor(seksjon: Locator, label: string): Locator {
+  return seksjon.getByLabel(label, { exact: true })
+}
+
 // «Om deg»-seksjonen på en gitt rute. Egen helper fordi tre tester trenger
 // den, og fordi «E-post» også finnes som varsel-kanal-etikett lenger ned på
 // /profil (VarslerInnstillinger) — scopingen er ikke valgfri.
@@ -115,7 +122,7 @@ test.describe('Profil — egne opplysninger', () => {
       const seksjon = omDegSeksjon(page)
 
       for (const felt of FRITEKSTFELT) {
-        const verdi = verdiFor(seksjon, felt)
+        const verdi = url === '/profil' ? verdiFor(seksjon, felt) : feltFor(seksjon, felt)
         await expect(verdi, `${felt} skal finnes på ${url}`).toBeVisible()
         const kappet = await verdi.evaluate(el => el.scrollWidth > el.clientWidth + 1)
         expect(kappet, `${felt} skal wrappe, ikke kappes, på ${url}`).toBe(false)
@@ -143,10 +150,15 @@ test.describe('Profil — egne opplysninger', () => {
       await page.goto(url)
       await page.waitForLoadState('networkidle')
       const seksjon = omDegSeksjon(page)
-      await expect(seksjon.locator('.opplysning-etikett').first()).toBeVisible()
-      // DOM-rekkefølge er trygt her: radene er én flex-kolonne uten
-      // omstokking (ingen `order`/grid), og `.all()` returnerer i DOM-orden.
-      const alle = await seksjon.locator('.opplysning-etikett').allTextContents()
+      // /profil: felles .opplysning-etikett. /profil/rediger: etiketten er første
+      // <span> i hver `label.skjema-rad` (SkjemaRad/TekstRad i Skjema.tsx).
+      const etikettLocator = url === '/profil'
+        ? seksjon.locator('.opplysning-etikett')
+        : seksjon.locator('label.skjema-rad > span:first-child')
+      await expect(etikettLocator.first()).toBeVisible()
+      // DOM-rekkefølge er trygt her: radene er én kolonne uten omstokking
+      // (ingen `order`/grid), og `.allTextContents()` returnerer i DOM-orden.
+      const alle = await etikettLocator.allTextContents()
       return alle.map(t => t.trim()).filter(t => t !== 'Visningsnavn')
     }
 
@@ -167,12 +179,18 @@ test.describe('Profil — egne opplysninger', () => {
     await page.goto('/profil/rediger')
     await page.waitForLoadState('networkidle')
 
-    for (const felt of ['Navn', 'Visningsnavn', 'Fødselsdato', 'Telefon', 'Matallergier', 'Stikkord om deg']) {
+    // Fødselsdato er et DatoFelt: selve <input> er usynlig (opacity 0) oppå
+    // verdien, så vi sjekker at den finnes, ikke at den er synlig.
+    for (const felt of ['Navn', 'Visningsnavn', 'Telefon', 'Matallergier', 'Stikkord om deg']) {
       await expect(
         page.getByLabel(felt, { exact: true }),
         `${felt} skal ha et tilgjengelig navn`,
       ).toBeVisible()
     }
+    await expect(
+      page.getByLabel('Fødselsdato', { exact: true }),
+      'Fødselsdato skal ha et tilgjengelig navn',
+    ).toBeAttached()
 
     // Rollen i tillegg til navnet for ett felt: beviser at navnet henger på
     // selve kontrollen, ikke på en tilfeldig container med samme tekst.

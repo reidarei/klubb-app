@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
+import { SkjemaGruppe, SkjemaRad, RadInput } from '@/components/ui/Skjema'
+import { SendRad } from '@/components/fond/EditorDeler'
 import { oppdaterKontantSaldo } from '@/lib/actions/fond'
 
 type Props = {
@@ -25,22 +25,16 @@ export default function KontantEditor({ saldo }: Props) {
   }
 
   return (
-    <form
-      action={handleOppdater}
-      style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+    <SkjemaGruppe
+      feil={feil}
+      hjelp={ok ? <span style={{ color: 'var(--success)' }}>Saldo oppdatert</span> : undefined}
     >
-      {feil && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{feil}</div>}
-      {ok && <div style={{ color: 'var(--success)', fontSize: 13 }}>Saldo oppdatert</div>}
-      <Input
-        name="saldo"
-        label="Saldo på konto (kr)"
-        type="number"
-        min={0}
-        step={0.01}
-        defaultValue={saldo}
-        required
-      />
-      <Button type="submit" variant="primary">Oppdater saldo</Button>
-    </form>
+      <form className="panel-liste" action={handleOppdater}>
+        <SkjemaRad etikett="Saldo på konto (kr)">
+          <RadInput name="saldo" type="number" min={0} step={0.01} defaultValue={saldo} required />
+        </SkjemaRad>
+        <SendRad tekst="Oppdater saldo" />
+      </form>
+    </SkjemaGruppe>
   )
 }

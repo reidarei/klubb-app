@@ -1,45 +1,9 @@
 'use client'
 
-import { useState, useTransition, type ButtonHTMLAttributes, type CSSProperties } from 'react'
+import { useState, useTransition } from 'react'
 import { leggTilMal, oppdaterMal, slettMal } from '@/lib/actions/arrangementmaler'
-import { treffflateRundt } from '@/components/ui/Treffflate'
-import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
-
-// Synlig pille: 26 px høy (text-xs + py-1 + 1 px kant), minWidth 44 (#700).
-const ADMIN_KNAPP_TREFF = treffflateRundt({ hoyde: 26 })
-// Radhøyde ≥ tap-flaten (+1 for borderTop), så knappene i nabo-radene ikke overlapper vertikalt.
-const RAD_MIN_HOYDE = MIN_TREFFMAAL_PX + 1
-
-// Usynlig knapp vokser vertikalt til 44; pillen inni bærer utseendet og får reell
-// minstebredde, så ingen X-utvidelse trengs og gap-1 mellom naboer overlapper ikke.
-function AdminKnapp({
-  stil,
-  children,
-  ...props
-}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style' | 'className' | 'type'> & { stil: CSSProperties }) {
-  return (
-    <button
-      type="button"
-      {...props}
-      style={{
-        ...ADMIN_KNAPP_TREFF.stil,
-        background: 'none',
-        border: 'none',
-        display: 'inline-flex',
-        alignItems: 'center',
-        flexShrink: 0,
-        fontFamily: 'inherit'
-      }}
-    >
-      <span
-        className="text-xs px-2 py-1 rounded-lg"
-        style={{ display: 'block', minWidth: MIN_TREFFMAAL_PX, textAlign: 'center', border: '1px solid transparent', ...stil }}
-      >
-        {children}
-      </span>
-    </button>
-  )
-}
+import { SkjemaGruppe, SkjemaRad, RadInput, ValgFelt } from '@/components/ui/Skjema'
+import { AdminKnapp, KNAPP_NORMAL, ListeRad } from '@/components/MalAdminDeler'
 
 type Mal = { id: string; navn: string; rekkefølge: number; purredato: string | null }
 
@@ -61,28 +25,6 @@ function tilLagringsdato(maaned: number, dag: number): string {
 function dagerIMaaned(maaned: number): number {
   // Bruker år 2000 (skuddår) slik at 29. feb er tilgjengelig
   return new Date(2000, maaned, 0).getDate()
-}
-
-const inputStil: React.CSSProperties = {
-  background: 'var(--bg-elevated-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  borderRadius: '0.75rem',
-  padding: '0.35rem 0.6rem',
-  fontSize: '0.875rem',
-  fontFamily: 'inherit',
-  flex: 1,
-  minWidth: 0,
-}
-
-const selectStil: React.CSSProperties = {
-  background: 'var(--bg-elevated-2)',
-  border: '1px solid var(--border)',
-  color: 'var(--text-primary)',
-  borderRadius: '0.75rem',
-  padding: '0.35rem 0.4rem',
-  fontSize: '0.8rem',
-  fontFamily: 'inherit',
 }
 
 function MalRad({ mal }: { mal: Mal }) {
@@ -139,78 +81,80 @@ function MalRad({ mal }: { mal: Mal }) {
   if (redigerer) {
     const antallDager = maaned ? dagerIMaaned(maaned) : 31
     return (
-      <div className="py-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="flex gap-2 items-center mb-2">
-          <input className="skjemafelt"
+      <>
+        <SkjemaRad etikett="Navn">
+          <RadInput
             value={navn}
             onChange={e => setNavn(e.target.value)}
-            style={inputStil}
             autoFocus
             onKeyDown={e => { if (e.key === 'Enter') handleLagre() }}
           />
+        </SkjemaRad>
+        <SkjemaRad etikett="Purring">
+          <ValgFelt
+            value={maaned ? String(maaned) : ''}
+            valg={[{ verdi: '', etikett: 'Ingen' }, ...MAANEDER.map((m, i) => ({ verdi: String(i + 1), etikett: m }))]}
+            onChange={e => handleMaanedEndring(e.target.value)}
+            aria-label="Purremåned"
+          />
+        </SkjemaRad>
+        {maaned && (
+          <SkjemaRad etikett="Dag">
+            <ValgFelt
+              value={String(dag)}
+              valg={Array.from({ length: antallDager }, (_, i) => ({ verdi: String(i + 1), etikett: `${i + 1}.` }))}
+              onChange={e => setDag(parseInt(e.target.value))}
+              aria-label="Purredag"
+            />
+          </SkjemaRad>
+        )}
+        <ListeRad>
+          <AdminKnapp onClick={handleAvbryt} stil={KNAPP_NORMAL}>
+            Avbryt
+          </AdminKnapp>
           <AdminKnapp onClick={handleLagre} disabled={isPending}
             stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: isPending ? 0.5 : 1 }}>
-            {isPending ? '…' : 'OK'}
+            {isPending ? '…' : 'Lagre'}
           </AdminKnapp>
-          <AdminKnapp onClick={handleAvbryt}
-            stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-            ✕
-          </AdminKnapp>
-        </div>
-        <div className="flex gap-2 items-center">
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Purring:</span>
-          <select className="skjemafelt" value={maaned ?? ''} onChange={e => handleMaanedEndring(e.target.value)} style={selectStil}>
-            <option value="">Ingen</option>
-            {MAANEDER.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-          </select>
-          {maaned && (
-            <select className="skjemafelt" value={dag} onChange={e => setDag(parseInt(e.target.value))} style={selectStil}>
-              {Array.from({ length: antallDager }, (_, i) => (
-                <option key={i + 1} value={i + 1}>{i + 1}.</option>
-              ))}
-            </select>
-          )}
-        </div>
-      </div>
+        </ListeRad>
+      </>
     )
   }
 
   const pTekst = purredatoTekst()
 
   return (
-    <div className="flex items-center justify-between gap-2 py-2" style={{ borderTop: '1px solid var(--border-subtle)', minHeight: RAD_MIN_HOYDE }}>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>{mal.navn}</p>
-        {pTekst && (
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Purring {pTekst}</p>
-        )}
-      </div>
-      <div className="flex gap-1 shrink-0">
-        {bekrefterSlett ? (
-          <>
-            <AdminKnapp onClick={handleSlett} disabled={isPending}
-              stil={{ background: 'var(--danger)', color: 'var(--text-primary)', opacity: isPending ? 0.5 : 1 }}>
-              Slett
-            </AdminKnapp>
-            <AdminKnapp onClick={() => setBekrefterSlett(false)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-              Nei
-            </AdminKnapp>
-          </>
-        ) : (
-          <>
-            <AdminKnapp onClick={() => setRedigerer(true)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'none' }}>
-              Rediger
-            </AdminKnapp>
-            <AdminKnapp onClick={() => setBekrefterSlett(true)}
-              stil={{ border: '1px solid var(--border)', color: 'var(--danger)', background: 'none' }}>
-              Slett
-            </AdminKnapp>
-          </>
-        )}
-      </div>
-    </div>
+    <ListeRad
+      venstre={
+        <>
+          <p className="text-sm truncate" style={{ color: 'var(--text-primary)', margin: 0 }}>{mal.navn}</p>
+          {pTekst && (
+            <p className="text-xs" style={{ color: 'var(--text-secondary)', margin: 0 }}>Purring {pTekst}</p>
+          )}
+        </>
+      }
+    >
+      {bekrefterSlett ? (
+        <>
+          <AdminKnapp onClick={handleSlett} disabled={isPending}
+            stil={{ background: 'var(--danger)', color: 'var(--text-primary)', opacity: isPending ? 0.5 : 1 }}>
+            Slett
+          </AdminKnapp>
+          <AdminKnapp onClick={() => setBekrefterSlett(false)} stil={KNAPP_NORMAL}>
+            Nei
+          </AdminKnapp>
+        </>
+      ) : (
+        <>
+          <AdminKnapp onClick={() => setRedigerer(true)} stil={KNAPP_NORMAL}>
+            Rediger
+          </AdminKnapp>
+          <AdminKnapp onClick={() => setBekrefterSlett(true)} stil={{ ...KNAPP_NORMAL, color: 'var(--danger)' }}>
+            Slett
+          </AdminKnapp>
+        </>
+      )}
+    </ListeRad>
   )
 }
 
@@ -226,27 +170,36 @@ function NyMalForm() {
     })
   }
 
+  const kanLeggeTil = !isPending && !!navn.trim()
+
   return (
-    <div className="flex gap-2 items-center pt-3 mt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-      <input className="skjemafelt"
-        value={navn}
-        onChange={e => setNavn(e.target.value)}
-        placeholder="Nytt arrangement…"
-        style={inputStil}
-        onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
-      />
-      <AdminKnapp onClick={handleLeggTil} disabled={isPending || !navn.trim()}
-        stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: (isPending || !navn.trim()) ? 0.5 : 1 }}>
-        {isPending ? '…' : '+ Legg til'}
-      </AdminKnapp>
-    </div>
+    <SkjemaGruppe tittel="Ny mal">
+      <SkjemaRad etikett="Navn">
+        <RadInput
+          value={navn}
+          onChange={e => setNavn(e.target.value)}
+          placeholder="Nytt arrangement…"
+          onKeyDown={e => { if (e.key === 'Enter') handleLeggTil() }}
+        />
+      </SkjemaRad>
+      <ListeRad>
+        <AdminKnapp onClick={handleLeggTil} disabled={!kanLeggeTil}
+          stil={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: kanLeggeTil ? 1 : 0.5 }}>
+          {isPending ? '…' : '+ Legg til'}
+        </AdminKnapp>
+      </ListeRad>
+    </SkjemaGruppe>
   )
 }
 
 export default function ArrangementmalerAdmin({ maler }: { maler: Mal[] }) {
   return (
     <div>
-      {maler.map(mal => <MalRad key={mal.id} mal={mal} />)}
+      {maler.length > 0 && (
+        <SkjemaGruppe>
+          {maler.map(mal => <MalRad key={mal.id} mal={mal} />)}
+        </SkjemaGruppe>
+      )}
       <NyMalForm />
     </div>
   )
