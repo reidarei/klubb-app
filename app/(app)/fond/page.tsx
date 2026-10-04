@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
-import SectionLabel from '@/components/ui/SectionLabel'
-import Card from '@/components/ui/Card'
+import { PanelGruppe, PanelRad } from '@/components/innstillinger/PanelRad'
 import InnskyterRad from '@/components/fond/InnskyterRad'
 import FondPostRad from '@/components/fond/FondPostRad'
 import Avkastning from '@/components/fond/Avkastning'
@@ -13,7 +12,6 @@ import { formaterDato } from '@/lib/dato'
 import { formaterKr, formaterBelop, summerKroner } from '@/lib/belop'
 import { KLUBB_KORTNAVN, FOND_KONTONUMMER, FOND_FAST_TREKK_FORSLAG } from '@/lib/klubb-config'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
-import { PilleLenke } from '@/components/ui/TreffPille'
 
 // ─── Formateringshjelpere (beholdes fra godkjent mockup) ─────────────────────
 
@@ -119,12 +117,18 @@ export default async function FondSide() {
 
   return (
     <div style={{ padding: '0 20px 32px' }}>
-      {/* Editorial hero — matcher klubbinfo-stilen */}
+      {/* Toppkort — samme kort som profil-heroen, så fondet ser ut som resten av appen */}
       <div
         style={{
-          padding: '12px 4px 26px',
-          marginBottom: 28,
-          borderBottom: '0.5px solid var(--border-subtle)',
+          marginTop: 12,
+          padding: '16px 16px 18px',
+          marginBottom: 22,
+          background:
+            'radial-gradient(ellipse at top, var(--accent-soft), transparent 70%), var(--bg-elevated)',
+          border: '0.5px solid var(--border-strong)',
+          borderRadius: 'var(--radius)',
+          backdropFilter: 'var(--blur-card)',
+          WebkitBackdropFilter: 'var(--blur-card)',
         }}
       >
         <div
@@ -220,46 +224,10 @@ export default async function FondSide() {
           ))}
         </div>
 
-        {/* Rediger-knapp — kun for admin (medlemmer har ikke tilgang til /fond/rediger).
-            Synlig pille i profil-sidens stil; den gamle 9px-lenken var usynlig på mobil. */}
-        {kanAdministrere(profil?.rolle) && (
-          <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <PilleLenke
-              href="/fond/rediger"
-              pilleStil={{
-                padding: '8px 14px',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 999,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                fontWeight: 500,
-                textDecoration: 'none',
-              }}
-              synligHoyde={34}
-            >
-              Rediger fondet
-            </PilleLenke>
-            {/* Fondsrapport (#785) — admin-only, åpner et ark med kvartalet (fra siste oppgjør),
-                sjekkliste og hilsen. Ikke i NyFAB: kortet tegnes fra teksten i
-                et vanlig innlegg, men publiseringen er en egen, avgrenset flyt.
-                Forhåndsvisning (#787): profil er garantert ikke-null her —
-                kanAdministrere(profil?.rolle) er bare true når profil finnes. */}
-            <PubliserFondsrapport
-              navn={profil?.navn ?? ''}
-              bildeUrl={profil?.bilde_url ?? null}
-              rolle={profil?.rolle ?? null}
-              brukerId={bruker?.id ?? ''}
-            />
-          </div>
-        )}
       </div>
 
       {/* Eiendommer */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={eiendomListe.length}>Eiendommer</SectionLabel>
-        <Card padding={false}>
+      <FondBoks tittel="Eiendommer" antall={eiendomListe.length}>
           {eiendomListe.length === 0 ? (
             <div
               style={{
@@ -327,13 +295,10 @@ export default async function FondSide() {
               </div>
             </>
           )}
-        </Card>
-      </section>
+      </FondBoks>
 
       {/* Aksjer og fond */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={vpListe.length}>Aksjer og fond</SectionLabel>
-        <Card padding={false}>
+      <FondBoks tittel="Aksjer og fond" antall={vpListe.length}>
           {vpListe.length === 0 ? (
             <div
               style={{
@@ -404,13 +369,10 @@ export default async function FondSide() {
               </div>
             </>
           )}
-        </Card>
-      </section>
+      </FondBoks>
 
       {/* Kontantbeholdning */}
-      <section>
-        <SectionLabel>Kontantbeholdning</SectionLabel>
-        <Card padding={false}>
+      <FondBoks tittel="Kontanter">
           <div
             style={{
               display: 'flex',
@@ -511,8 +473,61 @@ export default async function FondSide() {
               {' '}— så vokser fondet av seg sjæl.
             </div>
           )}
-        </Card>
-      </section>
+      </FondBoks>
+
+      {/* Admin — samme plass og form som i kontrollpanelet: nederst, i egen boks. */}
+      {kanAdministrere(profil?.rolle) && (
+        <>
+          <PanelGruppe tittel="Admin">
+            <PanelRad href="/fond/rediger" ikon="cog" farge="sand" tittel="Rediger fondet" />
+          </PanelGruppe>
+          {/* Fondsrapport (#785) — åpner et ark med kvartalet (fra siste oppgjør),
+              sjekkliste og hilsen. profil er garantert ikke-null her —
+              kanAdministrere(profil?.rolle) er bare true når profil finnes. */}
+          <div style={{ marginTop: -8 }}>
+            <PubliserFondsrapport
+              navn={profil?.navn ?? ''}
+              bildeUrl={profil?.bilde_url ?? null}
+              rolle={profil?.rolle ?? null}
+              brukerId={bruker?.id ?? ''}
+            />
+          </div>
+        </>
+      )}
     </div>
+  )
+}
+
+// Overskrift + avrundet boks — samme form som gruppene i kontrollpanelet og på
+// profilen. Uten panel-liste-klassen: radene her (FondPostRad, InnskyterRad)
+// tegner sine egne skillelinjer.
+function FondBoks({ tittel, antall, children }: { tittel: string; antall?: number; children: React.ReactNode }) {
+  return (
+    <section style={{ marginBottom: 22 }}>
+      <h2
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--text-tertiary)',
+          letterSpacing: '1.6px',
+          textTransform: 'uppercase',
+          fontWeight: 600,
+          margin: '0 0 8px 4px',
+        }}
+      >
+        {tittel}
+        {antall !== undefined && antall > 0 && ` · ${antall}`}
+      </h2>
+      <div
+        style={{
+          borderRadius: 14,
+          border: '0.5px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          overflow: 'hidden',
+        }}
+      >
+        {children}
+      </div>
+    </section>
   )
 }

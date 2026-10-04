@@ -4,8 +4,6 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getProfil } from '@/lib/auth-cache'
 import { kanAdministrere } from '@/lib/roller'
 import { FOND_OPPGJOR_URL } from '@/lib/config'
-import SectionLabel from '@/components/ui/SectionLabel'
-import Card from '@/components/ui/Card'
 import EiendomEditor from '@/components/fond/EiendomEditor'
 import VerdipapirEditor from '@/components/fond/VerdipapirEditor'
 import InnskuddEditor from '@/components/fond/InnskuddEditor'
@@ -43,15 +41,37 @@ export default async function FondRediger() {
 
   return (
     <div style={{ padding: '0 20px 40px' }}>
-      {/* Topp */}
-      <div style={{ padding: '16px 4px 20px', borderBottom: '0.5px solid var(--border-subtle)', marginBottom: 24 }}>
-        <div style={{ marginBottom: 8 }}>
+      {/* Topp — samme form som undersidene i kontrollpanelet */}
+      <header style={{ marginTop: 12, marginBottom: 22 }}>
+        <div style={{ marginBottom: 4 }}>
           <TilbakeKnapp href="/fond" til="Fond" />
         </div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
-          Rediger fond
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--text-tertiary)',
+            letterSpacing: '1.6px',
+            textTransform: 'uppercase',
+            marginBottom: 6,
+          }}
+        >
+          Fond
         </div>
-      </div>
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 30,
+            fontWeight: 500,
+            letterSpacing: '-0.4px',
+            margin: 0,
+            color: 'var(--text-primary)',
+          }}
+        >
+          Rediger fondet
+        </h1>
+      </header>
 
       {/* Med oppgjørs-henting konfigurert er den PRIMÆRVEIEN for innskudd og
           saldo — den står øverst, og de manuelle editorene for de samme
@@ -60,28 +80,35 @@ export default async function FondRediger() {
           Uten konfigurasjonen (klubb-app/test) er manuell redigering eneste
           vei, og seksjonene vises i vanlig rekkefølge uten overstyrings-ramme. */}
       {FOND_OPPGJOR_URL && (
-        <section style={{ marginBottom: 28 }}>
-          <SectionLabel>Hent publisert oppgjør</SectionLabel>
-          <Card>
+        <section style={{ marginBottom: 22 }}>
+          <Overskrift>Hent publisert oppgjør</Overskrift>
+          <div
+            style={{
+              borderRadius: 14,
+              border: '0.5px solid var(--border)',
+              background: 'var(--bg-elevated)',
+              padding: 16,
+            }}
+          >
             <HentOppgjor />
-          </Card>
+          </div>
         </section>
       )}
 
       {/* Eiendommer og verdipapirer dekkes ikke av oppgjøret — alltid manuelle */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={eiendommer?.length ?? 0}>Eiendommer</SectionLabel>
+      <section style={{ marginBottom: 22 }}>
+        <Overskrift antall={eiendommer?.length ?? 0}>Eiendommer</Overskrift>
         <EiendomEditor eiendommer={eiendommer ?? []} />
       </section>
 
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={verdipapirer?.length ?? 0}>Aksjer og fond</SectionLabel>
+      <section style={{ marginBottom: 22 }}>
+        <Overskrift antall={verdipapirer?.length ?? 0}>Aksjer og fond</Overskrift>
         <VerdipapirEditor verdipapirer={verdipapirer ?? []} />
       </section>
 
       {FOND_OPPGJOR_URL && (
         <div style={{ margin: '36px 0 20px' }}>
-          <SectionLabel>Overstyre manuelt</SectionLabel>
+          <Overskrift>Overstyre manuelt</Overskrift>
           <p
             style={{
               fontFamily: 'var(--font-body)',
@@ -98,16 +125,37 @@ export default async function FondRediger() {
       )}
 
       {/* Kontantbeholdning */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel>Kontantbeholdning</SectionLabel>
+      <section style={{ marginBottom: 22 }}>
+        <Overskrift>Kontanter</Overskrift>
         <KontantEditor saldo={kontant?.saldo ?? 0} />
       </section>
 
       {/* Innskudd */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel count={innskudd?.length ?? 0}>Innskudd</SectionLabel>
+      <section style={{ marginBottom: 22 }}>
+        <Overskrift antall={innskudd?.length ?? 0}>Innskudd</Overskrift>
         <InnskuddEditor innskudd={innskudd ?? []} profiler={profiler ?? []} />
       </section>
     </div>
+  )
+}
+
+// Gruppeoverskrift — samme form som SkjemaGruppe/PanelGruppe. Editorene under
+// rendrer selv boksene (uten tittel), så overskriften står her.
+function Overskrift({ antall, children }: { antall?: number; children: React.ReactNode }) {
+  return (
+    <h2
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        color: 'var(--text-tertiary)',
+        letterSpacing: '1.6px',
+        textTransform: 'uppercase',
+        fontWeight: 600,
+        margin: '0 0 8px 4px',
+      }}
+    >
+      {children}
+      {antall !== undefined && antall > 0 && ` · ${antall}`}
+    </h2>
   )
 }

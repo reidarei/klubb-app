@@ -4,7 +4,7 @@
 // får en automatisk reload eller en feilside.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { feilNavn, erChunkFeil, proevChunkReload, bildeKilde } from '@/lib/klient-logg'
+import { feilNavn, erChunkFeil, proevChunkReload, bildeKilde, erNavigasjonsSignal } from '@/lib/klient-logg'
 import { CHUNK_RELOAD_SPERRE_MS } from '@/lib/konstanter'
 
 describe('feilNavn', () => {
@@ -136,5 +136,32 @@ describe('bildeKilde', () => {
   it('kaster aldri på søppel-input — en logger skal ikke velte kallstedet', () => {
     expect(bildeKilde('::ikke en url::')).toBe('::ikke en url::')
     expect(bildeKilde('')).toBe('')
+  })
+})
+
+// #834: React lager en «gjenopprettet» #419-feil med serverens digest når en
+// side kaster notFound()/redirect() under streaming. Formen her speiler
+// react-dom-client: Error(419), tom stack, digest satt fra serveren.
+describe('erNavigasjonsSignal', () => {
+  function reactFeil(digest?: string) {
+    const e = new Error('Minified React error #419') as Error & { digest?: string }
+    e.stack = ''
+    e.digest = digest
+    return e
+  }
+
+  it('kjenner igjen notFound()', () => {
+    expect(erNavigasjonsSignal(reactFeil('NEXT_HTTP_ERROR_FALLBACK;404'))).toBe(true)
+  })
+  it('kjenner igjen redirect()', () => {
+    expect(erNavigasjonsSignal(reactFeil('NEXT_REDIRECT;replace;/innstillinger;307;'))).toBe(true)
+  })
+  it('lar en ekte serverfeil (annen digest) passere', () => {
+    expect(erNavigasjonsSignal(reactFeil('2853810723'))).toBe(false)
+  })
+  it('lar feil uten digest passere', () => {
+    expect(erNavigasjonsSignal(reactFeil())).toBe(false)
+    expect(erNavigasjonsSignal(new Error('vanlig'))).toBe(false)
+    expect(erNavigasjonsSignal(null)).toBe(false)
   })
 })

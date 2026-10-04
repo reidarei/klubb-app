@@ -74,6 +74,29 @@ export function feilNavn(feil: unknown): string {
 }
 
 /**
+ * Kjenner igjen Next sine styringssignaler — notFound() og redirect() — når de
+ * dukker opp som en klientfeil (#834).
+ *
+ * Kaster en side notFound()/redirect() etter at (app)-layouten har begynt å
+ * streame, merker React Suspense-grensen som feilet på serveren og lager på
+ * klienten en «gjenopprettet» feil (React #419) med tom stack og serverens
+ * digest. Next melder den videre som et vanlig window-error. Det er ikke en
+ * feil — siden gjorde det den skulle (f.eks. et medlem som åpner en admin-side
+ * og får 404) — og den skal ikke havne i feil_logg og feilalarmen.
+ *
+ * Avgjøres på digest, ikke på feilnummeret: en #419 med en annen digest er en
+ * ekte serverfeil og skal fortsatt logges.
+ */
+export function erNavigasjonsSignal(feil: unknown): boolean {
+  if (!feil || typeof feil !== 'object' || !('digest' in feil)) return false
+  const digest = (feil as { digest: unknown }).digest
+  return (
+    typeof digest === 'string' &&
+    (digest.startsWith('NEXT_HTTP_ERROR_FALLBACK') || digest.startsWith('NEXT_REDIRECT'))
+  )
+}
+
+/**
  * Kjenner igjen at nettleseren ikke fikk lastet en kodebit (chunk). Da kjører
  * klienten en HTML/bundle som peker på filer serveren ikke har lenger —
  * typisk etter en deploy mens PWA-en lå åpen i bakgrunnen.

@@ -7,16 +7,20 @@
 import { useEffect } from 'react'
 // Beacon-transporten bor i lib/klient-logg.ts, slik at håndterte klientfeil
 // (f.eks. i chat-hookene) kan bruke samme vei til feil_logg som de ufangede.
-import { sendFeilBeacon, feilNavn, bildeKilde, klassifiserRessursfeil } from '@/lib/klient-logg'
+import { sendFeilBeacon, feilNavn, bildeKilde, klassifiserRessursfeil, erNavigasjonsSignal } from '@/lib/klient-logg'
 
 export default function FeilFangst() {
   useEffect(() => {
     function handterFeil(ev: ErrorEvent) {
+      // notFound()/redirect() under streaming — ikke en feil, se #834.
+      if (erNavigasjonsSignal(ev.error)) return
+      const digest = (ev.error as { digest?: unknown } | null)?.digest
       sendFeilBeacon(
         'klient.window.feilet',
         ev.message ?? 'Ukjent feil',
         ev.error?.stack,
-        { name: feilNavn(ev.error) },
+        // digest kobler en klientfeil til serverfeilen som utløste den (#834)
+        { name: feilNavn(ev.error), digest: typeof digest === 'string' ? digest : undefined },
       )
     }
 
