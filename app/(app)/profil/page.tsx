@@ -3,10 +3,11 @@ import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker } from '@/lib/auth-cache'
 import { norskAar } from '@/lib/dato'
 import Avatar from '@/components/ui/Avatar'
-import Icon from '@/components/ui/Icon'
-import SectionLabel from '@/components/ui/SectionLabel'
+import { PanelGruppe, PanelRad } from '@/components/innstillinger/PanelRad'
+import { SkjemaGruppe } from '@/components/ui/Skjema'
+import { ProfilLenkeRad } from '@/components/profil/ProfilRad'
+import UlestVarselRad from '@/components/profil/UlestVarselRad'
 import VarslerInnstillinger from '@/components/VarslerInnstillinger'
-import VarslerListe from '@/components/profil/VarslerListe'
 import EgneOpplysninger from '@/components/profil/EgneOpplysninger'
 import PassInfoKort from '@/components/profil/PassInfoKort'
 import UtseendeValg from '@/components/profil/UtseendeValg'
@@ -16,7 +17,6 @@ import { lesTemaFraCookie } from '@/lib/tema-server'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
 import { formaterKr, summerKroner } from '@/lib/belop'
 import LoggUtKnapp from './LoggUtKnapp'
-import { PilleLenke } from '@/components/ui/TreffPille'
 import { treffflateRundt } from '@/components/ui/Treffflate'
 
 const KLUBBEN_START_AAR = 2007
@@ -34,10 +34,8 @@ export default async function Profil() {
     { count: kaaringer, error: kaaringerFeil },
     { data: ansvar, error: ansvarFeil },
     { data: varselPref, error: varselPrefFeil },
-    { data: varslerViktig, error: varslerViktigFeil },
-    { data: varslerAlt, error: varslerAltFeil },
+    { data: ulesteVarsler, error: ulesteVarslerFeil },
     { count: antallUlesteViktig, error: antallUlesteViktigFeil },
-    { count: antallUlesteAlt, error: antallUlesteAltFeil },
     { data: passInfo, error: passInfoFeil },
     { count: ulestPrivat, error: ulestPrivatFeil },
     { data: fondInnskudd, error: fondInnskuddFeil },
@@ -59,7 +57,7 @@ export default async function Profil() {
       .eq('profil_id', user!.id),
     supabase
       .from('arrangoransvar')
-      .select('id, aar, arrangement_navn, arrangement_id, arrangementer (id, tittel, start_tidspunkt, oppmoetested)')
+      .select('id, aar, arrangement_navn')
       .eq('ansvarlig_id', user!.id)
       .gte('aar', norskAar())
       .order('aar'),
@@ -68,43 +66,26 @@ export default async function Profil() {
       .select('push_aktiv, epost_aktiv, varsel_nivaa')
       .eq('profil_id', user!.id)
       .maybeSingle(),
-    // «Viktig» — default-fanen. teller_ulest = true dekker alt utenom de fem
-    // chat_*-broadcastene (#612, migrasjon 134); en pass-godkjenning skal
-    // ikke kunne drukne i en klubbchat-burst.
+    // De tre nyeste ULESTE «Viktig»-varslene til forhåndsvisningen øverst.
+    // teller_ulest = true dekker alt utenom de fem chat_*-broadcastene (#612,
+    // migrasjon 134); en pass-godkjenning skal ikke kunne drukne i en
+    // klubbchat-burst. Hele lista (Viktig/Alt) ligger på /varsler.
     supabase
       .from('varsel_logg')
-      .select('id, tittel, melding, lest, opprettet, url')
+      .select('id, tittel, opprettet')
       .eq('profil_id', user!.id)
       .eq('teller_ulest', true)
+      .eq('lest', false)
       .order('opprettet', { ascending: false })
-      .limit(10),
-    // «Alt» — hele historikken, chat inkludert.
-    supabase
-      .from('varsel_logg')
-      .select('id, tittel, melding, lest, opprettet, url')
-      .eq('profil_id', user!.id)
-      .order('opprettet', { ascending: false })
-      .limit(10),
-    // Total ulest-count for «Viktig» på tvers av hele historikken — listen
-    // viser kun top 10, men "Marker alle som lest"-knappen og tellingen i
-    // tittelen må kjenne til alle uleste, også de eldre enn topp 10 (#207).
-    // MÅ filtreres likt som prikken (harUlestVarsler() i lib/ulest.ts) —
-    // ellers lyver tittelen og avatar-prikken mot hverandre (#612).
+      .limit(3),
+    // Total ulest-count for «Viktig» på tvers av hele historikken — vises på
+    // «Alle varsler»-raden. MÅ filtreres likt som prikken (harUlestVarsler() i
+    // lib/ulest.ts) — ellers lyver tallet og avatar-prikken mot hverandre (#612).
     supabase
       .from('varsel_logg')
       .select('id', { count: 'exact', head: true })
       .eq('profil_id', user!.id)
       .eq('teller_ulest', true)
-      .eq('lest', false),
-    // Uleste i «Alt» — ALLE uleste, ikke bare chat-radene (#612-review).
-    // Badgen står på en fane som viser hele historikken, så den må telle det
-    // fanen faktisk inneholder: med 3 uleste viktige + 12 uleste chat sto det
-    // før «Alt · 12» på en fane med 15 uleste. Filteret på teller_ulest = false
-    // hørte til den forrige varianten der badgen skulle bety «chat».
-    supabase
-      .from('varsel_logg')
-      .select('id', { count: 'exact', head: true })
-      .eq('profil_id', user!.id)
       .eq('lest', false),
     // RLS sørger for at vi kun får egen rad. maybeSingle siden raden
     // ikke nødvendigvis finnes ennå.
@@ -141,10 +122,8 @@ export default async function Profil() {
   if (kaaringerFeil) throw new Error(`Kunne ikke telle kåringer: ${kaaringerFeil.message}`)
   if (ansvarFeil) throw new Error(`Kunne ikke hente arrangøransvar: ${ansvarFeil.message}`)
   if (varselPrefFeil) throw new Error(`Kunne ikke hente varselpreferanser: ${varselPrefFeil.message}`)
-  if (varslerViktigFeil) throw new Error(`Kunne ikke hente varsler («Viktig»): ${varslerViktigFeil.message}`)
-  if (varslerAltFeil) throw new Error(`Kunne ikke hente varsler («Alt»): ${varslerAltFeil.message}`)
+  if (ulesteVarslerFeil) throw new Error(`Kunne ikke hente uleste varsler: ${ulesteVarslerFeil.message}`)
   if (antallUlesteViktigFeil) throw new Error(`Kunne ikke telle uleste varsler («Viktig»): ${antallUlesteViktigFeil.message}`)
-  if (antallUlesteAltFeil) throw new Error(`Kunne ikke telle uleste varsler («Alt»): ${antallUlesteAltFeil.message}`)
   if (passInfoFeil) throw new Error(`Kunne ikke hente pass-info: ${passInfoFeil.message}`)
   if (ulestPrivatFeil) throw new Error(`Kunne ikke telle uleste privatmeldinger: ${ulestPrivatFeil.message}`)
   if (fondInnskuddFeil) throw new Error(`Kunne ikke hente fondinnskudd: ${fondInnskuddFeil.message}`)
@@ -152,6 +131,8 @@ export default async function Profil() {
   const navn = profil?.navn ?? 'Ukjent'
   const rolle = tittelFor(profil?.rolle)
   const ulest = ulestPrivat ?? 0
+  // Navnene på hans kommende arrangøransvar (fra i år og utover) som undertekst.
+  const ansvarNavn = (ansvar ?? []).map(a => a.arrangement_navn).join(', ')
 
   // «Min andel av fondet» = summen av egne kontant-innskudd. Følger samme
   // synlighetsregel som Fond-taben (#447): admin ser den alltid, medlemmer
@@ -200,27 +181,6 @@ export default async function Profil() {
             Din profil
           </h1>
         </div>
-
-        <PilleLenke
-          href="/profil/rediger"
-          style={{
-            flexShrink: 0,
-          }}
-          pilleStil={{
-            padding: '8px 14px',
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            borderRadius: 999,
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12,
-            fontWeight: 500,
-            textDecoration: 'none',
-          }}
-          synligHoyde={34}
-        >
-          Rediger
-        </PilleLenke>
       </header>
 
       {/* Profil-hero — kompakt rad (#589). Identiteten lå tidligere som et
@@ -379,11 +339,49 @@ export default async function Profil() {
         </div>
       </div>
 
-      {/* Egne opplysninger (#683) — rett etter hero, før alt annet: dette ER
-          «min profil», og feltene var tidligere kun lesbare inne i
-          redigeringsskjemaet. Tett radform, ikke FaktaRad-formen fra
-          medlemsdetaljsiden — se kommentar i komponenten for hvorfor
-          (høydebudsjett, jf. #589). */}
+      {/* Varsler — de tre nyeste uleste, og lenke til hele lista (/varsler).
+          Har han ingen uleste, står bare «Alle varsler»-raden igjen. */}
+      <PanelGruppe tittel="Varsler">
+        {(ulesteVarsler ?? []).map(v => (
+          <UlestVarselRad key={v.id} id={v.id} tittel={v.tittel} opprettet={v.opprettet} />
+        ))}
+        <ProfilLenkeRad
+          href="/varsler"
+          etikett="Alle varsler"
+          status={(antallUlesteViktig ?? 0) > 0 ? antallUlesteViktig : undefined}
+        />
+      </PanelGruppe>
+
+      {/* Mitt — privatmeldinger lå her fra #256 (flyttet fra /chat). Arrangøransvaret
+          sto tidligere som egen liste på profilen; nå ligger det på /arrangoransvar. */}
+      <PanelGruppe tittel="Mitt">
+        <PanelRad
+          href="/samtaler"
+          ikon="message"
+          farge="blaa"
+          tittel="Privatmeldinger"
+          status={ulest > 0 ? ulest : undefined}
+          tone={ulest > 0 ? 'varsle' : 'noeytral'}
+        />
+        <PanelRad
+          href="/arrangoransvar"
+          ikon="calendar"
+          farge="gul"
+          tittel="Arrangøransvar"
+          undertekst={ansvarNavn || 'Ingen kommende ansvar'}
+          status={ansvar?.length ?? 0}
+        />
+        <PanelRad
+          href="/innspill"
+          ikon="sparkle"
+          farge="lilla"
+          tittel="Innspill"
+          undertekst="Se innspill du har sendt og svar på dem"
+        />
+      </PanelGruppe>
+
+      {/* Egne opplysninger (#683) — «Om deg» som rader med etikett/verdi.
+          «Rediger profil» er siste rad i samme boks. */}
       <EgneOpplysninger
         navn={navn}
         visningsnavn={profil?.visningsnavn ?? null}
@@ -392,269 +390,30 @@ export default async function Profil() {
         epost={profil?.epost ?? ''}
         matallergier={profil?.matallergier ?? null}
         stikkord={profil?.stikkord ?? null}
-      />
-
-      {/* Privatmeldinger — flyttes hit fra /chat (#256) slik at lenken
-          er tilgjengelig fra profil-siden, ikke fra klubb-chat. */}
-      <Link
-        href="/samtaler"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '12px 14px',
-          marginBottom: 22,
-          background: 'var(--bg-elevated)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 'var(--radius-card)',
-          textDecoration: 'none',
-          color: 'inherit',
-        }}
       >
-        <Icon name="message" size={18} color="var(--accent)" strokeWidth={1.6} />
-        <span
-          style={{
-            flex: 1,
-            fontFamily: 'var(--font-body)',
-            fontSize: 14,
-            color: 'var(--text-primary)',
-          }}
-        >
-          Privatmeldinger
-        </span>
-        {ulest > 0 && (
-          <span
-            style={{
-              minWidth: 20,
-              height: 20,
-              padding: '0 7px',
-              borderRadius: 999,
-              background: 'var(--accent)',
-              color: 'var(--accent-foreground)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {ulest}
-          </span>
-        )}
-        <Icon name="chevron" size={14} color="var(--text-tertiary)" />
-      </Link>
+        <ProfilLenkeRad href="/profil/rediger" etikett="Rediger profil" aksent />
+      </EgneOpplysninger>
 
-      {/* Arrangøransvar */}
-      {ansvar && ansvar.length > 0 && (
-        <section style={{ marginBottom: 24 }}>
-          <SectionLabel>Arrangøransvar</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {ansvar.map((a, i) => {
-              const lagtInn = !!a.arrangement_id
-              const arr = Array.isArray(a.arrangementer)
-                ? a.arrangementer[0]
-                : a.arrangementer
-              const meta = arr
-                ? arr.oppmoetested ?? '—'
-                : 'Dato og sted ikke satt'
-              const farge = lagtInn ? 'var(--success)' : 'var(--danger)'
-              return (
-                <Link
-                  key={a.id}
-                  href={arr ? `/arrangementer/${arr.id}` : '/arrangoransvar'}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14,
-                    padding: '16px 4px',
-                    borderBottom:
-                      i < ansvar.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: farge,
-                      flexShrink: 0,
-                      boxShadow: `0 0 0 3px color-mix(in srgb, ${farge} 18%, transparent)`,
-                    }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 10,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '1.6px',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        marginBottom: 4,
-                      }}
-                    >
-                      {a.aar}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 18,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        letterSpacing: '-0.2px',
-                        lineHeight: 1.15,
-                        marginBottom: 3,
-                      }}
-                    >
-                      {a.arrangement_navn}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '0.1px',
-                      }}
-                    >
-                      {meta}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      color: farge,
-                      letterSpacing: '1.4px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {lagtInn ? 'Lagt inn' : 'Ikke lagt inn'}
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Varsler-innstillinger */}
       <VarslerInnstillinger
         pushAktiv={varselPref?.push_aktiv ?? false}
         epostAktiv={varselPref?.epost_aktiv ?? true}
         varselNivaa={varselPref?.varsel_nivaa === 'viktige' ? 'viktige' : 'alle'}
       />
 
-      {/* Utseende-innstillinger — alle kan velge tema */}
       <UtseendeValg initial={valgtTema} />
 
       {/* Automatisering — per-admin, gjelder bare den innloggede. Lå tidligere i
           kontrollpanelet, der den så ut som en bryter for hele klubben. */}
       {kanAdministrere(profil?.rolle) && (
-        <section style={{ marginTop: 32 }}>
-          <SectionLabel>Automatisering</SectionLabel>
+        <SkjemaGruppe tittel="Automatisering">
           <BursdagsgratulasjonToggle aktiv={profil?.bursdagsgratulasjon_aktiv ?? false} />
-          <p
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: 12,
-              color: 'var(--text-tertiary)',
-              lineHeight: 1.45,
-              margin: '0 4px',
-            }}
-          >
-            Gjelder bare deg. Andre admins har sitt eget valg.
-          </p>
-        </section>
+        </SkjemaGruppe>
       )}
 
-      {/* Personlige varsler — interaktiv klient-komponent med «Viktig»/«Alt»-
-          segment, filter, kollaps og marker-alle-lest. Vis seksjonen hvis det
-          finnes noe i EN av de to listene, ELLER uleste eldre enn topp 10 i
-          en av dem (se #207, utvidet med «Alt» i #612). */}
-      {((varslerViktig && varslerViktig.length > 0) ||
-        (varslerAlt && varslerAlt.length > 0) ||
-        (antallUlesteViktig ?? 0) > 0 ||
-        (antallUlesteAlt ?? 0) > 0) && (
-        <VarslerListe
-          varslerViktig={varslerViktig ?? []}
-          varslerAlt={varslerAlt ?? []}
-          antallUlesteViktigTotal={antallUlesteViktig ?? 0}
-          antallUlesteAltTotal={antallUlesteAlt ?? 0}
-        />
-      )}
+      {/* Pass-info — synlig kun for eier (RLS). PassInfoKort bærer boksen selv. */}
+      <PassInfoKort nummer={passInfo?.nummer ?? null} utloper={passInfo?.utloper ?? null} />
 
-      {/* Pass og Innspill samlet nederst — sjeldent brukt, eller mest praktisk
-          å nå når man scroller forbi det viktige (varsler, ansvar). */}
-
-      {/* Pass-info — synlig kun for eier (RLS) */}
-      <section style={{ marginTop: 32, marginBottom: 24 }}>
-        <SectionLabel>Pass</SectionLabel>
-        <PassInfoKort
-          nummer={passInfo?.nummer ?? null}
-          utloper={passInfo?.utloper ?? null}
-        />
-      </section>
-
-      {/* Innspill */}
-      <section style={{ marginBottom: 24 }}>
-        <SectionLabel>Innspill</SectionLabel>
-        <Link
-          href="/innspill"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: '16px 4px',
-            textDecoration: 'none',
-            color: 'inherit',
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 18,
-                fontWeight: 500,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.2px',
-                lineHeight: 1.15,
-                marginBottom: 3,
-              }}
-            >
-              Dine innspill
-            </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                letterSpacing: '0.1px',
-              }}
-            >
-              Se innspill du har sendt inn og svar på håndterte saker
-            </div>
-          </div>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 14,
-              color: 'var(--text-tertiary)',
-              fontWeight: 400,
-            }}
-          >
-            →
-          </span>
-        </Link>
-      </section>
-
-      {/* Logg ut */}
-      <div style={{ marginTop: 28 }}>
-        <LoggUtKnapp />
-      </div>
+      <LoggUtKnapp />
     </div>
   )
 }

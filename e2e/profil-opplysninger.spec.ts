@@ -17,17 +17,17 @@ import { harTestCreds, loggInn, SEED_PASSORD } from './helpers/auth'
 
 const UT_DIR = '.screenshots/profil'
 
-// Høydetak — en RETNINGSLINJE, ikke et krav fra #683. Målet «hold
-// Privatmeldinger over folden på iPhone 390×844» ble satt under planleggingen
-// av #683; issuet selv nevner ingen piksler. Taket er derfor satt romslig nok
+// Høydetak — en RETNINGSLINJE, ikke et krav fra #683. Taket er satt romslig nok
 // til å tåle fontmetrikk-forskjeller mellom Windows og CI-containeren og en
 // matallergi-tekst som wrapper, men stramt nok til å fange en ekte regresjon
 // (f.eks. et bytte til label-over-verdi-formen, som ville lagt på ~100 px).
 // Målt på den UTFYLTE seed-profilen (E2E Admin har alle feltene, se seed.sql).
-// Målt 2026-09-12 på utfylt seed-profil: seksjon 308 px, hero+seksjon 448 px
-// (matallergi-teksten wrapper over to linjer). Takene ligger ~10 % over det.
-const MAKS_SEKSJON_PX = 340
-const MAKS_HERO_PLUSS_SEKSJON_PX = 480
+// Seksjonen er bokser med 48 px-rader (seks felt + «Rediger profil»-raden +
+// overskrift ≈ 380 px, mer når matallergi-teksten wrapper). Heroen og
+// Varsler/Mitt-boksene ligger nå mellom hero og «Om deg», så «hero + seksjon»
+// måles ikke lenger — taket under er estimert, ikke målt: justér etter første
+// CI-kjøring (skriver «[#683] seksjon: N px» i loggen).
+const MAKS_SEKSJON_PX = 460
 
 // Verdi-cellen i en rad. `data-opplysning` står på rad-diven i
 // OpplysningRad, og `.opplysning-verdi` på selve verdien — en <div> på
@@ -79,25 +79,12 @@ test.describe('Profil — egne opplysninger', () => {
     await expect(seksjon.getByText('Matallergier', { exact: true })).toBeVisible()
     await expect(seksjon.getByText('Stikkord om deg', { exact: true })).toBeVisible()
 
-    // boundingBox() dekker IKKE margin (getBoundingClientRect), så bunnen måles
-    // mot toppen av neste element (Privatmeldinger-lenken) i stedet for
-    // seksjonens egen box.
+    // Seksjonens egen høyde (boksen + overskriften). Hero og de to boksene over
+    // «Om deg» (Varsler, Mitt) hører ikke med i budsjettet.
     const seksjonBox = await seksjon.boundingBox()
-    const privatBox = await page.getByRole('link', { name: 'Privatmeldinger' }).boundingBox()
     expect(seksjonBox).not.toBeNull()
-    expect(privatBox).not.toBeNull()
-    const seksjonMedMargin = privatBox!.y - seksjonBox!.y
-
-    // Hero + seksjon til sammen: fra toppen av hero-KORTET (ikke sideheaderen
-    // over det) til toppen av Privatmeldinger — det som faktisk avgjør om
-    // lenken er over folden.
-    const heroBox = await page.getByTestId('profil-hero').boundingBox()
-    expect(heroBox).not.toBeNull()
-    const heroPlussSeksjon = privatBox!.y - heroBox!.y
-
-    console.log(`[#683] seksjon: ${Math.round(seksjonMedMargin)} px, hero+seksjon: ${Math.round(heroPlussSeksjon)} px`)
-    expect(seksjonMedMargin).toBeLessThanOrEqual(MAKS_SEKSJON_PX)
-    expect(heroPlussSeksjon).toBeLessThanOrEqual(MAKS_HERO_PLUSS_SEKSJON_PX)
+    console.log(`[#683] seksjon: ${Math.round(seksjonBox!.height)} px`)
+    expect(seksjonBox!.height).toBeLessThanOrEqual(MAKS_SEKSJON_PX)
 
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
     await page.screenshot({ path: `${UT_DIR}/profil-om-deg-v2.png` })

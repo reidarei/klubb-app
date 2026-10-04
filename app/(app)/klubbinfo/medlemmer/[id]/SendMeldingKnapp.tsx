@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react'
 import { aapneSamtale } from '@/lib/actions/samtaler'
-import { PilleKnapp } from '@/components/ui/TreffPille'
 
 export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
   const [isPending, startTransition] = useTransition()
@@ -27,25 +26,28 @@ export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
     })
   }
 
+  // Full bredde og minst 44 px høy: knappen selv er treffflaten.
   return (
-    <PilleKnapp
+    <button
       type="button"
       onClick={handleKlikk}
       disabled={isPending}
-      pilleStil={{
-        padding: '8px 14px',
+      style={{
+        width: '100%',
+        minHeight: 44,
+        padding: '11px 14px',
         background: 'var(--accent-soft)',
         border: '0.5px solid var(--accent)',
-        borderRadius: 999,
+        borderRadius: 14,
         color: 'var(--accent)',
         fontFamily: 'var(--font-body)',
-        fontSize: 12,
+        fontSize: 15,
         fontWeight: 500,
         opacity: isPending ? 0.6 : 1,
+        cursor: 'pointer',
       }}
-      synligHoyde={34}
     >
       {isPending ? 'Åpner…' : 'Send melding'}
-    </PilleKnapp>
+    </button>
   )
 }

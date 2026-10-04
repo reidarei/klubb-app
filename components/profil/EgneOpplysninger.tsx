@@ -1,4 +1,5 @@
-import SectionLabel from '@/components/ui/SectionLabel'
+import type { ReactNode } from 'react'
+import { SkjemaGruppe } from '@/components/ui/Skjema'
 import OpplysningRad, { opplysningVerdiStil } from '@/components/profil/OpplysningRad'
 import { formaterDato } from '@/lib/dato'
 
@@ -10,6 +11,8 @@ type Props = {
   epost: string
   matallergier: string | null
   stikkord: string | null
+  /** Ekstra rader nederst i boksen (f.eks. «Rediger profil»-lenka). */
+  children?: ReactNode
 }
 
 /**
@@ -43,6 +46,7 @@ export default function EgneOpplysninger({
   epost,
   matallergier,
   stikkord,
+  children,
 }: Props) {
   // Truthy-sjekk, ikke != null: et tomt visningsnavn betyr «har ikke et eget
   // visningsnavn» — samme sak som null — og raden skal da skjules, ikke vises
@@ -50,24 +54,23 @@ export default function EgneOpplysninger({
   const visVisningsnavn = visningsnavn && visningsnavn !== navn
 
   return (
-    // 20 px matcher hero og resten av seksjonsrytmen på siden (20–24).
-    <section style={{ marginBottom: 20 }}>
-      <SectionLabel>Om deg</SectionLabel>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {visVisningsnavn && <Rad label="Visningsnavn" verdi={visningsnavn} />}
-        <Rad
-          label="Fødselsdato"
-          verdi={fodselsdato ? formaterDato(`${fodselsdato}T12:00:00Z`, 'd. MMMM yyyy') : null}
-        />
-        {/* E-post og telefon er bevisst IKKE mailto:/tel:-lenker slik de er på
-            medlemsdetaljsiden — dette er dine egne opplysninger, og å ringe
-            eller maile seg selv er ikke en handling noen vil gjøre. */}
-        <Rad label="Telefon" verdi={telefon} />
-        <Rad label="E-post" verdi={epost} mono />
-        <Rad label="Matallergier" verdi={matallergier} />
-        <Rad label="Stikkord om deg" verdi={stikkord} last />
-      </div>
-    </section>
+    // Boks med rader (Skjema.tsx). SkjemaGruppe rendrer en <section> med «Om deg»
+    // som overskrift — e2e finner seksjonen slik.
+    <SkjemaGruppe tittel="Om deg">
+      {visVisningsnavn && <Rad label="Visningsnavn" verdi={visningsnavn} />}
+      <Rad
+        label="Fødselsdato"
+        verdi={fodselsdato ? formaterDato(`${fodselsdato}T12:00:00Z`, 'd. MMMM yyyy') : null}
+      />
+      {/* E-post og telefon er bevisst IKKE mailto:/tel:-lenker slik de er på
+          medlemsdetaljsiden — dette er dine egne opplysninger, og å ringe
+          eller maile seg selv er ikke en handling noen vil gjøre. */}
+      <Rad label="Telefon" verdi={telefon} />
+      <Rad label="E-post" verdi={epost} mono />
+      <Rad label="Matallergier" verdi={matallergier} />
+      <Rad label="Stikkord om deg" verdi={stikkord} />
+      {children}
+    </SkjemaGruppe>
   )
 }
 
@@ -75,15 +78,13 @@ function Rad({
   label,
   verdi,
   mono,
-  last,
 }: {
   label: string
   verdi: string | null
   mono?: boolean
-  last?: boolean
 }) {
   return (
-    <OpplysningRad label={label} last={last}>
+    <OpplysningRad label={label}>
       {/* Bevisst «Ikke satt», ikke «—»: appen bruker «—» på medlemsdetaljsiden
           der det betyr «denne mannen har ingen». Her, på EGEN profil, betyr
           et tomt felt «du har ikke fylt ut dette ennå» — to ulike ting, to

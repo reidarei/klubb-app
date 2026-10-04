@@ -13,24 +13,34 @@ export default function LoggUtKnapp() {
     router.refresh()
   }
 
+  // Egen boks (samme form som SkjemaGruppe), én rad med rød tekst midtstilt.
   return (
-    <button
-      type="button"
-      onClick={loggUt}
+    <div
       style={{
-        width: '100%',
-        padding: '14px 0',
-        background: 'transparent',
-        border: '1px solid var(--border)',
-        borderRadius: 999,
-        color: 'var(--danger)',
-        fontFamily: 'var(--font-body)',
-        fontSize: 14,
-        fontWeight: 500,
-        letterSpacing: '0.2px'
+        borderRadius: 14,
+        border: '0.5px solid var(--border)',
+        background: 'var(--bg-elevated)',
+        overflow: 'hidden',
       }}
     >
-      Logg ut
-    </button>
+      <button
+        type="button"
+        onClick={loggUt}
+        style={{
+          display: 'block',
+          width: '100%',
+          minHeight: 48,
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--danger)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 15,
+          fontWeight: 500,
+          textAlign: 'center',
+        }}
+      >
+        Logg ut
+      </button>
+    </div>
   )
 }

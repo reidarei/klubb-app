@@ -7,6 +7,7 @@
 import { useTransition } from 'react'
 import { oppdaterBursdagsgratulasjon } from '@/app/(app)/innstillinger/actions'
 import { ToggleRad } from '@/components/ui/ToggleSwitch'
+import { ProfilRad } from '@/components/profil/ProfilRad'
 
 export default function BursdagsgratulasjonToggle({ aktiv }: { aktiv: boolean }) {
   const [isPending, startTransition] = useTransition()
@@ -23,27 +24,7 @@ export default function BursdagsgratulasjonToggle({ aktiv }: { aktiv: boolean })
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '14px 4px',
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          fontFamily: 'var(--font-body)',
-          fontSize: 13,
-          fontWeight: 500,
-          color: 'var(--text-primary)',
-          lineHeight: 1.3,
-        }}
-      >
-        Send automatisk bursdagsgratulasjon i chatten fra meg
-      </div>
+    <ProfilRad etikett="Automatisk bursdagsgratulasjon i chatten" undertekst="Gjelder bare deg">
       <ToggleRad
         on={aktiv}
         onChange={toggle}
@@ -54,6 +35,6 @@ export default function BursdagsgratulasjonToggle({ aktiv }: { aktiv: boolean })
             : 'Slå på automatisk bursdagsgratulasjon'
         }
       />
-    </div>
+    </ProfilRad>
   )
 }

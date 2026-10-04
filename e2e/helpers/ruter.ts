@@ -85,6 +85,7 @@ export const RUTER: Rute[] = [
   // redirecter derfor. Dekkes av egen test i innstillinger.spec.ts.
   { sti: '/profil', overskrift: 'Din profil' },
   { sti: '/profil/rediger' },
+  { sti: '/varsler', overskrift: 'Varsler' },
   { sti: '/om-appen', overskrift: 'Om appen' },
   { sti: '/arrangementer/ny' },
   { sti: '/meldinger/ny' },

@@ -23,6 +23,7 @@ export async function markerAlleVarslerLest() {
 
   if (error) throw new Error(error.message)
   revalidatePath('/profil', 'layout')
+  revalidatePath('/varsler')
 }
 
 /**
@@ -43,4 +44,5 @@ export async function markerVarselSomLest(varselId: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/profil', 'layout')
+  revalidatePath('/varsler')
 }

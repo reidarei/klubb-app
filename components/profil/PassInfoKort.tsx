@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import PassInfoSkjema from './PassInfoSkjema'
 import { formaterDato } from '@/lib/dato'
-import { PilleKnapp } from '@/components/ui/TreffPille'
+import { SkjemaGruppe } from '@/components/ui/Skjema'
+import { ProfilRad } from '@/components/profil/ProfilRad'
 
 type Props = {
   nummer: string | null
@@ -15,9 +16,43 @@ function sladdet(nummer: string): string {
   return '••••• ' + siste4
 }
 
+const VERDI = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 14,
+  color: 'var(--text-primary)',
+  letterSpacing: '0.5px',
+  whiteSpace: 'nowrap',
+} as const
+
+// Hele raden er knappen — 48 px høy, så treffflaten er god uten utvidelse (#700).
+function KnappRad({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        minHeight: 48,
+        padding: '0 14px',
+        background: 'transparent',
+        border: 'none',
+        textAlign: 'left',
+        fontFamily: 'var(--font-body)',
+        fontSize: 15,
+        fontWeight: 500,
+        color: 'var(--accent)',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 /**
- * Pass-info på profilsiden. Viser dashed-border kort med oppfordring
- * når tom; vis kompakt rad med sladdet nummer + utløp når fylt.
+ * Pass-info på profilsiden, som boks med rader. Tom: oppfordring + vilkår
+ * under boksen; fylt: sladdet nummer og utløp som rader.
  * Kun eier ser dette (RLS i DB håndhever).
  */
 export default function PassInfoKort({ nummer, utloper }: Props) {
@@ -36,176 +71,34 @@ export default function PassInfoKort({ nummer, utloper }: Props) {
 
   if (!harData) {
     return (
-      <div
-        style={{
-          padding: '14px 16px',
-          background: 'transparent',
-          border: '1px dashed var(--border-strong)',
-          borderRadius: 'var(--radius-card)',
-          color: 'var(--text-primary)',
-        }}
+      <SkjemaGruppe
+        tittel="Pass"
+        hjelp={
+          <>
+            Lagre passnummer og utløpsdato slik at reiseansvarlig kan booke tur for deg uten å mase.
+            Kun du ser dataen som default. Bare arrangøren av en tur du har meldt deg på (Ja) kan be
+            om tilgang, generalsekretæren må godkjenne forespørselen, og godkjent tilgang varer i 24
+            timer.
+          </>
+        }
       >
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.6px',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            marginBottom: 6,
-          }}
-        >
-          Pass-info — fyll ut her
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.45,
-            marginBottom: 12,
-          }}
-        >
-          Lagre passnummer og utløpsdato slik at reiseansvarlig kan booke tur for
-          deg uten å mase.
-        </div>
-
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 9,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '1.4px',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            marginBottom: 6,
-          }}
-        >
-          Slik kontrolleres tilgangen
-        </div>
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            margin: '0 0 14px',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12.5,
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-          }}
-        >
-          <li style={{ paddingLeft: 14, position: 'relative', marginBottom: 4 }}>
-            <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>·</span>
-            Kun du ser dataen som default
-          </li>
-          <li style={{ paddingLeft: 14, position: 'relative', marginBottom: 4 }}>
-            <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>·</span>
-            Bare arrangøren av en tur du har meldt deg på (Ja) kan be om tilgang
-          </li>
-          <li style={{ paddingLeft: 14, position: 'relative', marginBottom: 4 }}>
-            <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>·</span>
-            Generalsekretæren må godkjenne forespørselen
-          </li>
-          <li style={{ paddingLeft: 14, position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 0, color: 'var(--accent)' }}>·</span>
-            Godkjent tilgang varer i 24 timer
-          </li>
-        </ul>
-
-        <PilleKnapp
-          type="button"
-          onClick={() => setRedigerer(true)}
-          style={{
-            width: '100%',
-          }}
-          pilleStil={{
-            padding: '10px 0',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 999,
-            color: 'var(--accent-foreground)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-          synligHoyde={37}
-        >
-          Fyll ut pass-info
-        </PilleKnapp>
-      </div>
+        <KnappRad onClick={() => setRedigerer(true)}>Fyll ut pass-info</KnappRad>
+      </SkjemaGruppe>
     )
   }
 
   return (
-    <div
-      style={{
-        padding: '14px 16px',
-        background: 'var(--bg-elevated)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 'var(--radius-card)',
-      }}
+    <SkjemaGruppe
+      tittel="Pass"
+      hjelp="Kun synlig for deg. Arrangør av kommende tur du er meldt på (Ja) kan be om 24-timers tilgang via generalsekretæren."
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--accent)',
-              letterSpacing: '1.6px',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              marginBottom: 4,
-            }}
-          >
-            Pass-info
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 13,
-              color: 'var(--text-primary)',
-              letterSpacing: '0.5px',
-            }}
-          >
-            {sladdet(nummer!)} · gyldig til {formaterDato(`${utloper}T12:00:00Z`, 'd. MMM yyyy')}
-          </div>
-        </div>
-        <PilleKnapp
-          type="button"
-          onClick={() => setRedigerer(true)}
-          style={{
-            flexShrink: 0,
-          }}
-          pilleStil={{
-            padding: '8px 14px',
-            background: 'transparent',
-            border: '0.5px solid var(--border)',
-            borderRadius: 999,
-            color: 'var(--text-secondary)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 12,
-          }}
-          synligHoyde={34}
-        >
-          Endre
-        </PilleKnapp>
-      </div>
-      <div
-        style={{
-          marginTop: 10,
-          paddingTop: 10,
-          borderTop: '0.5px solid var(--border-subtle)',
-          fontFamily: 'var(--font-body)',
-          fontSize: 11.5,
-          color: 'var(--text-tertiary)',
-          lineHeight: 1.45,
-        }}
-      >
-        Kun synlig for deg. Arrangør av kommende tur du er meldt på (Ja) kan be om
-        24-timers tilgang via generalsekretæren.
-      </div>
-    </div>
+      <ProfilRad etikett="Passnummer">
+        <span style={VERDI}>{sladdet(nummer!)}</span>
+      </ProfilRad>
+      <ProfilRad etikett="Gyldig til">
+        <span style={VERDI}>{formaterDato(`${utloper}T12:00:00Z`, 'd. MMM yyyy')}</span>
+      </ProfilRad>
+      <KnappRad onClick={() => setRedigerer(true)}>Endre pass-info</KnappRad>
+    </SkjemaGruppe>
   )
 }

@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 /**
  * Visuell primitiv for en «opplysnings-rad» på /profil (visning, se
  * `EgneOpplysninger.tsx`): etikett venstre, verdi høyre, samme linje.
+ * Ligger inni en SkjemaGruppe-boks, som gir skillelinjene (.panel-liste).
  *
  * Kun VISNING. Redigeringsskjemaet (`/profil/rediger`) bruker
  * byggeklossene i `components/ui/Skjema.tsx` (Policy: Skjemaer), med samme
@@ -14,11 +15,9 @@ import type { CSSProperties, ReactNode } from 'react'
 export default function OpplysningRad({
   label,
   children,
-  last,
 }: {
   label: string
   children: ReactNode
-  last?: boolean
 }) {
   return (
     <div
@@ -28,11 +27,11 @@ export default function OpplysningRad({
       data-opplysning={label}
       style={{
         display: 'flex',
-        alignItems: 'baseline',
+        alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
-        padding: '8px 4px',
-        borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
+        minHeight: 48,
+        padding: '10px 14px',
       }}
     >
       <OpplysningLabel>{label}</OpplysningLabel>
@@ -46,13 +45,13 @@ export function OpplysningLabel({ children }: { children: ReactNode }) {
     <div
       className="opplysning-etikett"
       style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9.5,
-        fontWeight: 600,
-        color: 'var(--text-tertiary)',
-        textTransform: 'uppercase',
-        letterSpacing: '1.6px',
+        // Samme etikettstil som SkjemaRad (Skjema.tsx), så visning og redigering ser like ut.
+        fontFamily: 'var(--font-body)',
+        fontSize: 15,
+        color: 'var(--text-primary)',
+        lineHeight: 1.25,
         flexShrink: 0,
+        maxWidth: '45%',
       }}
     >
       {children}
@@ -72,7 +71,7 @@ export function opplysningVerdiStil({
 }: { mono?: boolean; dempet?: boolean } = {}): CSSProperties {
   return {
     fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)',
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 1.4,
     color: dempet ? 'var(--text-tertiary)' : 'var(--text-primary)',
     letterSpacing: mono ? '0.2px' : '0.1px',
@@ -81,5 +80,6 @@ export function opplysningVerdiStil({
     // gjelder like mye for et redigerbart felt som for ren visning.
     overflowWrap: 'break-word',
     minWidth: 0,
+    flex: 1,
   }
 }

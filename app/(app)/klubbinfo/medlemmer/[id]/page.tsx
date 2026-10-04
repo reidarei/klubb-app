@@ -1,11 +1,10 @@
-import Link from 'next/link'
-import TekstLenke from '@/components/ui/TekstLenke'
 import TilbakeKnapp from '@/components/ui/TilbakeKnapp'
 import { createServerClient } from '@/lib/supabase/server'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { notFound } from 'next/navigation'
 import Avatar from '@/components/ui/Avatar'
-import SectionLabel from '@/components/ui/SectionLabel'
+import { PanelGruppe } from '@/components/innstillinger/PanelRad'
+import ListeBoks, { type ListeRad } from './ListeBoks'
 import SendMeldingKnapp from './SendMeldingKnapp'
 import { formaterDato } from '@/lib/dato'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
@@ -109,85 +108,55 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
   const rolleLabel = tittelFor(medlem.rolle)
   const navn = medlem.navn ?? 'Ukjent'
 
+  const harVisningsnavn = medlem.visningsnavn && medlem.visningsnavn !== medlem.navn
+
+  const kaaringRader: ListeRad[] = kaaringer.map(k => ({
+    id: k.id,
+    tittel: k.navn,
+    undertekst: k.arrangementTittel,
+    begrunnelse: k.begrunnelse,
+    hoyre: String(k.aar),
+    href: k.arrangementId ? `/arrangementer/${k.arrangementId}` : undefined,
+  }))
+  const arrangementRader: ListeRad[] = (arrangementer ?? []).map(a => ({
+    id: a.id,
+    tittel: a.tittel,
+    hoyre: formaterDato(a.start_tidspunkt, 'MMM yyyy'),
+    href: `/arrangementer/${a.id}`,
+  }))
+
   return (
     <div style={{ padding: '0 20px 20px' }}>
-      {/* Breadcrumb + tittel */}
-      <div style={{ padding: '12px 4px 22px', marginBottom: 8 }}>
-        <div style={{ marginBottom: 4 }}>
-          <TilbakeKnapp href="/klubbinfo/medlemmer" til="Medlemmer" />
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 9,
-            color: 'var(--text-tertiary)',
-            letterSpacing: '2.5px',
-            textTransform: 'uppercase',
-            marginBottom: 18,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-        >
-          <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          {navn}
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 36,
-              fontWeight: 500,
-              letterSpacing: '-0.5px',
-              lineHeight: 1,
-              margin: 0,
+      <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <TilbakeKnapp href="/klubbinfo/medlemmer" til="Medlemmer" />
+        {erAdmin && (
+          <PilleLenke
+            href={`/klubbinfo/medlemmer/${id}/rediger`}
+            pilleStil={{
+              padding: '8px 14px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 999,
               color: 'var(--text-primary)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              fontWeight: 500,
+              textDecoration: 'none',
             }}
+            synligHoyde={34}
           >
-            {navn}
-          </h1>
-
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            {!erMegSelv && medlem?.aktiv && <SendMeldingKnapp motpartId={id} />}
-            {erAdmin && (
-              <PilleLenke
-                href={`/klubbinfo/medlemmer/${id}/rediger`}
-                pilleStil={{
-                  padding: '8px 14px',
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  borderRadius: 999,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                }}
-                synligHoyde={34}
-              >
-                Rediger
-              </PilleLenke>
-            )}
-          </div>
-        </div>
+            Rediger
+          </PilleLenke>
+        )}
       </div>
 
-      {/* Hero */}
+      {/* Toppkort — samme stil som profil-hero på /profil */}
       <div
         style={{
           padding: 24,
-          marginBottom: 24,
+          marginBottom: 14,
           textAlign: 'center',
-          background:
-            'radial-gradient(ellipse at top, var(--accent-soft), transparent 70%), var(--bg-elevated)',
+          background: 'radial-gradient(ellipse at top, var(--accent-soft), transparent 70%), var(--bg-elevated)',
           border: '0.5px solid var(--border-strong)',
           borderRadius: 'var(--radius)',
           backdropFilter: 'var(--blur-card)',
@@ -195,24 +164,24 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
         }}
       >
         <div style={{ display: 'inline-block' }}>
-          <Avatar
-            name={navn}
-            size={78}
-            src={medlem.bilde_url}
-            rolle={medlem.rolle}
-          />
+          <Avatar name={navn} size={78} src={medlem.bilde_url} rolle={medlem.rolle} />
         </div>
-        {medlem.visningsnavn && medlem.visningsnavn !== medlem.navn && (
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 18,
-              fontStyle: 'italic',
-              color: 'var(--text-secondary)',
-              marginTop: 14,
-              letterSpacing: '-0.2px',
-            }}
-          >
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 28,
+            fontWeight: 500,
+            letterSpacing: '-0.4px',
+            lineHeight: 1.1,
+            margin: '14px 0 0',
+            color: 'var(--text-primary)',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {navn}
+        </h1>
+        {harVisningsnavn && (
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontStyle: 'italic', color: 'var(--text-secondary)', marginTop: 4 }}>
             «{medlem.visningsnavn}»
           </div>
         )}
@@ -223,7 +192,7 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
             color: 'var(--accent)',
             letterSpacing: '2px',
             textTransform: 'uppercase',
-            marginTop: medlem.visningsnavn && medlem.visningsnavn !== medlem.navn ? 6 : 14,
+            marginTop: 8,
             fontWeight: 600,
           }}
         >
@@ -232,242 +201,79 @@ export default async function MedlemProfil({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* Stikkord — skjules helt når tomt, en tom seksjon ser ødelagt ut
-          (#639). Fritekst siden #685 — produkteieren ville ikke ha faste
-          pills — ikke «om deg», det er feil pronomen på en annens profil. */}
+      {!erMegSelv && medlem.aktiv && (
+        <div style={{ marginBottom: 22 }}>
+          <SendMeldingKnapp motpartId={id} />
+        </div>
+      )}
+
+      {/* Stikkord — skjules helt når tomt (#639). Fritekst siden #685, vist som brikke. */}
       {medlem.stikkord && (
-        <section style={{ marginBottom: 28 }}>
-          <SectionLabel>Stikkord</SectionLabel>
-          <div
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 22 }}>
+          <span
             style={{
+              padding: '5px 12px',
+              borderRadius: 999,
+              background: 'var(--bg-elevated)',
+              border: '0.5px solid var(--border)',
               fontFamily: 'var(--font-body)',
-              fontSize: 14,
+              fontSize: 13,
               color: 'var(--text-primary)',
-              lineHeight: 1.5,
-              overflowWrap: 'break-word',
+              lineHeight: 1.4,
+              overflowWrap: 'anywhere',
             }}
           >
             {medlem.stikkord}
-          </div>
-        </section>
-      )}
-
-      {/* Kontakt */}
-      <section style={{ marginBottom: 28 }}>
-        <SectionLabel>Kontakt</SectionLabel>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <FaktaRad
-            label="E-post"
-            href={medlem.epost ? `mailto:${medlem.epost}` : undefined}
-            value={medlem.epost ?? '—'}
-            mono
-          />
-          <FaktaRad
-            label="Telefon"
-            href={medlem.telefon ? `tel:${medlem.telefon}` : undefined}
-            value={medlem.telefon ?? '—'}
-            mono
-          />
-          <FaktaRad
-            label="Fødselsdato"
-            value={
-              medlem.fodselsdato
-                ? formaterDato(`${medlem.fodselsdato}T12:00:00Z`, 'd. MMMM yyyy')
-                : '—'
-            }
-          />
-          {/* Står i Kontakt og ikke i en egen seksjon: den som bestiller mat
-              leter her, der telefonnummeret også er. Vises alltid, også tom —
-              «—» er informasjon i seg selv når du planlegger en middag. */}
-          <FaktaRad label="Matallergier" value={medlem.matallergier ?? '—'} last />
+          </span>
         </div>
-      </section>
-
-      {/* Kåringer */}
-      {kaaringer.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <SectionLabel count={kaaringer.length}>Kåringer</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {kaaringer.map((k, i) => (
-              <div
-                key={k.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 14,
-                  padding: '14px 4px',
-                  borderBottom:
-                    i < kaaringer.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--accent)',
-                    letterSpacing: '1.2px',
-                    fontWeight: 600,
-                    width: 40,
-                    flexShrink: 0,
-                  }}
-                >
-                  {k.aar}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 16,
-                      fontWeight: 500,
-                      color: 'var(--text-primary)',
-                      letterSpacing: '-0.2px',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {k.navn}
-                  </div>
-                  {k.arrangementTittel && k.arrangementId && (
-                    <TekstLenke
-                      href={`/arrangementer/${k.arrangementId}`}
-                      style={{
-                        display: 'inline-block',
-                        marginTop: 3,
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 13,
-                        color: 'var(--accent)',
-                        letterSpacing: '-0.1px',
-                      }}
-                    >
-                      {k.arrangementTittel}
-                    </TekstLenke>
-                  )}
-                  {k.begrunnelse && (
-                    <div
-                      style={{
-                        marginTop: 4,
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        fontStyle: 'italic',
-                        color: 'var(--text-tertiary)',
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      «{k.begrunnelse}»
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
       )}
 
-      {/* Arrangementer opprettet av medlemmet */}
-      {arrangementer && arrangementer.length > 0 && (
-        <section style={{ marginBottom: 12 }}>
-          <SectionLabel count={arrangementer.length}>Opprettet</SectionLabel>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {arrangementer.map((a, i) => (
-              <Link
-                key={a.id}
-                href={`/arrangementer/${a.id}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'baseline',
-                  justifyContent: 'space-between',
-                  gap: 14,
-                  padding: '14px 4px',
-                  borderBottom:
-                    i < arrangementer.length - 1 ? '0.5px solid var(--border-subtle)' : 'none',
-                  textDecoration: 'none',
-                  color: 'inherit',
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: 'var(--text-primary)',
-                    letterSpacing: '-0.2px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {a.tittel}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: 'var(--text-tertiary)',
-                    letterSpacing: '1.4px',
-                    textTransform: 'uppercase',
-                    fontWeight: 600,
-                    flexShrink: 0,
-                  }}
-                >
-                  {formaterDato(a.start_tidspunkt, 'MMM yyyy')}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Matallergier står her: den som bestiller mat leter der telefonnummeret er.
+          Vises alltid, også tom — «—» er informasjon når du planlegger en middag. */}
+      <PanelGruppe tittel="Kontakt">
+        <FaktaRad label="Telefon" value={medlem.telefon ?? '—'} href={medlem.telefon ? `tel:${medlem.telefon}` : undefined} />
+        <FaktaRad label="E-post" value={medlem.epost ?? '—'} href={medlem.epost ? `mailto:${medlem.epost}` : undefined} />
+        <FaktaRad
+          label="Bursdag"
+          value={medlem.fodselsdato ? formaterDato(`${medlem.fodselsdato}T12:00:00Z`, 'd. MMMM') : '—'}
+        />
+        <FaktaRad label="Matallergier" value={medlem.matallergier ?? '—'} />
+      </PanelGruppe>
+
+      {kaaringRader.length > 0 && <ListeBoks tittel="Kåringer" rader={kaaringRader} />}
+      {arrangementRader.length > 0 && <ListeBoks tittel="Har laget" rader={arrangementRader} />}
     </div>
   )
 }
 
-function FaktaRad({
-  label,
-  value,
-  href,
-  mono,
-  last,
-}: {
-  label: string
-  value: string
-  href?: string
-  mono?: boolean
-  last?: boolean
-}) {
-  const innhold = (
-    <>
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9.5,
-          color: 'var(--text-tertiary)',
-          letterSpacing: '1.6px',
-          textTransform: 'uppercase',
-          marginBottom: 3,
-          fontWeight: 600,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)',
-          fontSize: 14,
-          color: 'var(--text-primary)',
-          letterSpacing: mono ? '0.2px' : '0.1px',
-        }}
-      >
-        {value}
-      </div>
-    </>
-  )
-
+// Rad med etikett til venstre og verdi til høyre; lenke (aksentfarge) når href er satt.
+function FaktaRad({ label, value, href }: { label: string; value: string; href?: string }) {
   const stil: React.CSSProperties = {
-    padding: '14px 4px',
-    borderBottom: last ? 'none' : '0.5px solid var(--border-subtle)',
-    display: 'block',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    padding: '11px 14px',
+    minHeight: 48,
     textDecoration: 'none',
     color: 'inherit',
   }
-
-  if (href) return <a href={href} style={stil}>{innhold}</a>
-  return <div style={stil}>{innhold}</div>
+  const innhold = (
+    <>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--text-primary)', flexShrink: 0 }}>{label}</span>
+      <span
+        style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: 14,
+          color: href ? 'var(--accent)' : 'var(--text-tertiary)',
+          textAlign: 'right',
+          minWidth: 0,
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value}
+      </span>
+    </>
+  )
+  return href ? <a href={href} style={stil}>{innhold}</a> : <div style={stil}>{innhold}</div>
 }

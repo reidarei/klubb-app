@@ -39,7 +39,7 @@ export default function PassInfoSkjema({ initialNummer = '', initialUtloper = ''
   return (
     <div>
       {/* Gruppen bærer tittelen selv, så PassInfoKort ikke trenger egen ramme. */}
-      <SkjemaGruppe tittel="Pass-info" feil={feil}>
+      <SkjemaGruppe tittel="Pass" feil={feil}>
         <SkjemaRad etikett="Passnummer">
           <RadInput
             type="text"
