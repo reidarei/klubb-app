@@ -565,6 +565,9 @@ export default function Chat({
           // og navn/tid-header på fortsettelses-meldinger. Dato-skille bryter
           // alltid grupperingen så første melding på ny dag alltid viser header.
           const erFortsettelse = !visDatoSkille && forrige?.profil_id === m.profil_id
+          const neste = i < meldinger.length - 1 ? meldinger[i + 1] : null
+          // Siste i serien: neste er fra en annen avsender eller starter ny dag (dato-skille).
+          const erSisteIGruppe = !neste || neste.profil_id !== m.profil_id || !erSammeNorskeDag(m.opprettet, neste.opprettet)
           const erEgen = m.profil_id === brukerId
           // Slett-knapp: kun egen-eier. Admin har verken knapp eller
           // RLS-rett til å slette andres chat (migrasjon 069, gjenopprettet
@@ -578,6 +581,7 @@ export default function Chat({
               melding={m}
               visDatoSkille={visDatoSkille}
               erFortsettelse={erFortsettelse}
+              erSisteIGruppe={erSisteIGruppe}
               erFoerste={i === 0}
               erEgen={erEgen}
               kanSlette={kanSlette}

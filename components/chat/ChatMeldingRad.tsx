@@ -1,6 +1,6 @@
 'use client'
 
-import Avatar from '@/components/ui/Avatar'
+import Avatar, { hueAv } from '@/components/ui/Avatar'
 import MessengerBadge from '@/components/ui/MessengerBadge'
 import { formaterDatoSkille } from '@/lib/dato'
 import { REAKSJON_EMOJIS, MIN_TREFFMAAL_PX } from '@/lib/konstanter'
@@ -32,8 +32,10 @@ type Props = {
   melding: ChatMelding
   /** Dato-skille over meldingen — første melding eller ny kalenderdag. Beregnes i Chats map (leser forrige melding). */
   visDatoSkille: boolean
-  /** Fortsettelses-melding fra samme bruker — skjuler avatar og navn/tid-header. */
+  /** Fortsettelses-melding fra samme bruker — skjuler navnet inni boblen og gir tett avstand. */
   erFortsettelse: boolean
+  /** Siste melding i en serie fra samme avsender — får avatar (andre) og «hale» på boblen. */
+  erSisteIGruppe: boolean
   /** Første melding i listen — styrer marginTop. */
   erFoerste: boolean
   erEgen: boolean
@@ -66,6 +68,7 @@ export default function ChatMeldingRad({
   melding: m,
   visDatoSkille,
   erFortsettelse,
+  erSisteIGruppe,
   erFoerste,
   erEgen,
   kanSlette,
@@ -93,6 +96,23 @@ export default function ChatMeldingRad({
   // «Slett» flyttet inn i long-press-pickeren (#796) — ingen separat
   // hover-knapp på selve boblen lenger.
   const visSlett = kanSlette && !m.id.startsWith('temp-')
+  // Hjørner: radius 12, men siste boble i serien får «hale» (3 px) mot avsendersiden.
+  const boblRadius = erSisteIGruppe ? (erEgen ? '12px 12px 3px 12px' : '12px 12px 12px 3px') : 12
+  const boblBg = erEgen ? 'var(--chat-egen-bg)' : 'var(--chat-annen-bg)'
+  // Navnet står inni boblen, kun på første melding i en serie, kun for andre.
+  const visNavn = !erEgen && !erFortsettelse
+  // Ren bildemelding: bildet fyller boblen og tiden legges over bildet.
+  const kunBilde = !!meldingBilde && !m.innhold && !meldingVideo
+  // Tiden går i egen rad under innholdet når det ikke er tekst å flette den
+  // inn i (video uten tekst) eller når et lenkekort avslutter boblen.
+  const tidIFlyt = !kunBilde && (!!lenke || !m.innhold)
+  const tidStil = {
+    fontFamily: 'var(--font-body)',
+    fontSize: 11,
+    lineHeight: 1.2,
+    color: 'var(--text-tertiary)',
+    fontVariantNumeric: 'tabular-nums',
+  } as const
   return (
     <>
       {visDatoSkille && (
@@ -101,21 +121,18 @@ export default function ChatMeldingRad({
           aria-label={`Meldinger fra ${formaterDatoSkille(m.opprettet)}`}
           style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: 8,
-            margin: '10px 0 2px',
-            paddingRight: 2,
+            justifyContent: 'center',
+            margin: erFoerste ? '0 0 8px' : '14px 0 8px',
           }}
         >
-          <span aria-hidden="true" style={{ width: 24, height: '0.5px', background: 'var(--border-subtle)' }} />
           <span
             style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              letterSpacing: '1.2px',
-              fontWeight: 600,
-              color: 'var(--text-tertiary)',
+              padding: '3px 10px',
+              borderRadius: 999,
+              background: 'var(--bg-elevated)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              color: 'var(--text-secondary)',
             }}
           >
             {formaterDatoSkille(m.opprettet)}
@@ -125,68 +142,39 @@ export default function ChatMeldingRad({
     <div
       style={{
         display: 'flex',
-        gap: 10,
+        gap: 6,
         flexDirection: erEgen ? 'row-reverse' : 'row',
-        marginTop: erFortsettelse ? 2 : erFoerste ? 0 : 8,
+        marginTop: erFortsettelse ? 2 : erFoerste || visDatoSkille ? 0 : 8,
       }}
     >
-      <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}>
-        {erFortsettelse ? (
-          // Tom plassholder så meldingene linjerer opp mot forrige boble
-          <div style={{ width: 26, height: 1 }} />
-        ) : (
-          <Avatar name={navn} size={26} src={bilde} rolle={rolle} />
-        )}
-      </div>
+      {/* Egne meldinger har verken avatar eller plassholder. Andres avatar
+          står ved SISTE melding i serien; de andre får tom plassholder så
+          boblene linjerer. */}
+      {!erEgen && (
+        <div style={{ flexShrink: 0, alignSelf: 'flex-end' }}>
+          {erSisteIGruppe ? (
+            <Avatar name={navn} size={28} src={bilde} rolle={rolle} />
+          ) : (
+            <div style={{ width: 28, height: 1 }} />
+          )}
+        </div>
+      )}
       <div
         style={{
-          maxWidth: '78%',
+          maxWidth: '80%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: erEgen ? 'flex-end' : 'flex-start',
           minWidth: 0,
         }}
       >
-        {!erFortsettelse && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              gap: 8,
-              marginBottom: 2,
-              paddingLeft: erEgen ? 0 : 2,
-              paddingRight: erEgen ? 2 : 0,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-secondary)',
-                fontWeight: 500,
-              }}
-            >
-              {navn}
-            </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                color: 'var(--text-tertiary)',
-                letterSpacing: '1.2px',
-              }}
-            >
-              {tid}
-            </span>
-          </div>
-        )}
         <div style={{ position: 'relative' }} className="chat-boble">
           {editerer ? (
             <div
               style={{
                 padding: '8px 10px',
-                borderRadius: erEgen ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                background: erEgen ? 'var(--accent-soft)' : 'var(--bg-elevated)',
+                borderRadius: boblRadius,
+                background: boblBg,
                 border: '0.5px solid var(--accent)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -214,8 +202,8 @@ export default function ChatMeldingRad({
                   outline: 'none',
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  lineHeight: 1.5,
+                  fontSize: 16,
+                  lineHeight: 1.35,
                   padding: '2px 4px',
                 }}
               />
@@ -281,17 +269,14 @@ export default function ChatMeldingRad({
               if (!m.id.startsWith('temp-')) handlers.setPickerFor(m.id)
             }}
             style={{
-              padding: '7px 12px',
-              borderRadius: erEgen ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-              background: erEgen ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-              border: `0.5px solid ${
-                erEgen ? 'var(--border-strong)' : 'var(--border-subtle)'
-              }`,
+              position: 'relative',
+              padding: kunBilde ? 3 : '6px 10px',
+              borderRadius: boblRadius,
+              background: boblBg,
               fontFamily: 'var(--font-body)',
-              fontSize: 13,
-              lineHeight: 1.5,
+              fontSize: 16,
+              lineHeight: 1.35,
               color: 'var(--text-primary)',
-              letterSpacing: '0.1px',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               userSelect: 'none',
@@ -300,6 +285,22 @@ export default function ChatMeldingRad({
               touchAction: 'manipulation',
             }}
           >
+            {visNavn && (
+              <div
+                className="chat-navn"
+                style={{
+                  // Hue fra samme funksjon som avataren — se .chat-navn i globals.css
+                  ['--avatar-hue' as string]: hueAv(navn),
+                  fontSize: 13,
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                  marginBottom: 2,
+                  padding: kunBilde ? '2px 7px 3px' : 0,
+                }}
+              >
+                {navn}
+              </div>
+            )}
             {meldingBilde && (
               <button
                 type="button"
@@ -315,9 +316,9 @@ export default function ChatMeldingRad({
                   // (samme radius), så normaltilfellet ser uendret ut.
                   minWidth: 120,
                   minHeight: 90,
-                  borderRadius: 8,
+                  borderRadius: 9,
                   background: 'var(--foto-tom-bg)',
-                  margin: m.innhold ? '0 0 8px' : 0,
+                  margin: m.innhold ? '0 0 6px' : 0,
                   maxWidth: '100%',
                 }}
                 aria-label="Vis bilde i full skjerm"
@@ -331,7 +332,7 @@ export default function ChatMeldingRad({
                     display: 'block',
                     maxWidth: 280,
                     maxHeight: 280,
-                    borderRadius: 8,
+                    borderRadius: 9,
                     objectFit: 'cover',
                   }}
                 />
@@ -363,7 +364,37 @@ export default function ChatMeldingRad({
                 skjulFraIndeks={lenke?.erSist ? lenke.indeks : undefined}
               />
             )}
+            {/* WhatsApp-teknikken: usynlig spacer med tidens bredde sist i
+                teksten reserverer plass, og den ekte tiden ligger absolutt
+                nederst til høyre — korte meldinger får tiden på samme linje,
+                lange under siste linje, uten overlapp. */}
+            {m.innhold && !tidIFlyt && (
+              <span aria-hidden="true" style={{ ...tidStil, display: 'inline-block', visibility: 'hidden', marginLeft: 8 }}>
+                {tid}
+              </span>
+            )}
             {lenke && <LenkeKort href={lenke.href} />}
+            {tidIFlyt && <div style={{ ...tidStil, textAlign: 'right', marginTop: 2 }}>{tid}</div>}
+            {!tidIFlyt && !kunBilde && (
+              <span style={{ ...tidStil, position: 'absolute', right: 10, bottom: 5 }}>{tid}</span>
+            )}
+            {kunBilde && (
+              <span
+                style={{
+                  ...tidStil,
+                  position: 'absolute',
+                  right: 9,
+                  bottom: 8,
+                  padding: '2px 6px',
+                  borderRadius: 999,
+                  background: 'var(--chat-pille-bg)',
+                  color: 'var(--chat-pille-fg)',
+                  pointerEvents: 'none',
+                }}
+              >
+                {tid}
+              </span>
+            )}
           </div>
           )}
           {/* Skjermleser-inngang til Rediger/Slett (#796): long-press er

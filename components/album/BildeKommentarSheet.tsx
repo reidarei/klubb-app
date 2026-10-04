@@ -342,6 +342,9 @@ export default function BildeKommentarSheet({
             const forrige = i > 0 ? meldinger[i - 1] : null
             const visDatoSkille = !forrige || !erSammeNorskeDag(forrige.opprettet, m.opprettet)
             const erFortsettelse = !visDatoSkille && forrige?.profil_id === m.profil_id
+            const neste = i < meldinger.length - 1 ? meldinger[i + 1] : null
+            // Siste i serien: neste er fra en annen avsender eller starter ny dag (dato-skille).
+            const erSisteIGruppe = !neste || neste.profil_id !== m.profil_id || !erSammeNorskeDag(m.opprettet, neste.opprettet)
             const erEgen = m.profil_id === brukerId
             // Kun-egen sletting (post-069-mønster, se mig. 117) — ingen
             // admin-bypass. erAdmin-propen brukes bevisst ikke her.
@@ -352,6 +355,7 @@ export default function BildeKommentarSheet({
                 melding={m}
                 visDatoSkille={visDatoSkille}
                 erFortsettelse={erFortsettelse}
+                erSisteIGruppe={erSisteIGruppe}
                 erFoerste={i === 0}
                 erEgen={erEgen}
                 kanSlette={kanSlette}
