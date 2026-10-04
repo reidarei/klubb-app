@@ -37,6 +37,8 @@ type Props = {
   bursdagMMDD: string[]
   /** Dagens dato i norsk tidssone som yyyy-MM-dd (fra iDagOslo() — deterministisk render) */
   iDag: string
+  /** Stiftelsesdagen som MM-dd (fra lib/klubb-info.ts). Utelatt = klubb-config. */
+  stiftetMMDD?: string
 }
 
 // Hvor langt bakover det er meningsfullt å bla: datasettet dekker kun
@@ -52,10 +54,11 @@ const PRIKK = 12
 const GAP = 2
 
 // Stiftelsesdagen som MM-dd, samme form som bursdagene bruker — den gjentar
-// seg årlig, så året i KLUBB_STIFTET er irrelevant her. (#528)
+// seg årlig, så året i KLUBB_STIFTET er irrelevant her. (#528) Default for
+// propen stiftetMMDD; agendaen sender inn datoen admin har satt.
 const STIFTET_MMDD = `${String(KLUBB_STIFTET.maaned).padStart(2, '0')}-${String(KLUBB_STIFTET.dag).padStart(2, '0')}`
 
-export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMMDD, iDag }: Props) {
+export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMMDD, iDag, stiftetMMDD = STIFTET_MMDD }: Props) {
   const [maanedOffset, setMaanedOffset] = useState(0)
 
   // iDag er en date-only-streng (yyyy-MM-dd); `new Date(iDag)` ville tolket den
@@ -141,7 +144,7 @@ export default function MiniKalender({ arrangementDatoer, turPerioder, bursdagMM
           // Stiftelsesdagen gjentar seg årlig som bursdagene, så vi sammenligner
           // på MM-dd. Kommer fra klubb-config, ikke fra en prop — det er en
           // konfigverdi, ikke data siden trenger å hente. (#528)
-          const erStiftelsesdag = nokkel.slice(5) === STIFTET_MMDD
+          const erStiftelsesdag = nokkel.slice(5) === stiftetMMDD
           const erIdag = nokkel === iDag
           const dagtall = parseInt(nokkel.slice(-2), 10)
 

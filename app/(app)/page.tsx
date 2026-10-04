@@ -20,6 +20,7 @@ import RsvpInline from '@/components/agenda/RsvpInline'
 import { byggAgenda } from '@/lib/agenda-sortering'
 import { kanAdministrere } from '@/lib/roller'
 import { hentAgendaData } from '@/lib/queries/agenda'
+import { hentKlubbInfo, stiftetTilDato } from '@/lib/klubb-info'
 import { AGENDA_VINDU_MND } from '@/lib/konstanter'
 import { PilleLenke } from '@/components/ui/TreffPille'
 
@@ -47,6 +48,11 @@ export default async function Forside() {
   const aar = norskAar()
 
   // Alle spørringer + rå-mapping bor i lib/queries/agenda.ts (#378).
+  // Klubbinfo (stiftelsesdatoen admin har satt) hentes parallelt, ikke etter.
+  const [agendaData, klubbInfo] = await Promise.all([
+    hentAgendaData(supabase, { brukerId: user!.id, aar, cutoffIso }),
+    hentKlubbInfo(),
+  ])
   const {
     arrangementerBerikt,
     ansvar,
@@ -59,7 +65,7 @@ export default async function Forside() {
     totaltPerArr,
     totaltPerPoll,
     chatProfiler,
-  } = await hentAgendaData(supabase, { brukerId: user!.id, aar, cutoffIso })
+  } = agendaData
 
   const { ubesvarte, meldinger, bursdagerIDag, idag, kommende, tidligere } = byggAgenda({
     arrangementer: arrangementerBerikt,
@@ -70,6 +76,7 @@ export default async function Forside() {
     meg: user!.id,
     naa,
     aar,
+    stiftet: klubbInfo.stiftet,
   })
 
   // Slå opp innlogget brukers profil fra aktive-profiler-lista (allerede hentet).
@@ -155,7 +162,7 @@ export default async function Forside() {
         </div>
 
         {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
-        <MiniKalender arrangementDatoer={arrangementDatoer} turPerioder={turPerioder} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} />
+        <MiniKalender arrangementDatoer={arrangementDatoer} turPerioder={turPerioder} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} stiftetMMDD={stiftetTilDato(klubbInfo.stiftet).slice(5)} />
 
         <NyFAB />
       </header>

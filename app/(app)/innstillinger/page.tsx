@@ -167,6 +167,7 @@ export default async function Kontrollpanel() {
       </PanelGruppe>
 
       <PanelGruppe tittel="Innhold">
+        <PanelRad href="/innstillinger/om-klubben" ikon="building" farge="blaa" tittel="Om klubben" />
         <PanelRad
           href="/innstillinger/faste-arrangementer"
           ikon="calendar"

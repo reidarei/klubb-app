@@ -8,17 +8,11 @@ import { kanAdministrere, godkjennerPassTilgang } from '@/lib/roller'
 import { naa } from '@/lib/dato'
 import { CHAT_STICKER_MONSTER } from '@/lib/konstanter'
 import versjon from '@/lib/versjon.json'
-import { KLUBB_STIFTET, KLUBB_STED, KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2, KLUBB_OM_AVSNITT } from '@/lib/klubb-config'
+import { KLUBB_NAVN_LINJE_1, KLUBB_NAVN_LINJE_2 } from '@/lib/klubb-config'
+import { hentKlubbInfo } from '@/lib/klubb-info'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 
-// Hele stiftelsesdatoen formatert på norsk («24. november 2007»).
-// Lokal fast dato uten tidssone-aspekt — new Date(y, m-1, d) er trygt her.
-const STIFTET_TEKST = format(
-  new Date(KLUBB_STIFTET.aar, KLUBB_STIFTET.maaned - 1, KLUBB_STIFTET.dag),
-  'd. MMMM yyyy',
-  { locale: nb }
-)
 
 export default async function Klubbinfo() {
   const [supabase, profil] = await Promise.all([createServerClient(), getProfil()])
@@ -27,6 +21,8 @@ export default async function Klubbinfo() {
   // «N venter» på Kontrollpanel-raden — samme to kilder som «Saker som venter»
   // i kontrollpanelet. Hentes bare for admin, så ingen andre betaler oppslaget.
   // Startes før count-spørringene under og awaites etter, så de går parallelt.
+  // Stiftelse, sted og om-tekst kan admin endre i kontrollpanelet (lib/klubb-info.ts).
+  const klubbInfoPromise = hentKlubbInfo()
   const venterPromise = erAdmin ? hentVenterPaaAdmin(godkjennerPassTilgang(profil?.rolle)) : Promise.resolve(0)
 
   // Fem count-spørringer i parallell — sekvensielt ville lagt fire ekstra
@@ -63,7 +59,14 @@ export default async function Klubbinfo() {
     ])
 
   const antallBilder = (antallAlbumBilder ?? 0) + (antallChatBilder ?? 0)
-  const venterPaaAdmin = await venterPromise
+  const [venterPaaAdmin, klubbInfo] = await Promise.all([venterPromise, klubbInfoPromise])
+  // Hele stiftelsesdatoen formatert på norsk («24. november 2007»).
+  // Lokal fast dato uten tidssone-aspekt — new Date(y, m-1, d) er trygt her.
+  const stiftetTekst = format(
+    new Date(klubbInfo.stiftet.aar, klubbInfo.stiftet.maaned - 1, klubbInfo.stiftet.dag),
+    'd. MMMM yyyy',
+    { locale: nb },
+  )
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -91,11 +94,11 @@ export default async function Klubbinfo() {
           }}
         >
           <span style={{ width: 18, height: '0.5px', background: 'var(--border-strong)' }} />
-          Stiftet {STIFTET_TEKST}
+          Stiftet {stiftetTekst}
           <span aria-hidden="true" style={{ opacity: 0.4 }}>·</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <MapPinIcon aria-hidden="true" style={{ width: 11, height: 11 }} />
-            {KLUBB_STED}
+            {klubbInfo.sted}
           </span>
         </div>
 
@@ -148,7 +151,7 @@ export default async function Klubbinfo() {
           Om klubben
           <span style={{ flex: 1, height: '0.5px', background: 'var(--border-subtle)' }} />
         </div>
-        {KLUBB_OM_AVSNITT.map((avsnitt, i) => (
+        {klubbInfo.omAvsnitt.map((avsnitt, i) => (
           <p
             key={i}
             style={{
@@ -156,7 +159,7 @@ export default async function Klubbinfo() {
               fontSize: 15,
               color: 'var(--text-secondary)',
               lineHeight: 1.55,
-              margin: i === KLUBB_OM_AVSNITT.length - 1 ? 0 : '0 0 10px',
+              margin: i === klubbInfo.omAvsnitt.length - 1 ? 0 : '0 0 10px',
             }}
           >
             {avsnitt}

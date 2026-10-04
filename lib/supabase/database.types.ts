@@ -1030,6 +1030,30 @@ export type Database = {
           },
         ]
       }
+      klubb_info: {
+        Row: {
+          id: boolean
+          om_tekst: string | null
+          oppdatert: string
+          sted: string | null
+          stiftet: string | null
+        }
+        Insert: {
+          id?: boolean
+          om_tekst?: string | null
+          oppdatert?: string
+          sted?: string | null
+          stiftet?: string | null
+        }
+        Update: {
+          id?: boolean
+          om_tekst?: string | null
+          oppdatert?: string
+          sted?: string | null
+          stiftet?: string | null
+        }
+        Relationships: []
+      }
       melding_bilder: {
         Row: {
           bilde_url: string

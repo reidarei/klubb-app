@@ -66,8 +66,8 @@ import { AVREISE_VINDU_DAGER } from '@/lib/konstanter'
 import { norskDag, erPaaOsloDag, osloDagNokkel } from '@/lib/dato'
 import { differenceInCalendarDays } from 'date-fns'
 
-// Stiftelsesdato — brukes til å beregne neste jubileumsdag på agendaen.
-// Hentes fra klubb-config slik at den kan overstyres via env-var.
+// Standard stiftelsesdato fra klubb-config (env-styrt). Agendaen sender inn
+// datoen admin har satt i kontrollpanelet; denne er fallbacken.
 export const STIFTET_DATO = KLUBB_STIFTET
 
 // Levetidsregler for meldinger på agenda. En melding er «levende» (vises
@@ -419,15 +419,16 @@ export function beregnBursdager(
 export function beregnKlubbJubileum(
   naa: Date,
   dagerFremover: number,
+  stiftet: { aar: number; maaned: number; dag: number } = STIFTET_DATO,
 ): KlubbJubileumData | null {
   const slutt = new Date(naa.getFullYear(), naa.getMonth(), naa.getDate() + dagerFremover)
   for (const aar of [naa.getFullYear(), naa.getFullYear() + 1]) {
-    const jubdag = new Date(aar, STIFTET_DATO.maaned - 1, STIFTET_DATO.dag)
+    const jubdag = new Date(aar, stiftet.maaned - 1, stiftet.dag)
     if (jubdag >= naa && jubdag <= slutt) {
       return {
         id: `klubbjubileum-${aar}`,
-        dato: `${aar}-${String(STIFTET_DATO.maaned).padStart(2, '0')}-${String(STIFTET_DATO.dag).padStart(2, '0')}`,
-        alder: aar - STIFTET_DATO.aar,
+        dato: `${aar}-${String(stiftet.maaned).padStart(2, '0')}-${String(stiftet.dag).padStart(2, '0')}`,
+        alder: aar - stiftet.aar,
       }
     }
   }
@@ -486,6 +487,8 @@ export function byggAgenda(input: {
   naa: Date
   aar: number
   bursdagsvinduDager?: number
+  /** Stiftelsesdatoen admin har satt (lib/klubb-info.ts). Utelatt = klubb-config. */
+  stiftet?: { aar: number; maaned: number; dag: number }
 }): Agenda {
   const { arrangementer, ansvar, profilerMedBursdag, meg, naa, aar } = input
   const poller = input.poller ?? []
@@ -644,7 +647,7 @@ export function byggAgenda(input: {
   }))
 
   // Klubbjubileum: samme sortIso-mønster som bursdager. Maks én per agenda.
-  const jubileum = beregnKlubbJubileum(naa, bursdagsvinduDager)
+  const jubileum = beregnKlubbJubileum(naa, bursdagsvinduDager, input.stiftet)
   const jubileumItems: AgendaItem[] = jubileum
     ? [{ kind: 'klubbjubileum', sortIso: `${jubileum.dato}T12:00:00.000Z`, data: jubileum }]
     : []

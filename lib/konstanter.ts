@@ -465,6 +465,11 @@ export const KART_MARKERING_MAKS_LENGDE = 60
 export const KART_SYMBOL_NAVN_MAKS = 16
 export const KART_SYMBOL_EMOJI_MAKS = 16
 
+// «Om klubben» (/innstillinger/om-klubben). Speiler check-constraintene i
+// migrasjon 157 (klubb_info.sted / om_tekst) — endres begge steder.
+export const KLUBB_STED_MAKS = 60
+export const KLUBB_OM_MAKS = 2000
+
 // Levetid for en markering satt UTENOM et arrangement. Pågår et arrangement med
 // sluttid, arver markeringen den i stedet. 12 timer dekker en kveld og natta
 // etter, og er kort nok til at kartet ikke fylles opp av gamle nåler ingen

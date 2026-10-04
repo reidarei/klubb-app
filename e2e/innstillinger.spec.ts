@@ -28,7 +28,7 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
     const main = page.locator('main')
     for (const navn of [
       'Ønsker fra brukerne', 'Varsler', 'Funksjoner', 'Kartmarkeringer',
-      'Faste arrangementer', 'Kåringer', 'Bursdagsbilder', 'Varselhistorikk', 'Bruk', 'Ytelse',
+      'Om klubben', 'Faste arrangementer', 'Kåringer', 'Bursdagsbilder', 'Varselhistorikk', 'Bruk', 'Ytelse',
     ]) {
       await expect(main.getByRole('link', { name: new RegExp(`^${navn}`) })).toBeVisible()
     }
@@ -47,6 +47,7 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
     ['/innstillinger/kaaringer', 'Kåringer'],
     ['/innstillinger/varselhistorikk', 'Varselhistorikk'],
     ['/innstillinger/onsker', 'Ønsker fra brukerne'],
+    ['/innstillinger/om-klubben', 'Om klubben'],
   ] as const) {
     test(`${sti} laster`, async ({ page }) => {
       await page.goto(sti)
