@@ -75,6 +75,19 @@
   --fond-farge-5: #d99aa9;
   --fond-farge-6: #93abc2;
   --fond-farge-7: #6c707a;
+  /* ── Kontrollpanel-ikoner ────────────────────────────────────────────────
+   * Bakgrunn på ikonfirkantene i kontrollpanelet (/innstillinger), én farge
+   * per rad så områdene skilles på et blikk. Mørkt tegn oppå i begge temaer.
+   * Bærer ingen semantikk — bruk dem ikke utenfor kontrollpanelet. */
+  --panel-ikon-gul: #e2b45c;
+  --panel-ikon-groenn: #7cc99a;
+  --panel-ikon-blaa: #9fb4e8;
+  --panel-ikon-lilla: #c9a7e8;
+  --panel-ikon-sand: #e8d9b5;
+  --panel-ikon-rosa: #e8a79b;
+  --panel-ikon-turkis: #8fd0c6;
+  --panel-ikon-graa: #b8bcc6;
+  --panel-ikon-tegn: #16161a;
 
   /* ── Kartet (#713) ────────────────────────────────────────────────────────
    * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
@@ -236,6 +249,16 @@
   --fond-farge-5: #d99aa9;
   --fond-farge-6: #93abc2;
   --fond-farge-7: #6c707a;
+  /* ── Kontrollpanel-ikoner ── se :root for begrunnelse ── */
+  --panel-ikon-gul: #e2b45c;
+  --panel-ikon-groenn: #7cc99a;
+  --panel-ikon-blaa: #9fb4e8;
+  --panel-ikon-lilla: #c9a7e8;
+  --panel-ikon-sand: #e8d9b5;
+  --panel-ikon-rosa: #e8a79b;
+  --panel-ikon-turkis: #8fd0c6;
+  --panel-ikon-graa: #b8bcc6;
+  --panel-ikon-tegn: #16161a;
 
   /* ── Kartet (#713) ────────────────────────────────────────────────────────
    * Kartsiden skal kjennes som sommer og ferie, mens resten av appen står
@@ -365,6 +388,16 @@
   --fond-farge-5: #c0677e;
   --fond-farge-6: #5f7a94;
   --fond-farge-7: #9a9ea8;
+  /* ── Kontrollpanel-ikoner ── se :root for begrunnelse ── */
+  --panel-ikon-gul: #dba64a;
+  --panel-ikon-groenn: #6cbc8b;
+  --panel-ikon-blaa: #8ea6e0;
+  --panel-ikon-lilla: #bc97e0;
+  --panel-ikon-sand: #e0cc9c;
+  --panel-ikon-rosa: #e09787;
+  --panel-ikon-turkis: #7cc4b9;
+  --panel-ikon-graa: #aeb2bd;
+  --panel-ikon-tegn: #16161a;
 
   /* ── Kartet (#713) — lys sommer ───────────────────────────────────────────
    * Her bærer temaet ferie-følelsen tydeligst: varme, lyse flater over et
@@ -598,4 +631,9 @@ a {
     textarea
   ) {
   min-height: 44px;
+}
+
+/* Skillelinje mellom radene i en kontrollpanel-gruppe (components/innstillinger/PanelRad.tsx). */
+.panel-liste > * + * {
+  border-top: 0.5px solid var(--border-subtle);
 }

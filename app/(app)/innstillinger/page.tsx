@@ -130,16 +130,20 @@ export default async function Kontrollpanel() {
           <PanelRad
             href="/innstillinger/pass-godkjenninger"
             ikon="doc"
+            farge="rosa"
             tittel="Passinfo-forespørsler"
+            undertekst="Bare generalsekretæren ser denne"
             status={ventendePass > 0 ? `${ventendePass} venter` : 'Ingen'}
-            varsle={ventendePass > 0}
+            tone={ventendePass > 0 ? 'varsle' : 'noeytral'}
           />
         )}
         <PanelRad
           href="/innstillinger/onsker"
           ikon="message"
+          farge="gul"
           tittel="Ønsker fra brukerne"
           status={aapneIssues.length > 0 ? `${aapneIssues.length} åpne` : 'Ingen'}
+          tone={aapneIssues.length > 0 ? 'varsle' : 'noeytral'}
         />
       </PanelGruppe>
 
@@ -147,49 +151,55 @@ export default async function Kontrollpanel() {
         <PanelRad
           href="/innstillinger/varsler"
           ikon="bell"
+          farge="gul"
           tittel="Varsler"
           status={testModus ? 'Testmodus på' : `${varslerPaa} av ${varselBrytere.length} på`}
-          varsle={testModus}
+          tone={testModus ? 'varsle' : 'noeytral'}
         />
         <PanelRad
           href="/innstillinger/funksjoner"
           ikon="cog"
+          farge="groenn"
           tittel="Funksjoner"
           status={`${funksjonerPaa} av ${flagg.length} på`}
         />
-        <PanelRad href="/innstillinger/kart" ikon="map" tittel="Kartmarkeringer" />
+        <PanelRad href="/innstillinger/kart" ikon="map" farge="blaa" tittel="Kartmarkeringer" />
       </PanelGruppe>
 
       <PanelGruppe tittel="Innhold">
         <PanelRad
           href="/innstillinger/faste-arrangementer"
           ikon="calendar"
+          farge="lilla"
           tittel="Faste arrangementer"
           status={`${antallMaler ?? 0} ${antallMaler === 1 ? 'mal' : 'maler'}`}
         />
         <PanelRad
           href="/innstillinger/kaaringer"
           ikon="trophy"
+          farge="sand"
           tittel="Kåringer"
           status={`${antallKaaringmaler ?? 0} ${antallKaaringmaler === 1 ? 'mal' : 'maler'}`}
         />
-        <PanelRad href="/innstillinger/bursdagsbilde" ikon="cake" tittel="Bursdagsbilder" />
+        <PanelRad href="/innstillinger/bursdagsbilde" ikon="cake" farge="rosa" tittel="Bursdagsbilder" />
       </PanelGruppe>
 
       <PanelGruppe tittel="Drift">
         <PanelRad
           href="/innstillinger/varselhistorikk"
           ikon="list"
+          farge="graa"
           tittel="Varselhistorikk"
           status={`${varslerSisteDogn ?? 0} siste døgn`}
         />
         <PanelRad
           href="/innstillinger/bruk"
           ikon="chart"
+          farge="turkis"
           tittel="Bruk"
           status={snittPerDag === null ? undefined : `${snittPerDag} per dag`}
         />
-        <PanelRad href="/innstillinger/vitals" ikon="flame" tittel="Ytelse" />
+        <PanelRad href="/innstillinger/vitals" ikon="flame" farge="groenn" tittel="Ytelse" />
       </PanelGruppe>
     </div>
   )

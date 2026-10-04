@@ -19,7 +19,7 @@ export default function BryterBoks({
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             color: 'var(--text-tertiary)',
-            letterSpacing: '2px',
+            letterSpacing: '1.6px',
             textTransform: 'uppercase',
             fontWeight: 600,
             margin: '0 0 8px 4px',
@@ -30,7 +30,7 @@ export default function BryterBoks({
       )}
       <div
         style={{
-          borderRadius: 12,
+          borderRadius: 14,
           border: '0.5px solid var(--border)',
           background: 'var(--bg-elevated)',
           padding: '0 12px',
