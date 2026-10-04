@@ -18,27 +18,49 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
   test('pass-godkjenninger sender vanlig admin tilbake til /innstillinger', async ({ page }) => {
     await page.goto('/innstillinger/pass-godkjenninger')
     await expect(page).toHaveURL(/\/innstillinger$/)
-    await expect(page.getByRole('heading', { name: 'Innstillinger' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Kontrollpanel' })).toBeVisible()
   })
 
-  test('laster for admin og viser nøkkeltall-kortene', async ({ page }) => {
+  test('forsiden viser alle områdene som rader', async ({ page }) => {
     await page.goto('/innstillinger')
 
-    await expect(page.getByRole('heading', { name: 'Innstillinger' })).toBeVisible()
-    await expect(page.getByText('Push-varsler')).toBeVisible()
-    await expect(page.getByText('Varsler — kontrollpanel')).toBeVisible()
-    await expect(page.getByText('Faste arrangementer')).toBeVisible()
-    await expect(page.getByText('Kåringer')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Kontrollpanel' })).toBeVisible()
+    const main = page.locator('main')
+    for (const navn of [
+      'Ønsker fra brukerne', 'Varsler', 'Funksjoner', 'Kartmarkeringer',
+      'Faste arrangementer', 'Kåringer', 'Bursdagsbilder', 'Varselhistorikk', 'Bruk', 'Ytelse',
+    ]) {
+      await expect(main.getByRole('link', { name: new RegExp(`^${navn}`) })).toBeVisible()
+    }
     // Pass-godkjenninger er generalsekretær-only (#582), og testbrukeren er
-    // vanlig admin. Kortet skal derfor være borte — pinner tilgangsregelen
+    // vanlig admin. Raden skal derfor være borte — pinner tilgangsregelen
     // fra UI-siden, ikke bare i RLS.
-    await expect(page.getByText('Pass-godkjenninger')).toHaveCount(0)
-    await expect(page.getByText('Varselhistorikk')).toBeVisible()
-    // «Bruk» og «Ytelse» — begge kjører aktivitet_dag/aktivitet_uke/
-    // vitals_logg-spørringer (#484). Skal rendre uten å kaste selv når
-    // test-instansen har lite/ingen slik måledata (?? []-fallback).
-    await expect(page.getByText('Bruk', { exact: true })).toBeVisible()
-    await expect(page.getByText('Ytelse')).toBeVisible()
+    await expect(page.getByText('Passinfo-forespørsler')).toHaveCount(0)
+  })
+
+  // Undersidene kaster ved feilet spørring, så «laster med riktig overskrift»
+  // er en reell sjekk av at dataene deres kan hentes.
+  for (const [sti, overskrift] of [
+    ['/innstillinger/varsler', 'Varsler'],
+    ['/innstillinger/funksjoner', 'Funksjoner'],
+    ['/innstillinger/faste-arrangementer', 'Faste arrangementer'],
+    ['/innstillinger/kaaringer', 'Kåringer'],
+    ['/innstillinger/varselhistorikk', 'Varselhistorikk'],
+    ['/innstillinger/onsker', 'Ønsker fra brukerne'],
+  ] as const) {
+    test(`${sti} laster`, async ({ page }) => {
+      await page.goto(sti)
+      await expect(page.getByRole('heading', { level: 1, name: overskrift })).toBeVisible()
+    })
+  }
+
+  // Testmodus-boksen sjekkes ikke her: den vises bare når test_modus-raden
+  // finnes, og den er ikke seedet i testbasen.
+  test('varselsiden viser bryterne i grupper', async ({ page }) => {
+    await page.goto('/innstillinger/varsler')
+    await expect(page.getByRole('heading', { name: 'Arrangementer' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Kåringer' })).toBeVisible()
+    await expect(page.getByText('Nytt arrangement lagt ut')).toBeVisible()
   })
 
   test('«Bruk»-siden (aktivitetstrend) laster og viser nøkkeltallene', async ({ page }) => {
@@ -74,7 +96,7 @@ test.describe('/innstillinger — admin-only dashboard (#485)', () => {
       // markupen — sjekk det før du leter etter en rettighetsbug.
       await page.goto('/innstillinger')
       await expect(page.getByRole('heading', { name: '404' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Innstillinger' })).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Kontrollpanel' })).toHaveCount(0)
     })
 
     test('et vanlig medlem slipper ikke inn på /innstillinger/bruk', async ({ page }) => {

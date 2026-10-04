@@ -5,7 +5,7 @@ type Props = {
 
 /**
  * Admin-merket: skjold i aksent-sirkel. Samme merke på /innstillinger (stort, i
- * «Kun for admin»-boksen) og på Innstillinger-raden på /klubbinfo (lite), så
+ * «Kun for admin»-boksen) og på Kontrollpanel-raden på /klubbinfo (lite), så
  * man kjenner igjen at raden fører til en admin-flate.
  */
 export default function AdminMerke({ size = 26 }: Props) {

@@ -115,7 +115,7 @@ export default async function Klubbinfo() {
     // Nederst: admin-flaten er siste valg på siden, og merkes med admin-skjoldet.
     {
       icon: 'cog',
-      title: 'Innstillinger',
+      title: 'Kontrollpanel',
       href: '/innstillinger',
       kunAdmin: true,
     },

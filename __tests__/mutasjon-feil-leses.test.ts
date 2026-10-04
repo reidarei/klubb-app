@@ -146,7 +146,7 @@ describe('oppdaterBursdagsgratulasjon', () => {
     expect(mockRevalidatePath).not.toHaveBeenCalled()
   })
 
-  it('skriver kun egen rad via ensureAdmin-klienten og revaliderer /innstillinger', async () => {
+  it('skriver kun egen rad via ensureAdmin-klienten og revaliderer /profil', async () => {
     const chain = lagChain(null)
     mockFrom.mockImplementation(() => chain)
 
@@ -155,7 +155,7 @@ describe('oppdaterBursdagsgratulasjon', () => {
     expect(mockFrom).toHaveBeenCalledWith('profiles')
     expect(chain.update).toHaveBeenCalledWith({ bursdagsgratulasjon_aktiv: true })
     expect(chain.eq).toHaveBeenCalledWith('id', 'admin-1')
-    expect(mockRevalidatePath).toHaveBeenCalledWith('/innstillinger')
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/profil')
   })
 
   it('avviser ikke-admin med kast og skriver ingenting', async () => {

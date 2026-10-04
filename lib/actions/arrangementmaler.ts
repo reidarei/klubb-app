@@ -13,7 +13,7 @@ export async function leggTilMal(navn: string) {
   if (maxFeil) throw new Error(`Kunne ikke bestemme rekkefølge: ${maxFeil.message}`)
   const { error } = await admin.from('arrangementmaler').insert({ navn: navn.trim(), rekkefølge: (max?.rekkefølge ?? 0) + 1 })
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/arrangoransvar')
 }
 
@@ -24,7 +24,7 @@ export async function oppdaterMal(id: string, navn: string, purredato?: string |
   if (purredato !== undefined) oppdatering.purredato = purredato
   const { error } = await admin.from('arrangementmaler').update(oppdatering).eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/arrangoransvar')
 }
 
@@ -33,6 +33,6 @@ export async function slettMal(id: string) {
   const admin = createAdminClient()
   const { error } = await admin.from('arrangementmaler').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/arrangoransvar')
 }

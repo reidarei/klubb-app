@@ -1,7 +1,7 @@
 'use client'
 
 // Per-admin toggle for automatisk bursdagsgratulasjon i klubb-chat.
-// Vises kun for admins (sjekkes i parent — innstillinger/page.tsx).
+// Vises kun for admins (sjekkes i parent — profil/page.tsx).
 // Skriver til profiles.bursdagsgratulasjon_aktiv via server action.
 
 import { useTransition } from 'react'

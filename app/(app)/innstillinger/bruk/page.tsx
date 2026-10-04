@@ -64,7 +64,7 @@ export default async function AktivitetAdmin() {
     <div style={{ padding: '20px 20px 120px' }}>
       <header style={{ marginBottom: 18 }}>
         <div style={{ marginBottom: 4 }}>
-          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+          <TilbakeKnapp href="/innstillinger" til="Kontrollpanel" />
         </div>
         <div
           style={{

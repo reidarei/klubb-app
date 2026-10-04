@@ -58,7 +58,7 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
     .upsert({ noekkel, aktiv, oppdatert: naa() }, { onConflict: 'noekkel' })
   if (error) throw new Error(`Kunne ikke lagre varsel-innstilling «${noekkel}»: ${error.message}`)
 
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
 }
 
 // Returnerer resultat i stedet for å kaste: kallet skjer fra en
@@ -96,7 +96,7 @@ export async function oppdaterTestEpost(
     .eq('noekkel', 'test_modus')
   if (skriveFeil) return { ok: false, feil: `Kunne ikke lagre test-epost: ${skriveFeil.message}` }
 
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   return { ok: true }
 }
 
@@ -133,7 +133,7 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
   revalidatePath('/', 'layout')
   revalidatePath('/fond')
   revalidatePath('/chat')
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
 }
 
 // Oppdaterer per-admin toggle for automatisk bursdagsgratulasjon.
@@ -148,5 +148,5 @@ export async function oppdaterBursdagsgratulasjon(aktiv: boolean) {
     .eq('id', user.id)
   if (error) throw new Error(`Kunne ikke lagre bursdagsgratulasjon-valget: ${error.message}`)
 
-  revalidatePath('/innstillinger')
+  revalidatePath('/profil')
 }

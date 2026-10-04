@@ -61,7 +61,7 @@ export default function BursdagsbildeRad({
           return
         }
         if (resultat.utfall === 'skrudd_av') {
-          setFeil('Bursdagsbilde er skrudd av under Innstillinger → Funksjoner.')
+          setFeil('Bursdagsbilde er skrudd av under Kontrollpanel → Funksjoner.')
           return
         }
         if (resultat.utfall === 'feilet' || resultat.utfall === 'avvist') {

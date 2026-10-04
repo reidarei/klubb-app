@@ -13,7 +13,7 @@ export async function leggTilKaaringMal(navn: string) {
   if (maxFeil) throw new Error(`Kunne ikke bestemme rekkefølge: ${maxFeil.message}`)
   const { error } = await admin.from('kaaringmaler').insert({ navn: navn.trim(), rekkefolge: (max?.rekkefolge ?? 0) + 1 })
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/kaaringer')
 }
 
@@ -22,7 +22,7 @@ export async function oppdaterKaaringMal(id: string, navn: string) {
   const admin = createAdminClient()
   const { error } = await admin.from('kaaringmaler').update({ navn: navn.trim() }).eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/kaaringer')
 }
 
@@ -31,6 +31,6 @@ export async function slettKaaringMal(id: string) {
   const admin = createAdminClient()
   const { error } = await admin.from('kaaringmaler').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/innstillinger')
+  revalidatePath('/innstillinger', 'layout')
   revalidatePath('/kaaringer')
 }

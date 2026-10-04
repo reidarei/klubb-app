@@ -25,7 +25,7 @@ export default async function KartInnstillinger() {
     <div style={{ padding: '0 20px 20px' }}>
       <header style={{ marginTop: 12, marginBottom: 22 }}>
         <div style={{ marginBottom: 4 }}>
-          <TilbakeKnapp href="/innstillinger" til="Innstillinger" />
+          <TilbakeKnapp href="/innstillinger" til="Kontrollpanel" />
         </div>
         <div
           style={{
@@ -38,7 +38,7 @@ export default async function KartInnstillinger() {
             marginBottom: 6,
           }}
         >
-          Innstillinger
+          Kontrollpanel
         </div>
         <h1
           style={{

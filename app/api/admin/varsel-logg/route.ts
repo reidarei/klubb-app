@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '10')
 
   const admin = createAdminClient()
-  // MÅ ha samme teller_ulest-filter som førstesiden i app/(app)/innstillinger/page.tsx
+  // MÅ ha samme teller_ulest-filter som førstesiden i app/(app)/innstillinger/varselhistorikk/page.tsx
   // (#612): «Vis flere» pagineres på offset, så et annet filter her ville både
   // dratt chat inn i lista og forskjøvet radene mot totalen siden ble rendret med.
   const { data, count, error } = await admin

@@ -157,7 +157,7 @@ async function handle(req: NextRequest) {
 
   const admin = createAdminClient()
 
-  // Klubbens av/på-bryter (Innstillinger → Funksjoner). Strengt oppslag: en
+  // Klubbens av/på-bryter (Kontrollpanel → Funksjoner). Strengt oppslag: en
   // feilet lesing kaster (synlig 500 i workflowen, neste slot prøver igjen)
   // i stedet for å gjette — og manglende rad betyr av, aldri et Vertex-kall.
   if ((await hentAppFlaggStrengt(admin, BURSDAGSBILDE)) !== true) {

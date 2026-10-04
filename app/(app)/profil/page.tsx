@@ -10,6 +10,7 @@ import VarslerListe from '@/components/profil/VarslerListe'
 import EgneOpplysninger from '@/components/profil/EgneOpplysninger'
 import PassInfoKort from '@/components/profil/PassInfoKort'
 import UtseendeValg from '@/components/profil/UtseendeValg'
+import BursdagsgratulasjonToggle from '@/components/BursdagsgratulasjonToggle'
 import { kanAdministrere, tittelFor } from '@/lib/roller'
 import { lesTemaFraCookie } from '@/lib/tema-server'
 import { hentAppFlagg, FOND_FANE } from '@/lib/app-innstillinger'
@@ -44,7 +45,7 @@ export default async function Profil() {
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('navn, visningsnavn, rolle, bilde_url, epost, telefon, fodselsdato, stikkord, matallergier')
+      .select('navn, visningsnavn, rolle, bilde_url, epost, telefon, fodselsdato, stikkord, matallergier, bursdagsgratulasjon_aktiv')
       .eq('id', user!.id)
       .maybeSingle(),
     supabase
@@ -549,6 +550,26 @@ export default async function Profil() {
 
       {/* Utseende-innstillinger — alle kan velge tema */}
       <UtseendeValg initial={valgtTema} />
+
+      {/* Automatisering — per-admin, gjelder bare den innloggede. Lå tidligere i
+          kontrollpanelet, der den så ut som en bryter for hele klubben. */}
+      {kanAdministrere(profil?.rolle) && (
+        <section style={{ marginTop: 32 }}>
+          <SectionLabel>Automatisering</SectionLabel>
+          <BursdagsgratulasjonToggle aktiv={profil?.bursdagsgratulasjon_aktiv ?? false} />
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              lineHeight: 1.45,
+              margin: '0 4px',
+            }}
+          >
+            Gjelder bare deg. Andre admins har sitt eget valg.
+          </p>
+        </section>
+      )}
 
       {/* Personlige varsler — interaktiv klient-komponent med «Viktig»/«Alt»-
           segment, filter, kollaps og marker-alle-lest. Vis seksjonen hvis det

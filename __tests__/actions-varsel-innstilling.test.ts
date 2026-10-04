@@ -77,7 +77,7 @@ describe('oppdaterVarselInnstilling', () => {
     const { rad, opts } = upsertKall()
     expect(rad).toMatchObject({ noekkel: symbolType, aktiv: false })
     expect(opts).toEqual({ onConflict: 'noekkel' })
-    expect(revalidatePath).toHaveBeenCalledWith('/innstillinger')
+    expect(revalidatePath).toHaveBeenCalledWith('/innstillinger', 'layout')
   })
 
   it('rører ingen andre kolonner enn aktiv og oppdatert', async () => {

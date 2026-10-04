@@ -12,11 +12,14 @@ export default function FunksjonToggle({
   noekkel,
   aktiv,
   beskrivelse,
+  forklaring,
   last,
 }: {
   noekkel: string
   aktiv: boolean
   beskrivelse: string
+  /** Én setning under navnet om hva bryteren faktisk gjør for medlemmene. */
+  forklaring?: string
   last?: boolean
 }) {
   const [isPending, startTransition] = useTransition()
@@ -54,6 +57,19 @@ export default function FunksjonToggle({
         }}
       >
         {beskrivelse}
+        {forklaring && (
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 400,
+              color: 'var(--text-tertiary)',
+              lineHeight: 1.4,
+              marginTop: 3,
+            }}
+          >
+            {forklaring}
+          </div>
+        )}
       </div>
       <ToggleRad
         on={aktiv}
