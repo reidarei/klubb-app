@@ -25,7 +25,7 @@ export default async function Klubbinfo() {
   const klubbInfoPromise = hentKlubbInfo()
   const venterPromise = erAdmin ? hentVenterPaaAdmin(godkjennerPassTilgang(profil?.rolle)) : Promise.resolve(0)
 
-  // Fem count-spørringer i parallell — sekvensielt ville lagt fire ekstra
+  // Seks count-spørringer i parallell — sekvensielt ville lagt fem ekstra
   // rundturer til Supabase på responstiden (jf. ytelseskravet).
   const [
     { count: antallMedlemmer },
@@ -33,6 +33,7 @@ export default async function Klubbinfo() {
     { count: antallChatBilder },
     { count: antallTurer },
     { count: antallKaaringer },
+    { count: antallPaaKartet },
   ] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('aktiv', true),
       // Antall BILDER, ikke antall album — raden heter «Bilder». Chat-bildene
@@ -56,6 +57,13 @@ export default async function Klubbinfo() {
         .lt('start_tidspunkt', naa()),
       // Antall kårede vinnere gjennom historien (én rad per kåring per år).
       supabase.from('kaaring_vinnere').select('id', { count: 'exact', head: true }),
+      // Menn som deler posisjon akkurat nå — samme «aktiv»-regel som /kart
+      // (deler_til fram i tid). RLS slipper gjennom din egen utløpte rad, så
+      // filteret må stå her og ikke overlates til policyen.
+      supabase
+        .from('posisjon_deling')
+        .select('profil_id', { count: 'exact', head: true })
+        .gt('deler_til', naa()),
     ])
 
   const antallBilder = (antallAlbumBilder ?? 0) + (antallChatBilder ?? 0)
@@ -178,7 +186,7 @@ export default async function Klubbinfo() {
         />
         <PanelRad href="/kaaringer" ikon="trophy" farge="sand" tittel="Kåringer" status={antallKaaringer || undefined} />
         <PanelRad href="/arrangoransvar" ikon="list" farge="lilla" tittel="Arrangøransvar" />
-        <PanelRad href="/kart" ikon="map" farge="groenn" tittel="Kart" undertekst="Hvor gutta er nå" />
+        <PanelRad href="/kart" ikon="map" farge="groenn" tittel="Kart" undertekst="Hvor gutta er nå" status={antallPaaKartet ?? undefined} />
       </PanelGruppe>
 
       <PanelGruppe tittel="Minner">
