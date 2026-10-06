@@ -160,6 +160,7 @@
   --overlay-control-ring: rgba(255, 255, 255, 0.25);
   /* Lett overlay på bilder/flater inni innhold (f.eks. foto-grid "+N"-badge) */
   --overlay-soft: rgba(0, 0, 0, 0.5);
+  --overlay-tekst: #fff; /* tekst oppå foto-toning (albumkort), lik i alle temaer */
 
   /* Bildevisning (AlbumLightbox) — helt opak, bevisst tema-uavhengig: et foto
    * skal stå alene, ikke over app-innhold som skinner igjennom (#625).
@@ -318,6 +319,7 @@
   --overlay-control-bg: rgba(0, 0, 0, 0.65);
   --overlay-control-ring: rgba(255, 255, 255, 0.25);
   --overlay-soft: rgba(0, 0, 0, 0.5);
+  --overlay-tekst: #fff; /* tekst oppå foto-toning (albumkort), lik i alle temaer */
 
   --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.18);
   --shadow-popover: 0 6px 18px rgba(0, 0, 0, 0.35);
@@ -434,6 +436,7 @@
   --overlay-control-bg: rgba(22, 20, 15, 0.62);
   --overlay-control-ring: rgba(255, 255, 255, 0.30);
   --overlay-soft: rgba(22, 20, 15, 0.45);
+  --overlay-tekst: #fff; /* tekst oppå foto-toning (albumkort), lik i alle temaer */
   /* --lightbox-backdrop varmes bevisst IKKE opp her — den arver #000 fra
    * :root uansett tema, se begrunnelse der (#625). */
 

@@ -418,21 +418,47 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
             </div>
           )}
 
-          {/* Albumkort: albumets omslagsbilde + CTA-pille som lenker til
-              hele albumet. Erstatter vanlig bilde-grid. Se #214, #463. */}
+          {/* Albumkort: ett samlet kort som lenker til hele albumet — omslagsbildet
+              med tittel og antall på en toning nederst, eller en rad i boks når
+              albumet mangler omslag. Erstatter vanlig bilde-grid. Se #214, #463. */}
           {albumKort && (
-            <div style={{ marginBottom: wrapperBunn }}>
+            /* <span role="link"> og ikke <Link>: hele kortet er allerede en <a>,
+               og <a>-i-<a> er ugyldig HTML. Parseren auto-lukker da den ytre i
+               server-HTML-en og hydreringen krasjer med React #418 (se #465).
+               preventDefault + stopPropagation hindrer at trykket også trigger
+               kort-Link-en (→ /meldinger/[id]). */
+            <span
+              role="link"
+              tabIndex={0}
+              aria-label={`Åpne albumet ${albumKort.albumTittel}`}
+              onClick={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                router.push(`/album/${albumKort.albumId}`)
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  router.push(`/album/${albumKort.albumId}`)
+                }
+              }}
+              style={{
+                display: 'block',
+                position: 'relative',
+                borderRadius: 'var(--radius-card)',
+                overflow: 'hidden',
+                marginBottom: wrapperBunn,
+                ...(albumBilde
+                  ? { aspectRatio: '4/3' }
+                  : {
+                      background: 'var(--bg-elevated)',
+                      border: '0.5px solid var(--border-subtle)',
+                    }),
+              }}
+            >
               {albumBilde && (
-                <div
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    aspectRatio: '4/3',
-                    borderRadius: 'var(--radius-card)',
-                    overflow: 'hidden',
-                    marginBottom: 8,
-                  }}
-                >
+                <>
                   <Image
                     src={albumBilde}
                     alt=""
@@ -440,55 +466,71 @@ export default function MeldingKort({ melding, brukerId, kommentarer = [], profi
                     sizes="100vw"
                     style={{ objectFit: 'cover' }}
                   />
-                </div>
+                  {/* Toning nederst så hvit tekst er lesbar på lyse bilder */}
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background:
+                        'linear-gradient(180deg, transparent 50%, var(--overlay-soft) 75%, var(--overlay-control-bg) 100%)',
+                    }}
+                  />
+                </>
               )}
-              {/* CTA-pille — <span role="link"> og ikke <Link>: hele kortet er
-                  allerede en <a>, og <a>-i-<a> er ugyldig HTML. Parseren
-                  auto-lukker da den ytre i server-HTML-en og hydreringen
-                  krasjer med React #418 (se #465). Samme mønster som
-                  KommentarMiniatyr. preventDefault + stopPropagation hindrer
-                  at trykket også trigger kort-Link-en (→ /meldinger/[id]). */}
               <span
-                role="link"
-                tabIndex={0}
-                onClick={e => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  router.push(`/album/${albumKort.albumId}`)
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    router.push(`/album/${albumKort.albumId}`)
-                  }
-                }}
                 style={{
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 12px',
-                  background: 'var(--accent-soft)',
-                  border: '0.5px solid var(--accent)',
-                  borderRadius: 999,
-                  color: 'var(--text-primary)',
-                  textDecoration: 'none',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12,
-                  fontWeight: 500,
+                  gap: 10,
+                  padding: albumBilde ? '0 14px 12px' : '12px 14px',
+                  minHeight: MIN_TREFFMAAL_PX,
+                  ...(albumBilde
+                    ? { position: 'absolute', left: 0, right: 0, bottom: 0 }
+                    : {}),
+                  color: albumBilde ? 'var(--overlay-tekst)' : 'var(--text-primary)',
                 }}
               >
-                <Icon name="image" size={13} color="var(--accent)" strokeWidth={1.8} />
-                <span>
-                  Se hele albumet
-                  <span style={{ color: 'var(--text-tertiary)' }}>
-                    {' · '}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      opacity: 0.8,
+                      color: albumBilde ? undefined : 'var(--accent)',
+                    }}
+                  >
+                    Album
+                    {albumKort.antallBilder > 0 &&
+                      ` · ${albumKort.antallBilder} ${albumKort.antallBilder === 1 ? 'bilde' : 'bilder'}`}
+                  </span>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 17,
+                      fontWeight: 500,
+                      lineHeight: 1.25,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {albumKort.albumTittel}
-                    {albumKort.antallBilder > 0 && ` (${albumKort.antallBilder})`}
                   </span>
                 </span>
+                <Icon
+                  name="chevron"
+                  size={18}
+                  color={albumBilde ? 'var(--overlay-tekst)' : 'var(--text-tertiary)'}
+                  strokeWidth={2}
+                />
               </span>
-            </div>
+            </span>
           )}
 
           {/* Bilde-grid. 1 bilde: full bredde 4:3. 2-4: 2×2-grid.
