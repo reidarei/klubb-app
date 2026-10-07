@@ -762,7 +762,7 @@ export default function Chat({
               justifyContent: 'center',
             }}
           >
-            <Icon name="image" size={18} color="currentColor" strokeWidth={1.8} />
+            <Icon name="camera" size={20} color="currentColor" strokeWidth={1.8} />
           </span>
         </Treffflate>
         <input
