@@ -274,7 +274,9 @@ export default function ChatMeldingRad({
               borderRadius: boblRadius,
               background: boblBg,
               fontFamily: 'var(--font-body)',
-              fontSize: 16,
+              // 15, ikke 16: 16 ble litt for stort i boblene. Redigeringsfeltet
+              // over står fortsatt på 16 — under det zoomer iOS inn når man skriver.
+              fontSize: 15,
               lineHeight: 1.35,
               color: 'var(--text-primary)',
               whiteSpace: 'pre-wrap',
