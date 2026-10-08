@@ -113,13 +113,11 @@ export default async function Forside() {
       .map(p => p.fodselsdato!.slice(5))
   )]
 
-  // Header viser dagens norske dato som en avrivningskalender: innbinding med ringer
-  // øverst, perforering der gårsdagens lapp ble revet av, og lappene under som titter
-  // fram nederst. Smal nok til at minikalenderen og + får plass.
+  // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
+  // Følger M5-referansen fra #190.
   const naaIso = new Date().toISOString()
   const ukedag = formaterDato(naaIso, 'EEEE')
-  const dagTall = formaterDato(naaIso, 'd')
-  const maaned = formaterDato(naaIso, 'MMMM')
+  const idagDato = formaterDato(naaIso, 'd. MMMM')
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -133,95 +131,35 @@ export default async function Forside() {
           marginBottom: 26,
         }}
       >
-        <h1
-          style={{
-            margin: 0,
-            position: 'relative',
-            width: 76,
-            flexShrink: 0,
-            paddingTop: 4,
-            paddingBottom: 6,
-            fontWeight: 400,
-            textAlign: 'center',
-          }}
-        >
-          {/* Lappene under dagens — kun kantene synes nederst, forskjøvet innover */}
-          <span aria-hidden style={{ ...lappUnderStil, left: 6, right: 6, bottom: 0 }} />
-          <span aria-hidden style={{ ...lappUnderStil, left: 3, right: 3, bottom: 3 }} />
-
-          <span
+        <div>
+          <div
             style={{
-              position: 'relative',
-              display: 'block',
-              background: 'var(--bg-elevated-solid)',
-              border: '1px solid var(--border)',
-              borderRadius: '4px 4px 6px 6px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '2.5px',
+              textTransform: 'uppercase',
+              marginBottom: 6,
             }}
           >
-            {/* Innbindingen, med to ringer som stikker opp over kanten */}
-            <span
-              aria-hidden
-              style={{
-                position: 'relative',
-                display: 'block',
-                height: 12,
-                margin: '-1px -1px 0', // dekker lappens kant oppe og på sidene
-                background: 'var(--accent)',
-                borderRadius: '4px 4px 0 0',
-              }}
-            >
-              <span style={{ ...ringStil, left: 16 }} />
-              <span style={{ ...ringStil, right: 16 }} />
-            </span>
-            {/* Perforeringen — restene etter gårsdagens lapp */}
-            <span
-              aria-hidden
-              style={{ display: 'block', margin: '3px 4px 0', borderTop: '1.5px dashed var(--border-strong)' }}
-            />
-            <span
-              style={{
-                display: 'block',
-                paddingTop: 5,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {ukedag}
-            </span>
-            <span
-              style={{
-                display: 'block',
-                paddingTop: 3,
-                fontFamily: 'var(--font-display)',
-                fontStyle: 'italic',
-                fontSize: 40,
-                letterSpacing: '-1px',
-                lineHeight: 1,
-                color: 'var(--text-primary)',
-              }}
-            >
-              {dagTall}
-            </span>
-            <span
-              style={{
-                display: 'block',
-                padding: '4px 0 7px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              {maaned}
-            </span>
-          </span>
-        </h1>
+            {ukedag}
+          </div>
+          <h1
+            style={{
+              // Tykk, rett skrift som på en avrivningskalender — ikke kursiv serif
+              fontFamily: 'var(--font-body)',
+              fontSize: 40,
+              fontWeight: 800,
+              letterSpacing: '-1.5px',
+              lineHeight: 1,
+              margin: 0,
+              color: 'var(--text-primary)',
+            }}
+          >
+            {idagDato}
+          </h1>
+        </div>
 
         {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
         <MiniKalender arrangementDatoer={arrangementDatoer} turPerioder={turPerioder} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} stiftetMMDD={stiftetTilDato(klubbInfo.stiftet).slice(5)} />
@@ -419,24 +357,4 @@ export default async function Forside() {
       )}
     </div>
   )
-}
-
-// Avrivningskalenderen i headeren: lappene som ligger under dagens.
-const lappUnderStil: React.CSSProperties = {
-  position: 'absolute',
-  top: 24,
-  background: 'var(--bg-elevated-2)',
-  border: '1px solid var(--border)',
-  borderRadius: '0 0 6px 6px',
-}
-
-// Ringene i innbindingen — «hull» i bakgrunnsfarge med metallkant.
-const ringStil: React.CSSProperties = {
-  position: 'absolute',
-  top: -5,
-  width: 6,
-  height: 12,
-  borderRadius: 3,
-  background: 'var(--bg)',
-  border: '1.5px solid var(--text-tertiary)',
 }

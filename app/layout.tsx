@@ -15,7 +15,7 @@ import './globals.css'
 // veie mot kald-last-kostnaden.
 const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: ['400', '500', '600', '800'], // 800: datoen øverst på agendaen
   variable: '--font-inter',
   display: 'swap',
 })
