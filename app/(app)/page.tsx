@@ -113,11 +113,12 @@ export default async function Forside() {
       .map(p => p.fodselsdato!.slice(5))
   )]
 
-  // Header viser dagens norske dato: ukedag (eyebrow), dato (h1), "I dag" (label).
-  // Følger M5-referansen fra #190.
+  // Header viser dagens norske dato som en kalenderlapp: ukedag på stripa øverst,
+  // stort datotall, måned i ord under. Smal nok til at minikalenderen og + får plass.
   const naaIso = new Date().toISOString()
   const ukedag = formaterDato(naaIso, 'EEEE')
-  const idagDato = formaterDato(naaIso, 'd. MMMM')
+  const dagTall = formaterDato(naaIso, 'd')
+  const maaned = formaterDato(naaIso, 'MMMM')
 
   return (
     <div style={{ padding: '0 20px 20px' }}>
@@ -131,35 +132,63 @@ export default async function Forside() {
           marginBottom: 26,
         }}
       >
-        <div>
-          <div
+        <h1
+          style={{
+            margin: 0,
+            width: 76,
+            flexShrink: 0,
+            borderRadius: 'var(--radius-small)',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            overflow: 'hidden',
+            textAlign: 'center',
+            fontWeight: 400,
+          }}
+        >
+          <span
             style={{
+              display: 'block',
+              padding: '4px 0 3px',
+              background: 'var(--accent)',
+              color: 'var(--accent-foreground)',
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
-              fontWeight: 600,
-              color: 'var(--text-tertiary)',
-              letterSpacing: '2.5px',
+              fontWeight: 700,
+              letterSpacing: '1px',
               textTransform: 'uppercase',
-              marginBottom: 6,
             }}
           >
             {ukedag}
-          </div>
-          <h1
+          </span>
+          <span
             style={{
+              display: 'block',
+              paddingTop: 6,
               fontFamily: 'var(--font-display)',
               fontStyle: 'italic',
-              fontSize: 44,
-              fontWeight: 400,
+              fontSize: 40,
               letterSpacing: '-1px',
               lineHeight: 1,
-              margin: 0,
               color: 'var(--text-primary)',
             }}
           >
-            {idagDato}
-          </h1>
-        </div>
+            {dagTall}
+          </span>
+          <span
+            style={{
+              display: 'block',
+              padding: '4px 0 7px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            {maaned}
+          </span>
+        </h1>
 
         {/* Mikro-kalenderen bor i luken mellom dato-blokka og NyFAB (#429) */}
         <MiniKalender arrangementDatoer={arrangementDatoer} turPerioder={turPerioder} bursdagMMDD={bursdagMMDD} iDag={iDagOslo()} stiftetMMDD={stiftetTilDato(klubbInfo.stiftet).slice(5)} />
