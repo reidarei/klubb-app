@@ -18,6 +18,16 @@ export default async function KlubbChatSide() {
     getProfil(),
   ])
 
+  // Marker at brukeren nå ser klubb-chat — prikken forsvinner ved neste
+  // navigasjon. Startes her så RPC-en går parallelt med spørringene under, og
+  // awaites før svaret (nederst). Den var tidligere fire-and-forget, men Vercel
+  // fryser funksjonen når svaret er sendt, så kallet ble i blant kuttet midt i
+  // (feil_logg: DbFeil med status 0 og tom code, ca. én gang om dagen).
+  // Feilen logges, men velter ikke siden (Policy: Side-effekter ved sidelast).
+  const markering = markerChatSett().catch((err: unknown) =>
+    logg.feil('ulest.marker_chat_sett.feilet', err).catch(() => {}),
+  )
+
   // Flagget hentes parallelt med chat-dataene — gating skjer før render, og
   // innholdet er ikke hemmelig når fanen er av (bare skjult), så det er trygt.
   const [
@@ -42,14 +52,7 @@ export default async function KlubbChatSide() {
   // av via /innstillinger (app_innstillinger.chat_fane). Admin har alltid tilgang.
   if (!kanAdministrere(profil?.rolle) && !chatFane) return notFound()
 
-  // Marker at brukeren nå ser klubb-chat — prikken forsvinner ved neste
-  // navigasjon. Fire-and-forget: vi venter ikke, men heller ikke stille — en
-  // tom lambda her ville svelget kastet og gjort feilen usynlig for
-  // feil_logg-vakten i e2e/sider-laster.spec.ts (CLAUDE.md § Policy:
-  // Side-effekter ved sidelast).
-  markerChatSett().catch((err: unknown) =>
-    logg.feil('ulest.marker_chat_sett.feilet', err).catch(() => {}),
-  )
+  await markering
 
   const initialMeldinger = [...(siste ?? [])].reverse()
 

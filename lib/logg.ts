@@ -78,7 +78,7 @@
 //   varsel.dedup.ingen_noekkel  — tillatDuplikat: false uten arrangementId/pollId/dedupNoekkel i lib/varsler.ts — ingen nøkkel å deduplisere på, sjekken under er en no-op (#518)
 //   samtaler.marker_lest.oppdatering.feilet — samtale_chat-oppdateringen til lest = true feiler ved sidelast, siden rendres videre (#539)
 //   samtaler.marker_lest.feilet — markerSamtaleLest() kastet uventet fra /samtaler/[id] (#539)
-//   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat, fire-and-forget under render (#539-review)
+//   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat (startes tidlig, awaites før svar — var fire-and-forget og ble kuttet av Vercel)
 //   klient.ressurs.feilet       — en <script>/<link> lastet ikke i nettleseren: appen mangler kode (#575)
 //   klient.bilde.feilet         — warn: et <img> lastet ikke. Kosmetisk og oftest transient på mobil (#603)
 //   varsel.push.timeout         — sendPush traff PUSH_TIMEOUT_MS-deadline (Promise.race), svelges som andre push-feil (#612)

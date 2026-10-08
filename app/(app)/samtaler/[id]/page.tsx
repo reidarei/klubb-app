@@ -42,6 +42,15 @@ export default async function SamtaleDetalj({
 
   const motpartId = samtale.profil_a === user.id ? samtale.profil_b : samtale.profil_a
 
+  // Marker innkomne meldinger som lest. Startes her så den går parallelt med
+  // spørringene under, og awaites før svaret — ren fire-and-forget ble i blant
+  // kuttet når Vercel fryser funksjonen etter svaret (samme som /chat). RLS
+  // hindrer at vi markerer andres meldinger. Kalles under render, så den får
+  // IKKE revalidere /profil (Next kaster) — den siden er dynamisk uansett (#539).
+  const markering = markerSamtaleLest(id).catch((err: unknown) =>
+    logg.feil('samtaler.marker_lest.feilet', err).catch(() => {}),
+  )
+
   const [
     { data: motpart, error: motpartFeil },
     { data: chatMeldinger, error: chatMeldingerFeil },
@@ -64,14 +73,7 @@ export default async function SamtaleDetalj({
   if (motpartFeil) throw new Error(`Kunne ikke hente motpart: ${motpartFeil.message}`)
   if (chatMeldingerFeil) throw new Error(`Kunne ikke hente chat: ${chatMeldingerFeil.message}`)
 
-  // Marker innkomne meldinger som lest når siden lastes. Trigges som side-
-  // effekt — UI venter ikke på dette. RLS hindrer at vi kan markere
-  // andres meldinger eller andre samtaler. Actionen kalles under render,
-  // så den får IKKE revalidere /profil (Next kaster) — den siden er
-  // dynamisk rendret og henter et ferskt tall uansett neste gang (#539).
-  markerSamtaleLest(id).catch((err: unknown) =>
-    logg.feil('samtaler.marker_lest.feilet', err).catch(() => {}),
-  )
+  await markering
 
   const navn = motpart?.visningsnavn || motpart?.navn || 'Ukjent'
 
