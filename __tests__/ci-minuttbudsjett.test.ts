@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
-  forbrukMinutter,
+  jobbMinutter,
+  unikeJobber,
+  kjoringMinutter,
+  tomCache,
+  tolkCache,
   skalKjoreE2e,
   foersteIManeden,
   hentForbrukForManeden,
-  tidligereForsok,
-  hentTidligereForsokMinutter,
-  MAKS_FORSOK_OPPSLAG,
+  MAKS_JOBB_OPPSLAG,
   CI_BUDSJETT_MIN,
   DRIFTSRESERVE_MIN,
   KVOTE_MIN,
@@ -17,53 +19,111 @@ import {
 // om at porten kjørte) — disse testene er derfor skrevet for å fange
 // mutasjoner i avrunding og terskel-sammenligning, ikke bare happy path.
 
-describe('forbrukMinutter', () => {
-  it('runder opp per kjøring (61 s → 2 min)', () => {
-    const runs = [{ run_started_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:01:01Z' }]
-    expect(forbrukMinutter(runs)).toBe(2)
+type Cache = { versjon: number; maaned: string; runs: Record<string, { forsok: number; min: number; tidligereMin: number }> }
+
+const t = (hhmmss: string) => `2026-10-04T${hhmmss}Z`
+
+function jobb(overstyr: Record<string, unknown> = {}) {
+  return { id: 1, run_id: 1, name: 'sjekk', run_attempt: 1, started_at: t('10:00:00'), completed_at: t('10:01:00'), ...overstyr }
+}
+
+describe('jobbMinutter', () => {
+  it('runder opp PER JOBB (2 × 61 s → 4 min, ikke 3)', () => {
+    const jobber = [
+      jobb({ completed_at: t('10:01:01') }),
+      jobb({ id: 2, name: 'kjerne', completed_at: t('10:01:01') }),
+    ]
+    expect(jobbMinutter(jobber).minutter).toBe(4)
   })
 
   it('runder ikke opp ved eksakt 60 sekunder', () => {
-    const runs = [{ run_started_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:01:00Z' }]
-    expect(forbrukMinutter(runs)).toBe(1)
+    expect(jobbMinutter([jobb()]).minutter).toBe(1)
   })
 
-  it('gir 0 for tom liste', () => {
-    expect(forbrukMinutter([])).toBe(0)
+  it('gir 0/0 for tom liste', () => {
+    expect(jobbMinutter([])).toEqual({ minutter: 0, utelatt: 0 })
   })
 
-  it('summerer flere kjøringer riktig når én krysser midnatt UTC', () => {
-    const runs = [
-      { run_started_at: '2026-07-01T23:58:00Z', updated_at: '2026-07-02T00:02:00Z' }, // 4 min, krysser midnatt
-      { run_started_at: '2026-07-02T00:00:00Z', updated_at: '2026-07-02T00:03:00Z' }, // 3 min
+  it('uten naa: pågående jobb utelates og telles i utelatt', () => {
+    expect(jobbMinutter([jobb({ completed_at: null }), jobb({ id: 2 })])).toEqual({ minutter: 1, utelatt: 1 })
+  })
+
+  it('med naa: pågående jobb telles til «nå», queued (ikke startet) gir 0 uten NaN', () => {
+    const naa = new Date(t('10:05:00'))
+    const jobber = [jobb({ completed_at: null }), jobb({ id: 2, started_at: null, completed_at: null })]
+    expect(jobbMinutter(jobber, { naa })).toEqual({ minutter: 5, utelatt: 1 })
+  })
+
+  it('hopper over uparsbare tidsstempler i stedet for å gi NaN', () => {
+    expect(jobbMinutter([jobb({ started_at: 'ikke-en-dato' }), jobb({ id: 2 })]).minutter).toBe(1)
+  })
+})
+
+// #851: ekte form fra en «Re-run failed jobs» på pr-check (4.10.2026): sjekk
+// feilet og ble kjørt igjen, kjerne ble KOPIERT inn i forsøk 2 med ny id men
+// originalens tider.
+const delvisRerun = [
+  jobb({ id: 11, name: 'sjekk', run_attempt: 1, started_at: t('17:52:02'), completed_at: t('18:00:09') }), // 9 min
+  jobb({ id: 12, name: 'kjerne', run_attempt: 1, started_at: t('17:52:03'), completed_at: t('17:55:53') }), // 4 min
+  jobb({ id: 21, name: 'sjekk', run_attempt: 2, started_at: t('18:00:36'), completed_at: t('18:08:29') }), // 8 min
+  jobb({ id: 22, name: 'kjerne', run_attempt: 2, started_at: t('17:52:03'), completed_at: t('17:55:53') }), // kopi
+]
+
+describe('unikeJobber', () => {
+  it('fjerner kopien fra «Re-run failed jobs», beholder den ekte reruns', () => {
+    expect(unikeJobber(delvisRerun).map((j: { id: number }) => j.id)).toEqual([11, 12, 21])
+  })
+
+  it('rører ikke like tider i et annet run', () => {
+    const jobber = [jobb({ run_id: 1 }), jobb({ id: 2, run_id: 2, run_attempt: 2 })]
+    expect(unikeJobber(jobber)).toHaveLength(2)
+  })
+
+  it('rører ikke to jobber med like tider i SAMME forsøk', () => {
+    expect(unikeJobber([jobb(), jobb({ id: 2, name: 'kjerne' })])).toHaveLength(2)
+  })
+})
+
+describe('kjoringMinutter', () => {
+  it('delvis rerun: 9 + 4 + 8 = 21 min, kopien telles ikke; 13 av dem er tidligere forsøk', () => {
+    expect(kjoringMinutter({ run_attempt: 2 }, delvisRerun)).toEqual({ min: 21, tidligereMin: 13 })
+  })
+
+  it('to parallelle jobber faktureres hver for seg — mer enn run-varigheten', () => {
+    const jobber = [
+      jobb({ name: 'sjekk', completed_at: t('10:08:00') }), // 8
+      jobb({ id: 2, name: 'kjerne', completed_at: t('10:03:30') }), // 4
     ]
-    expect(forbrukMinutter(runs)).toBe(7)
+    expect(kjoringMinutter({ run_attempt: 1 }, jobber)).toEqual({ min: 12, tidligereMin: 0 })
+  })
+})
+
+describe('tolkCache', () => {
+  const naa = new Date(t('12:00:00'))
+
+  it('leser en gyldig cache for inneværende måned', () => {
+    const cache = { ...tomCache(naa), runs: { 5: { forsok: 1, min: 3, tidligereMin: 0 } } }
+    expect(tolkCache(JSON.stringify(cache), naa).runs).toEqual({ 5: { forsok: 1, min: 3, tidligereMin: 0 } })
   })
 
-  it('teller en pågående kjøring (updated_at ≈ nå) som om den varer til nå', () => {
-    const start = new Date(Date.now() - 5 * 60_000).toISOString()
-    const naa = new Date().toISOString()
-    expect(forbrukMinutter([{ run_started_at: start, updated_at: naa }])).toBeGreaterThanOrEqual(5)
+  it('forrige måneds cache, feil versjon eller søppel ⇒ tom (aldri kast)', () => {
+    const forrige = { ...tomCache(new Date('2026-09-30T12:00:00Z')), runs: { 5: { forsok: 1, min: 3, tidligereMin: 0 } } }
+    expect(tolkCache(JSON.stringify(forrige), naa).runs).toEqual({})
+    expect(tolkCache(JSON.stringify({ ...forrige, maaned: '2026-10', versjon: 99 }), naa).runs).toEqual({})
+    expect(tolkCache('{ikke json', naa).runs).toEqual({})
   })
 
-  // En `queued`-kjøring har run_started_at = null. Uten vakten i
-  // forbrukMinutter ble hele summen NaN, og vakten kuttet e2e med «NaN» i
-  // sammendraget av en ren datagrunn.
-  it('lar ikke en queued kjøring uten run_started_at forgifte summen', () => {
-    const runs = [
-      { run_started_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:03:00Z' }, // 3 min
-      { run_started_at: null, updated_at: '2026-07-01T00:05:00Z' }, // queued — ikke startet
-    ]
-    expect(forbrukMinutter(runs)).toBe(3)
-  })
-
-  it('hopper over kjøringer med uparsbare tidsstempler i stedet for å gi NaN', () => {
-    const runs = [
-      { run_started_at: 'ikke-en-dato', updated_at: '2026-07-01T00:05:00Z' },
-      { run_started_at: '2026-07-01T00:00:00Z', updated_at: undefined },
-      { run_started_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:02:00Z' }, // 2 min
-    ]
-    expect(forbrukMinutter(runs)).toBe(2)
+  it('dropper ugyldige poster enkeltvis', () => {
+    const cache = {
+      ...tomCache(naa),
+      runs: {
+        1: { forsok: 1, min: -2, tidligereMin: 0 },
+        2: { forsok: 1, min: 'x', tidligereMin: 0 },
+        3: { forsok: 1, min: 2, tidligereMin: 3 },
+        4: { forsok: 2, min: 5, tidligereMin: 2 },
+      },
+    }
+    expect(Object.keys(tolkCache(JSON.stringify(cache), naa).runs)).toEqual(['4'])
   })
 })
 
@@ -93,243 +153,105 @@ describe('konstantene henger sammen', () => {
   })
 })
 
-// #668: budsjettvakten så tidligere kun SISTE forsøk per kjøring, fordi
-// run_started_at/updated_at settes til siste forsøks tidspunkt ved rerun.
-// tidligereForsok() er den rene delen — lister hvilke (runId, forsøk)-par som
-// mangler fra run-objektet og må hentes separat via attempts-endepunktet.
-describe('tidligereForsok', () => {
-  it('run_attempt 3 gir to tidligere forsøk (1 og 2)', () => {
-    const runs = [{ id: 42, run_attempt: 3 }]
-    expect(tidligereForsok(runs)).toEqual([
-      { runId: 42, forsok: 1 },
-      { runId: 42, forsok: 2 },
-    ])
-  })
-
-  it('run_attempt 1, eller feltet mangler, gir ingen tidligere forsøk', () => {
-    expect(tidligereForsok([{ id: 1, run_attempt: 1 }, { id: 2 }])).toEqual([])
-  })
-
-  it('blandet liste — kun kjøringer med run_attempt > 1 bidrar, i rekkefølge', () => {
-    const runs = [
-      { id: 1, run_attempt: 1 },
-      { id: 2, run_attempt: 2 },
-      { id: 3 },
-      { id: 4, run_attempt: 4 },
-    ]
-    expect(tidligereForsok(runs)).toEqual([
-      { runId: 2, forsok: 1 },
-      { runId: 4, forsok: 1 },
-      { runId: 4, forsok: 2 },
-      { runId: 4, forsok: 3 },
-    ])
-  })
-})
-
-describe('hentTidligereForsokMinutter', () => {
-  const somFetch = (f: (url: string, init: RequestInit) => Promise<unknown>) =>
-    f as unknown as typeof fetch
-  const attemptSvar = (startet: string, fullfort: string) => ({
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    json: async () => ({ run_started_at: startet, updated_at: fullfort }),
-  })
-
-  it('summerer ceil per forsøk via attempts-endepunktet', async () => {
-    const runs = [{ id: 42, run_attempt: 2 }]
-    const kalte: string[] = []
-    const minutter = await hentTidligereForsokMinutter({
-      repo: 'a/b',
-      token: 't',
-      runs,
-      fetchImpl: somFetch(async url => {
-        kalte.push(url)
-        return attemptSvar('2026-09-01T00:00:00Z', '2026-09-01T00:12:00Z') // 12 min
-      }),
-    })
-    expect(minutter).toBe(12)
-    expect(kalte).toEqual(['https://api.github.com/repos/a/b/actions/runs/42/attempts/1'])
-  })
-
-  it('gir 0 min og gjør ingen kall når ingen kjøring har reruns', async () => {
-    let kall = 0
-    const minutter = await hentTidligereForsokMinutter({
-      repo: 'a/b',
-      token: 't',
-      runs: [{ id: 1, run_attempt: 1 }],
-      fetchImpl: somFetch(async () => {
-        kall++
-        return attemptSvar('2026-09-01T00:00:00Z', '2026-09-01T00:01:00Z')
-      }),
-    })
-    expect(minutter).toBe(0)
-    expect(kall).toBe(0)
-  })
-
-  // Fail-closed, samme begrunnelse som pagineringstaket i
-  // hentForbrukForManeden(): et ukjent antall utelatte forsøk skal aldri
-  // returnere et tall som SER komplett ut.
-  it('kaster i stedet for å utelate forsøk når MAKS_FORSOK_OPPSLAG overskrides', async () => {
-    const runs = [{ id: 1, run_attempt: MAKS_FORSOK_OPPSLAG + 2 }] // MAKS_FORSOK_OPPSLAG + 1 tidligere forsøk
-    await expect(
-      hentTidligereForsokMinutter({
-        repo: 'a/b',
-        token: 't',
-        runs,
-        fetchImpl: somFetch(async () => {
-          throw new Error('skal aldri kalles — taket skal stoppe oss først')
-        }),
-      }),
-    ).rejects.toThrow(/taket nådd/i)
-  })
-
-  it('kaster ved et ikke-ok svar fra attempts-endepunktet', async () => {
-    const runs = [{ id: 1, run_attempt: 2 }]
-    await expect(
-      hentTidligereForsokMinutter({
-        repo: 'a/b',
-        token: 't',
-        runs,
-        fetchImpl: somFetch(async () => ({ ok: false, status: 404, statusText: 'Not Found' })),
-      }),
-    ).rejects.toThrow(/404/)
-  })
-
-  // HTTP 200 med ubrukelige tider må feile LUKKET som !res.ok — ellers ble
-  // forsøket 0 min i summen, en stille undervurdering (#668-review).
-  it.each([
-    ['tomme felt', { run_started_at: null, updated_at: '' }],
-    ['manglende felt', {}],
-    ['ugyldig dato', { run_started_at: 'tull', updated_at: '2026-09-01T00:05:00Z' }],
-    ['updated_at før run_started_at', { run_started_at: '2026-09-01T00:05:00Z', updated_at: '2026-09-01T00:00:00Z' }],
-  ])('kaster ved 200 med %s', async (_navn, body) => {
-    await expect(
-      hentTidligereForsokMinutter({
-        repo: 'a/b',
-        token: 't',
-        runs: [{ id: 1, run_attempt: 2 }],
-        fetchImpl: somFetch(async () => ({ ok: true, status: 200, statusText: 'OK', json: async () => body })),
-      }),
-    ).rejects.toThrow(/Ugyldig tidsrom/)
-  })
-
-  it('setter en timeout på attempts-kallet — samme vakt som resten av skriptet', async () => {
-    const runs = [{ id: 1, run_attempt: 2 }]
-    let signal: AbortSignal | undefined
-    await hentTidligereForsokMinutter({
-      repo: 'a/b',
-      token: 't',
-      runs,
-      fetchImpl: somFetch(async (_url, init) => {
-        signal = init.signal ?? undefined
-        return attemptSvar('2026-09-01T00:00:00Z', '2026-09-01T00:01:00Z')
-      }),
-    })
-    expect(signal).toBeInstanceOf(AbortSignal)
-  })
-})
-
 describe('hentForbrukForManeden', () => {
   // Stubbene implementerer bare de fire feltene skriptet faktisk leser (ok,
-  // status, statusText, json) — derfor casten til typeof fetch. Å bygge et
-  // fullt Response-objekt ville skjult hvor lite av APIet vi er avhengige av.
-  function svar(runs: unknown[]) {
-    return { ok: true, status: 200, statusText: 'OK', json: async () => ({ workflow_runs: runs }) }
+  // status, statusText, json) — derfor casten til typeof fetch.
+  const somFetch = (f: (url: string, init: RequestInit) => Promise<unknown>) => f as unknown as typeof fetch
+  const ok = (body: unknown) => ({ ok: true, status: 200, statusText: 'OK', json: async () => body })
+  const naa = new Date(t('20:00:00'))
+  const run = (id: number, overstyr: Record<string, unknown> = {}) => ({ id, status: 'completed', run_attempt: 1, ...overstyr })
+  // Standard: ett run = én jobb på `id` minutter.
+  const jobbPaa = (id: number) => [jobb({ run_id: id, completed_at: `2026-10-04T10:${String(id % 60).padStart(2, '0')}:00Z` })]
+
+  function api(runSider: unknown[][], jobberFor: (id: number) => unknown[] = jobbPaa) {
+    const kall: string[] = []
+    let side = 0
+    const fetchImpl = somFetch(async url => {
+      kall.push(url)
+      const m = /\/runs\/(\d+)\/jobs/.exec(url)
+      if (m) return ok({ jobs: jobberFor(Number(m[1])) })
+      return ok({ workflow_runs: runSider[side++] ?? [] })
+    })
+    return { fetchImpl, jobbKall: () => kall.filter(u => u.includes('/jobs')).length }
   }
-  const somFetch = (f: (url: string, init: RequestInit) => Promise<unknown>) =>
-    f as unknown as typeof fetch
-  const enMinutt = { run_started_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:01:00Z' }
 
-  it('stopper på første ikke-fulle side og summerer alle sidene (ingen reruns i fixture)', async () => {
-    const sider = [Array(100).fill(enMinutt), Array(30).fill(enMinutt)]
-    let kall = 0
-    const forbruk = await hentForbrukForManeden({
-      repo: 'a/b',
-      token: 't',
-      fetchImpl: somFetch(async () => svar(sider[kall++])),
-    })
-    expect(forbruk).toEqual({ totalMin: 130, sisteForsokMin: 130, tidligereForsokMin: 0, oppslag: 0 })
-    expect(kall).toBe(2)
+  it('summerer jobbene for alle kjøringer over flere sider', async () => {
+    const sider = [Array.from({ length: 100 }, (_, i) => run(1000 + i)), [run(2)]]
+    const { fetchImpl, jobbKall } = api(sider, () => [jobb()])
+    const forbruk = await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl })
+    expect(forbruk).toMatchObject({ totalMin: 101, oppslag: 101, fraCache: 0 })
+    expect(jobbKall()).toBe(101)
   })
 
-  // #668: fixturen har ingen run_attempt > 1 — kallteller er den harde vakten
-  // mot at rerun-korreksjonen koster noe når den ikke trengs.
-  it('gjør null ekstra fetch-kall mot attempts-endepunktet når ingen kjøring har reruns', async () => {
-    let kall = 0
-    const urler: string[] = []
-    await hentForbrukForManeden({
-      repo: 'a/b',
-      token: 't',
-      fetchImpl: somFetch(async url => {
-        kall++
-        urler.push(url)
-        return svar([{ ...enMinutt, id: 1, run_attempt: 1 }])
-      }),
-    })
-    expect(kall).toBe(1)
-    expect(urler.some(u => u.includes('/attempts/'))).toBe(false)
+  it('bruker cachen for ferdige kjøringer og gjør null jobb-kall for dem', async () => {
+    const cache: Cache = { ...tomCache(naa), runs: { 7: { forsok: 1, min: 9, tidligereMin: 0 } } }
+    const { fetchImpl, jobbKall } = api([[run(7), run(3)]])
+    const forbruk = await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl, cache })
+    expect(forbruk).toMatchObject({ totalMin: 9 + 3, oppslag: 1, fraCache: 1 })
+    expect(jobbKall()).toBe(1)
+    expect(cache.runs[3]).toEqual({ forsok: 1, min: 3, tidligereMin: 0 })
   })
 
-  // Regresjonstest (#668): en kjøring med ETT rerun skal telle BEGGE forsøk.
-  // Siste forsøk (slik run-basert telling så det FØR #668) er 10 min; det
-  // tapte første forsøket, hentet via attempts-endepunktet, er 12 min.
-  it('regresjonstest: run_attempt 2, siste forsøk 10 min, attempt 1 12 min ⇒ totalMin 22', async () => {
-    const forbruk = await hentForbrukForManeden({
-      repo: 'a/b',
-      token: 't',
-      fetchImpl: somFetch(async url => {
-        if (url.includes('/attempts/1')) {
-          return {
-            ok: true,
-            status: 200,
-            statusText: 'OK',
-            json: async () => ({ run_started_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:12:00Z' }), // 12 min
-          }
-        }
-        return svar([
-          { id: 900, run_attempt: 2, run_started_at: '2026-09-01T01:00:00Z', updated_at: '2026-09-01T01:10:00Z' }, // 10 min
-        ])
-      }),
-    })
-    expect(forbruk).toEqual({ totalMin: 22, sisteForsokMin: 10, tidligereForsokMin: 12, oppslag: 1 })
+  it('henter på nytt når run_attempt har økt (rerun), og cacher ikke en pågående kjøring', async () => {
+    const cache: Cache = { ...tomCache(naa), runs: { 7: { forsok: 1, min: 9, tidligereMin: 0 } } }
+    const { fetchImpl, jobbKall } = api([[run(7, { run_attempt: 2 }), run(8, { status: 'in_progress' })]])
+    await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl, cache })
+    expect(jobbKall()).toBe(2)
+    expect(cache.runs[7].forsok).toBe(2)
+    expect(cache.runs[8]).toBeUndefined()
   })
 
-  // Feiler LUKKET, ikke åpent: traff vi taket med full siste side har vi bare
-  // sett de nyeste kjøringene, og et for lavt tall ville sluppet e2e videre
-  // selv om budsjettet var brukt opp — motsatt av VED_MAALEFEIL = 'kutt'.
+  it('fjerner cache-poster for kjøringer som ikke lenger er i lista', async () => {
+    const cache: Cache = { ...tomCache(naa), runs: { 7: { forsok: 1, min: 9, tidligereMin: 0 }, 99: { forsok: 1, min: 4, tidligereMin: 0 } } }
+    const { fetchImpl } = api([[run(7)]])
+    await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl, cache })
+    expect(Object.keys(cache.runs)).toEqual(['7'])
+  })
+
+  it('delvis rerun teller kopien én gang (#851)', async () => {
+    const { fetchImpl } = api([[run(1, { run_attempt: 2 })]], () => delvisRerun)
+    const forbruk = await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl })
+    expect(forbruk).toMatchObject({ totalMin: 21, tidligereForsokMin: 13 })
+  })
+
+  // Feiler LUKKET: en sum uten de resterende kjøringene ser komplett ut. Det
+  // som rakk å hentes, skal likevel være cachet, så neste kjøring kommer videre.
+  it('kaster over maksOppslag, men har cachet det som ble hentet', async () => {
+    const cache = tomCache(naa)
+    const { fetchImpl, jobbKall } = api([[run(1), run(2), run(3)]])
+    await expect(hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl, cache, maksOppslag: 2 })).rejects.toThrow(/taket/)
+    expect(jobbKall()).toBe(2)
+    expect(Object.keys(cache.runs)).toHaveLength(2)
+  })
+
+  it('standardtaket ligger under GITHUB_TOKEN-grensen på 1000 kall/time', () => {
+    expect(MAKS_JOBB_OPPSLAG).toBeLessThan(1000)
+  })
+
   it('kaster i stedet for å returnere et for lavt tall når pagineringstaket nås', async () => {
-    await expect(
-      hentForbrukForManeden({
-        repo: 'a/b',
-        token: 't',
-        maksSider: 3,
-        fetchImpl: somFetch(async () => svar(Array(100).fill(enMinutt))),
-      }),
-    ).rejects.toThrow(/pagineringstaket/i)
+    const full = Array.from({ length: 100 }, (_, i) => run(i + 1))
+    const { fetchImpl } = api([full, full, full])
+    await expect(hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl, maksSider: 3 })).rejects.toThrow(/pagineringstaket/i)
   })
 
-  it('kaster ved API-feil så VED_MAALEFEIL får bestemme', async () => {
-    await expect(
-      hentForbrukForManeden({
-        repo: 'a/b',
-        token: 't',
-        fetchImpl: somFetch(async () => ({ ok: false, status: 403, statusText: 'Forbidden' })),
-      }),
-    ).rejects.toThrow(/403/)
+  it('kaster ved API-feil — også på jobb-kallet — så VED_MAALEFEIL får bestemme', async () => {
+    const forbudt = somFetch(async () => ({ ok: false, status: 403, statusText: 'Forbidden' }))
+    await expect(hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl: forbudt })).rejects.toThrow(/403/)
+    const jobbFeil = somFetch(async url =>
+      url.includes('/jobs') ? { ok: false, status: 500, statusText: 'Feil' } : ok({ workflow_runs: [run(1)] }),
+    )
+    await expect(hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl: jobbFeil })).rejects.toThrow(/500/)
   })
 
   it('setter en timeout på hvert kall — vakten skal ikke brenne minuttene den vokter', async () => {
-    let signal: AbortSignal | undefined
-    await hentForbrukForManeden({
-      repo: 'a/b',
-      token: 't',
-      fetchImpl: somFetch(async (_url, init) => {
-        signal = init.signal ?? undefined
-        return svar([])
-      }),
+    const signaler: unknown[] = []
+    const fetchImpl = somFetch(async (url, init) => {
+      signaler.push(init.signal)
+      return url.includes('/jobs') ? ok({ jobs: [] }) : ok({ workflow_runs: [run(1)] })
     })
-    expect(signal).toBeInstanceOf(AbortSignal)
+    await hentForbrukForManeden({ repo: 'a/b', token: 't', naa, fetchImpl })
+    expect(signaler).toHaveLength(2)
+    for (const s of signaler) expect(s).toBeInstanceOf(AbortSignal)
   })
 })
 

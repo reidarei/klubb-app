@@ -17,6 +17,8 @@ export interface LoggHendelser {
   'varsel.url.fremmed': true
   /** web-push-feil i lib/push.ts */
   'varsel.push.feilet': true
+  /** VAPID-oppsettet i lib/push.ts feilet; push hoppes over i stedet for å kaste midt i sendVarsel-løkka (#851) */
+  'varsel.push.oppsett.feilet': true
   /** R2-opplasting feiler */
   'bilde.opplast.feilet': true
   /** video-upload feiler */

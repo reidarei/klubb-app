@@ -1,7 +1,8 @@
 // Delt mellom sider-laster.spec.ts og treffmaal-vakten, så en ny rute havner
 // i begge vaktene samtidig (#700).
 
-// Seedede ID-er fra supabase/seed.sql — endres de der, må de endres her i samme commit.
+// Seedede ID-er fra supabase/seed.sql — endres de der, må de endres her i samme
+// commit (vakt: __tests__/e2e-seed-speil.test.ts, #851).
 export const ARRANGEMENT = '00000000-0000-4000-9000-000000000001'
 export const MELDING = '00000000-0000-4000-9300-000000000000'
 export const POLL = '00000000-0000-4000-9400-000000000000'

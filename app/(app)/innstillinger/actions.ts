@@ -1,9 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/admin'
-import { getProfil } from '@/lib/auth-cache'
 import { revalidatePath } from 'next/cache'
-import { kanAdministrere, rollerMed } from '@/lib/roller'
+import { rollerMed } from '@/lib/roller'
 import { naa } from '@/lib/dato'
 import { ensureAdmin } from '@/lib/auth'
 import { KJENTE_FLAGG, erKjentFlagg } from '@/lib/app-innstillinger'
@@ -45,13 +43,21 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
 export async function oppdaterTestEpost(
   epost: string,
 ): Promise<{ ok: true } | { ok: false; feil: string }> {
-  const profil = await getProfil()
-  if (!kanAdministrere(profil?.rolle)) return { ok: false, feil: 'Du har ikke tilgang til å endre dette' }
+  // ensureAdmin() kaster, men denne actionen skal aldri kaste (se over) — derfor
+  // try/catch. Brukerens RLS-klient, ikke service role: er_admin()-policyen på
+  // varsel_innstillinger er det som slipper skrivingen gjennom (#851, jf. #767).
+  let supabase: Awaited<ReturnType<typeof ensureAdmin>>['supabase']
+  try {
+    supabase = (await ensureAdmin()).supabase
+  } catch (err: unknown) {
+    // Feilet profil-oppslag er ikke det samme som manglende tilgang — vis hva som skjedde.
+    const melding = err instanceof Error ? err.message : String(err)
+    return { ok: false, feil: melding === 'Ikke admin' ? 'Du har ikke tilgang til å endre dette' : melding }
+  }
 
-  const admin = createAdminClient()
   // Kun aktive admin-profiler er gyldige test-mottakere — testmodus skal
   // aldri kunne rute varsler til et vanlig medlem ved en feiltastet epost.
-  const { data: mottaker, error: mottakerFeil } = await admin
+  const { data: mottaker, error: mottakerFeil } = await supabase
     .from('profiles')
     .select('id')
     .eq('epost', epost)
@@ -63,7 +69,7 @@ export async function oppdaterTestEpost(
   // serveren — men en deaktivert admin midt i økta ville treffe her.
   if (!mottaker) return { ok: false, feil: 'Fant ingen aktiv admin med den eposten' }
 
-  const { error: skriveFeil } = await admin
+  const { error: skriveFeil } = await supabase
     .from('varsel_innstillinger')
     .update({ beskrivelse: epost, oppdatert: naa() })
     .eq('noekkel', 'test_modus')

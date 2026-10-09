@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { aapneSamtale } from '@/lib/actions/samtaler'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 
 export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
   const [isPending, startTransition] = useTransition()
@@ -34,7 +35,7 @@ export default function SendMeldingKnapp({ motpartId }: { motpartId: string }) {
       disabled={isPending}
       style={{
         width: '100%',
-        minHeight: 44,
+        minHeight: MIN_TREFFMAAL_PX,
         padding: '11px 14px',
         background: 'var(--accent-soft)',
         border: '0.5px solid var(--accent)',

@@ -48,7 +48,15 @@ class PushTimeoutError extends Error {
 }
 
 export async function sendPush(subscription: PushSubscription, payload: PushPayload) {
-  init()
+  // sendPush skal aldri kaste: sendVarsel kaller den inne i utsendingsløkka
+  // (#851, pinnet i __tests__/varsel-loekke-fail-open.test.ts). Eget event, så
+  // oppsettfeilen ikke drukner i alarm-ignorerte varsel.push.feilet.
+  try {
+    init()
+  } catch (err) {
+    await logg.feil('varsel.push.oppsett.feilet', err)
+    return
+  }
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     // Hard timeout (#612): sendVarsel kjører alle mottakeres sendPush-kall i

@@ -14,6 +14,7 @@ import {
   CHAT_FANOUT_TREG_MS,
   EPOST_DOEGNBUDSJETT_CHAT,
   EPOST_BUDSJETT_VINDU_TIMER,
+  PAAMINNELSE_DAGER,
 } from '@/lib/konstanter'
 import { splittPaaMentions } from '@/lib/mention'
 import { logg } from '@/lib/logg'
@@ -214,7 +215,8 @@ export function formaterHilsenMelding({
 // INVARIANT: sendVarsel kaster kun FØR utsendingsløkka — inne i løkka er alt
 // fail-open. KASTER ⇒ ingen mottaker fikk noe. sendChatVarsler bygger på
 // dette. Et nytt throw inne i løkka bryter kontrakten stille.
-// Pinnet i __tests__/chat-varsler.test.ts § «mention-benet kaster».
+// Pinnet i __tests__/chat-varsler.test.ts § «mention-benet kaster»; at
+// sendPush/sendEpostBatch i løkka aldri kaster, i varsel-loekke-fail-open.test.ts (#851).
 export type VarselUtfall = {
   utfall:
     | 'sendt'
@@ -624,10 +626,16 @@ const PAAMINNE_7_HALER: Record<RsvpStatus, { visDetaljer: boolean; hale: string 
   },
 }
 
+// Tallord for dagene i påminnelsesteksten, så teksten følger
+// PAAMINNELSE_DAGER.LANG (#851). Utenfor tabellen faller vi til sifre.
+const TALLORD: Record<number, string> = {
+  2: 'to', 3: 'tre', 4: 'fire', 5: 'fem', 6: 'seks', 7: 'syv',
+  8: 'åtte', 9: 'ni', 10: 'ti', 11: 'elleve', 12: 'tolv',
+}
+
 /**
  * 7-dagers-påminnelsesteksten (#591), personlig hale per RSVP. Ren funksjon,
- * eksportert for testing. «syv» er hardkodet, ikke avledet av
- * PAAMINNELSE_DAGER.LANG — endres konstanten, må teksten endres samtidig.
+ * eksportert for testing. Antall dager avledes av PAAMINNELSE_DAGER.LANG.
  */
 export function byggPaaminne7Melding({
   tittel,
@@ -645,7 +653,7 @@ export function byggPaaminne7Melding({
   const { visDetaljer, hale } = PAAMINNE_7_HALER[rsvp]
   // Datoen her, klokkeslettet sammen med stedet i oppmøte-setningen.
   const setninger = [
-    `Det er syv dager til ${tittel}, ${formaterDatoKort(startTidspunkt)}.`,
+    `Det er ${TALLORD[PAAMINNELSE_DAGER.LANG] ?? PAAMINNELSE_DAGER.LANG} dager til ${tittel}, ${formaterDatoKort(startTidspunkt)}.`,
     ...(visDetaljer ? [oppmoteSetning(startTidspunkt, oppmoetested), paameldtSetning(antallPaameldt)] : []),
     hale,
   ]

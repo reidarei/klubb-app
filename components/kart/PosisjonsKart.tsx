@@ -36,6 +36,7 @@ import {
   MARKERING_SYMBOLER,
   STANDARD_SYMBOL,
   type MarkeringSymbol,
+  partisjonerSymboler,
 } from '@/lib/markering-symboler'
 
 // Chat er stor og rendres først etter et trykk — dynamic + ssr: false (#709).
@@ -56,6 +57,7 @@ export type { TimeplanArrangement, TimeplanPost }
 
 import 'leaflet/dist/leaflet.css'
 import './kart.css'
+import { HALE_FRA_VENSTRE, MARKOER_PX, SPOR_PRIKK_PX } from './kart-maal'
 
 export type Punkt = {
   id: string
@@ -877,8 +879,8 @@ export default function PosisjonsKart({
             icon: L.divIcon({
               html: sporPrikkHtml(m.navn),
               className: '',
-              iconSize: [12, 12],
-              iconAnchor: [6, 6],
+              iconSize: [SPOR_PRIKK_PX, SPOR_PRIKK_PX],
+              iconAnchor: [SPOR_PRIKK_PX / 2, SPOR_PRIKK_PX / 2],
             }),
             alt: `${m.navn} var her`,
             title: `${m.navn} — ${relativTid(p.registrert)}`,
@@ -902,9 +904,8 @@ export default function PosisjonsKart({
           icon: L.divIcon({
             html: markoerHtml(m.navn, m.bildeUrl, m.rolle, erFersk(siste.registrert), erMeg),
             className: '',
-            // 40 px for at ansiktet skal kjennes igjen; MÅ matche .kart-markoer i kart.css.
-            iconSize: [40, 40],
-            iconAnchor: [20, 20],
+            iconSize: [MARKOER_PX, MARKOER_PX],
+            iconAnchor: [MARKOER_PX / 2, MARKOER_PX / 2],
           }),
           alt: m.navn,
           title: `${m.navn} — ${relativTid(siste.registrert)}`,
@@ -1274,8 +1275,7 @@ export default function PosisjonsKart({
 
   // Samme knapp for stille symboler og Alert zone (#763). KlubbSymbol, ikke
   // register-unionen — se lib/markering-symboler.ts.
-  const symbolerStille = symboler.filter(s => s.varsel === null)
-  const symbolerVarsler = symboler.filter(s => s.varsel !== null)
+  const { stille: symbolerStille, varsler: symbolerVarsler } = partisjonerSymboler(symboler)
   function symbolKnapp(sym: KlubbSymbol) {
     const valgt = markeringSymbol === sym.id
     return (
@@ -1996,10 +1996,6 @@ export default function PosisjonsKart({
     </div>
   )
 }
-
-// Halens avstand fra boblas venstre kant (#708): like til høyre for symbolet.
-// MÅ speile `left` på .kart-boble-hale i kart.css.
-const HALE_FRA_VENSTRE = 22
 
 // Lagdeling over kartet. Leaflets egne paner går opp til 700 (tile 200,
 // overlay 400, shadow 500, marker 600, tooltip 650, popup 700), så alt vårt

@@ -19,8 +19,12 @@ import type { KartSymbolHendelse } from '@/lib/logg-hendelser'
  * i actionen, så et nytt varslende symbol ikke krever endring andre steder.
  */
 type SymbolVarsel = {
-  /** Varseltype, lagres i varsel_logg.type og styrer bryteren i varsel_innstillinger. */
-  type: string
+  /**
+   * Varseltype, lagres i varsel_logg.type og styrer bryteren i varsel_innstillinger.
+   * Alltid symbol-id + '_alert'; typen fanger suffikset, id-delen pinnes i
+   * __tests__/actions-kart-markering-varsel.test.ts (#851).
+   */
+  type: `${string}_alert`
   /** Tittelen i selve varselet — egen per symbol, ikke delt med et annet. */
   tittel: string
   /** Etikett i admin-kontrollpanelet; lib/varsel-typer.ts avleder Kartet-gruppen herfra (#767). */
@@ -58,16 +62,18 @@ export type KlubbSymbol = Omit<SymbolDef, 'id'> & { id: MarkeringSymbol }
 // Partisjonering for symbolvelgerens «Alert zone» (#763), utledet av varsel-
 // feltet så et nytt varslende symbol havner i sonen av seg selv. Bevarer
 // rekkefølgen. Type-predikatene sparer forbrukerne for null-sjekk av .varsel.
-// Går via ALLE (KlubbSymbol[]) fordi den formen tåler at en kategori er tom
-// (se KlubbSymbol) — begge kategoriene er valgfrie.
-const ALLE: readonly KlubbSymbol[] = MARKERING_SYMBOLER
+// Tar KlubbSymbol[] fordi den formen tåler at en kategori er tom (se
+// KlubbSymbol) — og fordi kartet partisjonerer klubbens tilpassede liste,
+// ikke bare registeret (#851).
+export function partisjonerSymboler(liste: readonly KlubbSymbol[]) {
+  return {
+    stille: liste.filter((s): s is KlubbSymbol & { varsel: null } => s.varsel === null),
+    varsler: liste.filter((s): s is KlubbSymbol & { varsel: SymbolVarsel } => s.varsel !== null),
+  }
+}
 
-export const SYMBOLER_STILLE = ALLE.filter(
-  (s): s is KlubbSymbol & { varsel: null } => s.varsel === null,
-)
-export const SYMBOLER_VARSLER = ALLE.filter(
-  (s): s is KlubbSymbol & { varsel: SymbolVarsel } => s.varsel !== null,
-)
+export const { stille: SYMBOLER_STILLE, varsler: SYMBOLER_VARSLER } =
+  partisjonerSymboler(MARKERING_SYMBOLER)
 
 // Første symbol i registeret, ikke en literal — en klubb uten 'ol' ville ellers
 // fått en standard som ikke finnes (#767).

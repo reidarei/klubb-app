@@ -166,9 +166,12 @@
   --tidligere-opacity-dypere: 0.4;
   --lest-opacity: 0.6;
 
+  /* Initialer på avatar uten bilde. */
+  --avatar-foreground: #f5f5f7;
 }
 
-/* Speiler :root (mørk default). Endrer du en verdi i :root, endre den her også. */
+/* Speiler :root (mørk default). Endrer du en verdi i :root, endre den her også
+   (vakt: __tests__/globals-css-speil.test.ts, #851). */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0e0f13;
@@ -542,7 +545,8 @@ a {
   }
 }
 
-/* 44 px = MIN_TREFFMAAL_PX i lib/konstanter.ts (CSS kan ikke importere den).
+/* 44 px = MIN_TREFFMAAL_PX i lib/konstanter.ts (CSS kan ikke importere den;
+   vakt: __tests__/globals-css-speil.test.ts, #851).
    OPT-IN via `skjemafelt` (settes av RadInput/TekstRad i Skjema.tsx): felt inne
    i en synlig pille (chat, kommentar, søk) skal ikke vokse (#700). Se CLAUDE.md
    § Policy: Trykkflater. */

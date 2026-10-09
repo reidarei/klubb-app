@@ -568,7 +568,7 @@ test.describe('kartmarkeringer (#697)', () => {
           }),
         { timeout: 10_000 },
       )
-      // Noen få piksler slingring for avrunding og sticky input-felt.
+      // Noen få piksler slingring for avrunding (skrivefeltet ligger i flyt, ikke sticky — #712).
       .toBeLessThan(40)
 
     // Skrivefeltet skal stå INNE i panelet (#712). En `fixed` pille spenner

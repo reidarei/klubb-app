@@ -4,7 +4,7 @@
 #   pull_request, risiko funnet     → FULL   (~7–8 min veggklokke): kjerneport + Playwright-e2e
 #   pull_request, lav risiko (#663) → KJERNE (~3 min):  ingen fil kan påvirke en flyt
 #   push, direkte til main          → KJERNE (~3 min):  lint, typecheck, vitest, bygg
-#   push, merget PR                 → INGEN  (~15 sek):   alt portet på PR-en alt
+#   push, merget PR                 → INGEN  (<1 min):    alt portet på PR-en alt; kun budsjettvaktens cache varmes (#851)
 #
 # Kjerneporten er fordelt på to parallelle jobber: `kjerne` (lint, typesjekk,
 # vitest) og `sjekk` (bygg, og e2e når den skal kjøre). Tidene over er fra
@@ -186,17 +186,44 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      # Budsjettvaktens cache over ferdige kjøringer (#851): vakten trenger ett
+      # API-kall per kjøring i måneden, og uten cache sprenger det
+      # GITHUB_TOKEN-grensen (1000/time) mot månedsslutt. En PR ser bare egne
+      # og main sine cacher — derfor kjører vakten også på merget push (under),
+      # så main alltid har en fersk cache å starte fra.
+      - name: Hent minuttcache
+        if: github.event.repository.private
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ci-minutter
+          key: ci-minutter-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ci-minutter-
+
       # Budsjettvakt (#534) — kjøres FØR npm ci med vilje: den er ren Node uten
       # avhengigheter, og et kutt her skal ikke betale for docker-pull/npm
       # install vi likevel ikke trenger. Se .github/scripts/ci-minuttbudsjett.mjs
       # og docs/ci-minuttbudsjett.md.
+      #
+      # Kjører også når commiten alt er portet (system-Node, ingen setup-node):
+      # da er resultatet uten betydning, men den varmer main-cachen over (#851).
+      # Koster noen sekunder i en jobb som uansett faktureres som 1 min.
       - name: CI-minuttbudsjett
         id: budsjett
-        if: steps.portet.outputs.hopp != 'true'
+        # Ren cache-varming når commiten alt er portet — en målefeil der skal ikke gi rød main.
+        continue-on-error: ${{ steps.portet.outputs.hopp == 'true' }}
         env:
           REPO_PRIVAT: ${{ github.event.repository.private }}
           GITHUB_TOKEN: ${{ github.token }}
+          CI_MINUTT_CACHE: ${{ runner.temp }}/ci-minutter/cache.json
         run: node .github/scripts/ci-minuttbudsjett.mjs
+
+      # Også når vakten feilet: det den rakk å hente, skal ikke hentes igjen.
+      - name: Lagre minuttcache
+        if: ${{ !cancelled() && github.event.repository.private }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ci-minutter
+          key: ci-minutter-${{ github.run_id }}-${{ github.run_attempt }}
 
       # Risiko-gating av e2e (#663) — kjøres ETTER budsjettvakten (så
       # forbrukstabellen fortsatt skrives på HVER PR, trendgrunnlag for #664)

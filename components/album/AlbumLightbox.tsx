@@ -487,9 +487,6 @@ export default function AlbumLightbox({
           så uten key beholdt raden forrige bildes optimistiske state. */}
       {brukerId && !sheetAapen && (
         <div
-          // Overflødig siden #625 (gest-handlerne bor på et søsken, ikke en
-          // ancestor) — latt stå som defensiv rest.
-          onTouchStart={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             bottom: 'max(20px, env(safe-area-inset-bottom))',

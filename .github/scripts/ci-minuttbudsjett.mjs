@@ -3,30 +3,34 @@
 // `#!` midt i en linje er parse-feil.
 //
 // Budsjettvakt for GitHub Actions-minutter (#534). Kjøres i pr-check.yml FØR
-// `npm ci` (ett REST-kall, ingen avhengigheter) og avgjør om e2e kjører.
-// Skriver forbrukstabell til step summary uansett utfall, så trenden synes.
+// `npm ci` (ingen avhengigheter) og avgjør om e2e kjører. Skriver
+// forbrukstabell til step summary uansett utfall, så trenden synes.
 //
 // Free-plan gir 2000 min/mnd på private repoer (klubb-app er offentlig og
 // gratis). Vakten ofrer e2e før kvoten sperrer ALL CI; drift og kjerneporten
 // røres aldri.
 //
-// FORBEHOLD (les før du justerer tersklene) — målt sept. 2026, 1.–23.:
-// - Run-varighet (run_started_at → updated_at), korrigert for reruns (#668).
-//     · `updated_at` henger etter siste jobb: +43 min overtelling, beholdt
-//       ukorrigert (trygg retning).
-//     · Parallelle jobber i samme workflow UNDERvurderes (GitHub fakturerer
-//       per jobb). pr-check.yml har nå to parallelle jobber (kjerne ‖ sjekk),
-//       så feilkilden er reell — ikke målt på nytt etter splitten.
-//     · Rerun telles i måneden runen ble opprettet (sjelden relevant).
-//   Netto: korrigert 1735 min mot 1692 jobb-basert — ~2,5 % overtelling.
+// FORBEHOLD (les før du justerer tersklene):
+// - Teller PER JOBB, `Math.ceil` per jobb — GitHubs faktureringsenhet (#851).
+//   Run-varighet undertalte 24 % etter at pr-check.yml fikk to parallelle
+//   jobber (okt. 2026, 1.–9.: 1119 mot 1466 min).
+// - `jobs?filter=all` gir alle forsøk i ett kall, så reruns er med uten egne
+//   oppslag. Ved «Re-run failed jobs» kopieres de urørte jobbene inn i det nye
+//   forsøket med samme tider; unikeJobber() fjerner kopiene (fakturert én gang).
+// - Ett jobb-kall per kjøring ⇒ ferdige kjøringer caches mellom kjøringer
+//   (actions/cache i pr-check.yml), ellers ~750 kall ved månedsslutt mot
+//   GITHUB_TOKEN-grensen på 1000/time. Cachen er kun en optimalisering:
+//   tapt eller ugyldig cache ⇒ alt hentes på nytt.
 // - Kvoten er KONTOBRED, men vi ser bare dette repoet; DRIFTSRESERVE_MIN
 //   dekker de andre private repoene.
 // - Copilot-kjøringer telles med (~27 % overvurdering) bevisst, så to
 //   umodellerte feil ikke kansellerer hverandre stille.
-// - Kalendermåned som proxy for faktureringssyklus, og pågående kjøringer
-//   telles til «nå» — begge overvurderer, trygg retning.
+// - Kalendermåned som proxy for faktureringssyklus, rerun telles i måneden
+//   runen ble opprettet, og pågående jobber telles til «nå» — overvurderer
+//   eller er uvesentlig, trygg retning.
 
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // ─── Konstanter — alt på ett sted ───────────────────────────────────────────
@@ -52,26 +56,70 @@ export const VED_MAALEFEIL = 'kutt'
 // Feil LUKKET når målingen feiler: verste utfall er «e2e manglet på én PR»,
 // mens å kjøre blindt kan sprenge budsjettet. Snu til noe annet for fail-open.
 
-export const MAKS_FORSOK_OPPSLAG = 50
-// Tak på /attempts/{n}-oppslag per kjøring (#668; sept. 2026 hadde 8), så
-// vakten ikke brenner minutter på å telle minutter. Sprengt tak kaster.
+export const MAKS_JOBB_OPPSLAG = 300
+// Tak på jobb-kall per kjøring av vakten (#851), godt under GITHUB_TOKEN sine
+// 1000/time. Med varm cache er det typisk noen titalls. Sprengt tak: det som
+// rakk å hentes, caches, og vakten kaster (⇒ VED_MAALEFEIL) — neste kjøring
+// fortsetter der denne slapp.
+
+export const SAMTIDIGE_OPPSLAG = 5 // GitHub fraråder mange samtidige kall (sekundær rate limit)
+
+const CACHE_VERSJON = 1
 
 // ─── Ren logikk (testbar uten nettverk) ─────────────────────────────────────
 
-// Runder OPP per kjøring (61 s → 2 min), slik GitHub fakturerer.
-export function forbrukMinutter(runs) {
-  let sum = 0
-  for (const run of runs) {
-    // `queued` har run_started_at = null ⇒ NaN som ville forgiftet hele
-    // summen. Den har uansett ikke brukt minutter ennå.
-    if (!run.run_started_at || !run.updated_at) continue
-    const start = new Date(run.run_started_at).getTime()
-    const slutt = new Date(run.updated_at).getTime()
-    if (!Number.isFinite(start) || !Number.isFinite(slutt)) continue
-    const ms = Math.max(0, slutt - start)
-    sum += Math.ceil(ms / 60_000)
+// En jobb i forsøk n > 1 med samme navn og tider som en jobb i et tidligere
+// forsøk er en KOPI GitHub lager ved «Re-run failed jobs» (ny id og
+// created_at, men started_at/completed_at fra originalen). Fakturert én gang
+// — telles én gang (#851).
+export function unikeJobber(jobber) {
+  return jobber.filter(
+    j =>
+      !jobber.some(
+        tidligere =>
+          tidligere.run_id === j.run_id &&
+          (tidligere.run_attempt ?? 1) < (j.run_attempt ?? 1) &&
+          tidligere.name === j.name &&
+          tidligere.started_at === j.started_at &&
+          tidligere.completed_at === j.completed_at,
+      ),
+  )
+}
+
+// `Math.ceil` PER JOBB, slik GitHub fakturerer. Uten `naa` utelates
+// pågående/queued jobber (talt i `utelatt`); med `naa` telles en startet,
+// ikke ferdig jobb til «nå» (vakten). Queued har ikke brukt noe uansett.
+export function jobbMinutter(jobber, { naa } = {}) {
+  let minutter = 0
+  let utelatt = 0
+  for (const jobb of jobber) {
+    const start = jobb.started_at ? new Date(jobb.started_at).getTime() : NaN
+    const slutt = jobb.completed_at
+      ? new Date(jobb.completed_at).getTime()
+      : naa && jobb.started_at
+        ? naa.getTime()
+        : NaN
+    // Manglende/uparsbare tider ⇒ NaN som ville forgiftet hele summen.
+    if (!Number.isFinite(start) || !Number.isFinite(slutt)) {
+      utelatt++
+      continue
+    }
+    minutter += Math.ceil(Math.max(0, slutt - start) / 60_000)
   }
-  return sum
+  return { minutter, utelatt }
+}
+
+// Fakturerte minutter for ÉN kjøring, alle forsøk. `tidligereMin` = forsøk før
+// run.run_attempt, det run-objektet selv aldri viser (#668) — kun til rapport.
+export function kjoringMinutter(run, jobber, naa = new Date()) {
+  const unike = unikeJobber(jobber)
+  const sisteForsok = run.run_attempt ?? 1
+  const { minutter: min } = jobbMinutter(unike, { naa })
+  const { minutter: tidligereMin } = jobbMinutter(
+    unike.filter(j => (j.run_attempt ?? 1) < sisteForsok),
+    { naa },
+  )
+  return { min, tidligereMin }
 }
 
 // Forbruk + e2e-kost, aldri forbruk alene — e2e-kjøringen selv skal ikke
@@ -85,20 +133,60 @@ export function foersteIManeden(naa = new Date()) {
   return new Date(Date.UTC(naa.getUTCFullYear(), naa.getUTCMonth(), 1, 0, 0, 0)).toISOString()
 }
 
-// Tidligere forsøk for runs med run_attempt > 1 (#668). Run-objektet viser
-// kun SISTE forsøks tider, så forsøk 1..n-1 må slås opp separat.
-export function tidligereForsok(runs) {
-  const liste = []
-  for (const run of runs) {
-    const sisteForsok = run.run_attempt ?? 1
-    for (let forsok = 1; forsok < sisteForsok; forsok++) {
-      liste.push({ runId: run.id, forsok })
-    }
-  }
-  return liste
+// ─── Cache over ferdige kjøringer (#851) ─────────────────────────────────────
+// { versjon, maaned: 'YYYY-MM', runs: { [id]: { forsok, min, tidligereMin } } }.
+// Kun `completed`-kjøringer lagres. En rerun gir ny run_attempt og bommer
+// dermed på cachen av seg selv.
+
+export function tomCache(naa = new Date()) {
+  return { versjon: CACHE_VERSJON, maaned: foersteIManeden(naa).slice(0, 7), runs: {} }
 }
 
-// ─── Nettverk: hent + summer forbruk for inneværende måned ─────────────────
+// Alt som ikke er en gyldig cache for DENNE måneden ⇒ tom, og ugyldige poster
+// droppes enkeltvis. Kaster aldri: en ødelagt cache koster bare flere oppslag.
+export function tolkCache(tekst, naa = new Date()) {
+  const cache = tomCache(naa)
+  let data
+  try {
+    data = JSON.parse(tekst)
+  } catch {
+    return cache
+  }
+  if (!data || data.versjon !== CACHE_VERSJON || data.maaned !== cache.maaned || !data.runs || typeof data.runs !== 'object') {
+    return cache
+  }
+  for (const [id, post] of Object.entries(data.runs)) {
+    const gyldig =
+      post &&
+      Number.isInteger(post.forsok) && post.forsok >= 1 &&
+      Number.isInteger(post.min) && post.min >= 0 &&
+      Number.isInteger(post.tidligereMin) && post.tidligereMin >= 0 && post.tidligereMin <= post.min
+    if (gyldig) cache.runs[id] = { forsok: post.forsok, min: post.min, tidligereMin: post.tidligereMin }
+  }
+  return cache
+}
+
+function lesCacheFil(sti, naa) {
+  if (!sti) return tomCache(naa)
+  try {
+    return tolkCache(readFileSync(sti, 'utf8'), naa)
+  } catch {
+    return tomCache(naa) // ingen fil: første kjøring eller cache-bom
+  }
+}
+
+function skrivCacheFil(sti, cache) {
+  if (!sti) return
+  try {
+    mkdirSync(dirname(sti), { recursive: true })
+    writeFileSync(sti, JSON.stringify(cache))
+  } catch (e) {
+    // Optimalisering, ikke måling — en skrivefeil skal ikke kutte e2e.
+    console.error(`::warning::Klarte ikke skrive minuttcachen: ${e.message}`)
+  }
+}
+
+// ─── Nettverk ────────────────────────────────────────────────────────────
 
 function githubHeaders(token) {
   return {
@@ -108,75 +196,100 @@ function githubHeaders(token) {
   }
 }
 
-// /attempts/{n} gir et frosset run-objekt for det ene forsøket, så
-// forbrukMinutter() kan gjenbrukes uendret. Sekvensielt mot et rate-limitet API.
-export async function hentTidligereForsokMinutter({ repo, token, runs, fetchImpl = fetch, maksOppslag = MAKS_FORSOK_OPPSLAG }) {
-  const liste = tidligereForsok(runs)
-  if (liste.length > maksOppslag) {
-    // Fail-closed: en ufullstendig sum ser komplett ut.
-    throw new Error(
-      `Flere enn ${maksOppslag} tidligere forsøk å slå opp denne måneden — taket nådd, forbruket kan ikke måles fullstendig.`,
+export function feilForRespons(res, url, kontekst) {
+  if (res.status === 403 || res.status === 404) {
+    return new Error(
+      `GitHub API ga ${res.status} ${res.statusText} for ${kontekst} — tokenet mangler trolig «actions:read»-rettigheten, eller rate limit er nådd.`,
     )
   }
-  const attemptObjekter = []
-  for (const { runId, forsok } of liste) {
-    const url = `https://api.github.com/repos/${repo}/actions/runs/${runId}/attempts/${forsok}`
-    const res = await fetchImpl(url, { headers: githubHeaders(token), signal: AbortSignal.timeout(10_000) })
-    if (!res.ok) {
-      throw new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
-    }
-    const forsokObjekt = await res.json()
-    // forbrukMinutter() hopper stille over manglende tider (riktig for queued),
-    // men et ferdig forsøk uten dem ville blitt 0 min. Kast ⇒ VED_MAALEFEIL.
-    const start = Date.parse(forsokObjekt?.run_started_at)
-    const slutt = Date.parse(forsokObjekt?.updated_at)
-    if (!Number.isFinite(start) || !Number.isFinite(slutt) || slutt < start) {
-      throw new Error(
-        `Ugyldig tidsrom for ${url}: run_started_at=${forsokObjekt?.run_started_at}, updated_at=${forsokObjekt?.updated_at}`,
-      )
-    }
-    attemptObjekter.push(forsokObjekt)
-  }
-  return forbrukMinutter(attemptObjekter)
+  return new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
 }
 
-// Maks 10 sider (1000 kjøringer) — pragmatisk tak. `totalMin` er tallet
-// vakten skal bruke; de to andre er delsummene (siste forsøk + reruns, #668).
+// Kaster ved pagineringstak: en ufullstendig sum ser komplett ut.
+export async function hentRuns({ repo, token, siden, fetchImpl = fetch, maksSider = 10 }) {
+  const kjoringer = []
+  for (let side = 1; side <= maksSider; side++) {
+    const url = `https://api.github.com/repos/${repo}/actions/runs?created=${encodeURIComponent('>=' + siden)}&per_page=100&page=${side}`
+    // undici venter ~300 s på headers by default. Abort ⇒ VED_MAALEFEIL.
+    const res = await fetchImpl(url, { headers: githubHeaders(token), signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) throw feilForRespons(res, url, 'kjøringer')
+    const data = await res.json()
+    const runs = data.workflow_runs ?? []
+    kjoringer.push(...runs)
+    if (runs.length < 100) return kjoringer
+  }
+  throw new Error(`Flere enn ${maksSider * 100} kjøringer i perioden — pagineringstaket nådd, forbruket kan ikke måles fullstendig.`)
+}
+
+// `filter=all` gir jobber fra ALLE forsøk i ett kall, hver med run_attempt
+// (verifisert) — ingen /attempts/{n}-iterasjon nødvendig.
+export async function hentJobber({ repo, runId, token, fetchImpl = fetch, maksSider = 5 }) {
+  const jobber = []
+  for (let side = 1; side <= maksSider; side++) {
+    const url = `https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs?filter=all&per_page=100&page=${side}`
+    const res = await fetchImpl(url, { headers: githubHeaders(token), signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) throw feilForRespons(res, url, `jobber (run ${runId})`)
+    const data = await res.json()
+    const sideJobber = data.jobs ?? []
+    jobber.push(...sideJobber)
+    if (sideJobber.length < 100) return jobber
+  }
+  throw new Error(`Flere enn ${maksSider * 100} jobber for kjøring ${runId} — pagineringstaket nådd.`)
+}
+
+// `cache` muteres: ferdige kjøringer legges inn etter hvert som de hentes, så
+// også en kjøring som kaster (tak, API-feil) har varmet cachen for neste.
 export async function hentForbrukForManeden({
   repo,
   token,
   naa = new Date(),
   fetchImpl = fetch,
   maksSider = 10,
-  maksOppslag = MAKS_FORSOK_OPPSLAG,
+  maksOppslag = MAKS_JOBB_OPPSLAG,
+  cache = tomCache(naa),
 }) {
-  const siden = foersteIManeden(naa)
-  const runs = []
-  for (let side = 1; side <= maksSider; side++) {
-    const url = `https://api.github.com/repos/${repo}/actions/runs?created=${encodeURIComponent('>=' + siden)}&per_page=100&page=${side}`
-    const res = await fetchImpl(url, {
-      headers: githubHeaders(token),
-      // undici venter ~300 s på headers by default. Abort ⇒ VED_MAALEFEIL.
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!res.ok) {
-      throw new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
-    }
-    const data = await res.json()
-    const sideRuns = data.workflow_runs ?? []
-    runs.push(...sideRuns)
-    if (sideRuns.length < 100) {
-      const sisteForsokMin = forbrukMinutter(runs)
-      const tidligereForsokMin = await hentTidligereForsokMinutter({ repo, token, runs, fetchImpl, maksOppslag })
-      const oppslag = tidligereForsok(runs).length
-      return { totalMin: sisteForsokMin + tidligereForsokMin, sisteForsokMin, tidligereForsokMin, oppslag }
+  const runs = await hentRuns({ repo, token, siden: foersteIManeden(naa), fetchImpl, maksSider })
+
+  // Kjøringer som ikke lenger er i lista (slettet, eller forrige måned) ut,
+  // så cachen aldri vokser utover én måned.
+  const iLista = new Set(runs.map(r => String(r.id)))
+  for (const id of Object.keys(cache.runs)) if (!iLista.has(id)) delete cache.runs[id]
+
+  let totalMin = 0
+  let tidligereForsokMin = 0
+  let fraCache = 0
+  const maaHentes = []
+  for (const run of runs) {
+    const post = cache.runs[run.id]
+    if (run.status === 'completed' && post && post.forsok === (run.run_attempt ?? 1)) {
+      totalMin += post.min
+      tidligereForsokMin += post.tidligereMin
+      fraCache++
+    } else {
+      maaHentes.push(run)
     }
   }
-  // Siste side var full: å returnere summen her ville feilet ÅPENT med et for
-  // lavt tall. Kast, så det håndteres som målefeil.
-  throw new Error(
-    `Flere enn ${maksSider * 100} kjøringer denne måneden — pagineringstaket nådd, forbruket kan ikke måles fullstendig.`,
-  )
+
+  const denneOmgang = maaHentes.slice(0, maksOppslag)
+  for (let i = 0; i < denneOmgang.length; i += SAMTIDIGE_OPPSLAG) {
+    const batch = denneOmgang.slice(i, i + SAMTIDIGE_OPPSLAG)
+    const resultater = await Promise.all(batch.map(run => hentJobber({ repo, runId: run.id, token, fetchImpl })))
+    batch.forEach((run, idx) => {
+      const { min, tidligereMin } = kjoringMinutter(run, resultater[idx], naa)
+      totalMin += min
+      tidligereForsokMin += tidligereMin
+      if (run.status === 'completed') cache.runs[run.id] = { forsok: run.run_attempt ?? 1, min, tidligereMin }
+    })
+  }
+
+  if (maaHentes.length > maksOppslag) {
+    // Fail-closed: en sum uten de resterende kjøringene ser komplett ut.
+    throw new Error(
+      `${maaHentes.length} kjøringer uten cache, taket er ${maksOppslag} jobb-oppslag — ${maksOppslag} hentet og cachet, resten tas ved neste kjøring.`,
+    )
+  }
+
+  return { totalMin, tidligereForsokMin, oppslag: denneOmgang.length, fraCache }
 }
 
 // ─── Rapportering ────────────────────────────────────────────────────────────
@@ -192,7 +305,7 @@ function skrivSummary(markdown) {
   else console.log(markdown) // lokal kjøring uten GITHUB_STEP_SUMMARY-fil
 }
 
-function tabell({ forbruk, budsjett, reserve, verdikt, ekstraRad, rerunMin }) {
+function tabell({ forbruk, budsjett, reserve, verdikt, ekstraRad, rerunMin, oppslag }) {
   const rader = [
     '### CI-minuttbudsjett (#534)',
     '',
@@ -208,6 +321,7 @@ function tabell({ forbruk, budsjett, reserve, verdikt, ekstraRad, rerunMin }) {
     `| Driftsreserve | ${reserve} min |`,
     `| Verdikt | ${verdikt} |`,
   )
+  if (oppslag) rader.push(`| Kjøringer (jobb-oppslag / fra cache) | ${oppslag.oppslag} / ${oppslag.fraCache} |`)
   if (ekstraRad) rader.push(`| Merknad | ${ekstraRad} |`)
   return rader.join('\n')
 }
@@ -217,9 +331,11 @@ async function main() {
   const token = process.env.GITHUB_TOKEN
   // Kun eksplisitt 'false' kortslutter; manglende/uventet verdi = privat.
   const repoPrivat = process.env.REPO_PRIVAT !== 'false'
+  // Settes av pr-check.yml (actions/cache). Uten den: ingen cache, alt hentes.
+  const cacheSti = process.env.CI_MINUTT_CACHE
 
   if (!repoPrivat) {
-    // Offentlige repoer (klubb-app) bruker ikke kvote — spar API-kallet helt.
+    // Offentlige repoer (klubb-app) bruker ikke kvote — spar API-kallene helt.
     skrivOutput(true)
     skrivSummary(tabell({ forbruk: '–', budsjett: '–', reserve: '–', verdikt: '✅ Kjør e2e', ekstraRad: 'Offentlig repo — bruker ikke Actions-kvote.' }))
     return
@@ -234,9 +350,11 @@ async function main() {
     return
   }
 
+  const naa = new Date()
+  const cache = lesCacheFil(cacheSti, naa)
   let forbruk
   try {
-    forbruk = await hentForbrukForManeden({ repo, token })
+    forbruk = await hentForbrukForManeden({ repo, token, naa, cache })
   } catch (e) {
     console.error(`::warning::Klarte ikke måle CI-forbruk: ${e.message}`)
     const kutt = VED_MAALEFEIL === 'kutt'
@@ -248,6 +366,9 @@ async function main() {
       verdikt: kutt ? '⚠️ Kuttet (måling feilet)' : '✅ Kjør e2e (fail-open)',
     }))
     return
+  } finally {
+    // Også ved feil: det som rakk å hentes, skal ikke hentes igjen.
+    skrivCacheFil(cacheSti, cache)
   }
 
   const totalMin = forbruk.totalMin
@@ -270,6 +391,7 @@ async function main() {
     verdikt: kjorE2e ? '✅ Kjør e2e' : '❌ Kuttet e2e denne kjøringen',
     ekstraRad,
     rerunMin: forbruk.tidligereForsokMin,
+    oppslag: forbruk,
   }))
 }
 

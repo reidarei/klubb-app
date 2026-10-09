@@ -4,11 +4,11 @@
 
 import { ensureInnlogget } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
-import { TIDLIGERE_SIDESTOERRELSE } from '@/lib/konstanter'
-import { dekodeCursor, byggNesteCursor, type KildeTilstand } from '@/lib/tidligere-cursor'
+import { MIN_TREFFMAAL_PX, TIDLIGERE_SIDESTOERRELSE } from '@/lib/konstanter'
+import { dekodeCursor, byggNesteCursor, klippSide, kildeTilstandFra } from '@/lib/tidligere-cursor'
 import { parseFilter, skalHente, arrangementstypeFor, TOM_TEKST } from '@/lib/tidligere-filter'
 import { feilTekst, proevIgjenHref, visTomTekst, bunnSlot, type TidligereKilde } from '@/lib/tidligere-feil'
-import { tilKort, tilMeldingKort, tilPollKort } from '@/lib/agenda-sortering'
+import { tilKort, tilMeldingKort, tilPollKort, ikkePaagaaendeFilter } from '@/lib/agenda-sortering'
 import type { TidligereItem, MeldingRaad } from '@/lib/agenda-sortering'
 import { hentPollStemmerAggregatBatch } from '@/lib/queries/poll'
 import { ALBUM_KORT_SELECT, tilAlbumKort } from '@/lib/melding-album'
@@ -53,15 +53,15 @@ export default async function TidligereSide({
   const grense = TIDLIGERE_SIDESTOERRELSE + 1 // én ekstra avslører om det finnes mer
 
   // === Arrangementer ===
-  // Pågående tur hører til «Kommende» på forsiden (#766). Speiler erPaagaaende()
-  // i lib/agenda-sortering.ts — endres den ene, må den andre følge (jf. #491).
+  // Pågående tur hører til «Kommende» på forsiden (#766). Filteret bor ved
+  // erPaagaaende() i lib/agenda-sortering.ts, testet mot den (#851).
   let arrQuery = supabase
     .from('arrangementer')
     .select(
       'id, type, tittel, start_tidspunkt, slutt_tidspunkt, oppmoetested, bilde_url, paameldinger (profil_id, status, profiles (visningsnavn, bilde_url, rolle))',
     )
     .lt('start_tidspunkt', naa())
-    .or(`slutt_tidspunkt.is.null,slutt_tidspunkt.lt.${naa()}`)
+    .or(ikkePaagaaendeFilter(naa()))
     .order('start_tidspunkt', { ascending: false })
     .order('id', { ascending: false })
     .limit(grense)
@@ -158,13 +158,12 @@ export default async function TidligereSide({
   )
   const harFeil = feilendeKilder.length > 0
 
-  const harMerArr = (arrRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
-  const harMerMeld = (meldRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
-  const harMerPoll = (pollRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
-
-  const arrSide = (arrRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
-  const meldSide = (meldRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
-  const pollSide = (pollRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
+  const arrKlippet = klippSide(arrRaad, TIDLIGERE_SIDESTOERRELSE)
+  const meldKlippet = klippSide(meldRaad, TIDLIGERE_SIDESTOERRELSE)
+  const pollKlippet = klippSide(pollRaad, TIDLIGERE_SIDESTOERRELSE)
+  const arrSide = arrKlippet.rader
+  const meldSide = meldKlippet.rader
+  const pollSide = pollKlippet.rader
 
   type CoverObj = { bilde_url: string; thumb_url: string | null }
   type RawAlbumEmbed = {
@@ -307,39 +306,24 @@ export default async function TidligereSide({
 
   // Neste cursor: «hvor starter neste side» og «finnes det en neste side» er
   // to uavhengige spørsmål per type (#488) — reglene bor i lib/tidligere-cursor.ts.
-  const emittertArr = side.filter(i => i.kind === 'arrangement')
-  const emittertMeld = side.filter(i => i.kind === 'melding')
-  const emittertPoll = side.filter(i => i.kind === 'poll')
-  const sisteArr = emittertArr.at(-1)
-  const sisteMeld = emittertMeld.at(-1)
-  const sistePoll = emittertPoll.at(-1)
-
-  // antallISidevindu MÅ leses fra *Side (klippet), ikke *Raad (+1 rad) — ellers
-  // henger «Last mer» igjen på siste side (#488).
-  const arrTilstand: KildeTilstand = {
+  const arrTilstand = kildeTilstandFra({
     inn: cursor.a,
-    antallISidevindu: arrSide.length,
-    antallEmittert: emittertArr.length,
-    sisteEmittert: sisteArr ? [sisteArr.sortIso, sisteArr.data.id] : null,
-    flereEnnSiden: harMerArr,
+    side: arrKlippet,
+    emittert: side.filter(i => i.kind === 'arrangement'),
     feilet: arrFeilet,
-  }
-  const meldTilstand: KildeTilstand = {
+  })
+  const meldTilstand = kildeTilstandFra({
     inn: cursor.m,
-    antallISidevindu: meldSide.length,
-    antallEmittert: emittertMeld.length,
-    sisteEmittert: sisteMeld ? [sisteMeld.sortIso, sisteMeld.data.id] : null,
-    flereEnnSiden: harMerMeld,
+    side: meldKlippet,
+    emittert: side.filter(i => i.kind === 'melding'),
     feilet: meldFeilet,
-  }
-  const pollTilstand: KildeTilstand = {
+  })
+  const pollTilstand = kildeTilstandFra({
     inn: cursor.p,
-    antallISidevindu: pollSide.length,
-    antallEmittert: emittertPoll.length,
-    sisteEmittert: sistePoll ? [sistePoll.sortIso, sistePoll.data.id] : null,
-    flereEnnSiden: harMerPoll,
+    side: pollKlippet,
+    emittert: side.filter(i => i.kind === 'poll'),
     feilet: pollFeilet,
-  }
+  })
 
   // Null når en aktiv kilde har feilet — «Last mer» og «Prøv igjen» utelukker hverandre.
   const nesteCursor = byggNesteCursor({ a: arrTilstand, m: meldTilstand, p: pollTilstand })
@@ -444,7 +428,7 @@ export default async function TidligereSide({
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginTop: 20,
-                minHeight: 44, // touch-target-minimum
+                minHeight: MIN_TREFFMAAL_PX,
                 padding: '0 14px',
                 textAlign: 'center',
                 fontFamily: 'var(--font-mono)',
@@ -471,7 +455,7 @@ export default async function TidligereSide({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  minHeight: 44, // touch-target-minimum
+                  minHeight: MIN_TREFFMAAL_PX,
                   padding: '0 14px',
                   borderRadius: 999,
                   border: '0.5px solid var(--danger-border)',

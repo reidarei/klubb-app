@@ -19,15 +19,15 @@ available_budget = quota_limit − drift_reserve
 
 See the constants block at the top of `.github/scripts/ci-minuttbudsjett.mjs` for current values.
 
-### Rerun correction
+### Counted per job, the way GitHub bills
 
-A rerun does not create a new run — it bumps `run_attempt` on the SAME run, and GitHub moves `run_started_at`/`updated_at` to the latest attempt. Counting run duration alone therefore only sees the last attempt, although every attempt is billed.
+GitHub bills each **job** separately, rounded up to whole minutes, and `pr-check.yml` runs two jobs in parallel (`kjerne` ‖ `sjekk`). Counting run duration would therefore undercount (measured at about 24 % on the source repo). The watcher sums job durations rounded up per job, fetched with `GET .../actions/runs/{id}/jobs?filter=all` — one call per run that also returns every rerun attempt.
 
-The watcher corrects for this. `run_attempt` is already on every run in the list response, so finding runs with reruns costs no extra calls. For each run with `run_attempt > 1`, `hentTidligereForsokMinutter()` fetches the earlier attempts one at a time via `GET .../actions/runs/{id}/attempts/{n}`, which returns a frozen run object for that attempt alone. An HTTP 200 response without a valid time span (missing or invalid timestamps, or `updated_at` before `run_started_at`) THROWS like a non-OK response — otherwise a lost attempt would silently count as 0 minutes and the watcher would undercount.
+When only failed jobs are rerun, GitHub copies the untouched job into the new attempt with a new id but the original timestamps. `unikeJobber()` removes those copies so they are not billed twice.
 
-More than `MAKS_FORSOK_OPPSLAG` (50) earlier attempts in one month also throws: an unknown number of skipped attempts produces a total that LOOKS complete. Like every other measurement error, this is treated as `VED_MAALEFEIL` and cuts e2e instead of guessing low.
+**API volume:** one call per run adds up to hundreds of calls by month end, close to the `GITHUB_TOKEN` limit of 1000/hour. Finished runs are cached between workflow runs with `actions/cache` (`CI_MINUTT_CACHE`); the cache is also warmed on the push of a merged PR, so `main` always has a fresh cache a PR can start from. A missing or stale cache only means everything is fetched again. More than `MAKS_JOBB_OPPSLAG` (300) uncached lookups in one run is treated as `VED_MAALEFEIL` and cuts e2e instead of guessing low — what was fetched before the cap is cached first, so the next run continues.
 
-Remaining known deviations: `updated_at` lags the last job's `completed_at` by a little, which overcounts (safe direction, left as is); parallel jobs within one workflow would undercount (none of the workflows have more than one job); and an attempt is counted in the month its run was CREATED. `GET .../runs/{id}/timing` was considered but returns `total_ms: 0` in practice.
+An attempt is counted in the month its run was CREATED.
 
 ## Public repos (like this template)
 
@@ -69,7 +69,7 @@ E2e is deliberately left out on `push`. If the change arrived via a PR, e2e alre
 gh run view <run-id> --json event --jq '.event'
 ```
 
-- `push` → expected. Push runs never include e2e. If the commit came from a merged PR, the entire core gate is also skipped (~15 sec) — it already ran on the PR.
+- `push` → expected. Push runs never include e2e. If the commit came from a merged PR, the entire core gate is also skipped (<1 min) — it already ran on the PR; only the budget cache is warmed.
 - `pull_request` → either the risk guard or budget guard cut it; see below.
 
 **For pull requests, distinguish the reason:**

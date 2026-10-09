@@ -117,7 +117,9 @@ test.describe('Profil — egne opplysninger', () => {
 
   // Tilgjengelig navn-vakten (#685): uten det leser en skjermleser «edit,
   // blank». getByLabel() slår opp det tilgjengelige navnet, ikke synlig tekst,
-  // så den går rød selv om etiketten fortsatt står på skjermen.
+  // så den går rød selv om etiketten fortsatt står på skjermen. SkjemaRad er en
+  // <label>, men aria-label trengs fortsatt: uten den blir DatoFelt sin synlige
+  // verdi (datoen) en del av navnet, og exact-matchen feiler.
   test('feltene i redigeringsskjemaet har tilgjengelig navn', async ({ page }) => {
     await page.goto('/profil/rediger')
     await page.waitForLoadState('networkidle')

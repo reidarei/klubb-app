@@ -20,7 +20,8 @@ const NAV_NOKKEL = 'https://pwa-nav.invalid/pending'
 
 // Tak på cache-skrivingen i notificationclick: en caches.put som aldri
 // resolver ville hengt handleren, og trykket på varselet gjorde ingenting.
-// Fail-open: heller miste overleveringen enn vinduet.
+// Fail-open: heller miste overleveringen enn vinduet. Lik klientens kopi i
+// ServiceWorkerRegistrering.tsx (vakt: __tests__/sw-pushklikk.test.ts, #851).
 const NAV_SKRIV_TIMEOUT_MS = 1000
 
 // Cache API har ingen LRU — trimCache() rydder eldste over grensen.

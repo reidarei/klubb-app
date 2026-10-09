@@ -433,6 +433,21 @@ describe('ferskhetsvindu', () => {
   })
 })
 
+describe('NAV_SKRIV_TIMEOUT_MS', () => {
+  // Samme tak på cache-skrivingen i sw.js og i klientens tilbakeskriving av
+  // forsøkstelleren; sw.js kan ikke importere fra lib/ (#851).
+  it('er lik i sw.js og components/ServiceWorkerRegistrering.tsx', () => {
+    const klient = readFileSync(
+      path.resolve(__dirname, '../components/ServiceWorkerRegistrering.tsx'),
+      'utf-8',
+    )
+    const les = (kilde: string) =>
+      kilde.match(/const NAV_SKRIV_TIMEOUT_MS = ([\d_]+)/)?.[1]?.replace(/_/g, '')
+    expect(les(SW_KILDE)).toBeDefined()
+    expect(les(klient)).toBe(les(SW_KILDE))
+  })
+})
+
 describe('navnesynk mellom sw.js og klienten', () => {
   // NAV_CACHE og NAV_NOKKEL finnes i to kopier (sw.js og lib/pending-nav.ts,
   // pluss literalene i denne fila) fordi public/sw.js er en statisk fil uten

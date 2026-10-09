@@ -624,7 +624,7 @@ export default function KommentarerPaaKort({
                 justifyContent: 'center',
               }}
             >
-              <Icon name="arrowRight" size={12} color="#0a0a0a" strokeWidth={2.5} />
+              <Icon name="arrowRight" size={12} color="var(--accent-foreground)" strokeWidth={2.5} />
             </span>
           </Treffflate>
         </div>

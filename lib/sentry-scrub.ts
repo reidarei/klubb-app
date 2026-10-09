@@ -4,8 +4,10 @@
 
 import type * as Sentry from '@sentry/nextjs'
 
-// Tillatte extra-nøkler. Speiler whitelist i lib/logg.ts og lib/api/logg-feil.
+// Tillatte extra-nøkler. Et utvalg av whitelistene i lib/logg.ts og
+// lib/logg-sanitering.ts, ikke en kopi — logg.ts sender resten via setContext.
 // 'ctx' fordi noen kodestier setter den som extra i stedet for setContext.
+// Vakt: __tests__/sentry-whitelist-speil.test.ts (#851).
 export const SERVER_WHITELIST = new Set([
   'profil_id',
   'arrangement_id',

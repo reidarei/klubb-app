@@ -11,7 +11,8 @@ import { SEED_PASSORD } from './auth'
  * service_role at raden er uendret.
  */
 
-// Speiler supabase/seed.sql — endres en rolle der, må denne følge etter.
+// Speiler supabase/seed.sql — endres en rolle der, må denne følge etter
+// (vakt: __tests__/e2e-seed-speil.test.ts, #851).
 export const TESTBRUKERE = {
   ADMIN: { id: '00000000-0000-4000-8000-000000000001', epost: 'e2e-admin@klubb.test', rolle: 'admin' },
   PETTER: { id: '00000000-0000-4000-8000-000000000002', epost: 'petter.prove@klubb.test', rolle: 'medlem' },

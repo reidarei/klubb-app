@@ -1,5 +1,6 @@
 // Sentrale domene-konstanter. Tegnegrenser speiler check-constraints i
-// databasen — endringer her må følges av tilsvarende migrasjon.
+// databasen — endringer her må følges av tilsvarende migrasjon. Vaktet av
+// __tests__/konstanter-db-speil.test.ts (#851).
 
 import type { LoggHendelse } from '@/lib/logg-hendelser'
 
@@ -229,7 +230,8 @@ export const INNSPILL_KOBLING_INNFOERT = new Date('2026-08-26T19:47:00Z')
 // ─── BURSDAGSBILDE (#641) ─────────────────────────────────────────────────
 
 // Lease-vinduene under speiler EKSAKT krev_bursdagsbilde() i migrasjon 140 —
-// endres de her, må RPC-en følge etter, og omvendt.
+// endres de her, må RPC-en følge etter, og omvendt (vakt:
+// __tests__/konstanter-db-speil.test.ts, #851).
 //
 // Etter så lenge regnes en 'paagaar'-rad som hengende og kan reclaimes.
 export const BURSDAGSBILDE_LEASE_MIN = 10
@@ -241,8 +243,9 @@ export const BURSDAGSBILDE_TVING_LEASE_SEK = 60
 export const BURSDAGSBILDE_MAKS_FORSOK = 5
 
 // Budsjett per steg i genererBursdagsbilde(). Summen (45 s) skal ligge minst
-// 10 s under cron-ruta sin maxDuration (60 s) — ellers drepes funksjonen midt
-// i en R2-opplasting og raden henger i 'paagaar' i stedet for 'feilet'.
+// 10 s under rutenes maxDuration (60 s) — ellers drepes funksjonen midt i en
+// R2-opplasting og raden henger i 'paagaar' i stedet for 'feilet'. Vaktet av
+// __tests__/bursdagsbilde-budsjett.test.ts (#851).
 export const BURSDAGSBILDE_BUDSJETT_HENT_MS = 5000 // hente profilbildet server-side
 export const BURSDAGSBILDE_BUDSJETT_MODELL_MS = 30000 // Vertex-kallet
 export const BURSDAGSBILDE_BUDSJETT_R2_MS = 10000 // opplasting til R2

@@ -25,9 +25,9 @@ export type Posisjon = [string, string]
 
 export type KildeTilstand = {
   inn: Posisjon | null // input-cursor for typen (null = les fra toppen)
-  // Rader ETTER klipp til sidestørrelse, ikke rå-svarets lengde (N+1). Sendes
-  // rå-svaret inn, blir `antallEmittert < antallISidevindu` alltid sann og
-  // #488-fiksen forsvinner stille.
+  // Rader ETTER klipp til sidestørrelse, ikke rå-svarets lengde (N+1) — ellers
+  // er `antallEmittert < antallISidevindu` alltid sann (#488). Bygg via
+  // kildeTilstandFra(), som bare tar en KlippetSide (#851).
   antallISidevindu: number
   antallEmittert: number // rader av typen som faktisk kom med i den viste siden
   sisteEmittert: Posisjon | null
@@ -35,6 +35,45 @@ export type KildeTilstand = {
   // En avskrudd kilde (filteret ekskluderer typen) har alltid feilet: false —
   // den ble aldri spurt (#492).
   feilet: boolean
+}
+
+// Ett svar klippet til sidestørrelse. Merket type, så KildeTilstand bare kan
+// bygges fra en klippet side og aldri fra rå-svaret med N+1 rader (#488, #851).
+declare const klippetMerke: unique symbol
+export type KlippetSide<T> = {
+  readonly rader: T[]
+  readonly flereEnnSiden: boolean
+  readonly [klippetMerke]: true
+}
+
+export function klippSide<T>(raad: T[] | null, stoerrelse: number): KlippetSide<T> {
+  const alle = raad ?? []
+  return {
+    rader: alle.slice(0, stoerrelse),
+    flereEnnSiden: alle.length > stoerrelse,
+  } as KlippetSide<T>
+}
+
+export function kildeTilstandFra({
+  inn,
+  side,
+  emittert,
+  feilet,
+}: {
+  inn: Posisjon | null
+  side: KlippetSide<unknown>
+  emittert: { sortIso: string; data: { id: string } }[]
+  feilet: boolean
+}): KildeTilstand {
+  const siste = emittert.at(-1)
+  return {
+    inn,
+    antallISidevindu: side.rader.length,
+    antallEmittert: emittert.length,
+    sisteEmittert: siste ? [siste.sortIso, siste.data.id] : null,
+    flereEnnSiden: side.flereEnnSiden,
+    feilet,
+  }
 }
 
 // Aldri nullstill en posisjon for å markere «uttømt»: null betyr «fra toppen»

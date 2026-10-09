@@ -104,7 +104,7 @@ export default async function VarslerKontroll() {
   const testModus = perNoekkel.get('test_modus')
 
   // Kart-alertene får navnet admin har gitt symbolet på /innstillinger/kart.
-  const symbolPanel = new Map(
+  const symbolPanel = new Map<string, string>(
     kartSymboler.flatMap(s => (s.varsel ? [[s.varsel.type, s.varsel.panel] as const] : [])),
   )
   const antallPush = pushCount ?? 0

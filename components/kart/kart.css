@@ -164,8 +164,8 @@
    egen kant og forsvant i det mørke kartet. Halvparten skjules av bobla. */
 .kart-boble-hale {
   position: absolute;
-  /* MÅ speile HALE_FRA_VENSTRE i PosisjonsKart.tsx, som forskyver bobla like
-     mye motsatt vei så spissen lander på stedet. */
+  /* = HALE_FRA_VENSTRE i kart-maal.ts: PosisjonsKart forskyver bobla like mye
+     motsatt vei så spissen lander på stedet. Vaktet av kart-maal.test.ts. */
   left: 22px;
   margin-left: -7px;
   bottom: -7px;
@@ -231,18 +231,6 @@
   width: 2px;
 }
 
-/* OBS: duplikat — overstyrer .kart-spor-prikk over. */
-.kart-spor-prikk {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: oklch(62% 0.13 var(--avatar-hue));
-  border: 1.5px solid var(--bg-elevated-solid);
-  opacity: 0.8;
-}
-
-
-
 /* Ring der fingeren holder ved langtrykk-terskel (#762). left/top settes i
    JSX; ringen sentreres på punktet. */
 .kart-presse-ring {
@@ -267,34 +255,6 @@
     opacity: 1;
   }
 }
-
-/* OBS: duplikat — overstyrer .kart-sikte over (størrelse, farge og clip-path
-   på den vannrette streken, som blokken over sier ikke skal brukes). */
-.kart-sikte {
-  position: relative;
-  width: 34px;
-  height: 34px;
-}
-
-.kart-sikte::before,
-.kart-sikte::after {
-  content: '';
-  position: absolute;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--overlay-control-bg);
-}
-
-/* Hull i midten så punktet ikke dekkes. */
-.kart-sikte::before {
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  margin-top: -1px;
-  clip-path: polygon(0 0, 38% 0, 38% 100%, 0 100%, 0 0, 62% 0, 100% 0, 100% 100%, 62% 100%, 62% 0);
-}
-
-
 
 /* Chat i kartets 320 px-panel (#709, #710): chatten er dimensjonert for /chat,
    og faste min-bredder sprenger panelet. overflow-x: hidden alene ville klippet

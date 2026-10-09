@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { naermestePub, sokSted } from '@/lib/actions/sted-sok'
 import type { StedTreff } from '@/lib/geokoding'
-import { STED_SOK_MAKS_LENGDE } from '@/lib/konstanter'
+import { MIN_TREFFMAAL_PX, STED_SOK_MAKS_LENGDE } from '@/lib/konstanter'
 import { meldKlientfeil } from '@/lib/klient-logg'
 
 type Koordinat = { lat: number; lng: number }
@@ -36,7 +36,7 @@ type Props = {
 }
 
 // Samme duplisering som MarkeringDetalj.tsx: kart-komponentene deler ikke
-// stilkonstanter på tvers av filer, se kommentaren der. minHeight: 44 lagt
+// stilkonstanter på tvers av filer, se kommentaren der. minHeight lagt
 // til her (fraværende i søsknene) — nye trykkflater skal være minst 44 px på
 // kortsiden.
 const PILLE = {
@@ -45,7 +45,7 @@ const PILLE = {
   fontWeight: 500,
   letterSpacing: '0.1px',
   padding: '8px 14px',
-  minHeight: 44,
+  minHeight: MIN_TREFFMAAL_PX,
   borderRadius: 'var(--radius-pill)',
   border: '0.5px solid var(--kart-kant)',
   background: 'var(--kart-flate-sterk)',
@@ -295,7 +295,7 @@ export default function StedSok({
                 alignItems: 'flex-start',
                 gap: 2,
                 padding: '10px 12px',
-                minHeight: 44,
+                minHeight: MIN_TREFFMAAL_PX,
                 // Uten dette krymper flexbox kandidatene når lista når maxHeight, og teksten kappes (#757).
                 flexShrink: 0,
                 borderRadius: 'var(--radius-small)',

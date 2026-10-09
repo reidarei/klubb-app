@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { unstable_rethrow } from 'next/navigation'
-import { naa } from '@/lib/dato'
 import { DbFeil, logg } from '@/lib/logg'
 import { MOETEMODUS_FOER_START_TIMER } from '@/lib/konstanter'
 
@@ -89,22 +88,23 @@ export async function finnPaagaaendeArrangementStrengt(
   // oppgitt», ikke «evig». type: reisemodus-predikatet ligger i
   // lib/reisemodus.ts — denne helperen definerer bare «pågår» (#723).
 ): Promise<PaagaaendeArrangement | null> {
-  const naaIso = naa()
-  const tidligstStart = new Date(
-    Date.now() - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000,
-  ).toISOString()
+  // Millisekunder, ikke ISO-strenger: PostgREST svarer «…+00:00», naa() gir
+  // «…Z», og de sorterer ikke likt leksikalsk (#851, samme som lib/timeplan.ts).
+  const naaMs = Date.now()
+  const tidligstStartMs = naaMs - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000
 
   // Timesgrensen hører KUN til grenen uten sluttid — i spørringen ville den
   // kuttet flerdagsturer fra dag 2 (#735). Samme asymmetri som oppryddingsjobben.
   const data = await hentNyligStartedeArrangementerStrengt(supabase)
 
   // start <= nå: radene kan inneholde møter som ennå ikke har startet (møtemodus-forløpet).
-  const kandidat = data.find(a =>
-    a.start_tidspunkt <= naaIso &&
-    (a.slutt_tidspunkt
-      ? a.slutt_tidspunkt >= naaIso
-      : a.start_tidspunkt >= tidligstStart),
-  )
+  const kandidat = data.find(a => {
+    const startMs = new Date(a.start_tidspunkt).getTime()
+    return startMs <= naaMs &&
+      (a.slutt_tidspunkt
+        ? new Date(a.slutt_tidspunkt).getTime() >= naaMs
+        : startMs >= tidligstStartMs)
+  })
   return kandidat
     ? { id: kandidat.id, tittel: kandidat.tittel, type: kandidat.type, sluttTidspunkt: kandidat.slutt_tidspunkt }
     : null

@@ -99,6 +99,32 @@ describe('finnPaagaaendeArrangement — varighet (#735)', () => {
   })
 })
 
+// PostgREST svarer «…+00:00», naa()/toISOString() gir «…Z». Strengsammenligning
+// av de to ga feil svar på sekundgrensen og ved annen offset (#851).
+describe('finnPaagaaendeArrangement — tidsstempel-format (#851)', () => {
+  const naa = new Date('2026-09-18T12:00:00Z')
+
+  it.each([
+    ['Z', '2026-09-18T12:00:00Z'],
+    ['+00:00', '2026-09-18T12:00:00+00:00'],
+  ])('sluttid nøyaktig nå i %s-form: pågår fortsatt', async (_form, slutt) => {
+    vi.useFakeTimers().setSystemTime(naa)
+    const tur = await finnPaagaaendeArrangement(
+      stubKlient([{ id: 'a1', tittel: 'Tur', start_tidspunkt: '2026-09-18T08:00:00+00:00', slutt_tidspunkt: slutt }]),
+    )
+    expect(tur?.id).toBe('a1')
+  })
+
+  it('samme øyeblikk med annen offset behandles likt', async () => {
+    vi.useFakeTimers().setSystemTime(naa)
+    // 13:30+02:00 = 11:30Z — startet, selv om strengen «13:30» er større enn «12:00».
+    const tur = await finnPaagaaendeArrangement(
+      stubKlient([{ id: 'a1', tittel: 'Tur', start_tidspunkt: '2026-09-18T13:30:00+02:00', slutt_tidspunkt: null }]),
+    )
+    expect(tur?.id).toBe('a1')
+  })
+})
+
 // «Ingen tur pågår» og «oppslaget feilet» så identiske ut i returverdien `null`
 // fram til #723-reviewen. Kartmodus (reisemodus/møtemodus) må kunne skille dem
 // for å kunne logge kartmodus.oppslag.feilet; posisjonsdeling må FORTSATT

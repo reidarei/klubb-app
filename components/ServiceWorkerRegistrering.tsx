@@ -11,9 +11,9 @@ import {
   type PendingNav,
 } from '@/lib/pending-nav'
 
-// Tak på tilbakeskrivingen av forsøkstelleren (speiler public/sw.js): en
-// hengende cache-skriving skal aldri blokkere navigasjonen — verste utfall er
-// at loop-bryteren mister ett forsøk.
+// Tak på tilbakeskrivingen av forsøkstelleren: en hengende cache-skriving skal
+// aldri blokkere navigasjonen — verste utfall er at loop-bryteren mister ett
+// forsøk. Lik public/sw.js (vakt: __tests__/sw-pushklikk.test.ts, #851).
 const NAV_SKRIV_TIMEOUT_MS = 1000
 
 // Felt fra SW-ens check-pending-nav-svar. Kun telemetri — skal aldri styre

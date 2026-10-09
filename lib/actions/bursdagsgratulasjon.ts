@@ -82,13 +82,11 @@ export async function kjorBursdagsgratulasjon(
     return { sendt, hoppet, feil }
   }
 
-  // `as string`-castet er fra før typene kjente kolonnen (mig. 100) —
-  // trolig overflødig nå.
   const { data: avsendere, error: avsendereFeil } = await admin
     .from('profiles')
     .select('id, navn')
     .eq('aktiv', true)
-    .eq('bursdagsgratulasjon_aktiv' as string, true)
+    .eq('bursdagsgratulasjon_aktiv', true)
     .in('rolle', rollerMed('kanAdministrere'))
 
   // Fail closed, som over.

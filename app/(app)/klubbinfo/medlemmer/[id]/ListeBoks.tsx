@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { MIN_TREFFMAAL_PX } from '@/lib/konstanter'
 
 export type ListeRad = {
   id: string
@@ -114,7 +115,7 @@ export default function ListeBoks({ tittel, rader }: { tittel: string; rader: Li
               background: 'transparent',
               border: 'none',
               justifyContent: 'center',
-              minHeight: 44,
+              minHeight: MIN_TREFFMAAL_PX,
               cursor: 'pointer',
               fontFamily: 'var(--font-body)',
               fontSize: 14,

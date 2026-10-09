@@ -239,6 +239,12 @@ export function erPaagaaende(arr: ArrangementRaad, naaIso: string): boolean {
   return arr.slutt_tidspunkt !== null && arr.slutt_tidspunkt >= naaIso
 }
 
+// PostgREST-speilet av !erPaagaaende() for /tidligere sin keyset-spørring
+// (#766, jf. #491). Holdes i takt av __tests__/tidligere-paagaaende.test.ts (#851).
+export function ikkePaagaaendeFilter(naaIso: string): string {
+  return `slutt_tidspunkt.is.null,slutt_tidspunkt.lt.${naaIso}`
+}
+
 // Avreise-blokka på tur-kortet (#669), eller null. Kun turer (møter har ingen
 // reise), kun framover («5 dager igjen» etter avreise er feil, og /tidligere
 // skal ikke ha den), og kun innenfor vinduet. `naa` sendes inn for testbarhet.

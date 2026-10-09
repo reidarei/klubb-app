@@ -5,6 +5,8 @@ import {
   nestePosisjon,
   harMerFraKilde,
   byggNesteCursor,
+  klippSide,
+  kildeTilstandFra,
   type TidligereCursor,
   type KildeTilstand,
   type Posisjon,
@@ -562,4 +564,44 @@ describe('ende-til-ende-paginering', () => {
       })
     })
   }
+})
+
+// #488/#851: KildeTilstand bygges kun fra en klippet side, så rå-svarets N+1
+// rader aldri blir antallISidevindu.
+describe('klippSide + kildeTilstandFra', () => {
+  const rad = (i: number) => ({ id: `id-${i}` })
+
+  it('N+1 rader: klipper til N og melder flere', () => {
+    const side = klippSide([1, 2, 3, 4].map(rad), 3)
+    expect(side.rader).toHaveLength(3)
+    expect(side.flereEnnSiden).toBe(true)
+  })
+
+  it('null-svar (filtrert bort) gir tom side uten flere', () => {
+    const side = klippSide(null, 3)
+    expect(side.rader).toEqual([])
+    expect(side.flereEnnSiden).toBe(false)
+  })
+
+  it('siste side helt vist: ingen «Last mer»', () => {
+    const side = klippSide([1, 2].map(rad), 3)
+    const emittert = side.rader.map((r, i) => ({ sortIso: `2024-06-0${i + 1}T00:00:00Z`, data: r }))
+    const k = kildeTilstandFra({ inn: null, side, emittert, feilet: false })
+    expect(k.antallISidevindu).toBe(2)
+    expect(k.sisteEmittert).toEqual(['2024-06-02T00:00:00Z', 'id-2'])
+    expect(harMerFraKilde(k)).toBe(false)
+  })
+
+  it('typen avviser et uklippet array', () => {
+    // Kun typesjekket (tsc), aldri kjørt.
+    const _ikkeKjoert = () =>
+      kildeTilstandFra({
+        inn: null,
+        // @ts-expect-error — rå-svaret må gjennom klippSide() først (#488)
+        side: [rad(1)],
+        emittert: [],
+        feilet: false,
+      })
+    expect(typeof _ikkeKjoert).toBe('function')
+  })
 })
