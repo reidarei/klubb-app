@@ -5,14 +5,12 @@ import { naa } from '@/lib/dato'
 import { revalidatePath } from 'next/cache'
 import { logg } from '@/lib/logg'
 
-// Hjelpefunksjon — invalider fond-sidene etter alle mutasjoner
 function revalider() {
   revalidatePath('/fond')
   revalidatePath('/fond/rediger')
 }
 
-// Skriv historikk-rad dersom verdien faktisk har endret seg.
-// Kalles etter at ny verdi er skrevet til DB.
+// Kalles etter at ny verdi er skrevet.
 async function skrivHistorikk(
   supabase: Awaited<ReturnType<typeof import('@/lib/auth').ensureAdmin>>['supabase'],
   userId: string,
@@ -21,7 +19,7 @@ async function skrivHistorikk(
   gammel_verdi: number,
   ny_verdi: number,
 ) {
-  if (gammel_verdi === ny_verdi) return // ingen endring — ingenting å logge
+  if (gammel_verdi === ny_verdi) return
   const { error } = await supabase.from('fond_verdi_historikk').insert({
     kilde,
     kilde_id,
@@ -30,8 +28,7 @@ async function skrivHistorikk(
     endret_av: userId,
     tidspunkt: naa(),
   })
-  // Verdien er allerede lagret — en feilet historikk-rad skal ikke velte
-  // selve oppdateringen, kun logges (#760).
+  // Verdien er alt lagret — en feilet historikk-rad logges, velter ikke (#760).
   if (error) {
     await logg.feil('fond.historikk.feilet', error, { ctx: { code: error.code, sample: kilde } })
   }
@@ -40,8 +37,7 @@ async function skrivHistorikk(
 // ─── Validering ──────────────────────────────────────────────────────────────
 
 function validerBelop(verdi: number, feltnavn = 'Beløp') {
-  // Maks to desimaler (øre) — DB-kolonnene er numeric(12,2). Toleransen på 1e-6
-  // fanger flyttall-støy fra parseFloat (6612.20 kan bli 6612.199999...).
+  // numeric(12,2). 1e-6 tåler flyttall-støy (6612.20 → 6612.199999...).
   const oere = verdi * 100
   if (!Number.isFinite(verdi) || verdi < 0 || Math.abs(oere - Math.round(oere)) > 1e-6)
     throw new Error(`${feltnavn} må være et ikke-negativt beløp med maks to desimaler`)
@@ -65,8 +61,7 @@ export async function opprettEiendom(input: {
   validerBelop(input.markedsverdi, 'Markedsverdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
   validerBelop(input.husleie_i_aar, 'Husleie i år')
-  // Driftskostnader lagres POSITIVT og trekkes fra i visningen — samme
-  // kontrakt som check-constrainten i migrasjon 129.
+  // Lagres POSITIVT, trekkes fra i visningen (check-constraint, mig. 129).
   validerBelop(input.driftskostnader_i_aar, 'Driftskostnader i år')
 
   const { error } = await supabase.from('fond_eiendom').insert({
@@ -94,16 +89,12 @@ export async function oppdaterEiendom(input: {
   validerBelop(input.markedsverdi, 'Markedsverdi')
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
   validerBelop(input.husleie_i_aar, 'Husleie i år')
-  // Driftskostnader lagres POSITIVT og trekkes fra i visningen — samme
-  // kontrakt som check-constrainten i migrasjon 129.
+  // Lagres POSITIVT, trekkes fra i visningen (check-constraint, mig. 129).
   validerBelop(input.driftskostnader_i_aar, 'Driftskostnader i år')
 
-  // Les gammel markedsverdi før oppdatering for historikk-logging. Kaster FØR
-  // selve oppdateringen: skriver vi den nye verdien uten å ha fått lest den
-  // gamle, mister vi sporet av en pengeendring permanent — verre enn å be
-  // brukeren prøve igjen (se CLAUDE.md § pulje A, fond.ts-vurderingen).
-  // maybeSingle (ikke single): «raden er borte» skal ha sin egen norske
-  // melding, ikke drukne i PostgREST-ens PGRST116-tekst.
+  // Kaster FØR oppdateringen hvis gammel verdi ikke kan leses — ellers er
+  // sporet av en pengeendring borte for godt. maybeSingle så «raden er borte»
+  // får egen melding i stedet for PGRST116.
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_eiendom')
     .select('markedsverdi')
@@ -113,8 +104,7 @@ export async function oppdaterEiendom(input: {
     await logg.feil('fond.eiendom.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
     throw new Error(`Kunne ikke lese gjeldende markedsverdi for historikk: ${gammelFeil.message}`)
   }
-  // Raden er slettet av noen andre mens skjemaet sto åpent: update-en under
-  // ville vært en stille no-op som ser ut som suksess. Si det som det er.
+  // Slettet mens skjemaet sto åpent: update-en ville vært en stille no-op.
   if (!gammel) throw new Error('Eiendommen finnes ikke lenger — den er slettet av noen andre')
 
   const { error } = await supabase
@@ -137,14 +127,10 @@ export async function oppdaterEiendom(input: {
 export async function slettEiendom(id: string) {
   const { supabase, user } = await ensureAdmin()
 
-  // Logg historikk før sletting: uten en 0-rad får den fremtidige utviklingsgrafen
-  // et usynlig hopp der eiendommens verdi bare forsvinner. Les siste verdi, så slett —
-  // kilde_id har ingen FK til kildetabellen, så rekkefølgen er ikke constraint-tvunget.
-  // Kaster FØR sletting hvis oppslaget feiler — sletter vi likevel mister vi
-  // historikk-raden for godt (samme resonnement som oppdaterEiendom over).
-  // Men sletting skal være IDEMPOTENT: er raden alt borte (to admins, eller
-  // to faner, på /fond) er utfallet brukeren ba om allerede sant, og da skal
-  // han ikke få en rød feil på en stale liste som aldri blir revalidert.
+  // 0-rad i historikken før sletting, ellers forsvinner verdien usynlig fra
+  // utviklingsgrafen (kilde_id har ingen FK, så rekkefølgen er ikke tvunget).
+  // Kaster hvis oppslaget feiler, men er IDEMPOTENT når raden alt er borte
+  // (to admins/faner) — da er utfallet brukeren ba om allerede sant.
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_eiendom')
     .select('markedsverdi')
@@ -154,8 +140,7 @@ export async function slettEiendom(id: string) {
     await logg.feil('fond.eiendom.oppslag.feilet', gammelFeil, { ctx: { code: gammelFeil.code } })
     throw new Error(`Kunne ikke lese gjeldende markedsverdi for historikk: ${gammelFeil.message}`)
   }
-  // Ingen rad = ingen ny historikk å skrive (0-raden ble skrevet av den som
-  // slettet først). Fortsett til delete-en, som blir en no-op, og revalider.
+  // Ingen rad: 0-raden ble skrevet av den som slettet først.
   if (gammel) await skrivHistorikk(supabase, user.id, 'eiendom', id, gammel.markedsverdi, 0)
 
   const { error } = await supabase.from('fond_eiendom').delete().eq('id', id)
@@ -204,9 +189,7 @@ export async function oppdaterVerdipapir(input: {
   validerBelop(input.anskaffelsesverdi, 'Anskaffelsesverdi')
   validerBelop(input.utbytte_i_aar, 'Utbytte i år')
 
-  // Samme historikk-resonnement som oppdaterEiendom over — kaster FØR
-  // oppdateringen hvis vi ikke får lest gammel verdi, og maybeSingle så
-  // «raden er borte» får sin egen melding i stedet for PGRST116.
+  // Samme resonnement som oppdaterEiendom.
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_verdipapir')
     .select('verdi')
@@ -238,9 +221,7 @@ export async function oppdaterVerdipapir(input: {
 export async function slettVerdipapir(id: string) {
   const { supabase, user } = await ensureAdmin()
 
-  // Logg historikk før sletting — se kommentar i slettEiendom for hvorfor (graf-kontinuitet).
-  // Kaster FØR sletting hvis oppslaget feiler, men er idempotent når raden alt
-  // er borte — se samme resonnement i slettEiendom.
+  // Samme resonnement som slettEiendom.
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_verdipapir')
     .select('verdi')
@@ -304,19 +285,15 @@ export async function slettInnskudd(id: string) {
   revalider()
 }
 
-// ─── Kontant-singleton ───────────────────────────────────────────────────────
-
 // ─── Hent og skriv publisert oppgjør ─────────────────────────────────────────
 
-// DTO fra hentPublisertOppgjor — rent data, ingen side-effekter.
-// Brukes av HentOppgjor-komponenten for å vise diff.
+// DTO fra hentPublisertOppgjor, vises som diff i HentOppgjor.
 export type OppgjorDiff = {
   snapshot_dato: string
   generert: string
   saldo: { app: number; hentet: number }
-  // Navn i oppgjøret som ikke kunne kobles til et medlem — ukjent kallenavn,
-  // eller to medlemmer med samme. Blokkerer skriving til admin har koblet dem
-  // i UI-et (#571). Tom liste = alt matcher.
+  // Ukjente eller tvetydige navn. Blokkerer skriving til admin har koblet
+  // dem (#571).
   uavklarteNavn: string[]
   rader: {
     profil_id: string
@@ -324,13 +301,10 @@ export type OppgjorDiff = {
     appVerdi: number | null   // null = ingen rad i fond_innskudd enda
     hentetVerdi: number
     antallRader: number       // > 1 = blokkerende tilstand
-    // Detaljpakken fra kilden. null = eldre API-svar uten detaljer.
-    //
-    // VIKTIG: HentOppgjor.tsx bygger skrive-payloaden på nytt FRA DENNE DTO-en,
-    // ikke fra JSON-en som ble hentet. Alt som ikke ligger her forsvinner stille
-    // mellom «Hent» og «Skriv», uten en eneste feilmelding. Legger du til et nytt
-    // felt i oppgjørs-kontrakten, må det inn her også — ellers hentes det og
-    // skrives aldri. Pinnet i __tests__/fond-oppgjor-dto.test.ts.
+    // null = eldre API-svar uten detaljer.
+    // VIKTIG: HentOppgjor.tsx bygger skrive-payloaden FRA DENNE DTO-en. Nytt
+    // felt i oppgjørs-kontrakten må inn her, ellers forsvinner det stille
+    // mellom «Hent» og «Skriv». Pinnet i __tests__/fond-oppgjor-dto.test.ts.
     detaljer: {
       oppspart_akkumulert: number
       renteandel_i_fjor: number
@@ -339,21 +313,13 @@ export type OppgjorDiff = {
   }[]
 }
 
-// Finner profilen et navn fra oppgjøret hører til, i to trinn:
+// Alias (fond_navn_alias) FØRST, så en manuell kobling vinner over et
+// tilfeldig navnesammenfall og historiske navn fortsatt matcher; deretter
+// eksakt visningsnavn.
 //
-//   1. et lagret alias (fond_navn_alias) — admin har pekt ut personen én gang
-//   2. eksakt treff på visningsnavn
-//
-// Alias sjekkes FØRST, så en manuell kobling alltid vinner over et tilfeldig
-// navnesammenfall. Det er også det som gjør historiske navn brukbare: et
-// medlem som sto med kallenavn i fjorårets ark og fullt navn i år matcher
-// fortsatt.
-//
-// Returnerer null ved ukjent eller tvetydig navn i stedet for å kaste.
-// Kalleren samler alle uavklarte navn og lar admin koble dem — å kaste på det
-// første ville skjult at fem andre også manglet (#571). Tvetydighet regnes
-// som uavklart av samme grunn som før: to profiler med samme kallenavn kan
-// ikke skilles maskinelt, og feil valg sender andelen til feil person (#453).
+// null ved ukjent eller tvetydig navn i stedet for å kaste, så kalleren kan
+// samle ALLE uavklarte (#571). Tvetydig = uavklart: feil valg sender andelen
+// til feil person (#453).
 function matchProfil(
   profilListe: { id: string; visningsnavn: string | null }[],
   alias: Map<string, string>,
@@ -364,8 +330,7 @@ function matchProfil(
   const aliasProfilId = alias.get(trimmet)
   if (aliasProfilId) {
     const viaAlias = profilListe.find((p) => p.id === aliasProfilId)
-    // Aliaset kan peke på en profil som siden er deaktivert. Da er koblingen
-    // ikke lenger gyldig, og navnet skal opp til ny vurdering.
+    // Alias til en siden deaktivert profil er ugyldig — ny vurdering.
     if (viaAlias) return viaAlias
   }
 
@@ -376,12 +341,10 @@ function matchProfil(
 export async function hentPublisertOppgjor(): Promise<
   { ok: true; diff: OppgjorDiff } | { ok: false; feil: string }
 > {
-  // ensureAdmin() kastes UTENFOR try/catch — uautoriserte kall skal propagere som
-  // vanlig feil (401/403), ikke pakkes inn som { ok: false } (Policy: Auth).
+  // UTENFOR try/catch: avvist tilgang skal kaste, ikke bli { ok: false }.
   const { supabase } = await ensureAdmin()
 
-  // Next.js maskerer feilmeldinger kastet fra server actions i prod (se #459),
-  // så resten av funksjonen returnerer { ok: false, feil: ... } i stedet for å kaste.
+  // Next maskerer kastede meldinger i prod (#459) — returner { ok: false }.
   try {
     const { FOND_OPPGJOR_URL } = await import('@/lib/config')
     if (!FOND_OPPGJOR_URL)
@@ -390,10 +353,8 @@ export async function hentPublisertOppgjor(): Promise<
     const { hentOppgjor } = await import('@/lib/fond-oppgjor')
     const oppgjor = await hentOppgjor()
 
-    // Hent alle aktive profiler for å matche visningsnavn → profil_id. Kaster
-    // på feil i stedet for å falle gjennom til profilListe=[] — ellers ville
-    // matchProfil() under feiltolket EN DB-feil som «ukjent visningsnavn» for
-    // hver eneste andel i oppgjøret, en villedende feilmelding.
+    // Kaster i stedet for profilListe=[], som ville gjort én DB-feil til
+    // «ukjent navn» for hver andel.
     const { data: profiler, error: profilerFeil } = await supabase
       .from('profiles')
       .select('id, visningsnavn')
@@ -405,9 +366,7 @@ export async function hentPublisertOppgjor(): Promise<
 
     const profilListe = profiler ?? []
 
-    // Aliaser: navn i oppgjøret som admin har koblet til en person manuelt.
-    // Fail-closed som profil-oppslaget over: uten aliasene ville kjente navn
-    // sett ut som ukjente, og admin ville blitt bedt om å koble på nytt.
+    // Fail-closed: uten aliasene ser kjente navn ukjente ut.
     const { data: aliasRader, error: aliasFeil } = await supabase
       .from('fond_navn_alias')
       .select('api_navn, profil_id')
@@ -417,8 +376,6 @@ export async function hentPublisertOppgjor(): Promise<
     }
     const aliasMap = new Map((aliasRader ?? []).map((a) => [a.api_navn, a.profil_id]))
 
-    // Bygg opp én rad per andel. Navn vi ikke kan avgjøre samles i
-    // uavklarteNavn i stedet for å stoppe på det første.
     const raderUtenAppVerdi: {
       profil_id: string
       visningsnavn: string
@@ -440,8 +397,7 @@ export async function hentPublisertOppgjor(): Promise<
         profil_id: match.id,
         visningsnavn: andel.visningsnavn,
         hentetVerdi: andel.belop,
-        // Pakke-regelen er alt håndhevet i validerOppgjor, så dette er enten
-        // hele pakken eller ingenting — aldri en halv.
+        // validerOppgjor håndhever hele-pakken-eller-ingenting.
         detaljer: harDetaljer(andel)
           ? {
               oppspart_akkumulert: andel.oppspart_akkumulert,
@@ -452,11 +408,8 @@ export async function hentPublisertOppgjor(): Promise<
       })
     }
 
-    // Hent alle innskudd-rader og kontant-saldo fra appen. Dette er
-    // grunnlaget for diff-visningen admin bruker til å bestemme om oppgjøret
-    // skal skrives — en svelget feil her ville vist «ingen rad enda» for ALLE
-    // medlemmer i stedet for de faktiske appVerdi-ene, og kunne fått admin til
-    // å tro et helt oppgjør manglet når det egentlig var en forbigående feil.
+    // Fail-closed: en svelget feil ville vist «ingen rad enda» for ALLE i
+    // diffen admin bruker til å avgjøre skrivingen.
     const { data: innskuddRader, error: innskuddFeil } = await supabase
       .from('fond_innskudd')
       .select('id, profil_id, belop')
@@ -477,13 +430,11 @@ export async function hentPublisertOppgjor(): Promise<
 
     const alleInnskudd = innskuddRader ?? []
 
-    // Bygg diff-rader: slå opp app-verdi og tell rader per profil
     const rader: OppgjorDiff['rader'] = raderUtenAppVerdi.map((r) => {
       const egneRader = alleInnskudd.filter((i) => i.profil_id === r.profil_id)
       const antallRader = egneRader.length
-      // Kun entydig ved nøyaktig én rad — 0 (ingen rad enda) og >1 (blokkerende
-      // duplikat) gir begge null appVerdi. Number() fordi PostgREST kan serialisere
-      // numeric som string.
+      // Kun entydig ved nøyaktig én rad. Number(): PostgREST kan gi numeric
+      // som string.
       const appVerdi = antallRader === 1 ? Number(egneRader[0].belop) : null
       return {
         profil_id: r.profil_id,
@@ -516,25 +467,21 @@ export async function hentPublisertOppgjor(): Promise<
 export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
   { ok: true } | { ok: false; feil: string }
 > {
-  // ensureAdmin() kastes UTENFOR try/catch — uautoriserte kall skal propagere som
-  // vanlig feil (401/403), ikke pakkes inn som { ok: false } (Policy: Auth).
+  // UTENFOR try/catch: avvist tilgang skal kaste, ikke bli { ok: false }.
   const { supabase, user } = await ensureAdmin()
 
-  // Next.js maskerer feilmeldinger kastet fra server actions i prod (se #459),
-  // så resten av funksjonen returnerer { ok: false, feil: ... } i stedet for å kaste.
+  // Next maskerer kastede meldinger i prod (#459) — returner { ok: false }.
   try {
     const { FOND_OPPGJOR_URL } = await import('@/lib/config')
     if (!FOND_OPPGJOR_URL)
       throw new Error('Henting av oppgjør er ikke konfigurert')
 
-    // Re-valider ALT server-side — stol aldri blindt på klient-payload.
-    // Bevisst ingen re-henting fra kilden her (TOCTOU-herding utenfor scope, #453):
-    // payload re-valideres fullt, kun admin, «det du så er det som skrives».
+    // Re-valider ALT server-side. Bevisst ingen re-henting fra kilden: «det
+    // du så er det som skrives» (TOCTOU-herding utenfor scope, #453).
     const { validerOppgjor } = await import('@/lib/fond-oppgjor')
     const oppgjor = validerOppgjor(oppgjorPayload)
 
-    // Samme resonnement som i hentPublisertOppgjor over: kast på feil i
-    // stedet for å la matchProfil() feiltolke den som «ukjent visningsnavn».
+    // Fail-closed, som i hentPublisertOppgjor.
     const { data: profiler, error: profilerFeil } = await supabase
       .from('profiles')
       .select('id, visningsnavn')
@@ -546,8 +493,7 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
 
     const profilListe = profiler ?? []
 
-    // Samme aliaser som ved henting — ellers ville en kobling admin nettopp
-    // gjorde blitt ignorert i det han trykker «Skriv til appen».
+    // Samme aliaser som ved henting, ellers ignoreres en fersk kobling.
     const { data: aliasRader, error: aliasFeil } = await supabase
       .from('fond_navn_alias')
       .select('api_navn, profil_id')
@@ -557,7 +503,6 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     }
     const aliasMap = new Map((aliasRader ?? []).map((a) => [a.api_navn, a.profil_id]))
 
-    // Match alle andeler til profiler — kast hvis ukjent eller tvetydig navn
     const { harDetaljer } = await import('@/lib/fond-oppgjor')
     const matchede: {
       profil_id: string
@@ -571,9 +516,8 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     }[] = []
     for (const andel of oppgjor.andeler) {
       const match = matchProfil(profilListe, aliasMap, andel.visningsnavn)
-      // Ved SKRIVING kaster vi fortsatt: kommer vi hit med et ukjent navn, har
-      // noe endret seg mellom hent og skriv (profil deaktivert, alias slettet),
-      // og da skal ingenting skrives før admin har sett på det på nytt.
+      // Ved skriving kaster vi: noe har endret seg siden henting (profil
+      // deaktivert, alias slettet), og admin må se på det på nytt.
       if (!match)
         throw new Error(
           `Ukjent navn i oppgjøret: «${andel.visningsnavn}» — koble det til et medlem før du skriver`,
@@ -592,10 +536,8 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       })
     }
 
-    // Sjekk at ingen profil har flere innskudd-rader — kast FØR første skriving.
-    // En svelget feil her ville gitt alleRader=[] og latt duplikat-sjekken
-    // under passere stille selv om duplikater faktisk fantes — nøyaktig
-    // sikkerhetsnettet kommentaren over lover at vi har.
+    // Duplikat-sjekk FØR første skriving. Fail-closed: alleRader=[] ville
+    // latt sjekken passere stille.
     const { data: alleInnskudd, error: alleInnskuddFeil } = await supabase
       .from('fond_innskudd')
       .select('id, profil_id')
@@ -613,13 +555,10 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
         )
     }
 
-    // Skriv andeler — upsert per profil (update hvis rad finnes, insert ellers).
-    // snapshot_dato overstyrer alltid dato — det er snapshot-semantikken (#453).
+    // snapshot_dato overstyrer alltid dato — snapshot-semantikk (#453).
     for (const m of matchede) {
-      // Fjorårstallene skrives sammen med totalen. Mangler detaljpakken (eldre
-      // API-svar), nullstilles de bevisst framfor å bli stående: da ville en
-      // gammel oppdeling overlevd et nytt oppgjør og sluttet å summere seg til
-      // den nye totalen — nøyaktig løgnen invarianten skal hindre.
+      // Uten detaljpakke nullstilles fjorårstallene bevisst — en gammel
+      // oppdeling ville ellers ikke lenger summere seg til den nye totalen.
       const fjor = {
         oppspart_akkumulert: m.detaljer?.oppspart_akkumulert ?? 0,
         renteandel_i_fjor: m.detaljer?.renteandel_i_fjor ?? 0,
@@ -645,9 +584,8 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       }
     }
 
-    // Bevegelsene: én RPC som gjør slett-så-sett-inn atomisk per person (se
-    // migrasjon 126). Kalles kun når kilden faktisk sendte detaljer — et eldre
-    // API-svar skal IKKE tørke ut bevegelser som alt ligger i appen.
+    // Atomisk slett-så-sett-inn per person (mig. 126). Kun med detaljer — et
+    // eldre API-svar skal ikke tørke ut eksisterende bevegelser.
     const medDetaljer = matchede.filter((m) => m.detaljer !== null)
     if (medDetaljer.length > 0) {
       const { error: bevegelseFeil } = await supabase.rpc('skriv_fond_bevegelser', {
@@ -665,11 +603,8 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       }
     }
 
-    // Skriv saldo via skrivHistorikk-logikken fra oppdaterKontantSaldo (historikk-logging inkludert).
-    // maybeSingle (ikke single): singletonen kan legitimt mangle før første
-    // gangs seeding — det skal IKKE kaste. En ekte feil skal det derimot, for
-    // uten det ville skrivHistorikk() under logget «endret fra 0» selv om
-    // reell gammel saldo var ukjent, og forfalsket regnskapshistorikken.
+    // maybeSingle: singletonen kan mangle før seeding. En ekte feil kaster —
+    // ellers logger historikken «endret fra 0» med ukjent gammel saldo.
     const { data: gammelKontant, error: gammelKontantFeil } = await supabase
       .from('fond_kontant')
       .select('saldo')
@@ -690,17 +625,15 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
 
     await skrivHistorikk(supabase, user.id, 'kontant', null, Number(gammelKontant?.saldo ?? 0), oppgjor.saldo)
 
-    // Cache-revalidering skjer i egen indre try/catch: DB-skrivingen (innskudd +
-    // saldo + historikk) er allerede fullført her, så suksess skal reflektere
-    // DB-tilstand, ikke cache-tilstand. En revalidatePath som kaster må aldri
-    // velte et vellykket oppgjør til { ok: false } (se #459).
+    // Egen try/catch: skrivingen er fullført, og en kastende revalidatePath
+    // skal aldri gjøre den til { ok: false } (#459).
     try {
       revalidatePath('/fond')
       revalidatePath('/fond/rediger')
       revalidatePath('/profil')
       revalidatePath('/', 'layout')
     } catch {
-      // Bevisst svelget — revalidering er best-effort etter en fullført skriving.
+      // Bevisst svelget — best-effort.
     }
 
     return { ok: true }
@@ -713,11 +646,7 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
   const { supabase, user } = await ensureAdmin()
   validerBelop(nySaldo, 'Saldo')
 
-  // Les gammel saldo; kan mangle hvis singleton ikke er seeded enda —
-  // maybeSingle håndterer det som en legitim null, ikke en feil (se samme
-  // resonnement i skrivPublisertOppgjor over). En ekte feil skal fortsatt
-  // kaste, ellers logges «endret fra 0» i historikken selv om reell gammel
-  // saldo var ukjent.
+  // Samme resonnement som saldo-oppslaget i skrivPublisertOppgjor.
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_kontant')
     .select('saldo')
@@ -728,7 +657,6 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
     throw new Error(`Kunne ikke lese gjeldende saldo for historikk: ${gammelFeil.message}`)
   }
 
-  // UPSERT: insert hvis rad ikke finnes, update ellers
   const { error } = await supabase
     .from('fond_kontant')
     .upsert({ id: 1, saldo: nySaldo, oppdatert: naa() }, { onConflict: 'id' })
@@ -738,21 +666,15 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
   revalider()
 }
 
-// Kobler et navn fra oppgjøret til et medlem. Koblingen står til den slettes,
-// så neste oppgjør med samme navn matcher automatisk (#571).
-//
-// Upsert på api_navn: å koble et navn på nytt skal overskrive, ikke feile.
-// Admin som oppdager at han pekte på feil person må kunne rette det uten å
-// gå veien om en slette-knapp.
+// Koblingen står til den slettes, så neste oppgjør matcher automatisk (#571).
+// Upsert på api_navn: å koble på nytt retter en feil kobling.
 export async function koblNavnTilMedlem(apiNavn: string, profilId: string) {
   const { supabase, user } = await ensureAdmin()
 
   const navn = apiNavn.trim()
   if (!navn) throw new Error('Navnet fra oppgjøret mangler')
 
-  // Vakt mot å koble til en deaktivert profil — koblingen ville sett riktig ut
-  // i UI-et, men matchProfil() hopper over inaktive og navnet ville dukket opp
-  // som uavklart igjen ved neste henting.
+  // matchProfil() hopper over inaktive, så navnet ville blitt uavklart igjen.
   const { data: profil, error: profilFeil } = await supabase
     .from('profiles')
     .select('id, aktiv')
@@ -773,7 +695,6 @@ export async function koblNavnTilMedlem(apiNavn: string, profilId: string) {
   revalidatePath('/fond/rediger')
 }
 
-// Alle aktive medlemmer, for nedtrekket i koblings-UI-et.
 export async function hentAktiveMedlemmer(): Promise<
   { id: string; navn: string; visningsnavn: string | null }[]
 > {

@@ -15,22 +15,21 @@ type Tab = {
   nokkel: 'agenda' | 'chat' | 'fond' | 'klubb'
   /** Path-prefikser som markerer denne tab-en som aktiv. */
   prefikser: string[]
-  /** Kun synlig for admin-brukere (brukes i testfase-gating per #443). */
+  /** Kun synlig for admin, med mindre et eget flagg åpner den (#443). */
   kunAdmin?: boolean
 }
 
 const TABS: Tab[] = [
   { href: '/', label: 'Agenda', nokkel: 'agenda', prefikser: ['/poll', '/arrangementer', '/meldinger'] },
-  // /samtaler aktiverer IKKE chat-tabben visuelt. Privatmeldinger åpnes fra profil-siden (#256). CHAT_TAB_PREFIKSER i lib/navigasjon.ts beholdes for pull-to-refresh-deaktivering.
+  // /samtaler aktiverer IKKE chat-tabben — privatmeldinger åpnes fra profilen (#256).
+  // CHAT_TAB_PREFIKSER i lib/navigasjon.ts er noe annet (pull-to-refresh).
   { href: '/chat', label: 'Chat', nokkel: 'chat', prefikser: ['/chat'] },
   { href: '/klubbinfo', label: 'Klubb', nokkel: 'klubb', prefikser: ['/klubbinfo', '/kaaringer', '/album'] },
-  // Fond ligger bevisst lengst til høyre (admins ønske). Alltid synlig for admin;
-  // for vanlige medlemmer styres synligheten av bryteren i /innstillinger (#447).
+  // Bevisst lengst til høyre. For vanlige medlemmer styres den av bryteren i /innstillinger (#447).
   { href: '/fond', label: 'Fond', nokkel: 'fond', prefikser: ['/fond'], kunAdmin: true },
 ]
 
-// localStorage-nøkkel for «har sett Fond-fanen» — ny-prikken vises til første besøk.
-// Per enhet (som tema-valget); prikken kan dukke opp igjen på en annen enhet, det er greit.
+// «Har sett Fond-fanen» — ny-prikken vises til første besøk. Per enhet, bevisst.
 const FOND_SETT_KEY = 'fond_fane_sett'
 
 function erAktiv(tab: Tab, pathname: string): boolean {
@@ -54,53 +53,37 @@ type Props = {
   /** False hvis Chat-fanen er skrudd av for vanlige medlemmer (app_innstillinger.chat_fane).
       Default true — chat skal aldri forsvinne pga. manglende prop (f.eks. SSR-fallback). */
   visChat?: boolean
-  /** True når en tur/møte pågår OG riktig klubb-flagg (`reisemodus`/`moetemodus`) er på (#723/#780) — styrer om toggelen vises. */
+  /** Tur/møte pågår OG riktig klubb-flagg er på (#723/#780) — styrer om toggelen vises. */
   reisemodusTilgjengelig?: boolean
-  /** True når kartmodus faktisk er PÅ for denne brukeren (ikke slått av for arrangementet). Styrer om headeren skjuler seg selv på /kart. */
+  /** Kartmodus er faktisk PÅ for denne brukeren — headeren skjuler seg da på /kart. */
   reisemodusPaa?: boolean
-  /** Hvilken modus som er aktuell — 'reise' eller 'moete' — sendt videre til ReisemodusToggle. null når ingen er tilgjengelig. */
+  /** Sendes videre til ReisemodusToggle; null når ingen modus er tilgjengelig. */
   kartmodus?: 'reise' | 'moete' | null
 }
 
 /**
- * Sticky topp-header med tre alltid-synlige tabs (Agenda / Chat / Klubb) og
- * profil-snarvei høyre. Aktiv tab markert med en animert pill-bakgrunn som
- * glir mellom tabene via CSS transform (FLIP-teknikk). Path-prefikser
- * styrer hvilken tab som er aktiv på undersider (f.eks. `/arrangementer/123`
- * → Agenda aktiv).
- *
- * Erstattet bottom-nav for å eliminere bug-klassen vi traff i #99, #104, #147,
- * #151, #153 hvor iOS-tastatur kolliderte med fixed bottom-elementer. Se
- * Policy: Navigasjon i CLAUDE.md.
+ * Sticky topp-header med faner og profil-snarvei til høyre. Aktiv fane markeres
+ * med en pill-bakgrunn som glir via transform; path-prefikser avgjør aktiv fane
+ * på undersider. Ingen bottom-nav — se CLAUDE.md § Policy: Navigasjon.
  */
 export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = false, ulestVarsler = false, visFond = false, visChat = true, reisemodusTilgjengelig = false, reisemodusPaa = false, kartmodus = null }: Props) {
   const pathname = usePathname()
 
-  // Filtrer bort tabs med kunAdmin=true for ikke-admin-brukere,
-  // men vis Fond-taben for alle hvis visFond-flagget er skrudd på (#447).
-  // Chat-taben er motsatt: synlig som default, men kan skrus av for vanlige
-  // medlemmer via chat_fane-flagget — admin ser den alltid.
+  // Fond: av som default, kan skrus på for medlemmer (#447). Chat: på som
+  // default, kan skrus av. Admin ser begge alltid.
   const synligeTabs = TABS.filter(t => {
     if (t.nokkel === 'chat') return visChat || kanAdministrere(rolle)
     return !t.kunAdmin || kanAdministrere(rolle) || (t.nokkel === 'fond' && visFond)
   })
   const fondSynlig = synligeTabs.some(t => t.nokkel === 'fond')
 
-  // ── Mobilgeometri (#723-review) ───────────────────────────────────────────
-  // Innerbredden på målplattformen er 358 px (390 px iPhone, app-skallet maks
-  // 480, 16 px padding på hver side). Fire faner i normalskala pluss avataren
-  // ligger allerede på ~344 px; legger «Reise»-pillen seg oppå, sprenger raden
-  // linja — og tabs-containeren har verken wrap, overflow eller krymping å ta
-  // det igjen på, så innhold havner utenfor viewporten på hver ikke-kart-rute.
-  //
-  // Terskelen teller ELEMENTER, ikke skjermbredde: målplattformen ER én bredde
-  // (jf. CLAUDE.md § Målplattform), og det som varierer er hvor mange faner
-  // brukeren ser og om toggelen finnes. En media query ville svart på feil
-  // spørsmål.
+  // ── Mobilgeometri (#723) ──────────────────────────────────────────────────
+  // Innerbredde 358 px (390 px iPhone − 2×16 padding). Fire faner + avatar
+  // tar ~344 px; med «Reise»-pillen i tillegg sprenger raden viewporten.
+  // Terskelen teller ELEMENTER, ikke skjermbredde: målplattformen er én bredde
+  // (CLAUDE.md § Målplattform), så en media query ville svart på feil spørsmål.
   const kompakt = synligeTabs.length + (reisemodusTilgjengelig ? 1 : 0) >= 5
 
-  // Alle målene som endrer seg mellom de to skalaene, samlet ett sted — ikke
-  // fem ternærer spredt nedover render-treet.
   const MAAL = kompakt
     ? { ytrePadding: 10, ytreGap: 6, faneGap: 2, faneXPadding: 9, faneSkrift: 15, hoeyreGap: 6 }
     : { ytrePadding: 16, ytreGap: 8, faneGap: 6, faneXPadding: 14, faneSkrift: 17, hoeyreGap: 8 }
@@ -113,15 +96,12 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   // vokser på Link-omslaget rundt i stedet (#700).
   const AVATAR_TREFF = treffflateRundt({ hoyde: 38, bredde: 38 })
 
-  // «Ny fane»-prikk på Fond: vises til brukeren har besøkt /fond første gang,
-  // deretter aldri igjen (per enhet). Settes i effect — localStorage finnes ikke
-  // under SSR, og prikken skal ikke gi hydration-mismatch.
+  // Settes i effect: localStorage finnes ikke under SSR (unngår hydration-mismatch).
   const [nyFondPrikk, setNyFondPrikk] = useState(false)
   useEffect(() => {
     if (!fondSynlig) return
     try {
       if (pathname.startsWith('/fond')) {
-        // Første besøk registrert — prikken er gjort jobben sin og forsvinner for godt
         localStorage.setItem(FOND_SETT_KEY, '1')
         setNyFondPrikk(false)
       } else if (!localStorage.getItem(FOND_SETT_KEY)) {
@@ -130,15 +110,13 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     } catch { /* localStorage utilgjengelig (privat modus e.l.) — da vises ingen prikk */ }
   }, [pathname, fondSynlig])
 
-  // Referanser for å måle pill-posisjon relativt til tabs-containeren
   const tabsRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Map<string, HTMLAnchorElement | null>>(new Map())
 
-  // pillRect = null betyr "ingen aktiv tab" (og vi viser ikke pill-en)
+  // null = ingen aktiv tab, ingen pill.
   const [pillRect, setPillRect] = useState<{ left: number; width: number } | null>(null)
   const [reduserBevegelse, setReduserBevegelse] = useState(false)
 
-  // Lytt på prefers-reduced-motion — skrur av transition for brukere som ønsker det
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     setReduserBevegelse(mq.matches)
@@ -147,11 +125,9 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Trekk ut måling til en lokal funksjon — brukes av både useLayoutEffect og resize-handleren
   const maalPill = () => {
     const container = tabsRef.current
     if (!container) return
-    // Bruk synligeTabs — pill skal måles mot faktisk rendret tab-element
     const aktivTab = synligeTabs.find(t => erAktiv(t, pathname))
     if (!aktivTab) {
       setPillRect(null)
@@ -159,31 +135,23 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
     }
     const tabEl = tabRefs.current.get(aktivTab.nokkel)
     if (!tabEl) return
-    // Mål posisjon relativt til tabs-containeren (ikke viewport) — dette er
-    // translateX-verdien vi sender til pill-elementet
+    // Relativt til tabs-containeren (ikke viewport) — det er pillens translateX.
     const cRect = container.getBoundingClientRect()
     const tRect = tabEl.getBoundingClientRect()
     setPillRect({ left: tRect.left - cRect.left, width: tRect.width })
   }
 
-  // useLayoutEffect = kjører synkront etter DOM-oppdatering, men før paint —
-  // gir riktig posisjon uten visuelt hopp ved navigasjon. Tradeoff: på første
-  // SSR-render finnes ikke pill (pillRect er null) — den popper inn umiddelbart
-  // etter hydrering. Knapt synlig og vurdert akseptabelt for å unngå at vi må
-  // duplisere aktiv-logikken i en SSR-fallback. Se #200-review.
-  // synligeTabs.length i deps: når Fond-taben dukker opp/forsvinner (visFond
-  // endres uten navigasjon) skifter tab-bredden, så pill må re-måles selv om
-  // pathname er uendret. #447-review.
-  // kompakt i deps: skalabyttet endrer hver tabs bredde uten at pathname eller
-  // antallet faner nødvendigvis gjør det (reisemodusTilgjengelig kan slå om
-  // alene), og pill-en ville ellers blitt stående på gammel bredde (#723-review).
+  // useLayoutEffect: måles før paint, så pillen ikke hopper ved navigasjon. På
+  // første SSR-render finnes ingen pill; den popper inn etter hydrering —
+  // akseptert for å slippe å duplisere aktiv-logikken (#200).
+  // synligeTabs.length og kompakt i deps: begge endrer fanebredder uten
+  // navigasjon (#447, #723).
   useLayoutEffect(() => {
     maalPill()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, synligeTabs.length, kompakt])
 
-  // Re-mål ved resize (f.eks. rotering av telefon). rAF-throttles så vi ikke
-  // gjør getBoundingClientRect flere ganger per frame under rotasjonen.
+  // Re-mål ved resize/rotasjon, rAF-throttlet til én måling per frame.
   useEffect(() => {
     let raf = 0
     const onResize = () => {
@@ -223,18 +191,12 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
   }
 
   const profilAktiv = pathname === '/profil'
-  // Generalsekretær har allerede gul ring rundt avataren — å legge på en
-  // outline i tillegg gir to overlappende gule ringer. Drop outline her,
-  // gloeden alene markerer at /profil er aktiv siden for ham.
+  // Generalsekretærens gule glød + outline ville gitt to overlappende ringer.
   const visAktivOutline = profilAktiv && !harGulGloed(rolle ?? null)
-  // Prikken vises kun når profil-siden ikke er aktiv (samme logikk som chat-prikken)
   const visProfilPrikk = ulestVarsler && !profilAktiv
 
-  // Reisemodus (#723): /kart er fullskjerm uten header mens reisemodus er
-  // PÅ. PosisjonsKart rendrer sin egen flytende bar (ReisemodusBar) med
-  // avatar+toggle i samme hjørne headeren ellers ville brukt. Må stå ETTER
-  // alle hooks over — en tidlig return øverst i komponenten ville brutt
-  // rules-of-hooks.
+  // Kartmodus (#723): /kart er fullskjerm uten header; ReisemodusBar overtar.
+  // Må stå ETTER alle hooks (rules of hooks).
   if (reisemodusPaa && pathname.startsWith('/kart')) return null
 
   return (
@@ -262,17 +224,12 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             display: 'flex',
             alignItems: 'center',
             gap: MAAL.faneGap,
-            // minWidth: 0 gjør raden krympbar i det hele tatt (flex-items har
-            // min-width: auto by default). Fanene selv har whiteSpace: nowrap,
-            // så dette gir ingen tekstbryting — det er en siste skanse som
-            // holder eventuell overflod INNENFOR containeren i stedet for å la
-            // den dytte avataren ut av viewporten.
+            // Siste skanse: holder overflod inne i raden i stedet for å dytte
+            // avataren ut av viewporten (flex-items har min-width: auto).
             minWidth: 0,
           }}
         >
-          {/* Delt pill-bakgrunn — glir mellom tabs via translateX i stedet for
-              at hver tab crossfader sin egen bakgrunn. aria-hidden fordi det
-              kun er et visuelt dekorasjonselement uten semantisk innhold. */}
+          {/* Delt pill-bakgrunn som glir mellom tabs i stedet for crossfade per tab. */}
           {pillRect && (
             <span
               aria-hidden="true"
@@ -296,20 +253,18 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
 
           {synligeTabs.map(tab => {
             const aktiv = erAktiv(tab, pathname)
-            // Prikk på Chat = uleste meldinger; prikk på Fond = ny fane brukeren
-            // ikke har besøkt ennå. Aldri når taben er aktiv.
+            // Chat: uleste meldinger. Fond: ny fane ikke besøkt ennå.
             const visPrikk =
               (tab.nokkel === 'chat' && ulestChat && !aktiv) ||
               (tab.nokkel === 'fond' && nyFondPrikk && !aktiv)
             const tabStil: CSSProperties = {
-              position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk og z-index over pill
-              zIndex: 1, // løft tekst over pill-bakgrunnen
+              position: 'relative',
+              zIndex: 1, // over pill-bakgrunnen
               paddingTop: 8 + TREFF.utvidY,
               paddingBottom: 8 + TREFF.utvidY,
               paddingLeft: MAAL.faneXPadding,
               paddingRight: MAAL.faneXPadding,
-              // Negativ margin nøytraliserer den ekstra paddingen (#700) — pillen
-              // og radhøyden er uendret, kun tap-flaten vokser.
+              // Nøytraliserer ekstra padding: kun tap-flaten vokser (#700).
               marginTop: -TREFF.utvidY,
               marginBottom: -TREFF.utvidY,
               borderRadius: 999,
@@ -319,7 +274,6 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
               fontWeight: aktiv ? 600 : 400,
               color: aktiv ? 'var(--accent)' : 'var(--text-tertiary)',
               opacity: aktiv ? 1 : 0.6,
-              // Ingen background her — pill-elementet over håndterer bakgrunnen
               textDecoration: 'none',
               letterSpacing: '-0.3px',
               lineHeight: 1,
@@ -342,20 +296,17 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
                       aria-hidden="true"
                       style={{
                         position: 'absolute',
-                        // + TREFF.utvidY (#700): prikken skal sitte ved det synlige
-                        // fanehjørnet, ikke oppe i den usynlige tap-flaten.
+                        // Ved det synlige fanehjørnet, ikke i den usynlige tap-flaten (#700).
                         top: 4 + TREFF.utvidY,
                         right: 6,
                         width: 6,
                         height: 6,
                         borderRadius: '50%',
                         background: 'var(--accent)',
-                        // Skygge i header-bg-fargen løfter prikken visuelt fra pill-bakgrunnen
                         boxShadow: '0 0 0 2px var(--bg-header)',
                       }}
                     />
-                    {/* Sr-only — behold tab-navnet som accessible name, legg tilleggsinfo
-                        som ekstra tekst for skjermlesere uten å overstyre. */}
+                    {/* Sr-only tillegg — overstyrer ikke tab-navnet som accessible name. */}
                     <span
                       style={{
                         position: 'absolute',
@@ -375,17 +326,10 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
           })}
         </div>
 
-        {/* Reisemodus-toggle + profil-snarvei, gruppert sammen — uten denne
-            wrapperen ville justifyContent: space-between på innerStyle spredt
-            tre barn (tabs / toggle / avatar) ut over hele bredden i stedet for
-            å holde toggle og avatar samlet «øverst til høyre», et bevisst
-            valg (#723). */}
+        {/* Wrapperen holder toggle + avatar samlet til høyre; ellers ville
+            space-between spredt tre barn over bredden (#723). */}
         <div style={{ display: 'flex', alignItems: 'center', gap: MAAL.hoeyreGap, flexShrink: 0 }}>
-          {/* Kun når en tur/møte pågår og riktig klubb-flagg er på (#780).
-              Samme hjørne i begge moduser — her, til venstre for
-              profil-snarveien, når headeren i det hele tatt vises (dvs.
-              kartmodus AV, eller vi er på en annen rute enn /kart — se
-              ReisemodusBar for fullskjerm-varianten). */}
+          {/* Fullskjerm-varianten på /kart er ReisemodusBar (#780). */}
           {reisemodusTilgjengelig && kartmodus && (
             <ReisemodusToggle paa={reisemodusPaa} variant="header" modus={kartmodus} />
           )}
@@ -396,7 +340,7 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             aria-label="Min profil"
             aria-current={profilAktiv ? 'page' : undefined}
             style={{
-              position: 'relative', // nødvendig for absolutt-posisjonert ulest-prikk
+              position: 'relative',
               display: 'block',
               borderRadius: '50%',
               outline: visAktivOutline ? '1.5px solid var(--accent)' : 'none',
@@ -421,26 +365,22 @@ export default function TopHeader({ brukerNavn, bildeUrl, rolle, ulestChat = fal
             />
             {visProfilPrikk && (
               <>
-                {/* Visuell prikk — større og mer "stikker ut" enn chat-tab-prikken
-                    fordi avataren er rundt og prikken må konkurrere mot bilde-innholdet.
-                    Se #205 — admin ba om mer tydelig versjon. */}
+                {/* Større enn fane-prikken: må konkurrere mot bildeinnholdet (#205). */}
                 <span
                   aria-hidden="true"
                   style={{
                     position: 'absolute',
-                    // + utvid* (#700): prikken sitter ved det synlige avatar-hjørnet.
+                    // Ved det synlige avatar-hjørnet (#700).
                     top: -2 + AVATAR_TREFF.utvidY,
                     right: -2 + AVATAR_TREFF.utvidX,
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
                     background: 'var(--accent)',
-                    // 0.95 i original — marginalt mørkere enn 0.85 i tab-prikken,
-                    // men avatar-plassering trenger ikke skille seg; bruker samme token.
                     boxShadow: '0 0 0 2.5px var(--bg-header)',
                   }}
                 />
-                {/* Sr-only — behold "Min profil" som accessible name */}
+                {/* Sr-only — «Min profil» forblir accessible name. */}
                 <span
                   style={{
                     position: 'absolute',

@@ -1,11 +1,6 @@
-// Cursor-koding for paginering på /tidligere-siden.
-// Siden blander tre element-typer (arrangementer, meldinger, polls) som
-// hver pagineres uavhengig med keyset — en cursor inneholder én posisjon
-// per type. null betyr «ingen cursor satt ennå» (hent fra toppen).
-//
-// Vi bruker base64url (ikke base64) for å slippe URL-escape av +/ i query
-// strings. Buffer.from(..., 'base64url') er Node.js ≥ 14 og kjører trygt
-// i Next.js server-kontekst.
+// Cursor for /tidligere. Arrangementer, meldinger og polls pagineres hver for
+// seg med keyset, så cursoren har én posisjon per type; null = fra toppen.
+// base64url slipper URL-escape av +/.
 
 export type TidligereCursor = {
   a: [string, string] | null  // arrangementer: [start_tidspunkt, id]
@@ -13,98 +8,62 @@ export type TidligereCursor = {
   p: [string, string] | null  // polls:        [svarfrist, id]
 }
 
-// Cursor-kompatibilitet ved denne endringen (#491): gamle cursors i delte
-// eller bokmerkede URL-er bærer verdier fra FØR sorterings_tidspunkt fantes,
-// dvs. sist_aktivitet. For alle ikke-arkiverte meldinger er sist_aktivitet
-// og sorterings_tidspunkt identisk verdi (coalesce faller til sist_aktivitet
-// når arkivert_tidspunkt er null), så disse cursorene fortsetter å virke
-// uendret. Arkiverte meldinger kan derimot degradere på to måter, og ingen av
-// dem retter seg av seg selv innenfor pagineringskjeden:
-//   1. Tapt rad: en melding med sist_aktivitet < cursorverdien som arkiveres
-//      ETTER at cursoren ble laget, får sorterings_tidspunkt > cursorverdien
-//      og filtreres bort av keyset-filteret (.lt) — den dukker aldri opp på
-//      side 2, 3, … i den kjeden.
-//   2. Duplikat over deploy-grensa: en melding arkivert for lenge siden
-//      (arkivert_tidspunkt < cursorverdien, sist_aktivitet > cursorverdien)
-//      ble vist på side 1 av gammel kode og kvalifiserer nå til side 2 av ny.
-// Begge retter seg ved en fersk lasting av /tidligere, hvor raden ligger
-// korrekt sortert. Vi har bevisst ikke lagt inn versjonering av cursor-
-// formatet for dette: vinduet er kort (kun cursors laget før deployet),
-// treffer kun arkiverte meldinger, og koster ett klikk på «Tidligere».
+// Cursorer laget før #491 bærer sist_aktivitet for meldinger. For ikke-arkiverte
+// er den lik sorterings_tidspunkt, så de virker. Arkiverte kan tapes eller
+// dupliseres i en gammel pagineringskjede; en fersk lasting retter det. Bevisst
+// ingen cursor-versjonering for dette (#491).
 
 export function enkodeCursor(c: TidligereCursor): string {
   return Buffer.from(JSON.stringify(c), 'utf8').toString('base64url')
 }
 
-// === Posisjons- og «finnes det mer»-logikk for én kilde (se #488) ===
+// === Posisjon og «finnes det mer» for én kilde (#488) ===
 //
-// To spørsmål er lett å blande sammen, men er ikke det samme:
-//   1. Hvor skal neste side starte for denne typen? (posisjon i keyset)
-//   2. Finnes det i det hele tatt en neste side? (om «Last mer» rendres)
-// #488 var et symptom av at disse var slått sammen — «Last mer» ble vist
-// på siste side fordi posisjons-logikken (feilaktig) også avgjorde
-// synlighet.
+// To ulike spørsmål som ikke må blandes: hvor neste side starter, og om
+// «Last mer» skal vises i det hele tatt. #488 var at de var slått sammen.
 export type Posisjon = [string, string]
 
 export type KildeTilstand = {
   inn: Posisjon | null // input-cursor for typen (null = les fra toppen)
-  // Rader i sidevinduet — dvs. ETTER klipp til sidestørrelse, ikke rå-svarets
-  // lengde (som er sidestørrelse+1). Feltet het `antallLest` før; navnet
-  // inviterte til å sende inn rå-svaret, og gjør man det blir
-  // `antallEmittert < antallISidevindu` permanent true og hele #488-fiksen
-  // forsvinner stille.
+  // Rader ETTER klipp til sidestørrelse, ikke rå-svarets lengde (N+1). Sendes
+  // rå-svaret inn, blir `antallEmittert < antallISidevindu` alltid sann og
+  // #488-fiksen forsvinner stille.
   antallISidevindu: number
   antallEmittert: number // rader av typen som faktisk kom med i den viste siden
   sisteEmittert: Posisjon | null
   flereEnnSiden: boolean // spørringen returnerte mer enn sidestørrelsen
-  // Tri-state mot #492: en avskrudd kilde (filteret ekskluderer typen) har
-  // ALLTID feilet: false — den ble aldri spurt. «Noen kilde feilet» betyr
-  // derfor reelt «noen *aktiv* kilde feilet», ikke «alle tre feilet».
+  // En avskrudd kilde (filteret ekskluderer typen) har alltid feilet: false —
+  // den ble aldri spurt (#492).
   feilet: boolean
 }
 
-// Posisjonen for neste side er ubetinget «siste emitterte, ellers inn-posisjonen
-// uendret». Vi nullstiller ALDRI en posisjon for å markere «uttømt» — null
-// betyr «start fra toppen» i keyset-filteret (se page.tsx), så det ville gitt
-// restart og duplikater for en kilde som fortsatt har mer å hente.
+// Aldri nullstill en posisjon for å markere «uttømt»: null betyr «fra toppen»
+// i keyset-filteret og ville gitt duplikater.
 export function nestePosisjon(k: KildeTilstand): Posisjon | null {
   return k.sisteEmittert ?? k.inn
 }
 
-// «Har denne kilden mer» = finnes det rader igjen etter den sist emitterte.
-// Eksakt når spørringen lykkes: `flereEnnSiden=false` betyr at de leste radene
-// *er* hele restmengden, så false her er et sant «uttømt» — ikke et gjett.
-// Konservativ som feilmodus: ved tvil viser vi lenka, fordi skjult historikk er
-// verre enn en tom side. Blir «Last mer» stående på en åpenbart siste side, er
-// det en regresjon å grave i — ikke forventet oppførsel.
-//   - `flereEnnSiden`: spørringen leste mer enn sidestørrelsen (den kjente
-//     «hent N+1»-sjekken).
-//   - `antallEmittert < antallISidevindu`: alle N leste radene var av denne
-//     typen, men noen ble kastet i merge-klippingen på tvers av typer
-//     (side.slice) og er dermed ikke vist ennå.
-// `feilet` leses bevisst IKKE her — porten mot en feilet kilde ligger i
-// byggNesteCursor (under), ikke i denne funksjonen. Se #492.
+// Eksakt når spørringen lykkes; ved tvil vises lenka, fordi skjult historikk er
+// verre enn en tom side.
+//   - `flereEnnSiden`: «hent N+1»-sjekken.
+//   - `antallEmittert < antallISidevindu`: leste rader ble kastet i
+//     merge-klippingen på tvers av typer og er ikke vist ennå.
+// `feilet` leses bevisst ikke her — porten ligger i byggNesteCursor (#492).
 export function harMerFraKilde(k: KildeTilstand): boolean {
   return k.flereEnnSiden || k.antallEmittert < k.antallISidevindu
 }
 
 export function byggNesteCursor(kilder: { a: KildeTilstand; m: KildeTilstand; p: KildeTilstand }): string | null {
   const { a, m, p } = kilder
-  // Invariant (#492): en cursor emitteres kun fra en side der alle aktive
-  // kilder lyktes. Uten denne gaten peker cursoren forbi rader vi aldri
-  // leste — «Last mer» ville da hoppet over historikk i stedet for å
-  // signalisere at noe manglet.
+  // Invariant: cursor kun når alle aktive kilder lyktes — ellers hopper
+  // «Last mer» over rader vi aldri leste (#492).
   if (a.feilet || m.feilet || p.feilet) return null
   if (!harMerFraKilde(a) && !harMerFraKilde(m) && !harMerFraKilde(p)) return null
   return enkodeCursor({ a: nestePosisjon(a), m: nestePosisjon(m), p: nestePosisjon(p) })
 }
 
-// Streng validering av cursor-feltene. Begge verdiene plasseres rett inn i
-// PostgREST `.or()`-uttrykk («start_tidspunkt.lt.<iso>,…»), så vi MÅ avvise
-// alt som inneholder komma, parentes, punktum-tegn utenfor fast posisjon,
-// osv. — ellers åpner vi en filter-injection-flate hvor en bruker kan
-// base64-enkode cursorverdier som injiserer ekstra PostgREST-uttrykk.
-// Se review-funn på branch eksp/issue-176.
+// Streng validering: verdiene settes rett inn i PostgREST `.or()`-uttrykk, så
+// alt utenom ren ISO/UUID-form ville åpnet for filter-injection.
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 const UUID_RE = /^[0-9a-f-]{36}$/i
 
@@ -112,9 +71,7 @@ export function dekodeCursor(s: string | undefined): TidligereCursor {
   if (!s) return { a: null, m: null, p: null }
   try {
     const obj = JSON.parse(Buffer.from(s, 'base64url').toString('utf8'))
-    // Et gyldig par består av (ISO-timestamp, UUID). Alt annet → null
-    // (behandles som «start fra toppen for denne typen»). Vi tillater ikke
-    // delvis ugyldig cursor: hele paret faller hvis ett felt er feil.
+    // Ugyldig par → null for den typen (fra toppen); ingen delvis godtatte par.
     const erGyldigPar = (v: unknown): v is [string, string] =>
       Array.isArray(v) &&
       v.length === 2 &&
@@ -128,7 +85,6 @@ export function dekodeCursor(s: string | undefined): TidligereCursor {
       p: erGyldigPar(obj.p) ? obj.p : null,
     }
   } catch {
-    // Ugyldig cursor — behandle som tom (start fra toppen)
     return { a: null, m: null, p: null }
   }
 }

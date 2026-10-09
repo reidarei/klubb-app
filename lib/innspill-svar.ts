@@ -1,32 +1,17 @@
-// Bygger teksten et medlem faktisk får når innspillet hans lukkes (#633).
+// Teksten et medlem får når innspillet hans lukkes (#633). Kilden er
+// endringslogg-oppføringen merket `innspill: [<nr>]`, aldri GitHub-
+// kommentaren — se CLAUDE.md § Policy: Varsler.
 //
-// Den forrige løsningen hentet et 200-tegns utdrag av siste GitHub-kommentar
-// — en tekst skrevet til produkteieren (PR-numre, arkitekturvalg, notater for
-// ettertiden), ikke til medlemmet. Kilden er nå endringslogg-oppføringen som
-// er merket med issue-nummeret via `innspill: [<nr>]` i
-// lib/endringslogg-data.ts — den er allerede skrevet ikke-teknisk og til
-// medlemmene, se #595.
+// Identitetsfri, deles ordrett med klubb-app.
 //
-// Helt identitetsfri (DIVERGERER ikke — deles ordrett med klubb-app): ingen
-// klubbnavn, ingen medlemsnavn.
-//
-// Issue-malen har både klokkeslett og versjon; vi tar med versjonen og dropper
-// klokkeslettet bevisst. Det gamle «live i appen ca. kl. HH:mm» var et gjett
-// regnet ut fra webhook-tidspunktet, og med ordningskravet (issuet lukkes
-// etter deploy-verifisering) er endringen allerede ute når varselet går —
-// da er et framtidig klokkeslett direkte feil. Versjonen er etterprøvbar:
-// medlemmet finner den igjen i endringsloggen under Klubb.
+// Versjon, ikke klokkeslett: issuet lukkes etter deploy, så et klokkeslett
+// ville vært et gjett; versjonen kan medlemmet finne igjen i endringsloggen.
 
 import type { Endring } from '@/lib/endringslogg'
 
-// Ingen «trykk for å se det under Innspill»-CTA i brødteksten: pushen har
-// allerede knappTekst «Se svaret», og den samme strengen rendres nå ordrett
-// PÅ /innspill — der ville en oppfordring om å gå dit vært selvmotsigende.
-// Nødløsning, ikke en normaltilstand. Et brukerinnspill skal enten leveres og
-// kommenteres, eller avslås — det finnes ikke noe midt imellom. Havner vi her,
-// er kontrakten brutt (glemt merkelapp, lukket før deploy, eller feil
-// state_reason), og webhooken logger det som en feil. Teksten later derfor
-// ikke som alt er i orden; den gir mannen en vei videre i stedet.
+// Ingen «se det under Innspill»-CTA: samme streng rendres PÅ /innspill.
+// Nødløsning når kontrakten er brutt (webhooken logger det som feil) — teksten
+// later ikke som alt er i orden, men gir en vei videre.
 export const INNSPILL_HANDTERT_TITTEL = 'Takk for innspillet'
 export const INNSPILL_HANDTERT_MELDING =
   'Takk for innspillet! Saken er lukket hos oss. Er du usikker på hva som ble gjort, spør i chatten.'
@@ -37,30 +22,17 @@ export const INNSPILL_AVSLUTTET_MELDING =
 
 export const INNSPILL_PA_PLASS_TITTEL = 'Ønsket ditt er på plass'
 
-// Finner endringslogg-oppføringen som svarer ut et gitt issue-nummer.
-// `endringer` er nyeste-først (se lib/endringslogg-data.ts), så første treff
-// er alltid det nyeste — relevant hvis to oppføringer skulle nevne samme
-// issue (f.eks. en oppfølging).
+// `endringer` er nyeste-først, så ved flere treff vinner det nyeste.
 export function finnEndringForInnspill(endringer: Endring[], issueNummer: number): Endring | null {
   return endringer.find(e => e.innspill?.includes(issueNummer)) ?? null
 }
 
-// ENESTE kilde til teksten medlemmet får — både pushen/innboksen (webhooken)
-// og Svar-boksen på /innspill (lib/innspill.ts) kaller denne. Bygger du en ny
-// flate som viser svaret, kall funksjonen; ikke sett sammen en egen variant,
-// da får medlemmet to ulike svar på samme innspill.
+// ENESTE kilde til svarteksten — push/innboks og /innspill kaller denne.
+// Ny flate som viser svaret: kall funksjonen, ikke bygg en egen variant.
 //
-// Ren funksjon — ingen kutting i noen gren. Push og varsel-lista klipper selv
-// (se VarslerListe.tsx og sw.js), og en tekst skrevet FOR et 2-linjers klipp
-// skal ikke også avkortes her. /innspill klipper ikke i det hele tatt, og er
-// derfor stedet hele teksten — versjonen inkludert — faktisk kan leses.
-//
-// Takken står først og KORT, på samme linje som endringsteksten — takk
-// tidlig var et eksplisitt ønske. En kort takk foran koster noen få tegn og
-// dytter derfor ikke
-// selve endringen ut av klippet (varsel-lista viser 2 linjer, iOS 2-4). Hadde
-// takken vært en egen setning på egen linje, ville den spist hele klippet og
-// medlemmet sett høflighet i stedet for hva han faktisk fikk.
+// Ingen kutting her: push og varsel-lista klipper selv, og /innspill viser alt.
+// Takken står kort og på samme linje som endringen, så den ikke spiser
+// 2-linjers-klippet.
 export function byggInnspillSvar(
   endring: Endring | null,
   stateReason?: string | null,

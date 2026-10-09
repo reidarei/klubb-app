@@ -12,33 +12,19 @@ export type PaagaaendeArrangement = {
 }
 
 /**
- * Arrangementet som pågår akkurat nå, hvis noe gjør det.
- *
- * Styrer om en innmeldt posisjon blir en del av et SPOR (#695) eller bare
- * oppdaterer hvor mannen sist var sett. Uten et pågående arrangement finnes det
- * ingen kveld å tegne en rute for, og punktene har ingenting å høre til.
- *
- * «Pågår» = start passert og slutt ikke passert. Et arrangement UTEN
- * `slutt_tidspunkt` regnes som pågående i ARRANGEMENT_ANTATT_TIMER etter start:
- * uten en grense ville en gammel tur uten sluttid gjort hver eneste posisjon
- * til en del av et spor som aldri ble ryddet, fordi oppryddingsjobben leter
- * etter arrangementer som er OVER.
- *
- * Returnerer den som startet SIST når flere overlapper — er du på to ting
- * samtidig, er det den ferskeste du faktisk er på.
+ * Antatt varighet for et arrangement UTEN `slutt_tidspunkt` (se
+ * finnPaagaaendeArrangementStrengt). Uten en grense ville en gammel tur uten
+ * sluttid gjort hver posisjon til et spor som aldri ryddes — oppryddingsjobben
+ * leter etter arrangementer som er OVER.
  */
 export const ARRANGEMENT_ANTATT_TIMER = 12
 
-// Hvor langt tilbake vi i det hele tatt LETER etter et pågående arrangement.
-// Ikke en varighetsregel — kun en grense som holder spørringen bounded, så en
-// flerdagstur fanges uten at vi drar inn hele historikken (#735).
+// Hvor langt tilbake vi LETER etter et pågående arrangement. Ikke en
+// varighetsregel — kun bounded spørring som fortsatt fanger flerdagsturer (#735).
 export const PAAGAAENDE_MAKS_DAGER = 30
 
-// Rådataformen fra hentNyligStartedeArrangementerStrengt() — bevisst navngitt
-// med snake_case-feltene direkte fra spørringen, ikke PaagaaendeArrangement:
-// denne rada er ikke NØDVENDIGVIS pågående ennå (predikatet ligger hos
-// kalleren), og et navn som lovet det ville vært misvisende for moetemodus
-// (#780), som leter etter en annen betingelse på SAMME rådata.
+// Rådata, ikke PaagaaendeArrangement: rada er ikke nødvendigvis pågående —
+// predikatet ligger hos kalleren, og møtemodus bruker et annet (#780).
 export type NyligStartetArrangementRad = {
   id: string
   tittel: string
@@ -48,22 +34,16 @@ export type NyligStartetArrangementRad = {
 }
 
 /**
- * Rådata-spørringen bak finnPaagaaendeArrangementStrengt() — arrangementer som
- * startet innenfor PAAGAAENDE_MAKS_DAGER, nyeste først. Trukket ut til egen
- * funksjon (#780) fordi møtemodus trenger NØYAKTIG samme rådata, men et annet
- * predikat («møte, ikke passert 06:00 dagen etter» i stedet for «pågår nå»):
- * å duplisere spørringen ville latt de to driftet fra hverandre på grenser og
- * limit uten at noen merket det.
+ * Rådata-spørringen bak finnPaagaaendeArrangementStrengt(): arrangementer som
+ * startet innenfor PAAGAAENDE_MAKS_DAGER, nyeste først. Delt med møtemodus
+ * (#780), som har et annet predikat på samme rådata — ikke dupliser spørringen.
  *
- * FAIL-CLOSED, som resten av denne fila: en spørringsfeil KASTES (DbFeil) i
- * stedet for å bli til `null`/`[]` — se begrunnelsen på
- * finnPaagaaendeArrangementStrengt() under.
+ * FAIL-CLOSED: spørringsfeil kastes som DbFeil, aldri `[]`.
  */
 export async function hentNyligStartedeArrangementerStrengt(
   supabase: SupabaseClient,
 ): Promise<NyligStartetArrangementRad[]> {
-  // Bred nedre grense, kun for å holde spørringen bounded. Den ekte
-  // avgrensningen (hva som faktisk «pågår») gjøres av kalleren, per predikat.
+  // Bred nedre grense, kun for bounded spørring; «pågår» avgjøres av kalleren.
   const eldsteAktuelle = new Date(
     Date.now() - PAAGAAENDE_MAKS_DAGER * 24 * 60 * 60 * 1000,
   ).toISOString()
@@ -82,8 +62,7 @@ export async function hentNyligStartedeArrangementerStrengt(
     .order('start_tidspunkt', { ascending: false })
     .limit(20)
 
-  // Kaster: «ingen rader» og «spørringen feilet» må være to ulike utfall for
-  // kalleren. Fail-open-oversettelsen skjer ÉTT sted — i wrapperen under.
+  // Fail-open-oversettelsen skjer ETT sted — i finnPaagaaendeArrangement().
   if (error) {
     throw new DbFeil(
       `Oppslag av pågående arrangement feilet: ${error.message}`,
@@ -94,43 +73,31 @@ export async function hentNyligStartedeArrangementerStrengt(
 }
 
 /**
- * FAIL-CLOSED-varianten: en spørringsfeil KASTES (DbFeil, så PostgREST-koden
- * overlever innpakkingen) i stedet for å bli til `null`.
+ * Arrangementet som pågår akkurat nå, hvis noe gjør det. Styrer bl.a. om en
+ * innmeldt posisjon blir del av et SPOR (#695).
  *
- * Finnes fordi `null` fra fail-open-varianten under betyr to vidt forskjellige
- * ting — «ingen tur pågår» og «oppslaget feilet» — og reisemodus (#723) må
- * kunne skille dem: uten skillet kan prod ikke se forskjell på en rolig dag og
- * en database som er nede (#723-review). Posisjonsdeling og kartmarkeringer
- * skal fortsatt fail-ope og bruker wrapperen under.
+ * «Pågår» = start passert og slutt ikke passert; uten sluttid gjelder
+ * ARRANGEMENT_ANTATT_TIMER fra start. Ved overlapp vinner den som startet SIST.
+ *
+ * FAIL-CLOSED: spørringsfeil kastes (DbFeil, så PostgREST-koden overlever),
+ * fordi kartmodus må skille «ingen tur pågår» fra «oppslaget feilet» (#723).
+ * Posisjonsdeling og markeringer bruker fail-open-wrapperen under.
  */
 export async function finnPaagaaendeArrangementStrengt(
   supabase: SupabaseClient,
-  // sluttTidspunkt er med fordi kartmarkeringer (#697) lar utløpstiden sin
-  // følge arrangementets slutt. null betyr «ingen sluttid oppgitt», ikke
-  // «varer evig» — kallstedet må da bestemme selv hva som er rimelig.
-  //
-  // type er med fordi reisemodus (#723) trenger å skille en tur fra et møte
-  // — predikatet (type === 'tur' && sluttTidspunkt !== null) skrives
-  // eksplisitt i lib/reisemodus.ts, ikke her: denne helperen definerer
-  // «pågår», ikke «utløser reisemodus».
+  // sluttTidspunkt: markeringer arver utløpstid herfra (#697); null = «ikke
+  // oppgitt», ikke «evig». type: reisemodus-predikatet ligger i
+  // lib/reisemodus.ts — denne helperen definerer bare «pågår» (#723).
 ): Promise<PaagaaendeArrangement | null> {
   const naaIso = naa()
   const tidligstStart = new Date(
     Date.now() - ARRANGEMENT_ANTATT_TIMER * 60 * 60 * 1000,
   ).toISOString()
 
-  // Et arrangement MED sluttid varer til sluttiden, uansett hvor lenge siden det
-  // startet. Fram til #735 lå 12-timersgrensen i selve spørringen og gjaldt begge
-  // grener — da sluttet en flerdagstur å være «pågående» fra og med dag 2, midt i
-  // turen: nye punkter mistet arrangement_id, kartet falt til 24-timersvinduet, og
-  // markeringer sluttet å arve turens sluttid. Oppryddingsjobben har alltid hatt
-  // den riktige, asymmetriske regelen (kun grenen UTEN sluttid er capet); dette
-  // bringer helperen i synk med den.
+  // Timesgrensen hører KUN til grenen uten sluttid — i spørringen ville den
+  // kuttet flerdagsturer fra dag 2 (#735). Samme asymmetri som oppryddingsjobben.
   const data = await hentNyligStartedeArrangementerStrengt(supabase)
 
-  // Med sluttid: pågår til sluttiden. Uten sluttid: antatt varighet fra start —
-  // den grenen MÅ ha en cap, ellers ville et gammelt arrangement uten sluttid
-  // stått som «pågående» for alltid.
   // start <= nå: radene kan inneholde møter som ennå ikke har startet (møtemodus-forløpet).
   const kandidat = data.find(a =>
     a.start_tidspunkt <= naaIso &&
@@ -144,14 +111,10 @@ export async function finnPaagaaendeArrangementStrengt(
 }
 
 /**
- * FAIL-OPEN-varianten, brukt av posisjonsdeling (#693/#695) og kartmarkeringer
- * (#697): klarer vi ikke slå opp arrangementet, skal posisjonen fortsatt kunne
- * lagres — den blir bare et løst punkt uten spor-tilhørighet. Å kaste her ville
- * gjort en treg spørring til «du får ikke dele posisjon».
- *
- * Feilen logges likevel (warn, ikke feil) slik at en feilet spørring ikke ser
- * ut som en rolig dag i observability. Oppførselen er bit-for-bit den samme som
- * før #723-reviewen — kun feilkanalen er flyttet inn hit fra spørringen selv.
+ * FAIL-OPEN-varianten for posisjonsdeling (#693/#695) og kartmarkeringer (#697):
+ * feiler oppslaget, lagres posisjonen likevel som et løst punkt uten spor —
+ * en treg spørring skal ikke bli «du får ikke dele posisjon». Logges som warn
+ * så en feil ikke ser ut som en rolig dag.
  */
 export async function finnPaagaaendeArrangement(
   supabase: SupabaseClient,
@@ -159,9 +122,8 @@ export async function finnPaagaaendeArrangement(
   try {
     return await finnPaagaaendeArrangementStrengt(supabase)
   } catch (err) {
-    // Next signaliserer «denne ruten må rendres dynamisk» med en throw under
-    // `next build`. Svelges den her, logges hvert sideoppslag i bygget som en
-    // ekte spørringsfeil — samme grep som i lib/reisemodus.ts.
+    // Next signaliserer «må rendres dynamisk» med en throw under `next build`;
+    // svelges den, logges hvert byggoppslag som spørringsfeil (jf. lib/kartmodus.ts).
     unstable_rethrow(err)
     logg.warn('posisjon.paagaaende.feilet', {
       code: err instanceof DbFeil ? (err.code ?? 'ukjent') : 'ukjent',

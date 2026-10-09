@@ -6,27 +6,17 @@ import { forventTreffbar } from './helpers/treffmaal'
 import { KART_MARKERING_MAKS_LENGDE } from '../lib/konstanter'
 import { MARKERING_SYMBOLER, STANDARD_SYMBOL, symbolEmoji } from '../lib/markering-symboler'
 
-// Symbolene specen seeder og klikker på avledes av klubbens eget register
-// (lib/klubb-symboler.ts), aldri av klubbens id-er: fila er MÅ MATCHE og
-// speiles til klubb-app, der verken 'ol' eller 'mat' trenger å finnes
-// (#767-review). STANDARD_SYMBOL er det eneste symbolet ethvert register
-// garantert har. ANNET_SYMBOL er det første som IKKE er standard — et register
-// kan lovlig ha bare ett symbol, og da hopper prøven som trenger to over seg
-// selv i stedet for å feile.
+// Symbolene avledes av klubbens eget register, aldri klubbens id-er: fila
+// er MÅ MATCHE og speiles til klubb-app (#767). Kun STANDARD_SYMBOL er garantert;
+// har registeret bare ett symbol, hopper prøvene som trenger to over seg selv.
 const ANNET_SYMBOL = MARKERING_SYMBOLER.find(s => s.id !== STANDARD_SYMBOL)
 
 /**
  * Markeringer på kartet (#697) — «møt meg her», satt der du står.
  *
- * Specen seeder markeringene direkte i basen i stedet for å gå gjennom
- * UI-flyten. Grunnen er at flyten kaller getCurrentPosition, og geolocation i
- * headless Chromium enten nektes eller går i timeout — da ville testen målt
- * nettleserens tillatelsesoppsett, ikke om markeringer vises, ryddes og
- * respekterer eierskap.
- *
- * Det UI-flyten faktisk eier — at knappen åpner et tekstfelt, og at et tomt
- * felt avvises — testes uten posisjon, siden valideringen skjer før
- * posisjonsoppslaget.
+ * Markeringene seedes direkte i basen: geolocation i headless Chromium nektes
+ * eller går i timeout, og testen ville målt tillatelsesoppsettet. UI-flytens
+ * egen logikk (steg, validering) testes uten posisjon.
  */
 
 const PETTER = '00000000-0000-4000-8000-000000000002'
@@ -36,11 +26,9 @@ const TEKST_ANNEN = 'Playwright — Petters markering'
 let megId: string | null = null
 
 /**
- * Lista ligger i sidepanelet etter fullskjerm-redesignet (#704), og panelet er
- * minimert som default. Radene står i DOM-en også når det er lukket, så en
- * test som hopper over dette kan «klikke» på noe brukeren ikke kan nå — samme
- * blindsone som #700 og #702. Alle spec-er som rører lista går derfor gjennom
- * denne.
+ * Lista ligger i sidepanelet, minimert som default (#704). Radene står i DOM-en
+ * også når det er lukket, så en test uten dette kan «klikke» på noe brukeren
+ * ikke når (jf. #700, #702). All bruk av lista går gjennom denne.
  */
 async function aapnePanel(page: import('@playwright/test').Page) {
   const handtak = page.getByTestId('panel-handtak')
@@ -68,17 +56,14 @@ test.describe('kartmarkeringer (#697)', () => {
     const { error } = await admin.from('kart_markering').insert([
       { opprettet_av: profil.id, lat: 59.9139, lng: 10.7522, tekst: TEKST_MIN, symbol: STANDARD_SYMBOL, utloper: om4t },
       { opprettet_av: PETTER, lat: 59.9165, lng: 10.758, tekst: TEKST_ANNEN, symbol: ANNET_SYMBOL?.id ?? STANDARD_SYMBOL, utloper: om4t },
-      // Utløpt for et døgn siden, satt av MEG: RLS slipper den gjennom (egen
-      // rad), så dette er den ene raden som beviser at siden filtrerer selv i
-      // stedet for å stole på at policyen gjør hele jobben.
+      // Utløpt, satt av MEG: RLS slipper egen rad gjennom, så den beviser at
+      // siden filtrerer selv.
       {
         opprettet_av: profil.id,
         lat: 59.92, lng: 10.76,
         tekst: 'Playwright — utløpt markering',
-        // `symbol` må stå her selv om kolonnen har en default: PostgREST
-        // normaliserer en batch-insert til felles kolonner, så en rad som
-        // mangler feltet sendes med eksplisitt null når søsknene har det —
-        // og da gjelder ikke defaulten.
+        // `symbol` må med tross default: PostgREST normaliserer en batch-insert
+        // til felles kolonner, og en manglende verdi sendes som eksplisitt null.
         symbol: STANDARD_SYMBOL,
         utloper: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       },
@@ -97,22 +82,17 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
     await expect(page.locator('.kart-markering-etikett')).toHaveCount(2, { timeout: 15_000 })
-    // Etiketten er en Leaflet-tooltip. Locatoren er bevisst knyttet til
-    // tooltip-klassen: står teksten kun i lista under kartet, er markeringen
-    // usynlig der den faktisk gjelder.
+    // Bevisst knyttet til tooltip-klassen: står teksten kun i lista, er
+    // markeringen usynlig på kartet.
     await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_MIN })).toHaveCount(1)
     await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_ANNEN })).toHaveCount(1)
 
-    // Den utløpte skal verken stå på kartet eller i lista. Den ligger fortsatt
-    // i basen (cron rydder den), så dette tester filtreringen, ikke slettingen.
+    // Den utløpte ligger fortsatt i basen — tester filtreringen, ikke slettingen.
     await expect(page.getByText('Playwright — utløpt markering')).toHaveCount(0)
   })
 
   test('admin ser fjern-knappen på alle markeringer', async ({ page }) => {
-    // Den innloggede testbrukeren ER admin. Fram til #699 skjulte UI-et
-    // fjern-knappen på andres markeringer selv om RLS tillot slettingen —
-    // policy og skjerm sa to forskjellige ting, og det som måtte bort måtte
-    // bort via databasen.
+    // Testbrukeren er admin: UI-et skal følge RLS, som lar admin slette alt (#699).
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
     await aapnePanel(page)
@@ -123,8 +103,7 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(min.getByTestId('markering-fjern')).toHaveCount(1)
     await expect(annen.getByTestId('markering-fjern')).toHaveCount(1)
 
-    // Dybde-kall (#700 PR 2): listepanelet er lukket som default og dekkes
-    // derfor ikke av bredde-sveipen i sider-laster.spec.ts.
+    // Dybde-kall (#700): panelet er lukket som default og usynlig for bredde-sveipen.
     await forventTreffbar(page, {
       kontekst: '/kart — listepanel åpent',
       omraade: '[data-testid="kart-panel"]',
@@ -135,9 +114,7 @@ test.describe('kartmarkeringer (#697)', () => {
     test.use({ storageState: { cookies: [], origins: [] } })
 
     test('ser fjern-knappen kun på sine egne', async ({ page }) => {
-      // Petter er medlem, ikke admin. Uten denne testen ville admin-grenen
-      // over vært eneste dekning, og en regresjon der ALLE fikk fjerne alt
-      // hadde passert usett.
+      // Petter er medlem: fanger en regresjon der alle får fjerne alt.
       await loggInn(page, { epost: 'petter.prove@klubb.test', passord: SEED_PASSORD })
       await page.goto('/kart')
       await expect(page.getByTestId('posisjonskart')).toBeVisible()
@@ -149,9 +126,8 @@ test.describe('kartmarkeringer (#697)', () => {
       await expect(hans.getByTestId('markering-fjern')).toHaveCount(1)
       await expect(andres.getByTestId('markering-fjern')).toHaveCount(0)
 
-      // Og panelet på kartet skal følge samme regel — ellers ville en vei
-      // rundt knappen i lista stått åpen. Sidepanelet må lukkes først: det
-      // dekker 300 px av høyre kant, og bobla kan ligge under det.
+      // Panelet på kartet skal følge samme regel. Sidepanelet lukkes først: det
+      // dekker 300 px av høyre kant, og bobla kan ligge under.
       await page.getByTestId('panel-handtak').click()
       await expect(page.getByTestId('panel-handtak')).toHaveAttribute('aria-expanded', 'false')
       await page.locator('.kart-markering-etikett').first().click()
@@ -160,10 +136,7 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('nåla på kartet åpner et panel med fjern-knapp', async ({ page }) => {
-    // Dette er mangelen som ble meldt inn: markeringen «måtte kunne slettes».
-    // Knappen FANTES, men lå i en liste man må scrolle forbi hele kartet og
-    // mannelista for å nå — og nåla, som er der man naturlig trykker, var
-    // ikke klikkbar i det hele tatt.
+    // Nåla er der man naturlig trykker for å slette (#699).
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
     await expect(page.locator('.kart-markering-etikett')).toHaveCount(2, { timeout: 15_000 })
@@ -180,12 +153,8 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('fjerning fra panelet tar bort både nåla og raden', async ({ page }) => {
-    // Egen, unikt navngitt markering i stedet for `.first()` på de delte
-    // seed-radene (#800): testen skal verifisere fjerning, ikke tilfeldig
-    // treffe HVILKEN av de to seedede radene Leaflet happener å tegne først.
-    // Uten en egen rad måtte testen legge seed-dataen tilbake for hånd etter
-    // hvert kjøring — nå rydder afterAll den som alt annet med «Playwright —»-
-    // prefiks, og ingen tilbakeleggingsblokk er nødvendig.
+    // Egen rad, ikke `.first()` på de delte seed-radene: ellers avhenger testen
+    // av tegnerekkefølgen og må legge seed tilbake (#800). afterAll rydder den.
     const EGEN = 'Playwright — fjern-panel'
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
@@ -202,25 +171,20 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(boble).toBeVisible({ timeout: 15_000 })
     await boble.click()
 
-    // Fjern-klikket er server actionen — selve mutasjonen, ikke bare
-    // panelet som lukker seg (#800, se e2e/helpers/server-action.ts).
     await ventPaaServerAction(page, () =>
       page.getByTestId('markering-panel').getByTestId('markering-panel-fjern').click(),
     )
 
-    // Panelet lukker seg selv — ellers ville det blitt stående og pekt på noe
-    // som ikke finnes. 15 s: statusen beviser at serveren er ferdig, ikke at
-    // React har committet det nye treet til DOM-en (#800).
+    // Panelet skal lukke seg, ikke peke på noe som ikke finnes. 15 s: statusen
+    // beviser server ferdig, ikke DOM-commit (#800).
     await expect(page.getByTestId('markering-panel')).toHaveCount(0, { timeout: 15_000 })
     await expect(page.locator('.kart-markering-etikett', { hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
-    // De seedede radene fra beforeAll skal stå urørt.
     await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_MIN })).toHaveCount(1)
     await expect(page.locator('.kart-markering-etikett', { hasText: TEKST_ANNEN })).toHaveCount(1)
   })
 
   test('fjerning tar bort markeringen', async ({ page }) => {
-    // Samme grunn som testen over: egen rad, ikke avhengig av at TEKST_MIN
-    // fortsatt ligger der en annen test etterlot den (#800).
+    // Egen rad, samme grunn som over (#800).
     const EGEN = 'Playwright — fjern-liste'
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
@@ -241,15 +205,13 @@ test.describe('kartmarkeringer (#697)', () => {
 
     // 15 s: statusen beviser server ferdig, ikke DOM-commit (#800).
     await expect(page.getByTestId('markering-rad').filter({ hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
-    // Og nåla skal være borte fra kartet, ikke bare raden i lista — de to
-    // tegnes fra samme data, og at de kan komme i utakt var nettopp bugen i #694.
+    // Nåla også, ikke bare raden — at de kan komme i utakt var bugen i #694.
     await expect(page.locator('.kart-markering-etikett', { hasText: EGEN })).toHaveCount(0, { timeout: 15_000 })
   })
 
   test('stedsøket med «Nærmeste pub» er treffbart', async ({ page }) => {
-    // Dybde-kall (#727, Policy: Trykkflater): søkeflaten ligger bak
-    // «Søk etter et sted» og er usynlig for bredde-sveipen. Knappene MÅLES
-    // bare — «Nærmeste pub» trykkes ikke, så e2e kaller aldri Overpass.
+    // Dybde-kall (#727): søkeflaten er usynlig for bredde-sveipen. Knappene
+    // MÅLES bare — «Nærmeste pub» trykkes ikke, så e2e kaller aldri Overpass.
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
     await page.getByTestId('sted-sok-start').click()
@@ -263,9 +225,8 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('flyten er peke først, skrive etterpå', async ({ page }) => {
-    // Rekkefølgen ER funksjonen (#702). Ett steg åpnet tekstfeltet med én
-    // gang; tastaturet sprang opp og dekket kartet, og man skrev inn teksten
-    // uten å ha sett hvor krysset havnet.
+    // Rekkefølgen ER funksjonen (#702): tekstfeltet åpner tastaturet, som
+    // dekker kartet før man har sett hvor krysset havnet.
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
@@ -278,8 +239,7 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.getByTestId('markering-sikte')).toBeVisible()
     await expect(page.getByTestId('markering-tekst')).toHaveCount(0)
 
-    // Steg 2: stedet bekreftet, nå kommer teksten — og krysset trekkes,
-    // siden stedet er låst og kartet ikke lenger styrer noe.
+    // Steg 2: teksten kommer, og krysset trekkes siden stedet er låst.
     await page.getByTestId('markering-bekreft-sted').click()
     const felt = page.getByTestId('markering-tekst')
     await expect(felt).toBeVisible()
@@ -291,8 +251,7 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(page.getByTestId('kart-feil')).toContainText('Skriv hva markeringen gjelder')
     await expect(felt).toBeVisible()
 
-    // «Tilbake» går til stedsvalget, ikke helt ut: har man valgt feil sted er
-    // det stedet man vil endre, ikke starte på nytt.
+    // «Tilbake» går til stedsvalget, ikke helt ut.
     await page.getByTestId('markering-tilbake').click()
     await expect(page.getByTestId('markering-sikte')).toBeVisible()
     await expect(page.getByTestId('markering-tekst')).toHaveCount(0)
@@ -302,9 +261,7 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('markeringen settes der siktet står, ikke der GPS-en sier du er', async ({ page }) => {
-    // Geolocation nektes eksplisitt. Går markeringen likevel gjennom, er det
-    // beviset på at den leser kartsenteret — den gamle implementasjonen
-    // kalte getCurrentPosition og ville stoppet her.
+    // Geolocation nektes: går markeringen gjennom, leser den kartsenteret.
     await page.context().clearPermissions()
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
@@ -323,7 +280,6 @@ test.describe('kartmarkeringer (#697)', () => {
     await expect(
       page.getByTestId('markering-rad').filter({ hasText: 'Playwright — fra siktet' }),
     ).toHaveCount(1, { timeout: 15_000 })
-    // Skjemaet lukker seg, og siktet med det.
     await expect(page.getByTestId('markering-sikte')).toHaveCount(0)
 
     const admin = adminKlient('kart-markering')
@@ -331,10 +287,8 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('lista ligger i et panel som må åpnes', async ({ page }) => {
-    // Etter #704 er kartet fullskjerm og lista flyttet inn i et sidepanel.
-    // Testen står her fordi radene finnes i DOM-en også når panelet er lukket:
-    // uten en eksplisitt sjekk på at panelet faktisk er utenfor skjermen, kan
-    // en spec «bruke» en liste ingen kan se.
+    // Radene finnes i DOM-en også når panelet er lukket (#704): uten en sjekk på
+    // at panelet er utenfor skjermen kan en spec «bruke» en liste ingen ser.
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
 
@@ -350,9 +304,8 @@ test.describe('kartmarkeringer (#697)', () => {
     await handtak.click()
     await expect(handtak).toHaveAttribute('aria-expanded', 'true')
 
-    // Åpent: panelet er innenfor kartflaten. `poll` og ikke et øyeblikksbilde —
-    // panelet glir inn over 220 ms, og en måling rett etter klikket leser
-    // sluttposisjonen fra FØR animasjonen.
+    // `poll`: panelet glir inn over 220 ms, og en måling rett etter klikket
+    // leser posisjonen fra før animasjonen.
     await expect
       .poll(async () => (await panel.boundingBox())!.x, { timeout: 5000 })
       .toBeLessThan(flate!.x + flate!.width - 50)
@@ -362,32 +315,24 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('symbolet velges i flyten og vises på kartet', async ({ page }) => {
-    // Symbolet er det man leser på AVSTAND; teksten er detaljen man får ved å
-    // trykke (#707). Testen følger hele veien: valg i skjemaet → nål på kartet
-    // → rad i lista.
-    //
-    // Trenger to symboler: ett forhåndsvalgt og ett å bytte til. Et register
-    // med bare ett symbol har ingen slik flyt å teste, og da hopper prøven
-    // over seg selv framfor å feile på en konfigurasjon som er helt lovlig.
+    // Hele veien: valg i skjemaet → nål på kartet → rad i lista (#707).
     test.skip(!ANNET_SYMBOL, 'Registeret har bare ett symbol — ingenting å bytte til')
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
 
     await page.getByTestId('markering-start').click()
-    // Vent til kartet er initialisert: «Her er det» leser kartsenteret, og er
-    // låst til Leaflet er klar. I CI rekker ikke kartet å laste før klikket.
+    // «Her er det» er låst til Leaflet er klar; i CI rekker ikke kartet å laste før klikket.
     const bekreft = page.getByTestId('markering-bekreft-sted')
     await expect(bekreft).toBeEnabled({ timeout: 15_000 })
     await bekreft.click()
 
-    // Standardsymbolet er forhåndsvalgt — uten det ville et glemt valg gitt en
-    // markering uten ikon.
+    // Forhåndsvalgt, så et glemt valg ikke gir en markering uten ikon.
     await expect(page.getByTestId(`symbol-${STANDARD_SYMBOL}`)).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId(`symbol-${ANNET_SYMBOL!.id}`)).toHaveAttribute('aria-pressed', 'false')
 
     await page.getByTestId(`symbol-${ANNET_SYMBOL!.id}`).click()
     await expect(page.getByTestId(`symbol-${ANNET_SYMBOL!.id}`)).toHaveAttribute('aria-pressed', 'true')
-    // Valget er eksklusivt: uten dette kunne to symboler stått markert samtidig.
+    // Valget er eksklusivt.
     await expect(page.getByTestId(`symbol-${STANDARD_SYMBOL}`)).toHaveAttribute('aria-pressed', 'false')
 
     await page.getByTestId('markering-tekst').fill('Playwright — med symbol')
@@ -408,15 +353,10 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('alle symbolene finnes og har hvert sitt ikon', async ({ page }) => {
-    // Listen i lib/markering-symboler.ts (avledet fra klubbens egen
-    // lib/klubb-symboler.ts, #767) speiles av migrasjon 152 sin format-check,
-    // ikke lenger en verdiliste. Denne testen fanger at UI-et og listen
-    // kommer i utakt — legges et symbol til i koden uten at knappen finnes,
-    // eller omvendt.
+    // Fanger at UI-et og MARKERING_SYMBOLER kommer i utakt.
     await page.goto('/kart')
     await page.getByTestId('markering-start').click()
-    // Vent til kartet er initialisert: «Her er det» leser kartsenteret, og er
-    // låst til Leaflet er klar. I CI rekker ikke kartet å laste før klikket.
+    // «Her er det» er låst til Leaflet er klar; i CI rekker ikke kartet å laste før klikket.
     const bekreft = page.getByTestId('markering-bekreft-sted')
     await expect(bekreft).toBeEnabled({ timeout: 15_000 })
     await bekreft.click()
@@ -428,32 +368,21 @@ test.describe('kartmarkeringer (#697)', () => {
       await expect(knapp).toContainText(sym.emoji)
       emojier.add(sym.emoji)
     }
-    // Distinkte ikoner for hvert symbol: to like ville gjort symbolet
-    // verdiløst på kartet — forveksling er nøyaktig det symbolene skal unngå.
+    // Distinkte ikoner — to like gjør symbolet verdiløst på kartet.
     expect(emojier.size).toBe(MARKERING_SYMBOLER.length)
   })
 
   test('databasen håndhever symbolFORMATET, ikke en verdiliste', async () => {
-    // Dette er testen som faktisk fanger en glemt migrasjon (#759): UI-testen
-    // over beviser bare at UI-et og MARKERING_SYMBOLER stemmer overens med
-    // hverandre — den sier ingenting om check-constrainten i databasen, som er
-    // en TREDJE, uavhengig kilde til sannhet. Legges et symbol til i
-    // registeret uten at migrasjonen følger, ville UI-testen fortsatt vært
-    // grønn mens en ekte insert feiler i produksjon.
+    // Check-constrainten er en uavhengig kilde til sannhet ved siden av
+    // registeret og UI-et (#759); hver klubb redigerer registeret selv, og en
+    // id med feil format sier bare denne testen fra om før produksjon.
     //
-    // Etter filsplitten (#767) er registeret lib/klubb-symboler.ts, som HVER
-    // KLUBB redigerer selv. Velger noen en id som ikke matcher formatet, er
-    // denne testen det eneste som sier fra før produksjon.
+    // Constrainten håndhever FORM, ikke en verdiliste (migrasjon 152, #767).
+    // «Registerets id-er godtas» alene ville også passert den gamle verdilista,
+    // så formatet pinnes i begge retninger: gyldig men UKJENT id inn, ugyldige
+    // former avvist av databasen.
     //
-    // Fra migrasjon 152 (#767) håndhever constrainten FORM, ikke INNHOLD, og
-    // da er «alle registerets id-er godtas» ikke lenger nok: nøyaktig de
-    // id-ene ble også godtatt av den gamle verdilista, så testen ville stått
-    // grønn om 152 aldri kjørte (#767-review). Derfor pinnes formatet i begge
-    // retninger — en gyldig, men UKJENT id skal inn, og ugyldige former skal
-    // avvises av databasen, ikke bare av UI-et.
-    //
-    // Ingen `page` — testen inserter direkte mot databasen via adminKlient,
-    // så den koster ingen nettleser-/browser-tid, kun noen spørringer.
+    // Ingen `page` — kun spørringer via adminKlient.
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
 
@@ -469,18 +398,15 @@ test.describe('kartmarkeringer (#697)', () => {
 
     let bestod = false
     try {
-      // (a) Hele registeret går inn. En glemt migrasjon for et nytt symbol gir
-      // 23514 her, ikke et UI-symptom lenger nede i kjeden.
+      // (a) Hele registeret går inn — ellers 23514 her.
       const { error } = await admin!
         .from('kart_markering')
         .insert(MARKERING_SYMBOLER.map((sym, i) => rad(`registeret-${i}`, sym.id)))
       expect(error, 'et symbol i registeret ble avvist av databasen').toBeNull()
 
-      // (b) DEN avgjørende: en id som er gyldig på FORM, men som ikke finnes i
-      // registeret. Dette er eneste assertion som beviser at verdilista
-      // faktisk er borte — den gamle constrainten ville gitt 23514 her.
-      // 'obs1' er ikke tilfeldig valgt: sifferet er grunnen til at formatet
-      // tillater tall i det hele tatt (se migrasjon 152).
+      // (b) Den avgjørende: gyldig FORM, ukjent id — beviser at verdilista er
+      // borte. 'obs1' fordi sifferet er grunnen til at formatet tillater tall
+      // (migrasjon 152).
       const { error: ukjentFeil } = await admin!
         .from('kart_markering')
         .insert(rad('ukjent', 'obs1'))
@@ -489,16 +415,14 @@ test.describe('kartmarkeringer (#697)', () => {
         'gyldig, ukjent symbol-id ble avvist — står verdilista fra 146/151 fortsatt?',
       ).toBeNull()
 
-      // (c) 24 tegn er taket, ikke 23: en off-by-one i regexen ville flyttet
-      // grensen uten at noe annet i suiten merket det.
+      // (c) 24 tegn er taket — fanger off-by-one i regexen.
       const { error: maksFeil } = await admin!
         .from('kart_markering')
         .insert(rad('maks', 'a'.repeat(24)))
       expect(maksFeil, 'en id på nøyaktig 24 tegn skal godtas').toBeNull()
 
-      // (d) Og formen håndheves fortsatt — et format-check, ikke et FRAVÆR av
-      // check. Et medlem kan POSTe rett mot PostgREST, så dette er den
-      // eneste vakten mot at symbol blir et fritekstfelt.
+      // (d) Formen håndheves: et medlem kan POSTe rett mot PostgREST, så dette
+      // er eneste vakt mot at symbol blir fritekst.
       const ugyldige: [string, string][] = [
         ['Obs1', 'stor forbokstav'],
         ['1obs', 'innledende siffer'],
@@ -510,17 +434,14 @@ test.describe('kartmarkeringer (#697)', () => {
           .from('kart_markering')
           .insert(rad(`ugyldig-${hvorfor}`, symbol))
         expect(formFeil?.code, `${hvorfor} skulle vært avvist`).toBe('23514')
-        // Navngitt constraint, ikke bare koden: tekst-lengden har sin egen
-        // 23514, og uten dette kunne testen vært grønn på feil constraint.
+        // Navngitt constraint: tekst-lengden har sin egen 23514.
         expect(formFeil?.message).toContain('kart_markering_symbol_gyldig')
       }
       bestod = true
     } finally {
-      // Oppryddingen skal ikke feile stille (jf. Policy: Databasespørringer):
-      // gjenglemte rader arves av neste kjøring uten at noen vet om dem, og da
-      // er testen grønn på falskt grunnlag. Kaster likevel bare når selve
-      // testen gikk bra — ellers ville opprydningsfeilen maskert den ekte
-      // assertion-feilen i rapporten. Samme mønster som flyt-testen under.
+      // Oppryddingen feiler ikke stille (gjenglemte rader arves av neste
+      // kjøring), men kaster kun når testen ellers bestod, så den ikke maskerer
+      // den ekte assertion-feilen.
       const { error: oppryddingFeil } = await admin!
         .from('kart_markering')
         .delete()
@@ -533,33 +454,27 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('symbolet står ÉN gang, i bobla', async ({ page }) => {
-    // Tilbakemeldingen: unødvendig med både ølflaske som nål og ølflasker på
-    // etiketten — må nesten bare velge. Symbolet sto både på en egen nål og
-    // først i etiketten, og det leste som to markeringer (#708).
+    // Symbol både på nål og i etikett leste som to markeringer (#708).
     await page.goto('/kart')
     await expect(page.locator('.kart-markering-etikett').first()).toBeVisible({ timeout: 15_000 })
 
-    // Samme symbol som raden ble seedet med over.
     const emoji = symbolEmoji(STANDARD_SYMBOL)
     const boble = page.locator('.kart-markering-etikett', { hasText: TEKST_MIN })
     await expect(boble).toContainText(emoji)
 
-    // Nøyaktig én forekomst av symbolet i markeringen — ikke to.
     const antall = await boble.evaluate(
       (el, e) => (el.textContent ?? '').split(e).length - 1,
       emoji,
     )
     expect(antall).toBe(1)
 
-    // Og ingen frittstående nål ved siden av bobla. Klassen er borte fra
-    // koden; testen fanger at den ikke sniker seg tilbake.
+    // Fanger at den frittstående nåla sniker seg tilbake.
     await expect(page.locator('.kart-markering-naal')).toHaveCount(0)
   })
 
   test('pilspissen peker på selve stedet', async ({ page }) => {
-    // Kravet var at boblene skal være snakkebokser med pilspissen akkurat i
-    // det stedet som er markert. Bobla er hele markeringen, så hvis halen
-    // peker litt ved siden av, peker markeringen på feil sted (#708).
+    // Bobla er hele markeringen: peker halen ved siden av, peker markeringen
+    // på feil sted (#708).
     await page.goto('/kart')
     await expect(page.locator('.kart-markering-etikett').first()).toBeVisible({ timeout: 15_000 })
 
@@ -573,42 +488,31 @@ test.describe('kartmarkeringer (#697)', () => {
       const a = anker.getBoundingClientRect()
       return {
         haleSynlig: hs.display,
-        // Halen er en rotert firkant; spissen er nederste hjørne, altså
-        // underkanten av dens bounding box etter rotasjonen.
+        // Halen er en rotert firkant; spissen er underkanten av bounding boxen.
         spissY: b.bottom,
         spissX: b.x + b.width / 2,
         punktY: a.y,
         punktX: a.x,
-        // En trekant laget av border har 0 innhold. Denne har ekte størrelse,
-        // og det er nettopp forskjellen som gjorde at den ble synlig.
+        // Ekte størrelse, i motsetning til en border-trekant (0 innhold).
         haleBredde: b.width,
       }
     })
 
     expect(maal).not.toBeNull()
-    // Halen må faktisk tegnes. Den var først Leaflets ::before (kom aldri
-    // fram), så en border-trekant (usynlig mot mørkt kart — en CSS-trekant ER
-    // en border og kan ikke ha kant selv). Nå en rotert firkant med bakgrunn
-    // OG kant, som er hvorfor den vises.
+    // Halen må faktisk tegnes: en CSS-border-trekant kan ikke ha egen kant og
+    // er usynlig mot mørkt kart, derfor rotert firkant med bakgrunn og kant.
     expect(maal!.haleSynlig).not.toBe('none')
     expect(maal!.haleBredde).toBeGreaterThan(8)
-    // 4 px slingringsmonn: halen er rotert, så bounding box er litt større enn
-    // spissen. Feilen ville vært titalls piksler, eller ingen hale i det hele tatt.
+    // Slingringsmonn fordi bounding boxen til en rotert hale er litt større enn
+    // spissen. En reell feil er titalls piksler.
     expect(Math.abs(maal!.spissY - maal!.punktY)).toBeLessThan(6)
     expect(Math.abs(maal!.spissX - maal!.punktX)).toBeLessThan(4)
   })
 
   test('panelet tilbyr veibeskrivelse', async ({ page }) => {
-    // Et medlem spurte om dette da kartet var nytt — trengtes det en «gå
-    // til»-funksjon, eller måtte man uansett inn i Google Maps for å finne
-    // det selv? (#708)
-    //
-    // Testen står på at knappen FINNES og er trykkbar. Selve navigeringen
-    // setter window.location til comgooglemaps:// (#711), og et custom
-    // URL-skjema gir verken en request å avskjære eller en sidebytte i
-    // Chromium — det ville bare målt Playwright. URL-byggingen, som er det
-    // som faktisk kan bli feil, er enhetstestet i
-    // __tests__/kart-navigasjon.test.ts.
+    // Kun at knappen finnes og er trykkbar (#708): comgooglemaps:// (#711) gir
+    // verken request eller sidebytte i Chromium. URL-byggingen er enhetstestet
+    // i __tests__/kart-navigasjon.test.ts.
     await page.goto('/kart')
     await expect(page.locator('.kart-markering-etikett').first()).toBeVisible({ timeout: 15_000 })
     await page.locator('.kart-markering-etikett').first().click()
@@ -619,9 +523,7 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('chatten ligger i et venstrepanel som kan hentes ut og lukkes', async ({ page }) => {
-    // Speiler listepanelet til høyre (#709). Gutta er ofte på kartet fordi de
-    // skal finne hverandre — da er det å bytte fane for å skrive «vi er her»
-    // én omvei for mye.
+    // Speiler listepanelet til høyre (#709).
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
 
@@ -636,14 +538,12 @@ test.describe('kartmarkeringer (#697)', () => {
 
     await handtak.click()
     await expect(handtak).toHaveAttribute('aria-expanded', 'true')
-    // poll: panelet glir inn over 220 ms, og en måling rett etter klikket
-    // leser posisjonen fra før animasjonen.
+    // poll: panelet glir inn over 220 ms.
     await expect
       .poll(async () => (await panel.boundingBox())!.x, { timeout: 5000 })
       .toBeGreaterThan(flate.x - 10)
 
-    // Chat-komponenten lastes lazy — den skal faktisk komme, ikke bare et
-    // tomt panel. Uten denne ville testen bestått om chunken aldri lastet.
+    // Chatten lastes lazy — fanger at chunken aldri kommer.
     await expect(panel.getByPlaceholder(/Skriv en melding/i)).toBeVisible({ timeout: 15_000 })
 
     await handtak.click()
@@ -651,17 +551,14 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('chatten starter nederst i traden', async ({ page }) => {
-    // Kravet var at chatten bare skal scrolle ned til bunnen — den startet
-    // litt lenger opp. Chat-komponenten scroller `window`, men kartsiden
-    // låser vindusscroll — så den gjorde ingenting, og tråden ble stående et
-    // tilfeldig sted (#711). Panelet sendes nå inn som scroll-container.
+    // Kartsiden låser vindusscroll, så chatten må scrolle panelet, ikke
+    // `window` (#711).
     await page.goto('/kart')
     await page.getByTestId('chat-handtak').click()
     const panel = page.getByTestId('chat-panel')
     await expect(panel.getByPlaceholder(/Skriv en melding/i)).toBeVisible({ timeout: 15_000 })
 
-    // poll: chatten scroller i flere runder (panelet glir inn, bilder får
-    // høyde etterpå), så en måling rett etter åpning er for tidlig.
+    // poll: chatten scroller i flere runder (panelet glir inn, bilder får høyde).
     await expect
       .poll(
         async () =>
@@ -674,13 +571,9 @@ test.describe('kartmarkeringer (#697)', () => {
       // Noen få piksler slingring for avrunding og sticky input-felt.
       .toBeLessThan(40)
 
-    // Og skrivefeltet skal stå INNE i panelet, ikke bak det (#712).
-    //
-    // Chat-komponenten gjør input-pillen `position: fixed` når den er sidens
-    // hovedinnhold. I sidepanelet festet den seg da til viewporten, spente
-    // over hele skjermen og havnet bak panelet (z-index 20 mot panelets 760) —
-    // feltet var borte. En ren `toBeVisible` ville ikke fanget det: elementet
-    // VAR synlig, bare ikke der brukeren så etter det.
+    // Skrivefeltet skal stå INNE i panelet (#712). En `fixed` pille spenner
+    // over skjermen bak panelet — `toBeVisible` ville ikke fanget det.
+    // Se CLAUDE.md § Policy: Skrivefelt og iOS-tastatur.
     const plassering = await panel.evaluate(el => {
       const p = el as HTMLElement
       const felt = p.querySelector('textarea, input[type=text]') as HTMLElement | null
@@ -697,21 +590,18 @@ test.describe('kartmarkeringer (#697)', () => {
     expect(plassering).not.toBeNull()
     expect(plassering!.innenforBunn).toBe(true)
     expect(plassering!.innenforVenstre).toBe(true)
-    // Den viktigste: `fixed` ga et felt som spente over HELE skjermen og altså
-    // stakk langt ut til høyre for panelet.
+    // Den viktigste: et `fixed` felt stikker langt ut til høyre for panelet.
     expect(plassering!.innenforHoyre).toBe(true)
     expect(plassering!.bredde).toBeGreaterThan(80)
   })
 
   test('chatten scroller bare opp og ned, ikke sidelengs', async ({ page }) => {
-    // Kravet var at chatten bare skal kunne scrolle opp og ned, ikke høyre
-    // og venstre. Panelet arvet `overflow-x: auto` fra `overflow-y: auto`
-    // (CSS-spec), så bredt innhold gjorde det dragbart sidelengs (#710).
+    // `overflow-y: auto` gir også `overflow-x: auto` (CSS-spec), så bredt
+    // innhold gjør panelet dragbart sidelengs (#710).
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
 
-    // Et langt ord UTEN mellomrom er det klassiske tilfellet som sprenger en
-    // smal container. Testdataen i seed er kort og ville ikke avslørt noe.
+    // Et langt ord uten mellomrom sprenger en smal container; seed-dataen er for kort.
     const LANG = `Playwright-${'x'.repeat(90)}-slutt`
     const { error } = await admin!.from('klubb_chat').insert({
       profil_id: megId!,
@@ -728,26 +618,23 @@ test.describe('kartmarkeringer (#697)', () => {
 
       const maal = await panel.evaluate(el => {
         const p = el as HTMLElement
-        // Forsøk faktisk å dra sidelengs, i stedet for bare å lese en
-        // CSS-verdi: det er BEVEGELSEN som var problemet.
+        // Forsøk faktisk å dra: det er BEVEGELSEN som er problemet, ikke CSS-verdien.
         p.scrollLeft = 500
         return {
           overflowX: getComputedStyle(p).overflowX,
           overflowY: getComputedStyle(p).overflowY,
           flyttetSeg: p.scrollLeft,
-          // Og at innholdet faktisk får plass — `hidden` alene ville bare
-          // klippet den lange teksten usynlig.
+          // `hidden` alene ville bare klippet teksten usynlig.
           overflyt: p.scrollWidth - p.clientWidth,
         }
       })
 
       expect(maal.overflowX).toBe('hidden')
-      // Vertikal scroll skal fortsatt virke — chatten er en lang tråd.
       expect(['auto', 'scroll']).toContain(maal.overflowY)
       expect(maal.flyttetSeg).toBe(0)
       expect(maal.overflyt).toBeLessThanOrEqual(0)
 
-      // Den lange teksten skal være der, brutt over flere linjer — ikke borte.
+      // Brutt over flere linjer, ikke borte.
       await expect(panel.getByText(/Playwright-x+/)).toBeVisible()
     } finally {
       await admin!.from('klubb_chat').delete().like('innhold', 'Playwright-%').throwOnError()
@@ -755,20 +642,14 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('skrivefeltet ligger i flyt under siste melding, ikke forankret', async ({ page }) => {
-    // Fjerde runde i samme bug-klasse (#222, #236, #712, #713): skrivepillen
-    // skal IKKE forankres til viewporten (fixed/sticky) — den skal ligge i
-    // normal flyt som siste element under meldingene, akkurat som meldingene
-    // selv. Se CLAUDE.md § Policy: Skrivefelt og iOS-tastatur (#714).
+    // Se CLAUDE.md § Policy: Skrivefelt og iOS-tastatur (#714).
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
 
-    // ~25 meldinger så panelet garantert overflyter og faktisk kan scrolles.
-    // Strengt stigende tidspunkter, ikke ett felles now(): produksjons-
-    // spørringen (app/(app)/kart/page.tsx) sorterer KUN på `opprettet`, så
-    // 25 identiske tidsstempler gir udefinert rekkefølge og ingen garanti
-    // for at -24 faktisk er siste melding. Da ville (b)/(c) under testet noe
-    // annet enn de påstår. Sekundene legges BAKOVER fra nå, så meldingene
-    // fortsatt er de nyeste i topp-30-vinduet.
+    // ~25 meldinger så panelet overflyter. Strengt stigende tidspunkter: kart-
+    // siden sorterer KUN på `opprettet`, så like stempler gir udefinert
+    // rekkefølge og -24 er ikke garantert sist. Bakover fra nå, så de er de
+    // nyeste i topp-30-vinduet.
     const NAA = Date.now()
     const MELDINGER = Array.from({ length: 25 }, (_, i) => ({
       profil_id: megId!,
@@ -786,13 +667,9 @@ test.describe('kartmarkeringer (#697)', () => {
       const felt = panel.getByPlaceholder(/Skriv en melding/i)
       await expect(felt).toBeVisible({ timeout: 15_000 })
 
-      // (a) Verken fixed eller sticky snek seg inn igjen — HELE kjeden fra
-      // feltet opp til chat-panelet skal være fri for viewport-forankring.
-      // Traverseringen må gå hele veien: stopper den på første `static`
-      // (normalt inputens umiddelbare forelder), blir en sticky wrapper
-      // lenger oppe aldri undersøkt, og testen ville passert også på den
-      // gamle sticky-varianten — altså ikke bevist det den påstår.
-      // Panelet SELV er unntatt: det er en forankret flate, og det er greit.
+      // (a) Ingen fixed/sticky i HELE kjeden opp til panelet — stopper
+      // traverseringen på første `static`, slipper en sticky wrapper lenger
+      // oppe gjennom. Panelet selv er en forankret flate og er unntatt.
       const forankret = await felt.evaluate(el => {
         let node: HTMLElement | null = el.parentElement
         while (node) {
@@ -804,23 +681,20 @@ test.describe('kartmarkeringer (#697)', () => {
           }
           node = node.parentElement
         }
-        // Nådde vi rota uten å se panelet, står feltet ikke der vi tror —
-        // en tom kjede skal ikke telle som bestått.
+        // Rota uten panel: feltet står ikke der vi tror — skal ikke telle som bestått.
         return 'fant aldri chat-panel over skrivefeltet'
       })
       expect(forankret).toBeNull()
 
-      // (b) Feltet ligger under siste melding, ikke over/bak den.
+      // (b) Under siste melding, ikke over/bak den.
       const sisteMelding = panel.getByText('Playwright-flyt-24')
       await expect(sisteMelding).toBeVisible()
       const meldingBox = (await sisteMelding.boundingBox())!
       const feltBoxFoer = (await felt.boundingBox())!
       expect(feltBoxFoer.y).toBeGreaterThanOrEqual(meldingBox.y + meldingBox.height)
 
-      // (c) Det positive beviset på flyt: scroller vi panelet til toppen, går
-      // feltet helt ut av det synlige området. En forankret (sticky/fixed)
-      // pill ville blitt stående synlig — nøyaktig det denne assertion-en
-      // ville feilet på med dagens sticky-oppførsel.
+      // (c) Positivt bevis på flyt: scrollet til toppen er feltet ute av syne.
+      // En forankret pille ville blitt stående synlig.
       await panel.evaluate(el => {
         ;(el as HTMLElement).scrollTop = 0
       })
@@ -828,7 +702,7 @@ test.describe('kartmarkeringer (#697)', () => {
       const feltBoxTopp = (await felt.boundingBox())!
       expect(feltBoxTopp.y).toBeGreaterThan(panelBox.y + panelBox.height)
 
-      // (d) Scroller vi tilbake til bunnen, er feltet der og fokuserbart.
+      // (d) Tilbake ved bunnen: synlig og fokuserbart.
       await panel.evaluate(el => {
         ;(el as HTMLElement).scrollTop = (el as HTMLElement).scrollHeight
       })
@@ -837,11 +711,8 @@ test.describe('kartmarkeringer (#697)', () => {
       await expect(felt).toBeFocused()
       bestod = true
     } finally {
-      // Opprydding skal ikke feile stille (jf. Policy: Databasespørringer):
-      // 25 gjenglemte meldinger dytter ekte testdata ut av topp-30-vinduet
-      // og forurenser senere kjøringer. Kaster likevel bare når selve testen
-      // gikk bra — ellers ville opprydningsfeilen maskert den ekte
-      // assertion-feilen i rapporten, som er verre enn den er verdt.
+      // Gjenglemte meldinger dytter testdata ut av topp-30-vinduet. Kaster kun
+      // når testen ellers bestod, så den ikke maskerer den ekte feilen.
       const { error: ryddefeil } = await admin!
         .from('klubb_chat')
         .delete()
@@ -854,14 +725,12 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('bare ett panel er åpent om gangen', async ({ page }) => {
-    // To åpne paneler på en 390 px skjerm ville latt igjen en stripe kart i
-    // midten — da er man like langt som før kartet ble fullskjerm.
+    // To åpne paneler på 390 px ville latt igjen bare en stripe kart.
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
 
     await page.getByTestId('panel-handtak').click()
     await expect(page.getByTestId('panel-handtak')).toHaveAttribute('aria-expanded', 'true')
-    // Chat-håndtaket skjules mens lista er ute, så de ikke står side om side.
     await expect(page.getByTestId('chat-handtak')).toHaveCount(0)
 
     await page.getByTestId('panel-handtak').click()
@@ -871,13 +740,8 @@ test.describe('kartmarkeringer (#697)', () => {
   })
 
   test('knappene står stille når man panorerer kartet', async ({ page }) => {
-    // Meldingen var at knappene øverst på kartet forsvant etterhvert som man
-    // navigerte rundt. Overlayene lå absolutt-posisjonert i en
-    // kartflate som IKKE var fixed, så de fulgte med når siden kunne scrolle
-    // bak kartet (#706).
-    //
-    // Testen drar faktisk i kartet i stedet for å stole på at CSS-en ser
-    // riktig ut — det var nettopp en riktig-utseende CSS som feilet.
+    // Overlayene fulgte med når siden scrollet bak kartet (#706). Drar faktisk
+    // i kartet — det var en riktig-utseende CSS som feilet.
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
     await page.locator('.leaflet-tile-pane img').first().waitFor({ state: 'visible', timeout: 15_000 })
@@ -885,8 +749,7 @@ test.describe('kartmarkeringer (#697)', () => {
     const knapp = page.getByTestId('del-knapp')
     const foer = await knapp.boundingBox()
 
-    // Dra kartet et godt stykke, i flere steg så Leaflet oppfatter det som en
-    // ekte panorering og ikke et klikk.
+    // Flere steg, så Leaflet oppfatter det som panorering, ikke klikk.
     const flate = (await page.getByTestId('kart-flate').boundingBox())!
     const midtX = flate.x + flate.width / 2
     const midtY = flate.y + flate.height / 2
@@ -900,90 +763,65 @@ test.describe('kartmarkeringer (#697)', () => {
     await page.waitForTimeout(500)
 
     const etter = await knapp.boundingBox()
-    // 2 px toleranse, ikke eksakt: sub-piksel-avrunding gir småbevegelser som
-    // ikke er forskyvning. Det som var feil var 44 px — en terskel her måler
-    // fortsatt riktig ting uten å vippe på desimaler.
+    // 2 px toleranse for sub-piksel-avrunding; feilen var 44 px.
     expect(Math.abs(etter!.x - foer!.x)).toBeLessThan(2)
     expect(Math.abs(etter!.y - foer!.y)).toBeLessThan(2)
 
-    // Og panelhåndtaket, som står på kanten midt på — det er det andre stedet
-    // en forskyvning ville vært synlig med en gang.
+    // Panelhåndtaket midt på kanten er det andre stedet en forskyvning synes.
     const handtak = await page.getByTestId('panel-handtak').boundingBox()
     expect(handtak!.y).toBeGreaterThan(flate.y)
     expect(handtak!.y + handtak!.height).toBeLessThan(flate.y + flate.height)
 
-    // MEKANISMEN, ikke bare symptomet. Draget over ville passert uansett i
-    // desktop-Chromium: der fanger Leaflet musen, og siden ville ikke bevegd
-    // seg selv om den KUNNE. Det som ble observert var iOS' rubber-band,
-    // som Playwright ikke reproduserer (jf. Policy: Visuell verifikasjon).
-    //
-    // Derfor asserteres låsen som faktisk fjerner muligheten. Ryker den, er
-    // vi tilbake der overlayene kan skli ut av skjermen på telefon — uten at
-    // noe annet i suiten merker det.
+    // MEKANISMEN, ikke bare symptomet: draget over passerer uansett i desktop-
+    // Chromium (Leaflet fanger musen), og iOS' rubber-band reproduseres ikke.
+    // Derfor asserteres scroll-låsen som fjerner muligheten.
     const laas = await page.evaluate(() => {
-      // Forsøk faktisk å scrolle, i stedet for å sammenligne scrollHeight mot
-      // innerHeight: innholdet KAN være høyere uten at siden lar seg flytte,
-      // og det er «lar seg flytte» som er hele saken.
+      // Forsøk faktisk å scrolle: innholdet kan være høyere uten at siden lar
+      // seg flytte, og det er flyttingen som er saken.
       window.scrollTo(0, 400)
       return {
         overflow: getComputedStyle(document.body).overflow,
         htmlOverflow: getComputedStyle(document.documentElement).overflow,
         overscroll: getComputedStyle(document.body).overscrollBehavior,
         flyttetSeg: window.scrollY,
-        // Overflyt er det rubber-band har å dra i. Null overflyt = ingenting
-        // å skli på, uansett hva nettleseren tillater av programmatisk scroll.
+        // Overflyt er det rubber-band har å dra i.
         overflyt: document.documentElement.scrollHeight - window.innerHeight,
       }
     })
     expect(laas.overflow).toBe('hidden')
     expect(laas.htmlOverflow).toBe('hidden')
     expect(laas.overscroll).toBe('none')
-    // Terskel på 2 px, ikke 0: layoutens `min-h-screen` er 100vh mens
-    // kartflaten er 100dvh, og avrundingen mellom dem gir én piksel. Feilen
-    // var 44 px (DeployInfo under kartet) — terskelen skiller de to.
+    // 2 px, ikke 0: `min-h-screen` (100vh) mot kartflatens 100dvh gir én
+    // piksel avrunding. Feilen var 44 px (DeployInfo under kartet).
     expect(laas.flyttetSeg).toBeLessThan(2)
     expect(laas.overflyt).toBeLessThan(2)
   })
 
   test('scroll-låsen slippes når man forlater kartet', async ({ page }) => {
-    // Låsen settes på <body>, som er delt med hele appen. Ryddes den ikke,
-    // blir resten av appen uscrollbar etter et besøk på kartet — en langt
-    // verre feil enn den vi fikset.
+    // Låsen settes på <body>, delt med hele appen — ryddes den ikke, blir
+    // resten av appen uscrollbar.
     await page.goto('/kart')
     await expect(page.getByTestId('kart-flate')).toBeVisible()
-    // POLL, ikke et enkeltoppslag: kart-flate står i SSR-HTML-en, mens låsen
-    // settes i en useEffect i PosisjonsKart — altså først etter hydrering.
-    // Mellom de to øyeblikkene er body fortsatt på globals.css sin egen
-    // «overflow-x: clip» (computed: «clip visible»), og et oppslag rett etter
-    // toBeVisible() kappløper med hydreringen. Det er nettopp det kappløpet
-    // som slo til i CI (tyngre bundle enn lokalt), ikke en ødelagt lås.
+    // POLL: kart-flate står i SSR-HTML-en, men låsen settes i en useEffect
+    // etter hydrering. Et enkeltoppslag kappløper med den (slo til i CI).
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow), {
       timeout: 15_000,
     }).toBe('hidden')
 
     await page.goto('/tidligere')
     await expect(page.getByRole('heading', { name: 'Hele historikken' })).toBeVisible()
-    // Samme kappløp motsatt vei: opprydningen skjer i effektens cleanup.
+    // Samme kappløp motsatt vei: opprydding skjer i effektens cleanup.
     await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).overflow), {
       timeout: 15_000,
     }).not.toBe('hidden')
   })
 
   test('nåla har et treffområde en finger faktisk kan treffe', async ({ page }) => {
-    // Playwright klikker programmatisk i midten av et element og treffer
-    // alltid — en klikk-test kan derfor ikke skille en 12 px nål fra en 44 px.
-    // Nøyaktig den blindsonen gjorde at #699 ble meldt grønn mens nåla
-    // fortsatt ikke lot seg treffe på telefonen. Derfor måles STØRRELSEN.
-    //
-    // Og den må måles på SELVE MARKØRELEMENTET (.leaflet-marker-icon), ikke på
-    // et barn inni det. Forrige runde målte et 44 px treffområde som lå inne i
-    // et 12 px markørelement og overflowet det: testen var grønn, elementet
-    // Leaflet binder klikk til var fortsatt 12 px, og fingeren traff ikke
-    // (#702). Klassen ligger derfor nå på ikonet selv.
-    // Seeder sin EGEN markering i stedet for å stole på at en tidligere test i
-    // fila la sin tilbake. Testene her fjerner og gjenoppretter markeringer, og
-    // en spec som avhenger av rekkefølgen feiler på noe som ser ut som en
-    // komponentfeil (jf. e2e/README.md § «Spec-er bør ikke stole på dette»).
+    // Et programmatisk klikk i midten treffer alltid, så STØRRELSEN måles
+    // (#699). Målet må være elementet Leaflet binder klikket til, ikke et barn
+    // inni det som overflower (#702).
+    // Egen markering: specen avhenger ellers av rekkefølgen på testene
+    // (e2e/README.md § «Spec-er bør ikke stole på dette»).
     const admin = adminKlient('kart-markering')
     test.skip(!admin, 'Ingen admin-klient')
     const EGEN = 'Playwright — treffområde'
@@ -998,21 +836,17 @@ test.describe('kartmarkeringer (#697)', () => {
     await page.goto('/kart')
 
     const boble = page.locator('.leaflet-tooltip.kart-markering-etikett').first()
-    // «attached», ikke «visible»: testen handler om STØRRELSEN på treffmålet,
-    // og kartutsnittet avgjør om bobla tilfeldigvis ligger innenfor den
-    // klippede kartcontaineren akkurat nå. Med `visible` vippet testen når
-    // andre spec-er hadde lagt igjen posisjoner som dro fitBounds utover.
+    // «attached», ikke «visible»: kartutsnittet (fitBounds, påvirket av andre
+    // specs' posisjoner) avgjør om bobla er innenfor den klippede containeren.
     await boble.waitFor({ state: 'attached', timeout: 15_000 })
     const boks = await boble.boundingBox()
     expect(boks).not.toBeNull()
-    // Bobla er bred (symbol + tekst) og ~30 px høy pluss halen. 44 px i bredde
-    // er Apples minste anbefalte tap-mål; høyden er lavere med vilje, fordi en
-    // snakkeboble som er 44 px høy dekker for mye kart. Bredden bærer målet.
+    // Høyden er lavere enn 44 med vilje — en 44 px høy boble dekker for mye
+    // kart; bredden bærer målet (unntak i treffmaal-unntak.ts).
     expect(boks!.width).toBeGreaterThanOrEqual(44)
     expect(boks!.height).toBeGreaterThanOrEqual(28)
 
-    // Dybde-kall (#700 PR 2): samme flate, men den generelle vakten — fanger
-    // andre nål-/etikett-relaterte brudd enn den håndskrevne målingen over.
+    // Dybde-kall (#700): den generelle vakten fanger andre brudd i markørlaget.
     await forventTreffbar(page, {
       kontekst: '/kart — markørlaget',
       omraade: '.leaflet-marker-pane, .leaflet-tooltip-pane',

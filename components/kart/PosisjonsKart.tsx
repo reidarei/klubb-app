@@ -38,14 +38,11 @@ import {
   type MarkeringSymbol,
 } from '@/lib/markering-symboler'
 
-// Chat-komponenten er stor, og de fleste som åpner kartet er der for kartet.
-// ssr: false fordi den uansett bare rendres etter et klikk — og da slipper
-// serveren å bygge markup ingen ser (#709).
+// Chat er stor og rendres først etter et trykk — dynamic + ssr: false (#709).
 const Chat = dynamic(() => import('@/components/chat/Chat'), { ssr: false })
 
-// Timeplan-panelet (#716) — statisk import, IKKE dynamic(): panelet er en
-// liten liste og et skjema (noen få kB gz), og «Timeplan · 17:00»-pilla må
-// kunne vise neste post i FØRSTE paint uten en chunk-hent midt i trykket.
+// Statisk import, IKKE dynamic(): panelet er lite, og «Timeplan · 17:00»-pilla
+// må vise neste post i FØRSTE paint (#716).
 import TimeplanPanel, { type TimeplanArrangement, type TimeplanPost } from './TimeplanPanel'
 import { beregnDefaultTimeplanDato } from './NyTimeplanPost'
 import KartListePanel from './KartListePanel'
@@ -54,8 +51,7 @@ import StedSok from './StedSok'
 import type { StedTreff } from '@/lib/geokoding'
 import ReisemodusBar, { KART_TOPP_MARGIN, REISEMODUS_BAR_SONE } from './ReisemodusBar'
 import { PilleKnapp } from '@/components/ui/TreffPille'
-// Re-eksportert slik at page.tsx kan importere ALLE kart-typene fra ett sted
-// (samme mønster som Mann/Markering/Punkt under).
+// Re-eksportert så page.tsx henter alle kart-typene fra ett sted.
 export type { TimeplanArrangement, TimeplanPost }
 
 import 'leaflet/dist/leaflet.css'
@@ -98,9 +94,8 @@ type Props = {
   menn: Mann[]
   markeringer: Markering[]
   /**
-   * Symbolregisteret med admin-tilpasset navn/emoji lagt på
-   * (lib/kart-symbol-tilpasning.ts). Valgfri: tester og en klubb uten
-   * tilpasninger får registeret som det står i lib/klubb-symboler.ts.
+   * Symbolregisteret med admin-tilpasninger (lib/kart-symbol-tilpasning.ts).
+   * Uten: registeret slik det står i lib/klubb-symboler.ts.
    */
   symboler?: readonly KlubbSymbol[]
   /** Innlogget brukers profil-id — skiller «meg» fra «de andre» på kartet. */
@@ -118,41 +113,26 @@ type Props = {
   visChat: boolean
   chatMeldinger: React.ComponentProps<typeof Chat>['initialMeldinger']
   chatProfiler: React.ComponentProps<typeof Chat>['profiler']
-  /**
-   * Arrangementet timeplan-knappen skal peke til (#716) — pågående med
-   * senest start, ellers nærmeste framtidige, uansett hvor langt fram. null
-   * betyr «ingen aktuelt arrangement», og da rendres pilla ikke i det hele
-   * tatt.
-   */
+  /** Se finnAktuellArrangement() (#716). null = timeplan-pilla rendres ikke. */
   timeplanArrangement: TimeplanArrangement | null
   timeplanPoster: TimeplanPost[]
   /** kart.timeplan.hent.feilet traff på serveren — panelet får egen feiltilstand. */
   timeplanFeil: boolean
   /**
-   * Et sted delt via lenke (#719) — ?lat=&lng=&tekst= i URL-en, parset
-   * server-side i page.tsx (lib/kart-lenke.ts). null når ingen slik
-   * parameter finnes. Kartet sentreres på dette punktet ved åpning, og en
-   * egen markør vises der — uavhengig av om noen `kart_markering`-rad
-   * fortsatt finnes (lenken bærer koordinatet, ikke en rad-id).
+   * Sted delt via lenke (#719), ?lat=&lng=&tekst= parset i page.tsx. Kartet
+   * sentreres her med egen markør — lenken bærer koordinatet, ikke en rad-id,
+   * så det virker selv om markeringen er slettet.
    */
   deltSted: { lat: number; lng: number; tekst: string | null } | null
   /** «Ping en herre» (#725) — påmeldte (eller alle aktive) minus dem som allerede deler. */
   pingKandidater: PingKandidat[]
   /**
-   * Reisemodus PÅ (#723) — TopHeader er ikke montert, så flaten fyller HELE
-   * viewporten (ikke bare det som er igjen under headeren) og en egen,
-   * flytende bar (ReisemodusBar) overtar avatar+togglejobben headeren
-   * ellers gjorde. Styrer også `--kart-panel-safe-top` — se stilen på
-   * kart-flaten under.
+   * Kartmodus PÅ (reise- eller møtemodus, #723/#780): ingen TopHeader, flaten
+   * fyller hele viewporten og ReisemodusBar overtar avatar+toggle. Styrer også
+   * `--kart-panel-safe-top` (se stilen på kart-flaten).
    */
   reisemodus: boolean
-  /**
-   * Hvilken av de to modusene som er PÅ (#780) — 'reise' eller 'moete'. Kun
-   * relevant når `reisemodus` (fellesnavnet for boolean-flagget, beholdt for
-   * å unngå en bred rename) er true; styrer teksten på ReisemodusBar. Valgfri
-   * (default null) så eksisterende tester som seeder `reisemodus: false`
-   * ikke måtte utvides for en modus som aldri vises i den tilstanden.
-   */
+  /** Hvilken modus som er på (#780); styrer teksten på ReisemodusBar. Kun relevant når `reisemodus`. */
   kartmodus?: 'reise' | 'moete' | null
 }
 
@@ -164,28 +144,16 @@ function erFersk(iso: string): boolean {
   return Date.now() - new Date(iso).getTime() < POSISJON_FERSK_MINUTTER * 60 * 1000
 }
 
-// Escaper tekst som skal inn i en HTML-streng Leaflet injiserer rått i DOM-en.
-// Navn og bilde-URL kommer begge fra profildata og må gjennom denne.
+// For HTML-strenger Leaflet injiserer rått i DOM-en. Navn og bilde-URL er profildata.
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 }
 
-// Markør-HTML for SISTE punkt: profilbildet når mannen har ett, initialer når
-// han ikke har det.
+// Markør-HTML for SISTE punkt: profilbilde, ellers initialer.
 //
-// BEVISST UNNTAK fra Policy: Avatar, og eneste stedet i appen som er det.
-// Leaflet sin divIcon tar en HTML-STRENG, ikke en React-node, så <Avatar> kan
-// ikke brukes her. Alternativet — å montere React i markørnoden via createPortal
-// etter at Leaflet har tegnet den — ville krevd portal-state og opprydding per
-// markør for å rendre 34 px. Dupliseringen holdes derfor nede ved å dele de to
-// tingene som faktisk bærer regler: `bildeSrc()` (Policy: Bildevisning, eneste
-// trakt inn i et src-attributt) og `harGulGloed()` (Policy: Roller, aldri en
-// rolle-streng sammenlignet direkte). Kun selve oppmerkingen er egen.
-//
-// Opprinnelig var dette initialer med vilje — et ansikt på 34 px er smått. Endret
-// etter en brukertest der «1R» ikke sa noe om hvem som sto der — et lite
-// ansikt gjenkjennes raskere enn to bokstaver når man vet hvem som er med.
-// Størrelsen er samtidig hevet fra 34 til 40 px for å gi ansiktet en sjanse.
+// BEVISST UNNTAK fra Policy: Avatar (det eneste): divIcon tar en HTML-STRENG,
+// ikke en React-node, og en createPortal per markør er ikke verdt det. Reglene
+// deles likevel via `bildeSrc()` og `harGulGloed()` — kun oppmerkingen er egen.
 function markoerHtml(
   navn: string,
   bildeUrl: string | null,
@@ -196,15 +164,12 @@ function markoerHtml(
   const klasser = ['kart-markoer']
   if (!fersk) klasser.push('kart-markoer-gammel')
   if (erMeg) klasser.push('kart-markoer-meg')
-  // Gul ring for generalsekretæren, som overalt ellers i appen. Taper mot
-  // «meg»-ringen hvis begge gjelder — står du på kartet selv, er det viktigste
-  // å finne deg selv først.
+  // Taper mot «meg»-ringen hvis begge gjelder — du skal finne deg selv først.
   if (!erMeg && harGulGloed(rolle)) klasser.push('kart-markoer-gs')
 
   const bilde = bildeSrc(bildeUrl)
   if (bilde) {
-    // Ikke next/image: dette er en løs HTML-streng utenfor Reacts tre, så det
-    // finnes ingen komponent å rendre. Avatarene er allerede små filer.
+    // Ikke next/image: løs HTML-streng utenfor Reacts tre.
     return `<div class="${klasser.join(' ')}"><img src="${esc(bilde)}" alt="${esc(navn)}" loading="lazy" /></div>`
   }
 
@@ -219,24 +184,11 @@ function markoerHtml(
   return `<div class="${klasser.join(' ')}" style="--avatar-hue:${hueAv(navn)}">${esc(init)}</div>`
 }
 
-// Markering på kartet (#708): ÉN snakkeboble som starter med symbolet og
-// peker ned på stedet.
-//
-// Tidligere sto symbolet to steder — på en egen nål OG først i etiketten ved
-// siden av. Det leste som to markeringer, og man måtte nesten bare velge.
-// Bobla er nå hele markeringen, og halen under den er det som peker på
-// selve punktet.
-//
-// Bobla ER tooltipen, ikke et eget ikon: den må vokse med teksten, og
-// `L.divIcon` krever en fast `iconSize` (default 12×12 — se #702). En tooltip
-// får naturlig bredde av innholdet. `interactive: true` gjør den trykkbar, som
-// den må være når den er hele markeringen — motsatt av før, da den var ren
-// pynt ved siden av en nål som tok trykket.
+// Markering (#708): ÉN snakkeboble med symbolet, halen peker på stedet. Bobla
+// ER tooltipen, ikke et divIcon: den må vokse med teksten, og `L.divIcon`
+// krever fast `iconSize` (#702). `interactive: true` fordi bobla er hele markeringen.
 
-// De TIDLIGERE punktene i sporet — små prikker uten initialer. De skal leses som
-// «her var han», ikke konkurrere med markøren som sier «her er han». Uten
-// størrelsesforskjellen blir en rute gjennom byen til et kart fullt av like
-// prikker der man ikke ser hvilken som gjelder nå.
+// De TIDLIGERE punktene i sporet: små prikker, så det synes hvilken som gjelder nå.
 function sporPrikkHtml(navn: string): string {
   return `<div class="kart-spor-prikk" style="--avatar-hue:${hueAv(navn)}"></div>`
 }
@@ -264,11 +216,9 @@ export default function PosisjonsKart({
   const kartetRef = useRef<LeafletMap | null>(null)
   const lagRef = useRef<LayerGroup | null>(null)
 
-  // Markeringer jeg selv har fjernet. Prop-en kommer fra serveren via RSC-
-  // revalidering etter slettMarkering(), men i CI (2 vCPU) ble den revaliderte
-  // siden i blant aldri committet i nettleseren, så raden sto igjen (#800).
-  // Fjerningen skal derfor ikke vente på den: svaret fra actionen er nok.
-  // Idene blir liggende — en slettet id kommer aldri tilbake fra serveren.
+  // Markeringer jeg selv har fjernet — svaret fra actionen er nok; vi venter
+  // ikke på RSC-revalideringen, som i blant aldri ble committet (#800).
+  // Idene blir liggende: en slettet id kommer aldri tilbake fra serveren.
   const [fjernedeMarkeringer, setFjernedeMarkeringer] = useState<ReadonlySet<string>>(new Set())
   const markeringer = useMemo(
     () => markeringerFraServer.filter(m => !fjernedeMarkeringer.has(m.id)),
@@ -278,111 +228,71 @@ export default function PosisjonsKart({
   const [jobber, setJobber] = useState(false)
   const [feil, setFeil] = useState<string | null>(null)
   const [plinget, setPlinget] = useState<string | null>(null)
-  // Hvem som nettopp er plinget, og derfor har en låst, grå knapp. Uten denne
-  // sto knappen helt uendret etter trykket, og mannen som trykket visste ikke
-  // om plinget faktisk hadde gått ut — knappen var eneste stedet han så etter svar.
+  // Hvem som nettopp er plinget (låst, grå knapp) — knappen er eneste sted
+  // mannen ser at plinget gikk ut.
   const [nyligPlinget, setNyligPlinget] = useState<Record<string, boolean>>({})
-  // Timer-IDene ryddes ved unmount. Uten det fyrer en setState på en komponent
-  // som er borte hvis man forlater kartet innen vinduet er ute.
+  // Ryddes ved unmount, ellers setState på en avmontert komponent.
   const plingTimere = useRef<number[]>([])
-  // Kopier-lenke-kvittering (#719) — trigges av BÅDE «Kopier lenke»-knappen i
-  // MarkeringDetalj og et langtrykk rett på boblen i kartet, derfor ligger
-  // den her og ikke i detaljpanelet: ett feedback-sted for to inngangar.
-  // `lenkeFallback` er IKKE null KUN når clipboard-skrivingen feilet — da
-  // vises lenken i et readonly, forhåndsselektert felt i stedet for en
-  // stille feil (Safari nekter clipboard-skriving utenfor et ekte
-  // brukergestvindu i noen kontekster).
+  // Kopier-lenke-kvittering (#719) — her og ikke i MarkeringDetalj fordi både
+  // knappen der og langtrykk på bobla trigger den. `lenkeFallback` er satt KUN
+  // når clipboard feilet (Safari nekter utenfor ekte brukergest) — da vises
+  // lenken i et forhåndsselektert felt i stedet for en stille feil.
   const [lenkeKopiert, setLenkeKopiert] = useState(false)
   const [lenkeFallback, setLenkeFallback] = useState<string | null>(null)
   const lenkeKopiertTimer = useRef<number | null>(null)
-  // Markeringsskjemaet er lukket til man trykker «Sett markering». Å la
-  // tekstfeltet stå åpent hele tiden ville tatt plass fra kartet, som er det
-  // man er der for.
-  // Markeringsflyten har to steg (#702). Ett steg var feil rekkefølge: å åpne
-  // tekstfeltet med én gang sprang opp tastaturet, som dekket kartet — og
-  // dermed krysset man skulle sikte med. Man skrev inn teksten uten å ha sett
-  // hvor nåla havnet.
+  // Markeringsflyten har to steg — sikte FØR tekst, ellers dekker tastaturet
+  // krysset man sikter med (#702).
   //
   //   'av'             — ingenting på gang
-  //   'sted'           — krysset står på kartet, kartet er fritt å flytte, ingen tekst
+  //   'sted'           — krysset står på kartet, kartet er fritt å flytte
   //   'tekst'          — stedet er låst, nå skriver man hva det er
-  //   'timeplan-punkt' — samme sikte, men for en timeplan-post (#716): ÉN
-  //                      sikte-tilstand for hele kartet, aldri to parallelle
-  //                      sikte-flagg. Panelet glir helt ut mens dette står på.
-  //   'sok'            — interaktivt stedssøk (#757): eget panel i bunn-blokka,
-  //                      ingen sikte. Et valgt treff går VIDERE til 'sted' (via
-  //                      «Sett markering her») eller rett i timeplan-utkastet —
-  //                      se onMarkeringFraSok/onTimeplanFraSok under.
+  //   'timeplan-punkt' — samme sikte for en timeplan-post (#716); ÉN sikte-
+  //                      tilstand for hele kartet. Panelet glir ut imens.
+  //   'sok'            — stedssøk (#757), ingen sikte. Et treff går videre til
+  //                      'sted' eller rett i timeplan-utkastet.
   const [steg, setSteg] = useState<'av' | 'sted' | 'tekst' | 'timeplan-punkt' | 'sok'>('av')
-  // Lytterne i langtrykk-effekten under (#762) registreres ÉN gang (deps
-  // [kartKlar]), og leser derfor steg via en REF, ikke via closure over
-  // React-state: leste de `steg` direkte, måtte de re-bindes ved hvert
-  // stegskifte, og en gest som pågår akkurat idet steget endres ville miste
-  // timeren sin i cleanup.
+  // Langtrykk-lytterne (#762) registreres ÉN gang og leser steg via ref —
+  // re-binding ved stegskifte ville drept timeren til en pågående gest.
   const stegRef = useRef(steg)
   useEffect(() => {
     stegRef.current = steg
   }, [steg])
-  // Punktet ringen under et pågående langtrykk tegnes på (#762), relativt
-  // til kartcontainerens rect. null = ingen gest pågår.
+  // Langtrykk-ringens punkt relativt til kartcontaineren (#762). null = ingen gest.
   const [presseRing, setPresseRing] = useState<{ x: number; y: number } | null>(null)
-  // Styrer hjelpeteksten i steg 'sted' (#762, utvidet #757): kom man dit via
-  // langtrykk eller via et valgt søketreff, står krysset allerede over
-  // stedet — «Flytt kartet» er da feil oppfordring. Nullstilles ('knapp') i
-  // bekreftSted og avbrytMarkering — begge avslutter steget.
+  // Styrer hjelpeteksten i 'sted' (#762, #757): via langtrykk/søk står krysset
+  // allerede over stedet, så «Flytt kartet» er feil oppfordring.
   const [stedKilde, setStedKilde] = useState<'knapp' | 'langtrykk' | 'sok'>('knapp')
-  // Valgt kandidat fra StedSok (#757) — treffnåla tegnes for dette punktet
-  // så lenge steg === 'sok'. null utenfor et aktivt søk eller før noe er valgt.
+  // Valgt søketreff (#757) — treffnåla tegnes her så lenge steg === 'sok'.
   const [sokValgt, setSokValgt] = useState<StedTreff | null>(null)
   const [markeringTekst, setMarkeringTekst] = useState('')
   const [markeringSymbol, setMarkeringSymbol] = useState<MarkeringSymbol>(STANDARD_SYMBOL)
-  // Koordinatet låses når man bekrefter stedet, slik at en utilsiktet
-  // panorering mens tastaturet er oppe ikke flytter markeringen.
+  // Låses ved bekreftelse, så panorering mens tastaturet er oppe ikke flytter markeringen.
   const [valgtSted, setValgtSted] = useState<{ lat: number; lng: number } | null>(null)
-  // Markeringen man har trykket på KARTET. Fram til #699 var nålene
-  // `interactive: false` — du så dem, trykket på dem, og ingenting skjedde.
-  // Fjern-knappen lå i en liste langt under kartet, som man må scrolle forbi
-  // hele kartet og mannelista for å nå. Det er ikke der man leter.
+  // Markeringen man har trykket på i kartet (#699).
   const [valgtMarkering, setValgtMarkering] = useState<string | null>(null)
-  // Ett panel om gangen, samlet i én union (#716) — tre booleans ga 8
-  // tilstander hvorav 5 var ulovlige. panelAapent/chatAapent/timeplanAapent
-  // under er avledet LOKALT per render, ikke egen state, slik at all
-  // eksisterende JSX (aria-expanded, transform, betingelser lenger ned)
-  // kan stå UENDRET: e2e (kart-markering.spec.ts, kart-markorer.spec.ts)
-  // leser disse testid-ene og verdiene, og skal ikke måtte endres av denne
-  // refaktoreringen.
+  // Ett panel om gangen, som én union (#716). De tre boolske under er avledet
+  // per render, ikke egen state.
   const [aapentPanel, setAapentPanel] = useState<'ingen' | 'liste' | 'chat' | 'timeplan'>('ingen')
   const panelAapent = aapentPanel === 'liste'
   const chatAapent = aapentPanel === 'chat'
   const timeplanAapent = aapentPanel === 'timeplan'
   const chatPanelRef = useRef<HTMLElement>(null)
 
-  // Timeplan-utkast (#716). Bor HER, ikke i TimeplanPanel/NyTimeplanPost —
-  // bindende arkitekturbeslutning: panelet glir helt ut mens man velger et
-  // punkt på kartet (steg 'timeplan-punkt' under), og skal glide inn igjen
-  // med utkastet intakt. dato initialiseres lazy til arrangementets
-  // startdato hvis turen ikke har begynt, ellers dagens dato.
+  // Timeplan-utkastet bor HER, ikke i TimeplanPanel: panelet glir ut under
+  // punktvelging ('timeplan-punkt') og skal komme tilbake med utkastet intakt (#716).
   const [timeplanDato, setTimeplanDato] = useState(() =>
     timeplanArrangement ? beregnDefaultTimeplanDato(timeplanArrangement) : '',
   )
   const [timeplanTekst, setTimeplanTekst] = useState('')
   const [timeplanManuellKlokke, setTimeplanManuellKlokke] = useState<string | null>(null)
   const [timeplanPunkt, setTimeplanPunkt] = useState<{ lat: number; lng: number } | null>(null)
-  // Adresse (#732) — alternativ til punkt, samme «bor her»-begrunnelse som
-  // punktet over: skal overleve at panelet glir ut under en punktvelging.
+  // Adresse (#732) — alternativ til punkt.
   const [timeplanAdresse, setTimeplanAdresse] = useState<string | null>(null)
 
-  // Arrangement-bundet state nullstilles når serveren peker på et ANNET
-  // arrangement (#716 review). En RSC-revalidering et annet sted i komponenten
-  // (settMarkering() e.l.) kan bytte aktuelt arrangement uten at noe
-  // remonteres, og den lazy useState-initialiseringen over kjører kun ved
-  // mount — uten dette ble gammel dato, gammel tekst og gammelt punkt stående
-  // under tittelen til en helt annen tur. Dekker samtidig overgangen
-  // null → satt, som denne effekten håndterte alene før.
-  //
-  // Sammenligningen står på ID-en i en ref, ikke på objektidentiteten:
-  // props-objektet er nytt ved hver RSC-render, så en ren deps-sammenligning
-  // ville tømt utkastet hans hver gang en vilkårlig action revaliderte siden.
+  // Nullstill utkastet når serveren peker på et ANNET arrangement (#716): en
+  // RSC-revalidering kan bytte arrangement uten remount, og lazy-init over
+  // kjører kun ved mount. Sammenlign på ID i en ref — props-objektet er nytt
+  // ved hver RSC-render og ville tømt utkastet ved enhver revalidering.
   const forrigeTimeplanId = useRef<string | null>(timeplanArrangement?.id ?? null)
   useEffect(() => {
     const id = timeplanArrangement?.id ?? null
@@ -395,34 +305,19 @@ export default function PosisjonsKart({
     setTimeplanAdresse(null)
   }, [timeplanArrangement])
 
-  // Tastatur-høyden. Brukes KUN til å løfte bunn-blokka (absolute, #714)
-  // når man skriver markeringsteksten — uten det havner tekstfeltet bak
-  // tastaturet. Hooken lytter på visualViewport-scroll, som i chatten ga en
-  // «dansende» pille (#222/#236); her er siden låst mot scroll (se effekten
-  // under), så offsetTop holder seg i ro. Chat-panelet under bruker ikke
-  // lenger denne hooken — skrivefeltet der ligger i normal flyt.
+  // KUN for å løfte den forankrede bunn-blokka (#714) over tastaturet. Den
+  // ustabile hooken er ok her fordi siden er scroll-låst (effekten under).
+  // Chat-panelet ligger i flyt og bruker den ikke (se CLAUDE.md § Policy:
+  // Skrivefelt og iOS-tastatur).
   const tastaturOffset = useKeyboardOffset()
 
-  // Kartsiden låser sidescroll så lenge den er montert.
-  //
-  // Uten dette kan siden scrolle bak det fastlåste kartet: layoutens
-  // `min-h-screen` er 100vh, mens kartflaten er 100dvh — på iOS er vh større
-  // enn dvh når adresselinja er synlig, så det ble et par hundre piksler
-  // tomrom å scrolle ned i. Da flyttet knappene seg ut av skjermen når man
-  // dro rundt på kartet, og bunn-blokka havnet delvis utenfor for så å komme
-  // til syne igjen senere (#706). position: fixed på selve flaten løser
-  // plasseringen; denne låsen fjerner tomrommet som gjorde det mulig i det
-  // hele tatt.
+  // Kartsiden låser sidescroll så lenge den er montert (#706): layoutens
+  // 100vh er større enn kartflatens 100dvh på iOS, og tomrommet lot siden
+  // scrolle bak kartet så knappene forsvant ut av skjermen.
   useEffect(() => {
-    // BÅDE <html> og <body>. `overflow: hidden` på body alene holdt ikke —
-    // målt til 44 px scroll igjen, fordi <html> er scroll-containeren og
-    // body-verdien bare propagerer til viewporten når html står på `visible`.
-    // De 44 pikslene kom fra DeployInfo, som ligger i <main> under kartflaten;
-    // den blir klippet bort her, og det er riktig: kartsiden er fullskjerm.
-    //
-    // overscrollBehavior i tillegg til overflow: på iOS hindrer ikke `hidden`
-    // alene rubber-band-effekten, og det var den som dro overlayene ut av
-    // skjermen mens man panorerte kartet.
+    // BÅDE <html> og <body>: <html> er scroll-containeren, så body alene holdt
+    // ikke. overscrollBehavior i tillegg fordi `hidden` alene ikke stopper
+    // iOS' rubber-band.
     const html = document.documentElement
     const body = document.body
     const forrige = {
@@ -435,14 +330,10 @@ export default function PosisjonsKart({
     html.style.overscrollBehavior = 'none'
     body.style.overflow = 'hidden'
     body.style.overscrollBehavior = 'none'
-    // Skjuler DeployInfo, som ligger i <main> under kartet og la 44 px ekstra
-    // høyde på dokumentet. Overflyten var det rubber-band-effekten hadde å dra
-    // i; uten den er det ingenting å skli på. Se regelen i globals.css.
+    // Skjuler DeployInfo under kartet, som ga 44 px overflyt å rubber-bande i (se globals.css).
     body.classList.add('fullskjerm-side')
     return () => {
-      // Låsen ligger på elementer hele appen deler. Ryddes den ikke, blir
-      // resten av appen uscrollbar etter et besøk på kartet — en langt verre
-      // feil enn den vi fikset. Pinnet i e2e.
+      // MÅ ryddes, ellers blir resten av appen uscrollbar. Pinnet i e2e.
       html.style.overflow = forrige.htmlOverflow
       html.style.overscrollBehavior = forrige.htmlOverscroll
       body.style.overflow = forrige.bodyOverflow
@@ -450,32 +341,24 @@ export default function PosisjonsKart({
       body.classList.remove('fullskjerm-side')
     }
   }, [])
-  // Leaflet lastes asynkront, mens markør-effekten kjører rett etter den
-  // synkrone delen av init-effekten. Uten dette flagget leser markør-effekten
-  // en lagRef som ennå er null, returnerer tomhendt, og kjører ALDRI igjen —
-  // punktene er jo uendret. Det var bugen i første versjon: tomt kart, full
-  // liste under, men kun ved fersh sidelast.
+  // Leaflet lastes asynkront. Uten flagget leser markør-effekten en lagRef som
+  // ennå er null og kjører aldri igjen (punktene er uendret) — tomt kart.
   const [kartKlar, setKartKlar] = useState(false)
 
   const meg = menn.find(m => m.profilId === megId) ?? null
   const megDeler = meg !== null
 
-  // Din siste posisjon (#728) — grunnlaget for avstand-visning på
-  // markeringer og timeplan-rader. null når du ikke deler: da vises ingen
-  // avstand, kun linja «Del posisjonen din for å se avstand.»
+  // Grunnlag for avstand-visning (#728). null når du ikke deler.
   const megPunkt = meg ? { lat: meg.spor.at(-1)!.lat, lng: meg.spor.at(-1)!.lng } : null
 
-  // Navn/bilde til MEG selv til den optimistiske timeplan-raden (#716) —
-  // chatProfiler dekker alle aktive medlemmer uansett om jeg deler posisjon,
-  // til forskjell fra `meg` over (som krever aktiv deling).
+  // Til den optimistiske timeplan-raden (#716). Fra chatProfiler, ikke `meg`,
+  // som krever aktiv deling.
   const megProfil = chatProfiler.find(p => p.id === megId) ?? null
   const megNavn = megProfil?.navn || 'Deg'
   const megBildeUrl = megProfil?.bilde_url ?? null
   const megRolle = megProfil?.rolle ?? null
 
-  // Ett panel om gangen. To åpne paneler på en 390 px skjerm ville latt igjen
-  // en stripe kart i midten — da er man like langt som før kartet ble
-  // fullskjerm.
+  // Ett panel om gangen — to på 390 px ville latt igjen en stripe kart.
   const aapneListe = useCallback(() => {
     setAapentPanel(p => (p === 'liste' ? 'ingen' : 'liste'))
   }, [])
@@ -509,13 +392,9 @@ export default function PosisjonsKart({
     kartetRef.current?.flyTo([lat, lng], POSISJON_KART_ZOOM)
   }, [])
 
-  // Egen posisjon oppdateres (#726): flytt kartet KUN hvis punktet havner
-  // utenfor det utsnittet mannen faktisk ser på. Har han zoomet inn for å
-  // se seg selv og trykker «Oppdater» mens han fortsatt står i samme rute,
-  // skal kartet stå musestille — ikke zoome ut til POSISJON_KART_ZOOM som
-  // senterPaa() ville gjort. maxZoom: kart.getZoom() er selve garantien mot
-  // at kartet zoomer INN når punktet ER utenfor: fitBounds() zoomer aldri
-  // nærmere enn det du allerede sto på.
+  // Egen posisjon oppdatert (#726): flytt kartet KUN hvis punktet er utenfor
+  // utsnittet — ellers står det stille (ikke senterPaa()). maxZoom: getZoom()
+  // hindrer at fitBounds zoomer INN.
   const taMedPosisjon = useCallback((lat: number, lng: number) => {
     const kart = kartetRef.current
     if (!kart) return
@@ -525,12 +404,8 @@ export default function PosisjonsKart({
     kart.fitBounds(b.extend([lat, lng]), { padding: [50, 50], maxZoom: kart.getZoom() })
   }, [])
 
-  // «Vis stedet på kartet» fra en timeplan-rad: lukk panelet FØRST (#716
-  // review). Panelet dekker 88 % av flaten, så punktet ble sentrert rett bak
-  // det — knappen flyttet kartet uten at man så noe som helst. Kartflaten
-  // beholder full størrelse (panelet er et overlegg, ikke en kolonne), så
-  // sentreringen treffer riktig med en gang; flyTo-animasjonen og panelets
-  // utglidning går side om side.
+  // Fra en timeplan-rad: lukk panelet, ellers sentreres punktet bak det (#716).
+  // Panelet er et overlegg, så sentreringen treffer uten å vente på utglidningen.
   const senterPaaFraTimeplan = useCallback(
     (lat: number, lng: number) => {
       setAapentPanel('ingen')
@@ -539,10 +414,7 @@ export default function PosisjonsKart({
     [senterPaa],
   )
 
-  // Bygger stedslenken og forsøker å legge den på utklippstavlen (#719).
-  // Delt mellom «Kopier lenke»-knappen i MarkeringDetalj og langtrykket på
-  // selve boblen i kartet — se kommentaren ved state-deklarasjonen.
-  // Kvitteringen deles av langtrykket og av Kopier-knappen i fallback-panelet.
+  // Stedslenke til utklippstavlen (#719) — se lenkeKopiert-state over.
   const visLenkeKvittering = useCallback(() => {
     setLenkeFallback(null)
     setLenkeKopiert(true)
@@ -558,8 +430,7 @@ export default function PosisjonsKart({
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(lenke).then(visLenkeKvittering).catch(() => setLenkeFallback(lenke))
     } else {
-      // Ingen Clipboard API i det hele tatt (eldre WebKit, usikker kontekst)
-      // — rett til fallback-feltet i stedet for et garantert avvist forsøk.
+      // Ingen Clipboard API (eldre WebKit, usikker kontekst) — rett til fallback.
       setLenkeFallback(lenke)
     }
   }, [visLenkeKvittering])
@@ -567,36 +438,27 @@ export default function PosisjonsKart({
   const router = useRouter()
   const [friskerOpp, startFriskOpp] = useTransition()
 
-  // Erstatningen for pull-to-refresh på kartsiden (#718): siden er
-  // scroll-låst (#706), så en dra-ned-gest der alltid leses som panorering —
-  // `draNedForOppdaterAv()` i lib/navigasjon.ts slår derfor av gesten helt
-  // her, og «friskt kart» må hentes eksplisitt i stedet.
+  // Erstatter pull-to-refresh, som er av på den scroll-låste kartsiden (#718,
+  // `draNedForOppdaterAv()` i lib/navigasjon.ts).
   const friskOppKartet = useCallback(() => {
     startFriskOpp(() => {
       router.refresh()
     })
   }, [router])
 
-  // Pillene som trigger hentOgLagre må låses av BEGGE ventetidene, ikke bare
-  // GPS-hentingen: flere av feilgrenene under nullstiller `jobber` FØR
-  // friskOppKartet() starter, og «ingen Geolocation API»-grenen setter `jobber`
-  // aldri. Med bare `jobber` i disabled ble knappen klikkbar igjen — eller
-  // aldri låst i det hele tatt — mens RSC-refreshen fortsatt pågikk (#718).
+  // Lås på BEGGE ventetidene: flere feilgrener nullstiller (eller setter aldri)
+  // `jobber` før friskOppKartet() er ferdig (#718).
   const opptatt = jobber || friskerOpp
 
-  // Kjernen i innmeldingen. `stille` skiller den automatiske oppdateringen ved
-  // sidelast fra et bevisst knappetrykk: den automatiske skal aldri vise en
-  // feilmelding eller flytte kartet under føttene på deg — den bare fyller på
-  // sporet hvis den får lov.
+  // `stille` = automatisk oppdatering ved sidelast: aldri feilmelding, aldri
+  // flytte kartet — bare fylle på sporet.
   const hentOgLagre = useCallback(
     (stille: boolean) => {
       if (!stille) setFeil(null)
       if (typeof navigator === 'undefined' || !navigator.geolocation) {
         if (!stille) {
           setFeil('Denne telefonen gir ikke appen tilgang til posisjon.')
-          // Ingen GPS i det hele tatt — vi får aldri en delPosisjon-kvittering
-          // (og dermed aldri revalidatePath('/kart')) for denne mannen, så
-          // kartet friskes opp eksplisitt her i stedet (#718).
+          // Ingen delPosisjon ⇒ ingen revalidatePath — frisk opp eksplisitt (#718).
           friskOppKartet()
         }
         return
@@ -604,10 +466,8 @@ export default function PosisjonsKart({
       if (!stille) setJobber(true)
       navigator.geolocation.getCurrentPosition(
         async pos => {
-          // try/catch fordi dette er en async callback UTENFOR Reacts tre:
-          // kaster delPosisjon (utløpt sesjon er rutine i en PWA, og
-          // ensureInnlogget kaster da), har ingen noe å fange den, og den blir
-          // en unhandled rejection i stedet for en beskjed til mannen.
+          // Async callback utenfor Reacts tre: et kast (f.eks. utløpt sesjon)
+          // ville blitt en unhandled rejection i stedet for en beskjed.
           try {
             const svar = await delPosisjon(
               pos.coords.latitude,
@@ -618,9 +478,7 @@ export default function PosisjonsKart({
               setJobber(false)
               if (!svar.ok) {
                 setFeil(svar.melding)
-                // delPosisjon feilet før den nådde revalidatePath('/kart') —
-                // uten dette blir kartet stående med gamle data selv om han
-                // trykte «Oppdater» (#718).
+                // Feilet før revalidatePath — frisk opp eksplisitt (#718).
                 friskOppKartet()
                 return
               }
@@ -630,18 +488,14 @@ export default function PosisjonsKart({
             if (!stille) {
               setJobber(false)
               setFeil('Klarte ikke lagre posisjonen. Prøv igjen.')
-              // Samme begrunnelse som svar.ok-grenen over: delPosisjon kastet
-              // før revalideringen, så kartet må friskes opp eksplisitt.
               friskOppKartet()
             }
           }
         },
         posFeil => {
           if (!stille) setJobber(false)
-          // Tre ulike ting for brukeren: han har sagt nei, telefonen fikk ikke
-          // fix, eller det tok for lang tid. Én felles «noe gikk galt» ville
-          // sendt ham til innstillingene for en timeout han bare kunne prøvd
-          // på nytt.
+          // Tre ulike råd: en felles melding ville sendt ham til
+          // innstillingene for en timeout han bare kunne prøvd på nytt.
           const klasse =
             posFeil.code === posFeil.PERMISSION_DENIED
               ? 'nektet'
@@ -657,11 +511,9 @@ export default function PosisjonsKart({
                   : 'Telefonen fant ingen posisjon akkurat nå. Prøv igjen om litt.',
             )
           }
-          // Warn og ikke error: at en mann sier nei er ikke en programfeil. Men
-          // uten raden kan vi ikke svare på om iOS-PWA-en glemmer tillatelsen
-          // mellom økter, som fortsatt er det åpne spørsmålet. `auto-`-prefikset
-          // skiller den stille oppdateringen fra et bevisst trykk — det er
-          // nettopp den stille som avslører en glemt tillatelse.
+          // Warn, ikke error: et nei er ingen programfeil, men raden avslører om
+          // iOS-PWA-en glemmer tillatelsen mellom økter — derfor `auto-`-prefikset
+          // på den stille oppdateringen.
           sendFeilBeacon(
             'klient.posisjon.nektet',
             posFeil.message || klasse,
@@ -669,46 +521,32 @@ export default function PosisjonsKart({
             { fingerprint: stille ? `auto-${klasse}` : klasse },
             'warn',
           )
-          // Nektet, timeout eller utilgjengelig — GPS ga aldri en posisjon å
-          // sende til delPosisjon, så ingen revalidatePath('/kart') skjer.
-          // Kartet friskes opp likevel her, slik at «Oppdater» også henter
-          // inn andres bevegelser selv når din egen posisjon feiler (#718).
+          // Ingen revalidatePath her heller — «Oppdater» skal likevel hente
+          // andres bevegelser (#718).
           if (!stille) friskOppKartet()
         },
-        // enableHighAccuracy slår på GPS i stedet for mast/wifi. Det koster
-        // batteri og noen sekunder, men et punkt med ±1500 m er ubrukelig til
-        // nettopp det kartet er til for: å finne hverandre i en gate.
+        // GPS, ikke mast/wifi: ±1500 m er ubrukelig for å finne hverandre i en gate.
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       )
     },
     [taMedPosisjon, friskOppKartet],
   )
 
-  // Automatisk oppdatering ved sidelast for den som ALLEREDE deler.
-  //
-  // To grunner til at dette hører med, og ikke er en snikende utvidelse: (1)
-  // uten det ville sporet bestått av de 2–3 gangene noen husket å trykke på en
-  // knapp, og et spor med tre punkter er ikke en rute. (2) pling-varselet er
-  // verdiløst hvis mottakeren må gjøre noe mer enn å åpne appen — hele poenget
-  // er at trykket hans ER oppdateringen.
-  //
-  // Gated på aktiv deling: har du ikke sagt ja, henter vi ingenting, og
-  // getCurrentPosition kalles aldri. Ingen uventet tillatelsesdialog.
+  // Automatisk oppdatering ved sidelast, KUN for den som allerede deler (ingen
+  // uventet tillatelsesdialog). Uten den blir sporet bare de få knappetrykkene,
+  // og pling-varselet virker fordi det å åpne appen ER oppdateringen.
   useEffect(() => {
     if (!megDeler) return
     hentOgLagre(true)
-    // Kun ved montering: dette er «da du åpnet siden», ikke en løpende puls.
+    // Kun ved montering, ikke en løpende puls.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Leaflet importeres inne i effekten, ikke på modulnivå. Biblioteket rører
-  // `window` ved import, så et toppnivå-import ville kastet under SSR. Dette
-  // laster også kartkoden først når noen faktisk åpner /kart, som er hele
-  // grunnen til at resten av appen ikke blir tyngre av Leaflet (jf. ytelseskravet).
+  // Leaflet importeres i effekten: den rører `window` ved import (kaster under
+  // SSR), og resten av appen slipper å bære den.
   useEffect(() => {
     let avbrutt = false
-    // Deklarert her (ikke inni .then()) slik at cleanup-funksjonen under
-    // kan rydde den selv om Leaflet-modulen ikke er ferdig lastet ennå.
+    // Utenfor .then(), så cleanup kan rydde den før Leaflet er lastet.
     let ventId: number | undefined
     const node = kartRef.current
     if (!node) return
@@ -717,18 +555,8 @@ export default function PosisjonsKart({
       if (avbrutt || kartetRef.current) return
       const L = mod.default
 
-      // Startutsnittet rammer inn HOVEDTYNGDEN av punktene, ikke automatisk
-      // ALT som finnes (#735). Uten dette drar én mann som fortsatt står på
-      // avreisestedet (flyet ikke landet, eller bare ikke delt posisjon siden)
-      // utsnittet over et helt hav — kartet må da spenne fra Gardermoen til
-      // Lisboa i stedet for å vise byen turen faktisk foregår i.
-      //
-      // Posisjoner og markeringer sendes inn HVER FOR SEG: kun mennene stemmer
-      // over hvor utsnittet havner, mens markeringene blir med hvis de ligger
-      // der gjengen er. En markering langt unna skal verken dra utsnittet dit
-      // eller kunne stemme ned mennene (se lib/kart-klynge.ts). Finnes det
-      // ingen posisjoner i det hele tatt, rammes samtlige markeringer inn som
-      // før denne funksjonen fantes (#699) — det håndterer funksjonen selv.
+      // Startutsnittet rammer inn HOVEDTYNGDEN, ikke alt (#735). Posisjoner og
+      // markeringer sendes HVER FOR SEG — se lib/kart-klynge.ts.
       const posisjonspunkter: [number, number][] = menn.flatMap(m => {
         const siste = m.spor[m.spor.length - 1]
         return siste ? [[siste.lat, siste.lng] as [number, number]] : []
@@ -736,26 +564,19 @@ export default function PosisjonsKart({
       const markeringspunkter: [number, number][] = markeringer.map(
         mk => [mk.lat, mk.lng] as [number, number],
       )
-      // Et delt sted (#753) trenger ingen klynge-vurdering — utsnittet skal
-      // treffe PRESIS det koordinatet, ikke et snitt av annet på kartet.
-      // Regnestykket i velgKlyngeUtsnitt() hopper vi derfor over når det uansett
-      // ikke skal brukes.
+      // Et delt sted (#719, #753) vinner startutsnittet: mannen trykket lenken
+      // for å se DET stedet, så klynging og fitBounds hoppes over.
       const punkterIUtsnittet: [number, number][] = deltSted
         ? []
         : velgKlyngeUtsnitt(posisjonspunkter, markeringspunkter)
 
-      // Ankomsten via en delt lenke (#753): kartet skal FØDES vidt og flys
-      // synlig inn mot koordinatet, ikke stå der ferdig innzoomet. Planlagt
-      // FØR kartet konstrueres, slik at startZoom kan brukes i options under.
+      // Ankomst via delt lenke (#753): kartet FØDES vidt og flys synlig inn.
+      // Planlagt før konstruksjon fordi startZoom brukes i options.
       const ankomst = deltSted ? planleggAnkomst(foretrekkerRedusertBevegelse()) : null
-      // Nøkkelen denne ankomsten er planlagt FOR. Post-mount-effekten lenger
-      // nede stempler samme ref når den overtar med et nytt mål (#753).
+      // Målet denne ankomsten gjelder; post-mount-effekten stempler samme ref
+      // når den overtar med et nytt mål (#753).
       const ankomstKey = deltStedKey
 
-      // Et delt sted (#719) vinner startutsnittet: mannen trykket på nettopp
-      // DEN lenken for å se DET stedet, ikke gjennomsnittet av alt annet på
-      // kartet. fitBounds-grenen under kjøres derfor ikke når deltSted er
-      // satt — presis sentrering slår «få alt med».
       const kart = L.map(node, {
         center: deltSted ? [deltSted.lat, deltSted.lng] : (punkterIUtsnittet[0] ?? [fallbackSenter.lat, fallbackSenter.lng]),
         zoom: deltSted
@@ -763,15 +584,12 @@ export default function PosisjonsKart({
           : punkterIUtsnittet.length > 0
             ? POSISJON_KART_ZOOM
             : POSISJON_KART_FALLBACK_ZOOM,
-        // Zoom-knappene er museflate. Målplattformen er en telefon der man
-        // kniper, og knappene ville bare spist skjermplass.
+        // Mobil-PWA: man kniper.
         zoomControl: false,
         attributionControl: true,
       })
 
-      // Med flere punkter zoomer vi ut til alt får plass. maxZoom hindrer at to
-      // punkter i samme kvartal zoomer helt inn på husnummer; padding holder
-      // markørene unna kanten, der de ville vært halvt avskåret.
+      // maxZoom: to punkter i samme kvartal skal ikke zoome inn på husnummer.
       if (!deltSted && punkterIUtsnittet.length > 1) {
         kart.fitBounds(L.latLngBounds(punkterIUtsnittet), {
           padding: [50, 50],
@@ -779,49 +597,37 @@ export default function PosisjonsKart({
         })
       }
 
-      // Referansen tas vare på: ankomstflyvningen venter på at DENNE
-      // flisrunden er tegnet (#753) før den zoomer videre inn.
+      // Ankomstflyvningen venter på at DENNE flisrunden er tegnet (#753).
       const flisLag = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        // Attribusjon er et VILKÅR for å bruke OSMs fliser, ikke en høflighet.
+        // Attribusjon er et VILKÅR for OSMs fliser.
         attribution: '&copy; OpenStreetMap',
       }).addTo(kart)
 
-      // Trykk på selve kartet lukker et åpent panel (#721, #722) — chat,
-      // liste og timeplan er én union (aapentPanel), så dette dekker alle
-      // tre. INGEN scrim-div: et inset:0-overlegg ville svelget panorering,
-      // som e2e (kart-markorer.spec.ts m.fl.) allerede vokter. Leaflet fyrer
-      // ikke 'click' for et trykk som traff en interaktiv markør/tooltip
-      // (de stopper propagering selv), så dette griper kun kartFLATEN.
+      // Trykk på kartflaten lukker et åpent panel (#721, #722). INGEN scrim-div:
+      // den ville svelget panorering (vaktet i e2e). Interaktive markører/
+      // tooltips stopper propagering selv, så dette griper kun flaten.
       kart.on('click', () => setAapentPanel('ingen'))
 
       lagRef.current = L.layerGroup().addTo(kart)
       kartetRef.current = kart
       setKartKlar(true)
-      // Leaflet måler containeren ved init. Åpnes siden mens layouten fortsatt
-      // setter seg (fonter, safe-area), blir målingen for liten og flisene
-      // dekker bare deler av ruta. invalidateSize etter første paint retter opp.
+      // Leaflet måler ved init, mens layouten (fonter, safe-area) kan være
+      // uferdig — da dekker flisene bare deler av ruta.
       requestAnimationFrame(() => kart.invalidateSize())
 
-      // Innzoomingen mot et delt sted (#753). To triggere, én guard:
-      // 'load' er den normale veien (flisene som dekker STARTutsnittet er
-      // tegnet — å zoome inn over en grå flate hadde mistet halve poenget),
-      // timeout-en er fail-open hvis en flis feiler eller nettet henger —
-      // ankomsten må aldri kunne bli hengende for godt.
+      // Innzooming mot delt sted (#753): 'load' (startfliser tegnet, ikke zoom
+      // over grå flate) eller timeout som fail-open — én guard.
       let harFlydd = false
       if (ankomst?.animer) {
         const start = () => {
           if (avbrutt || harFlydd || !kartetRef.current) return
-          // Han kan ha trykket en NY steds-lenke i chat-panelet mens vi ventet
-          // på fliser (#753). Post-mount-effekten har da alt flydd til det nye
-          // målet og stemplet nøkkelen — denne planlagte flyvningen ville dratt
-          // ham tilbake til det gamle stedet.
+          // En NY steds-lenke trykket mens vi ventet (#753) er alt håndtert av
+          // post-mount-effekten — ikke dra ham tilbake til det gamle målet.
           if (forrigeDeltStedKey.current !== ankomstKey) return
           harFlydd = true
           window.clearTimeout(ventId)
-          // Containeren kan ha fått endelig størrelse først etter at
-          // startutsnittet ble tegnet (samme grunn som invalidateSize over) —
-          // uten denne kan flyTo regne på feil dimensjoner.
+          // Samme grunn som invalidateSize over.
           kart.invalidateSize()
           kart.flyTo([deltSted!.lat, deltSted!.lng], ankomst.sluttZoom, {
             duration: ankomst.varighetSek,
@@ -840,25 +646,18 @@ export default function PosisjonsKart({
       lagRef.current = null
       setKartKlar(false)
     }
-    // Kjøres én gang: menn/fallbackSenter leses kun for STARTutsnittet, og
-    // senere endringer tegnes av effekten under i stedet for å bygge kartet på nytt.
+    // Én gang: props leses kun for STARTutsnittet; endringer tegnes av effekten under.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Langtrykk på kartflaten (#762): holder man fingeren et sted, panoreres
-  // det punktet inn under siktet og steg 'sted' startes — eller, er siktet
-  // allerede oppe, panoreres det bare, uten å endre steg (regissørens
-  // beslutninger #1 og #2 for #762).
+  // Langtrykk på kartflaten (#762): punktet panoreres inn under siktet og steg
+  // 'sted' startes — er siktet alt oppe, panoreres det bare.
   //
-  // Native DOM-lyttere på Leaflet-containeren, ikke React og ikke
-  // map.on('contextmenu'): Leaflets egen tapHold har tapHoldDelay hardkodet
-  // som en modul-lokal variabel — ikke en option, kan ikke settes til
-  // LONG_PRESS_MS — og handleren er som default kun på for iOS Safari.
-  // Android ville dermed fått en annen (fraværende) gest. Egne lyttere med
-  // de samme terskelkonstantene boble-gesten (#719, lenger ned i fila) bruker
-  // gir lik oppførsel på begge plattformer.
+  // Egne DOM-lyttere, ikke map.on('contextmenu'): Leaflets tapHold har
+  // hardkodet forsinkelse og er kun på for iOS Safari. Samme terskler som
+  // boble-gesten (#719) gir lik oppførsel på iOS og Android.
   //
-  // deps [kartKlar], ikke [steg]: se stegRef over for hvorfor.
+  // deps [kartKlar], ikke [steg]: se stegRef.
   useEffect(() => {
     if (!kartKlar) return
     const node = kartRef.current
@@ -868,9 +667,8 @@ export default function PosisjonsKart({
     let holdTimer: number | null = null
     let klar = false
     let start = { x: 0, y: 0 }
-    // Aktive pekere telles selv, IKKE via e.isPrimary — jsdom setter
-    // isPrimary til false som default på et syntetisk PointerEvent, så en
-    // isPrimary-vakt ville gjort hele testfila «grønn» uten å bevise noe.
+    // Telles selv, IKKE via e.isPrimary — jsdom setter den false som default,
+    // og en isPrimary-vakt ville gjort testene grønne uten å bevise noe.
     let aktivPeker: number | null = null
 
     const avbrytHold = () => {
@@ -886,24 +684,16 @@ export default function PosisjonsKart({
       // Ingen pointerType-sil (#796): touch er eneste målflate, og et drag
       // (også e2e-ens mus-drag) passerer bevegelsesterskelen lenge før timeren.
       if (aktivPeker !== null) {
-        // Pinch-vakt: en ANDRE peker ned mens den første holder er en
-        // knipe-gest, ikke et langtrykk.
+        // En ANDRE peker = knipe-gest, ikke langtrykk.
         avbrytHold()
         return
       }
-      // Koordinatet er låst i steg 'tekst' (#702) — hele poenget med
-      // to-stegs-flyten er at teksten ikke skal kunne flytte nåla.
-      // Steg 'sok' (#757) har sitt eget panel og ingen sikte — et langtrykk
-      // der skal ikke starte en parallell markeringsflyt.
+      // 'tekst': koordinatet er låst (#702). 'sok': eget panel, ingen
+      // parallell markeringsflyt (#757).
       if (stegRef.current === 'tekst' || stegRef.current === 'sok') return
-      // Kollisjonsvakten mot boble-gesten (#719): et langtrykk på en
-      // eksisterende markering/kontroll skal IKKE i tillegg starte en ny
-      // markering. Eksplisitt target-sil — ikke avhengig av at boblas egen
-      // stopPropagation() i pointerup rekker først (den lytteren rører vi
-      // ikke — se boble-gesten lenger ned i denne effekten som tegner
-      // markørene, merket #719).
-      // Ikke '.leaflet-marker-icon' (#700): den står på alle markører, også
-      // interactive:false-ansiktene der langtrykk skal starte en markering.
+      // Langtrykk på en markering/kontroll skal ikke OGSÅ starte en ny (#719).
+      // Eksplisitt sil, ikke avhengig av boblas stopPropagation(). Ikke
+      // '.leaflet-marker-icon' (#700): den står også på ikke-interaktive ansikter.
       const target = e.target as HTMLElement
       if (
         target.closest(
@@ -923,9 +713,7 @@ export default function PosisjonsKart({
     }
 
     const pointerMove = (e: PointerEvent) => {
-      // Samme mønster som boble-gesten (#719, lenger ned i fila): under
-      // panorering ryddes timeren bort etter de første ~10 pikslene — hele
-      // ytelsessvaret.
+      // Under panorering ryddes timeren etter de første pikslene — tidlig retur deretter.
       if (holdTimer === null) return
       const dx = e.clientX - start.x
       const dy = e.clientY - start.y
@@ -937,8 +725,7 @@ export default function PosisjonsKart({
       avbrytHold()
       aktivPeker = null
       if (!varKlar) return
-      // PointerEvent arver MouseEvent, så Leaflets egen hjelper kan brukes
-      // direkte — ingen manuell omregning av koordinater.
+      // PointerEvent arver MouseEvent, så Leaflets hjelper virker direkte.
       startMarkeringFraLangtrykk(kart.mouseEventToLatLng(e))
     }
 
@@ -947,14 +734,11 @@ export default function PosisjonsKart({
       aktivPeker = null
     }
 
-    // Android Chrome åpner sin egen bilde-kontekstmeny på langtrykk over en
-    // flis (<img>) — Android-benet av samme problem -webkit-touch-callout
-    // løser på iOS (se kart.css).
+    // Android-benet av det -webkit-touch-callout løser på iOS (se kart.css).
     const kontekstmeny = (e: Event) => e.preventDefault()
 
-    // Touch-pekere har IMPLISITT pointer capture på noden som fikk
-    // pointerdown, så pointerup kommer tilbake hit selv om fingeren dras
-    // utenfor containeren — ingen document-lyttere, ingen pointerleave.
+    // Touch har implisitt pointer capture — pointerup kommer hit selv utenfor
+    // containeren, så ingen document-lyttere trengs.
     node.addEventListener('pointerdown', pointerDown, { passive: true })
     node.addEventListener('pointermove', pointerMove, { passive: true })
     node.addEventListener('pointerup', pointerUp, { passive: true })
@@ -970,21 +754,17 @@ export default function PosisjonsKart({
       if (holdTimer !== null) window.clearTimeout(holdTimer)
       setPresseRing(null)
     }
-    // Lytterne skal registreres ÉN gang; steg leses via stegRef (se over), og
-    // startMarkeringFraLangtrykk er stabil (useCallback med tomme deps).
+    // Registreres ÉN gang; steg via stegRef, startMarkeringFraLangtrykk er stabil.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kartKlar])
 
-  // Reisemodus-toggelen endrer FLATENS høyde (header borte/tilbake) uten at
-  // kartet remountes. Leaflet måler kun containeren ved init og reagerer ikke
-  // selv på en ren CSS-høydeendring — uten denne sto kartet med feil utsnitt
-  // (stripe uten fliser i bunnen) til neste resize eller rotasjon.
+  // Modus-toggelen endrer flatens høyde uten remount, og Leaflet merker ikke
+  // en ren CSS-høydeendring — ellers en stripe uten fliser i bunnen.
   useEffect(() => {
     if (!kartetRef.current) return
     requestAnimationFrame(() => kartetRef.current?.invalidateSize())
   }, [reisemodus])
 
-  // Tegner spor og markører på nytt når dataene endrer seg.
   useEffect(() => {
     if (!kartKlar) return
     const lag = lagRef.current
@@ -996,66 +776,43 @@ export default function PosisjonsKart({
       const L = mod.default
       lag.clearLayers()
 
-      // Markeringene tegnes FØRST, så personmarkørene legger seg oppå. Det er
-      // riktig prioritet: en mann som beveger seg er ferskere informasjon enn
-      // en nål som har stått en stund.
+      // Markeringene FØRST, så personmarkørene (ferskere info) legger seg oppå.
       for (const mk of markeringer) {
         const markoer = L.marker([mk.lat, mk.lng], {
-          // Ankeret er USYNLIG og 1×1: bobla (tooltipen under) er det man ser
-          // og trykker på. En synlig markør her ville vært symbolet en gang
-          // for mye — nøyaktig det #708 fjerner.
+          // Usynlig 1×1-anker; bobla er det man ser og trykker på (#708).
           icon: L.divIcon({ html: '', className: 'kart-markering-anker', iconSize: [1, 1] }),
           alt: mk.tekst,
           title: `${mk.tekst} — ${mk.avNavn}, ${relativTid(mk.opprettet)}`,
-          // #700: ankeret selv har ingen handling (klikket er bundet til
-          // bobla/tooltipen under, se .bindTooltip under) — uten dette fikk et
-          // 1×1 element `.leaflet-interactive`-klassen av Leaflets default og
-          // ble en reell, umulig-å-treffe trykkflate (jf. #702-mønsteret).
+          // Klikket er bundet til bobla — ellers en umulig-å-treffe 1×1-trykkflate (#700).
           interactive: false,
         })
           .bindTooltip(
-            // Halen er et EGET element, ikke Leaflets ::before. Den innebygde
-            // pila lot seg ikke få fram her uansett border-verdier — bobla ble
-            // stående som et avrundet rektangel (#708-oppfølging). Et eget
-            // element gir full kontroll over form, farge og hvor spissen lander.
+            // Halen er et eget element (se .kart-boble-hale i kart.css).
             `<span class="kart-boble-symbol" aria-hidden="true">${esc(mk.emoji)}</span><span class="kart-boble-tekst">${esc(mk.tekst)}</span><span class="kart-boble-hale" aria-hidden="true"></span>`,
             {
               permanent: true,
-              // `top` gir Leaflets innebygde pil som peker NED mot punktet —
-              // akkurat snakkeboble-formen som var ønsket. Offset løfter bobla
-              // så halen lander på selve koordinatet.
+              // Bobla over punktet; offset løfter den så halen lander på koordinatet.
               direction: 'top',
               offset: [0, -4],
               className: 'kart-markering-etikett',
-              // Bobla ER markeringen nå, så den må ta imot trykk.
               interactive: true,
             },
           )
           .on('click', () => setValgtMarkering(mk.id))
           .addTo(lag)
 
-        // Halen står mot VENSTRE ende av bobla, ikke midt på (#708). Leaflet
-        // sentrerer tooltipen over punktet, så uten en motvekt ville halen
-        // pekt et stykke til venstre for stedet den gjelder.
-        //
-        // Forskyvningen må måles, ikke gjettes: bobla er like bred som teksten
-        // i den, og en fast offset ville bommet med halve differansen for hver
-        // markering som ikke tilfeldigvis hadde «riktig» lengde.
-        // getTooltip().getElement(), ikke markoer.getElement(): sistnevnte gir
-        // det usynlige 1×1-ankeret. Det er BOBLA som skal forskyves.
+        // Halen står mot venstre ende (#708), mens Leaflet sentrerer tooltipen —
+        // forskyv bobla tilsvarende. MÅLT, fordi bredden følger teksten.
+        // getTooltip().getElement(): markoer.getElement() er 1×1-ankeret.
         const boble = markoer.getTooltip()?.getElement()
         if (boble) {
           boble.style.marginLeft = `${boble.offsetWidth / 2 - HALE_FRA_VENSTRE}px`
 
-          // Langtrykk kopierer lenken til stedet (#719) — native DOM-lyttere,
-          // ikke React, fordi boble er en Leaflet-tegnet node utenfor Reacts
-          // tre (samme begrunnelse som markoerHtml over).
+          // Langtrykk kopierer stedslenken (#719); DOM-lyttere fordi bobla er
+          // utenfor Reacts tre.
           //
-          // KRITISK: timeren setter KUN et flagg (`klar`). Selve
-          // navigator.clipboard.writeText()-kallet skjer i pointerup, inne i
-          // det ekte brukergestvinduet — Safari avviser clipboard-skriving
-          // fra en setTimeout-callback som ligger UTENFOR det vinduet, selv
-          // om timeren ble startet av en ekte pekerhendelse.
+          // KRITISK: timeren setter KUN `klar`. Clipboard-skrivingen skjer i
+          // pointerup — Safari avviser den fra en setTimeout-callback.
           let holdTimer: number | null = null
           let klar = false
           let start = { x: 0, y: 0 }
@@ -1085,8 +842,7 @@ export default function PosisjonsKart({
             const varKlar = klar
             avbrytHold()
             if (!varKlar) return
-            // Hindrer at løftet i tillegg utløser Leaflets 'click' (som ville
-            // åpnet detaljpanelet) — et langtrykk er ÉN handling, ikke to.
+            // Ikke også Leaflets 'click' (detaljpanelet) — langtrykk er ÉN handling.
             e.preventDefault()
             e.stopPropagation()
             kopierLenke(mk.lat, mk.lng, mk.tekst)
@@ -1101,8 +857,7 @@ export default function PosisjonsKart({
         const siste = m.spor.at(-1)
         if (!siste) continue
 
-        // Linja gjennom sporet tegnes FØRST, så prikker og markør legger seg
-        // oppå den. Motsatt rekkefølge ville lagt en strek tvers over ansiktene.
+        // Linja FØRST, ellers går streken tvers over ansiktene.
         if (m.spor.length > 1) {
           L.polyline(
             m.spor.map(p => [p.lat, p.lng] as [number, number]),
@@ -1110,16 +865,13 @@ export default function PosisjonsKart({
               className: erMeg ? 'kart-rute kart-rute-meg' : 'kart-rute',
               weight: 3,
               opacity: 0.55,
-              // Leaflet setter farge som SVG-attributt og overstyrer klassen,
-              // så color må settes her. var() er gyldig i SVG-attributtet og
-              // plukker opp tema-tokenet som alt annet.
+              // SVG-attributtet overstyrer klassen; var() virker der og følger temaet.
               color: erMeg ? 'var(--accent)' : 'var(--text-tertiary)',
               interactive: false,
             },
           ).addTo(lag)
         }
 
-        // Alle punkter UNNTATT det siste: små prikker som viser hvor han var.
         for (const p of m.spor.slice(0, -1)) {
           L.marker([p.lat, p.lng], {
             icon: L.divIcon({
@@ -1130,15 +882,12 @@ export default function PosisjonsKart({
             }),
             alt: `${m.navn} var her`,
             title: `${m.navn} — ${relativTid(p.registrert)}`,
-            // Gamle punkter skal ikke stjele trykk fra markøren når de ligger tett.
             interactive: false,
           }).addTo(lag)
         }
 
-        // Nøyaktighetssirkelen er ikke pynt: et punkt med ±1500 m og ett med
-        // ±10 m ser identiske ut som prikker, men betyr helt forskjellige ting
-        // for den som skal finne deg. Kun på siste punkt, og kun når
-        // usikkerheten er stor nok til å bety noe på gatenivå.
+        // ±1500 m og ±10 m ser like ut som prikker. Kun siste punkt, og kun når
+        // usikkerheten betyr noe på gatenivå.
         if (siste.noeyaktighetM != null && siste.noeyaktighetM > 50) {
           L.circle([siste.lat, siste.lng], {
             radius: siste.noeyaktighetM,
@@ -1153,16 +902,13 @@ export default function PosisjonsKart({
           icon: L.divIcon({
             html: markoerHtml(m.navn, m.bildeUrl, m.rolle, erFersk(siste.registrert), erMeg),
             className: '',
-            // 40 og ikke 34: et ansikt trenger flere piksler enn to bokstaver
-            // for å kjennes igjen. Anchor er halve størrelsen, så prikken står
-            // sentrert over koordinatet.
+            // 40 px for at ansiktet skal kjennes igjen; MÅ matche .kart-markoer i kart.css.
             iconSize: [40, 40],
             iconAnchor: [20, 20],
           }),
           alt: m.navn,
           title: `${m.navn} — ${relativTid(siste.registrert)}`,
-          // #700: ansiktet har ingen handling — trykk går til kartet (lukker panel),
-          // langtrykk starter en markering, som på tom kartflate.
+          // Ingen handling: trykk og langtrykk virker som på tom kartflate (#700).
           interactive: false,
           keyboard: false,
         }).addTo(lag)
@@ -1174,17 +920,11 @@ export default function PosisjonsKart({
     }
   }, [menn, markeringer, megId, kartKlar, kopierLenke])
 
-  // Nøkkelen (ikke objektet) er dep-en under (#719) — samme mønster som
-  // forrigeTimeplanId lenger opp: `deltSted` er et NYTT objekt fra serveren
-  // ved hver RSC-render (f.eks. etter en pling eller settMarkering et annet
-  // sted på siden), og en deps-sammenligning på objektidentitet ville trigget
-  // effektene under langt oftere enn stedet faktisk endret seg.
+  // Nøkkelen, ikke objektet, er dep-en (#719): `deltSted` er nytt ved hver RSC-render.
   const deltStedKey = deltSted ? `${deltSted.lat},${deltSted.lng},${deltSted.tekst ?? ''}` : null
 
-  // Tegner en egen markør for det delte stedet (#719) — uavhengig av om noen
-  // `kart_markering`-rad fortsatt finnes. Egen ref, IKKE lagRef: deles den
-  // layer-gruppa ville markøren blitt visket ut hver gang menn/markeringer
-  // tegnes på nytt (f.eks. ved en pling fra en annen mann).
+  // Markør for det delte stedet (#719). Egen ref, IKKE lagRef — den tømmes
+  // hver gang menn/markeringer tegnes på nytt.
   const deltStedMarkerRef = useRef<LeafletMarker | null>(null)
   useEffect(() => {
     if (!kartKlar || !deltSted) return
@@ -1203,8 +943,7 @@ export default function PosisjonsKart({
         }),
         alt: deltSted.tekst ?? 'Delt sted',
         title: deltSted.tekst ?? 'Delt sted',
-        // #700: samme resonnement som person-markøren over — ingen handling,
-        // trykk lukker nå panel, langtrykk starter markering, som vedtatt.
+        // Ingen handling, som person-markøren (#700).
         interactive: false,
         keyboard: false,
       }).addTo(kart)
@@ -1217,17 +956,12 @@ export default function PosisjonsKart({
       deltStedMarkerRef.current?.remove()
       deltStedMarkerRef.current = null
     }
-    // deltSted (ikke bare -Key) leses inni, men dep-en er nøkkelen — se
-    // begrunnelsen over.
+    // Dep-en er nøkkelen, ikke deltSted — se deltStedKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kartKlar, deltStedKey])
 
-  // Treffnåla for et valgt søketreff (#757) — PRIVAT og MIDLERTIDIG (i
-  // motsetning til en kart_markering-rad): den lever kun så lenge steg ===
-  // 'sok' og et treff er valgt, forsvinner igjen så snart man går videre
-  // («Sett markering her»/«Legg i timeplanen») eller avbryter. Egen
-  // LayerGroup, ikke lagRef — den delte laget tegnes på nytt av en annen
-  // effekt (menn/markeringer) og ville visket bort nåla ved neste render.
+  // Treffnåla for et valgt søketreff (#757): privat og midlertidig, kun mens
+  // steg === 'sok'. Egen LayerGroup, ikke lagRef (som tømmes ved hver tegning).
   const sokLagRef = useRef<LayerGroup | null>(null)
   useEffect(() => {
     if (!kartKlar) return
@@ -1250,8 +984,7 @@ export default function PosisjonsKart({
         }),
         alt: sokValgt.navn,
         title: sokValgt.navn,
-        // Ren visning — ikke-interaktiv og ikke i keyboard-tabordenen, i
-        // motsetning til en ekte kart_markering-boble som tar imot trykk.
+        // Ren visning, i motsetning til en ekte markeringsboble.
         interactive: false,
         keyboard: false,
       }).addTo(lag)
@@ -1263,33 +996,21 @@ export default function PosisjonsKart({
     }
   }, [kartKlar, steg, sokValgt])
 
-  // Flytter kartet til et NYTT delt sted etter mount (#719) — startutsnittet
-  // dekkes allerede av init-effekten over. Refen holder unna den samme
-  // objektidentitets-fellen som -Key-forklaringen over: kun en ekte
-  // verdiendring skal utløse en flyTo, ikke en vilkårlig RSC-revalidering.
-  //
-  // Samme ankomst som init-effekten (#753) — dette er den ANDRE av de to
-  // ankomstveiene: lenken trykket fra chat-PANELET mens man allerede står
-  // på /kart (komponenten remountes ikke, kun søkeparametrene endres).
-  // Ingen ventetid på fliser her: kartet er allerede tegnet i sitt nåværende
-  // utsnitt, det er kun MÅLET som er nytt.
+  // Flyr til et NYTT delt sted etter mount (#719, #753) — lenke trykket i
+  // chat-panelet mens man står på /kart (ingen remount). Startutsnittet tas av
+  // init-effekten. Ingen flis-venting: kartet er alt tegnet, kun målet er nytt.
   const forrigeDeltStedKey = useRef<string | null>(deltStedKey)
   useEffect(() => {
     if (deltStedKey === forrigeDeltStedKey.current) return
 
-    // Lenken er FJERNET (?lat/?lng borte): ingen flyvning å gjøre, men
-    // tilstanden er terminal — nøkkelen stemples, slik at det samme stedet
-    // delt på nytt senere fortsatt teller som en ekte endring.
+    // Lenken fjernet: stemple likevel, så samme sted delt på nytt teller som endring.
     if (!deltStedKey || !deltSted) {
       forrigeDeltStedKey.current = deltStedKey
       return
     }
 
-    // Kartet er ikke bygget ennå (Leaflet importeres dynamisk, og en lenke i
-    // chat-panelet kan fint trykkes i det vinduet): IKKE stemple nøkkelen her.
-    // Effekten kjøres på nytt når `kartKlar` slår om, og flyr da. Samme regel
-    // som § Policy: Navigasjon setter for push-overleveringen — markøren
-    // konsumeres når handlingen har LYKTES, ikke når den leses.
+    // Kartet ikke bygget ennå: IKKE stemple — effekten kjører igjen når
+    // `kartKlar` slår om. Nøkkelen konsumeres når flyvningen har LYKTES.
     if (!kartKlar) return
     const kart = kartetRef.current
     if (!kart) return
@@ -1327,24 +1048,16 @@ export default function PosisjonsKart({
     }
   }, [])
 
-  // Forsvinner markeringen (fjernet av meg, eller utløpt mens siden sto åpen),
-  // skal ikke panelet bli stående og peke på noe som ikke finnes.
+  // Markeringen fjernet eller utløpt: lukk detaljpanelet.
   useEffect(() => {
     if (valgtMarkering && !markeringer.some(m => m.id === valgtMarkering)) {
       setValgtMarkering(null)
     }
   }, [markeringer, valgtMarkering])
 
-  // Markeringen settes der SIKTET står — midt i kartet — ikke der GPS-en sier
-  // du er (#700).
-  //
-  // Opprinnelig brukte den getCurrentPosition. Det så ut som «Sett markering
-  // her» plasserte noe uten at man fikk vite hvor, fordi det ikke sto noe kryss
-  // på kartet: man hadde ingen måte å se hva «her» betydde før nåla dukket opp.
-  // Siktet gjør stedet synlig FØR man lagrer, og lar deg samtidig markere et
-  // sted du ikke står — møtestedet, baren borte i gata. Som bonus faller hele
-  // GPS-veien bort: ingen tillatelsesdialog, ingen timeout, ingen ventetid.
-  // Steg 1 → 2: lås stedet krysset står på, og gå videre til teksten.
+  // Markeringen settes der SIKTET står (kartsenteret), ikke der GPS-en sier du
+  // er (#700): stedet er synlig før lagring, og man kan markere et sted man
+  // ikke står. Steg 1 → 2: lås stedet og gå til teksten.
   const bekreftSted = useCallback(() => {
     const kart = kartetRef.current
     if (!kart) {
@@ -1358,23 +1071,12 @@ export default function PosisjonsKart({
     setSteg('tekst')
   }, [])
 
-  // Committen fra langtrykk-gesten (#762, effekten over): panorerer punktet
-  // man holdt på inn under siktet, i stedet for å plassere et sikte der
-  // fingeren var. Siktet er alltid i sentrum og bekreftSted() leser
-  // getCenter() — panorering lar langtrykket arve HELE #700-maskineriet uten
-  // én ny sannhetskilde for koordinatet, og punktet kommer samtidig ut fra
-  // under fingeren, som er svaret på «hvordan ser man hvor det havner».
+  // Langtrykk-commit (#762): punktet panoreres inn under siktet i sentrum, så
+  // bekreftSted() sin getCenter() forblir eneste sannhetskilde.
   //
-  // Forflytningen er SYNKRON (animate: false), ikke animert. Var den animert,
-  // sto kartsenteret et sted mellom gammelt senter og punktet så lenge
-  // animasjonen løp — mens «Her er det» var trykkbar fra første frame, og
-  // bekreftSted() leser getCenter(). Et raskt trykk låste da et koordinat
-  // fingeren aldri pekte på, altså nøyaktig den upresisheten gesten skulle
-  // fjerne. Alternativet (holde knappen død til 'moveend') gjør en knapp
-  // ubrukelig i et kvart sekund for å redde en animasjon som uansett er kort:
-  // avstanden er aldri mer enn et halvt kartutsnitt, og gesten committer på
-  // pointerup — fingeren er allerede på vei opp når kartet flytter seg.
-  // Vaktet av «bekreft umiddelbart etter slipp» i __tests__/kart-langtrykk.test.tsx.
+  // SYNKRONT (animate: false): animert ville et raskt «Her er det» låst et
+  // koordinat midt i animasjonen. Vaktet av «bekreft umiddelbart etter slipp»
+  // i __tests__/kart-langtrykk.test.tsx.
   const startMarkeringFraLangtrykk = useCallback((latlng: LatLng) => {
     const kart = kartetRef.current
     if (!kart) return
@@ -1384,10 +1086,8 @@ export default function PosisjonsKart({
     kart.panTo(latlng, { animate: false })
     setFeil(null)
     setStedKilde('langtrykk')
-    // Steg 'av' → gå til 'sted' (start flyten). Steg 'sted'/'timeplan-punkt' →
-    // bare panorer, la steget stå (regissørens beslutning #2). 'tekst' nås
-    // aldri hit — koordinatet er låst der, og pointerdown-lytteren silte det
-    // bort før vi kom så langt.
+    // 'av' → 'sted'. 'sted'/'timeplan-punkt': bare panorer. 'tekst'/'sok' er
+    // silt bort i pointerdown.
     setSteg(gjeldende => (gjeldende === 'av' ? 'sted' : gjeldende))
   }, [])
 
@@ -1400,11 +1100,8 @@ export default function PosisjonsKart({
     setStedKilde('knapp')
   }, [])
 
-  // Punktvalg for en timeplan-post (#716) — samme sikte som markeringsflyten
-  // over, gjenbrukt via steg 'timeplan-punkt' (ÉN sikte-tilstand for hele
-  // kartet). Panelet glir helt ut (aapentPanel → 'ingen') og inn igjen
-  // (aapentPanel → 'timeplan') rundt dette; utkastet selv rører vi ikke, det
-  // bor i egen state over og overlever runden uendret.
+  // Punktvalg for en timeplan-post (#716) — samme sikte, steg 'timeplan-punkt'.
+  // Panelet glir ut og inn igjen; utkastet overlever i egen state.
   const startTimeplanPunktvalg = useCallback(() => {
     setAapentPanel('ingen')
     setFeil(null)
@@ -1420,10 +1117,8 @@ export default function PosisjonsKart({
     const senter = kart.getCenter()
     setTimeplanPunkt({ lat: senter.lat, lng: senter.lng })
     setFeil(null)
-    // Et langtrykk (eller et søketreff, #757) under punktvalget setter
-    // stedKilde (samme sikte, flere veier inn). Uten nullstilling her ville
-    // neste ordinære «Sett markering» møtt hjelpeteksten «Krysset står der
-    // du holdt» selv om den ble startet med knappen.
+    // Langtrykk/søk under punktvalget satte stedKilde — nullstill, ellers får
+    // neste «Sett markering» feil hjelpetekst.
     setStedKilde('knapp')
     setSteg('av')
     setAapentPanel('timeplan')
@@ -1437,8 +1132,6 @@ export default function PosisjonsKart({
   }, [])
 
   // ── Stedssøk (#757) ────────────────────────────────────────────────────
-  // Åpner søket. Samme opprydding som «Sett markering»/langtrykk: lukk andre
-  // paneler, nullstill en tidligere valgt markering og feilmelding.
   const startStedSok = useCallback(() => {
     setAapentPanel('ingen')
     setValgtMarkering(null)
@@ -1447,10 +1140,7 @@ export default function PosisjonsKart({
     setSteg('sok')
   }, [])
 
-  // Et treff er valgt fra StedSoks kandidatliste: kartet flyr dit (uten
-  // animasjon hvis brukeren har bedt om redusert bevegelse) og treffnåla
-  // tegnes av effekten lenger ned (avhenger av sokValgt). Ren visning —
-  // ingenting er «satt» ennå, det skjer først i markerFraSok/leggSokITimeplan.
+  // Ren visning — ingenting lagres før markerFraSokTreff/leggSokTreffITimeplan.
   const velgSokTreff = useCallback((treff: StedTreff) => {
     setSokValgt(treff)
     const kart = kartetRef.current
@@ -1462,12 +1152,8 @@ export default function PosisjonsKart({
     }
   }, [])
 
-  // «Sett markering her» fra et søketreff: går via SAMME sikte/«Her er
-  // det»-bekreftelse som «Sett markering»-knappen og langtrykket — treffnåla
-  // er privat og midlertidig, kun bekreftSted() lager en delt kart_markering
-  // (regissørens produktvalg for #757). panTo (synkron) sentrerer kartet
-  // eksakt på treffet FØR steg 'sted' vises, slik at «Her er det» kan
-  // trykkes med én gang uten å måtte vente på en flyTo-animasjon.
+  // Via SAMME sikte/«Her er det» som knappen og langtrykket (#757) — kun
+  // bekreftSted() lager en delt markering. Synkron panTo, se startMarkeringFraLangtrykk.
   const markerFraSokTreff = useCallback((treff: StedTreff) => {
     const kart = kartetRef.current
     if (kart) kart.panTo([treff.lat, treff.lng], { animate: false })
@@ -1477,12 +1163,9 @@ export default function PosisjonsKart({
     setSteg('sted')
   }, [])
 
-  // «Legg i timeplanen» fra et søketreff: fyller PUNKTET i utkastet direkte
-  // (samme felt som punktvalg-flyten skriver til), og fyller TEKSTEN med
-  // stedets navn KUN hvis feltet er tomt — en tekst brukeren alt har skrevet
-  // skal aldri overskrives av et treffnavn. Adressen NULLSTILLES (fylles ikke
-  // med Nominatim-teksten): adresse vinner over punkt ved navigering, så en
-  // gammel adresse fra utkastet ville sendt folk feil sted (#757-review).
+  // Fyller punktet, og teksten KUN hvis den er tom. Adressen NULLSTILLES:
+  // adresse vinner over punkt ved navigering, så en gammel adresse ville
+  // sendt folk feil sted (#757).
   const leggSokTreffITimeplan = useCallback((treff: StedTreff) => {
     setTimeplanPunkt({ lat: treff.lat, lng: treff.lng })
     setTimeplanAdresse(null)
@@ -1493,7 +1176,6 @@ export default function PosisjonsKart({
     setAapentPanel('timeplan')
   }, [])
 
-  // «Nytt søk»: det forrige treffet er ikke lenger valgt, så nåla skal bort.
   const nyttStedSok = useCallback(() => {
     setSokValgt(null)
   }, [])
@@ -1552,12 +1234,8 @@ export default function PosisjonsKart({
   const pling = useCallback(async (profilId: string, navn: string) => {
     setFeil(null)
 
-    // OPTIMISTISK: knappen reagerer på TRYKKET, ikke på serveren (#705).
-    // sendVarsel() gjør et rundeslag mot Supabase, web-push og Resend før den
-    // returnerer — det tar lang nok tid at knappen så død ut, og man trykket
-    // igjen. Nøyaktig det produkteieren gjorde fem ganger den første kvelden,
-    // som er hva kvitteringen fra #700 skulle løse; den løste bare halve
-    // problemet, fordi den kom etter ventetiden.
+    // OPTIMISTISK: knappen reagerer på trykket, ikke serveren — sendVarsel()
+    // er treg nok til at knappen ellers ser død ut (#705).
     const rullTilbake = () => {
       setPlinget(null)
       setNyligPlinget(f => {
@@ -1569,19 +1247,14 @@ export default function PosisjonsKart({
 
     setPlinget(navn)
     setNyligPlinget(f => ({ ...f, [profilId]: true }))
-    // Kvitteringen står i POSISJON_PLING_KVITTERING_SEK og forsvinner så av
-    // seg selv. Den skal være lenge nok til at man rekker å se den, men ikke
-    // så lenge at knappen føles ødelagt — og når den går tilbake er det
-    // samtidig invitasjonen til å spørre igjen.
     const id = window.setTimeout(rullTilbake, POSISJON_PLING_KVITTERING_SEK * 1000)
     plingTimere.current.push(id)
 
     try {
       await plingEtterPosisjon(profilId)
     } catch {
-      // Rulles tilbake ved feil. Uten dette ville den optimistiske
-      // kvitteringen LØYET: varselet ER handlingen her (jf. Policy: Varsler),
-      // og en grønn kvittering på noe som aldri ble sendt er verre enn ingen.
+      // Varselet ER handlingen — ingen grønn kvittering på noe som ikke ble
+      // sendt (se CLAUDE.md § Policy: Varsler).
       window.clearTimeout(id)
       rullTilbake()
       setFeil(`Fikk ikke sendt pling til ${navn}. Prøv igjen.`)
@@ -1590,12 +1263,8 @@ export default function PosisjonsKart({
 
   const antallPaaKartet = menn.length + markeringer.length
 
-  // «Timeplan · 17:00» på pilla (#716) — neste post som ikke er passert enda,
-  // fra SERVERENS liste. Bevisst forenkling: en post lagt til tidligere i
-  // DENNE økten (kun i TimeplanPanel sin optimistiske state) rekker ikke
-  // oppdatere denne teksten før neste fulle sidelast — pilla er en
-  // orientering, ikke fasit; panelet (som ER autoritativt) viser alltid
-  // riktig liste.
+  // «Timeplan · 17:00» (#716): neste post fra SERVERENS liste. Bevisst: en
+  // post lagt til optimistisk i denne økten vises ikke her før neste sidelast.
   const nesteTimeplanKlokke = (() => {
     const kommende = timeplanPoster
       .filter(p => new Date(p.tidspunkt).getTime() >= Date.now())
@@ -1603,11 +1272,8 @@ export default function PosisjonsKart({
     return kommende[0] ? formaterDato(kommende[0].tidspunkt, 'HH:mm') : null
   })()
 
-  // Delt mellom stille-knappene og Alert zone-rammen (#763) — samme markup
-  // for begge grupper, ingen duplisering mellom raden og sonen.
-  // KlubbSymbol og ikke (typeof MARKERING_SYMBOLER)[number]: de partisjonerte
-  // listene er typet som KlubbSymbol, ikke som medlemmer av register-unionen
-  // (se lib/markering-symboler.ts for hvorfor).
+  // Samme knapp for stille symboler og Alert zone (#763). KlubbSymbol, ikke
+  // register-unionen — se lib/markering-symboler.ts.
   const symbolerStille = symboler.filter(s => s.varsel === null)
   const symbolerVarsler = symboler.filter(s => s.varsel !== null)
   function symbolKnapp(sym: KlubbSymbol) {
@@ -1618,10 +1284,7 @@ export default function PosisjonsKart({
         type="button"
         onClick={() => setMarkeringSymbol(sym.id)}
         aria-pressed={valgt}
-        // Kun de varslende symbolene får en aria-label — rammen sier
-        // ingenting til den som ikke ser den, og "Alert zone" alene
-        // forklarer ikke konsekvensen. Etiketten blir prefiks i navnet
-        // ("label in name"), så synlig tekst og skjermleser er i samsvar.
+        // Rammen sier ingenting til skjermleser; etiketten først holder «label in name».
         aria-label={sym.varsel ? `${sym.etikett} — varsler alle i klubben` : undefined}
         data-testid={`symbol-${sym.id}`}
         style={{
@@ -1629,19 +1292,13 @@ export default function PosisjonsKart({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          // Sonen strekker sine knapper til egen høyde pluss SONE_PAD i
-          // padding, og align-items: stretch (default) på den ytre raden
-          // strekker DA de stille knappene til samme, høyere rad-høyde.
-          // Uten justifyContent ville de stille knappenes innhold (som
-          // flex-start i en høyere boks) ligget over de innrammedes —
-          // center holder emojiene på linje, forutsatt symmetrisk padding
-          // i sonen (SONE_PAD likt topp/bunn).
+          // Sonens padding gjør raden høyere og strekker de stille knappene;
+          // center holder emojiene på linje (forutsetter symmetrisk SONE_PAD).
           justifyContent: 'center',
           gap: 2,
           padding: '8px 4px',
           borderRadius: 'var(--radius-small)',
-          // Valgt symbol får aksentramme OG bakgrunn: på et lite
-          // felt over et kart er ramme alene lett å overse.
+          // Ramme OG bakgrunn — ramme alene er lett å overse over et kart.
           border: valgt ? '1px solid var(--accent)' : '0.5px solid var(--border)',
           background: valgt ? 'var(--accent-soft)' : 'transparent',
           color: valgt ? 'var(--text-primary)' : 'var(--text-secondary)'
@@ -1668,89 +1325,53 @@ export default function PosisjonsKart({
     <div
       data-testid="kart-flate"
       style={{
-        // `relative`, IKKE `fixed` (#706). Fixed var det opplagte svaret på at
-        // knappene forsvant, men det virker ikke her: `.page-enter` i
-        // (app)-layouten har en `transform`-animasjon med fill-mode `both`, og
-        // en forelder med transform blir containing block for `position:
-        // fixed`. Kartet festet seg da til en kollapset blokk i stedet for til
-        // viewporten, og forsvant helt.
-        //
-        // Rotårsaken er uansett en annen: at SIDEN kunne bevege seg bak
-        // kartet. Den er fjernet i effekten over (body-lås + overscroll), og
-        // da er `absolute`-overlays inne i en `relative` flate like faste som
-        // fixed ville vært.
+        // `relative`, IKKE `fixed` (#706): `.page-enter` i layouten har en
+        // transform, som blir containing block for fixed — kartet forsvant.
+        // Med siden scroll-låst (effekten over) er absolute-overlays like faste.
         position: 'relative',
-        // TopHeader er `--top-header-h` HØY PLUSS iOS' topp-innsett i
-        // padding (se components/TopHeader.tsx). Trakk vi bare fra høyden, ble
-        // kartflaten for høy med hele notch-innsettet og stakk forbi bunnen av
-        // skjermen — alt inni, inkludert bunn-knappene, ble skjøvet tilsvarende
-        // ned og delvis ut av syne (#707).
-        //
-        // I reisemodus (#723) er TopHeader ikke montert i det hele tatt — flaten
-        // fyller da HELE viewporten i stedet for det som er igjen under headeren.
+        // TopHeader er `--top-header-h` PLUSS topp-innsettet i padding — begge
+        // må trekkes fra, ellers stikker bunn-knappene ut av skjermen (#707).
+        // I kartmodus (#723) er TopHeader ikke montert.
         height: reisemodus
           ? '100dvh'
           : 'calc(100dvh - var(--top-header-h) - var(--safe-top, 0px))',
         width: '100%',
         overflow: 'hidden',
-        // Stopper iOS' rubber-band: uten denne drar et kart-sveip hele siden
-        // med seg i bounce, og overlayene sklir ut av skjermen selv om siden
-        // ikke egentlig kan scrolle.
+        // Stopper iOS' rubber-band, som ellers drar overlayene ut av skjermen.
         overscrollBehavior: 'none',
         background: 'var(--bg-elevated)',
-        // Custom property KONSUMERT av kart-panelene (knapperad, chat-panel,
-        // listepanel, TimeplanPanel) i stedet for at hver av dem leser
-        // iOS' egen topp-innsett-variabel selv. Med headeren har flaten
-        // allerede rykket seg ned under notchen (se height over) — et panel
-        // som DA også la på innsettet talte notchen dobbelt (~59 px død luft
-        // på en iPhone med notch, se arkitekturstyrets uttalelse i #723).
-        // Uten headeren (reisemodus) har flaten IKKE gjort det selv, og
-        // panelene MÅ da legge inn innsettet. Ingen kart-panel skal
-        // noensinne lese iOS' topp-innsett-variabel direkte — det er
-        // invarianten (se grep-kommandoen i CLAUDE.md § Policy: Navigasjon).
+        // Eneste kilde til topp-innsett for kart-panelene (#723). Med header
+        // har flaten alt rykket under notchen (0px, ellers telles den dobbelt);
+        // i kartmodus må panelene legge det inn selv. Invariant: se CLAUDE.md
+        // § Policy: Navigasjon.
         '--kart-panel-safe-top': reisemodus ? 'var(--safe-top, 0px)' : '0px',
-        // Høyden på toppkontroll-sonen i hjørnet (ReisemodusBar). 0 uten
-        // reisemodus, siden baren ikke finnes da. Verdien eies av
-        // ReisemodusBar — se konstantene der (#723-review).
+        // ReisemodusBar sin reserverte høyde; verdien eies av ReisemodusBar (#723).
         '--kart-topp-sone': reisemodus ? `${REISEMODUS_BAR_SONE}px` : '0px',
       } as React.CSSProperties}
     >
       <div ref={kartRef} data-testid="posisjonskart" style={{ position: 'absolute', inset: 0 }} />
 
       {/* ── Reisemodus-bar ───────────────────────────────────────────────────
-          Erstatter TopHeader (som ikke er montert i reisemodus, se
-          app/(app)/layout.tsx): egen avatar + ulest-prikk + toggle, flytende
-          over kartet øverst til høyre — «samme sted i begge moduser»,
-          bevisst valgt (#723). */}
+          Erstatter TopHeader i kartmodus: avatar + ulest-prikk + toggle,
+          samme hjørne som i vanlig modus (#723). */}
       {reisemodus && kartmodus && (
         <ReisemodusBar zIndex={Z.KNAPPER} modus={kartmodus} />
       )}
 
       {/* ── Knapperad, oppå kartet ───────────────────────────────────────────
-          Små piller med liten skrift (#704): kartet er innholdet, knappene er
-          verktøy. Wrapper-en har pointerEvents:none så kartet kan panoreres i
-          mellomrommene mellom pillene — bare pillene selv tar imot trykk. */}
+          Små piller (#704). pointerEvents:none på wrapperen så kartet kan
+          panoreres mellom pillene. */}
       <div
         style={{
           position: 'absolute',
-          // I NORMAL modus starter flaten allerede under headeren, som selv
-          // har tatt hensyn til notchen — --kart-panel-safe-top er da 0px, og
-          // dette er nøyaktig `top: 10` som før (#707). I reisemodus (#723) er
-          // headeren borte, og variabelen bærer innsettet i stedet.
-          //
-          // I reisemodus deler denne raden hjørnet med ReisemodusBar (avatar +
-          // toggle, øverst til høyre) — uten et ekstra offset flexWrap-et en
-          // pille (typisk «Timeplan», siden den bare vises når det FAKTISK er
-          // en aktuell tur — nøyaktig når reisemodus også er aktuelt) rett oppå
-          // ReisemodusBar og blokkerte klikk på togglen. --kart-topp-sone er
-          // barens reserverte høyde, satt fra ReisemodusBar sine egne mål
-          // (0px uten reisemodus) — ikke et tall gjettet her (#723-review).
+          // --kart-topp-sone: i kartmodus deler raden hjørnet med ReisemodusBar,
+          // og en wrappet pille la seg ellers oppå togglen (#723).
           top: `calc(${KART_TOPP_MARGIN}px + var(--kart-topp-sone, 0px) + var(--kart-panel-safe-top, 0px))`,
           left: KART_TOPP_MARGIN,
           right: KART_TOPP_MARGIN,
           display: 'flex',
           flexWrap: 'wrap',
-          // Radgap 8 (var 6): pillene har 4 px usynlig treffflate opp/ned, og to nabo-rader skal ikke overlappe (#700)
+          // Radgap 8: pillene har 4 px usynlig treffflate opp/ned som ikke skal overlappe (#700)
           columnGap: 6,
           rowGap: 8,
           pointerEvents: 'none',
@@ -1765,10 +1386,7 @@ export default function PosisjonsKart({
               data-testid="del-knapp"
               pilleStil={{ ...PILLE_PRIMAER, opacity: opptatt ? 0.6 : 1 }}
             >
-              {/* Tre tilstander, ikke to: teksten skal si hvilken av de to
-                  ventetidene som pågår. `jobber` sjekkes først fordi
-                  GPS-hentingen kommer først i flyten — refreshen er det som
-                  står igjen etterpå. */}
+              {/* Teksten sier hvilken ventetid som pågår; GPS kommer før refresh. */}
               {jobber ? 'Henter …' : friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
             </KartPille>
             <KartPille
@@ -1790,26 +1408,17 @@ export default function PosisjonsKart({
             >
               {jobber ? 'Henter posisjon …' : 'Del posisjonen min'}
             </KartPille>
-            {/* Uten denne har den som følger turen uten å dele egen posisjon
-                ingen vei til friske data etter at pull-to-refresh ble
-                slått av på kartet (#718) — verst i reisemodus, der
-                TopHeader ikke finnes og «naviger bort og tilbake» ikke er
-                et reelt alternativ. Vises kun her: har `meg` verdi, gjør
-                «Oppdater»-pilla i `if (meg)`-grenen over allerede jobben. */}
+            {/* Eneste vei til friske data for den som ikke deler — pull-to-refresh
+                er av på kartet (#718). Deler han, gjør «Oppdater» over jobben. */}
             <KartPille
               onClick={friskOppKartet}
               disabled={opptatt}
               data-testid="oppdater-kart-knapp"
               pilleStil={{ ...PILLE, opacity: opptatt ? 0.6 : 1 }}
             >
-              {/* LÅSEN følger `opptatt`, ikke `friskerOpp`: mens GPS-hentingen
-                  fra pilla ved siden av pågår er `meg` fortsatt null, så denne
-                  grenen står montert og pilla ville vært klikkbar — og hvert
-                  trykk et `router.refresh()` i kappløp med refreshen
-                  `hentOgLagre` selv ender i. TEKSTEN følger bare `friskerOpp`
-                  (bevisst): «Henter …» hører til posisjons-pilla, og to piller
-                  som samtidig annonserer samme ventetid er støy. Felles lås,
-                  egen tekst — ikke «rett» det til én av delene (#718-review). */}
+              {/* Bevisst: LÅSEN følger `opptatt` (ellers refresh i kappløp med
+                  GPS-hentingen ved siden av), TEKSTEN kun `friskerOpp` («Henter …»
+                  hører til naboen). Ikke «rett» det til én av delene (#718). */}
               {friskerOpp ? 'Oppdaterer …' : 'Oppdater'}
             </KartPille>
           </>
@@ -1825,11 +1434,8 @@ export default function PosisjonsKart({
           </KartPille>
         )}
 
-        {/* Søk-knappen (#757), samme gate som «Sett markering» over. Rund
-            ikonknapp og ikke en tekstpille: raden flexWrap-er allerede på en
-            390 px skjerm, og en fjerde pille (etter del/oppdater/sett
-            markering) ville dyttet timeplan-pilla ned i en ny rad oftere enn
-            nødvendig. 44×44 — minste lovlige trykkflate. */}
+        {/* Søk (#757): rund 44×44-ikonknapp, ikke tekstpille — raden wrapper
+            allerede på 390 px. */}
         {steg === 'av' && (
           <button
             type="button"
@@ -1852,12 +1458,8 @@ export default function PosisjonsKart({
           </button>
         )}
 
-        {/* Timeplan-pilla (#716). Rendres kun når det finnes et aktuelt
-            arrangement — uansett hvor langt fram — og skjules mens man
-            sikter, samme gate som «Sett markering» over. Viser neste
-            kommende KLOKKESLETT, ikke teksten: knapperaden flexWrap-er
-            allerede, og en pille med variabel lengde ville skjøvet de andre
-            ned over kartet. */}
+        {/* Timeplan-pilla (#716) viser KLOKKESLETT, ikke tekst — variabel
+            lengde ville skjøvet de andre pillene ned over kartet. */}
         {timeplanArrangement && steg === 'av' && (
           <KartPille
             onClick={aapneTimeplan}
@@ -1873,12 +1475,8 @@ export default function PosisjonsKart({
       </div>
 
       {/* ── Ringen under et pågående langtrykk (#762) ───────────────────────
-          Wrapperen er søsken av kartdiven over, som selv er inset:0 i flaten
-          — container-rect og flate-rect er derfor samme boks, og regnestykket
-          i pointerdown-lytteren (over) holder MED og UTEN TopHeader/
-          reisemodus. Ingen kart-panel skal noensinne lese iOS sin egen
-          topp-innsett-variabel direkte (Policy: Navigasjon), og denne ringen
-          er intet unntak. */}
+          Søsken av kartdiven (begge inset:0), så koordinatene fra pointerdown
+          stemmer med og uten TopHeader. */}
       {presseRing && (
         <div
           aria-hidden="true"
@@ -1917,8 +1515,7 @@ export default function PosisjonsKart({
       )}
 
       {/* ── Bunn-blokk: markeringsflyt, kvittering og feil ───────────────────
-          Ligger oppå kartet, ikke under det. Kun når det faktisk er noe å si —
-          et tomt felt her ville spist kartplass uten grunn. */}
+          Oppå kartet, kun når det er noe å si. */}
       {(steg !== 'av' || feil || plinget) && (
         <div
           data-testid="kart-steg-flate"
@@ -1926,9 +1523,7 @@ export default function PosisjonsKart({
             position: 'absolute',
             left: 10,
             right: 10,
-            // Løftes over tastaturet når man skriver markeringsteksten.
-            // Uten tastaturOffset ligger tekstfeltet bak tastaturet, og man
-            // skriver i blinde.
+            // Løftes over tastaturet (se tastaturOffset).
             bottom: `calc(10px + env(safe-area-inset-bottom, 0px) + ${tastaturOffset}px)`,
             background: 'var(--kart-flate-sterk)',
             border: '0.5px solid var(--kart-kant)',
@@ -1955,11 +1550,7 @@ export default function PosisjonsKart({
                 <button
                   type="button"
                   onClick={bekreftSted}
-                  // Låst til Leaflet faktisk er initialisert. Uten dette kunne
-                  // man trykke før kartet fantes, og bekreftSted() hadde ingen
-                  // kartsenter å lese — man fikk «Kartet er ikke klart ennå» i
-                  // stedet for å komme videre. Sjelden på en rask telefon,
-                  // rutine i CI, og det var der det ble fanget.
+                  // Låst til Leaflet er klar — bekreftSted() trenger kartsenteret (rutine i CI).
                   disabled={!kartKlar}
                   data-testid="markering-bekreft-sted"
                   style={{
@@ -2016,13 +1607,8 @@ export default function PosisjonsKart({
           {steg === 'tekst' && (
             <>
               <div style={HJELPETEKST}>Stedet er valgt. Hva er det som er der?</div>
-              {/* Symbolet velges FØR teksten: det er symbolet man ser på
-                  kartet på avstand, og teksten er detaljen man leser ved å
-                  trykke. Store trykkflater, ikke en nedtrekksliste — med fire
-                  valg er en liste flere trykk enn valget er verdt. */}
-              {/* Rekkefølgen er registerets: stille knapper først, så
-                  Alert zone-rammen rundt de varslende (#763). Partisjonen
-                  leses av sym.varsel — ingen liste over enkeltsymboler her. */}
+              {/* Symbolet FØR teksten: det er symbolet man ser på avstand. */}
+              {/* Stille knapper først, så Alert zone rundt de varslende (#763). */}
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }} role="group" aria-label="Symbol">
                 {symbolerStille.map(symbolKnapp)}
                 {symbolerVarsler.length > 0 && (
@@ -2038,23 +1624,13 @@ export default function PosisjonsKart({
                       padding: SONE_PAD,
                       border: '1px solid var(--warning-border)',
                       borderRadius: 'var(--radius-small)',
-                      // Basis lik sonens EGEN bredde-kostnad (padding, ramme,
-                      // indre gaps — se soneEkstra()), grow lik antall knapper
-                      // inni. Da fordeler flexbox den FRIE plassen likt over
-                      // alle knapper i raden, stille som innrammede — uten
-                      // denne basisen spiser sonens egen ramme/padding av
-                      // veksten før knappene inni får sin andel, og de
-                      // innrammede ender smalere enn naboene sine.
+                      // Basis = sonens egen breddekostnad (soneEkstra()), grow =
+                      // antall knapper — så alle knapper i raden blir like brede.
                       flex: `${symbolerVarsler.length} 1 ${soneEkstra(symbolerVarsler.length)}px`,
                     }}
                   >
-                    {/* Absolutt posisjonert så den "kutter" rammens
-                        topplinje (fieldset-legend-effekten) uten å koste
-                        vertikal plass. <fieldset>/<legend> er bevisst ikke
-                        brukt — display: flex på fieldset har WebKit-quirks,
-                        og målplattformen er WebKit. Teksten i DOM er "Alert
-                        zone" uendret — versalene kommer fra textTransform,
-                        ikke fra strengen. */}
+                    {/* Legend-effekt uten <fieldset>, som har WebKit-quirks med
+                        display: flex. Versalene kommer fra textTransform. */}
                     <span
                       id="alert-zone-etikett"
                       style={{
@@ -2094,8 +1670,7 @@ export default function PosisjonsKart({
                 }}
                 style={{
                   fontFamily: 'var(--font-body)',
-                  // 16px og ikke mindre: iOS zoomer inn på et tekstfelt med
-                  // mindre skrift, og etterlater kartet forskjøvet.
+                  // Under 16px zoomer iOS inn og etterlater kartet forskjøvet.
                   fontSize: 16,
                   padding: '10px 14px',
                   borderRadius: 'var(--radius-small)',
@@ -2177,8 +1752,7 @@ export default function PosisjonsKart({
         })()}
 
       {/* ── Kvittering for kopiert stedslenke (#719) ────────────────────────
-          Ett feedback-sted for to inngangar: «Kopier lenke»-knappen over OG
-          langtrykk rett på en boble i kartet. */}
+          Felles for «Kopier lenke» og langtrykk på en boble. */}
       {(lenkeKopiert || lenkeFallback) && (
         <div
           role="status"
@@ -2212,18 +1786,14 @@ export default function PosisjonsKart({
                 type="text"
                 value={lenkeFallback}
                 data-testid="lenke-fallback-felt"
-                // IKKE readOnly: iOS Safari ignorerer select() og
-                // setSelectionRange() på et readonly-felt, så teksten lot seg
-                // ikke markere i det hele tatt — og uten Kopier-knappen under
-                // sto man da helt fast (#737). inputMode="none" hindrer at
-                // tastaturet spretter opp selv om feltet er redigerbart.
+                // IKKE readOnly: iOS Safari lar seg ikke markere i et readonly-felt
+                // (#737). inputMode="none" holder tastaturet nede.
                 inputMode="none"
                 onChange={() => {}}
                 ref={el => {
                   if (!el) return
                   el.focus()
-                  // setSelectionRange, ikke select(): den førstnevnte er den
-                  // som faktisk virker i WebKit.
+                  // setSelectionRange, ikke select() — kun den virker i WebKit.
                   el.setSelectionRange(0, el.value.length)
                 }}
                 onFocus={e => e.currentTarget.setSelectionRange(0, e.currentTarget.value.length)}
@@ -2239,11 +1809,8 @@ export default function PosisjonsKart({
                 }}
               />
               <div style={{ display: 'flex', gap: 8 }}>
-                {/* Et ekte click er den mest pålitelige brukergesten for
-                    clipboard i WebKit — langt sikrere enn pointerup etter et
-                    langtrykk, som er det som feilet og sendte oss hit (#737).
-                    Derfor et nytt forsøk her framfor bare å be om manuell
-                    markering. */}
+                {/* Et ekte click er den sikreste clipboard-gesten i WebKit —
+                    sikrere enn pointerup etter langtrykk, som feilet hit (#737). */}
                 <button
                   type="button"
                   onClick={() => {
@@ -2253,8 +1820,7 @@ export default function PosisjonsKart({
                       ?.writeText(v)
                       .then(visLenkeKvittering)
                       .catch(() => {
-                        /* Fortsatt nektet — feltet over er da eneste vei,
-                           og det er nå markerbart. */
+                        /* Fortsatt nektet — feltet over er eneste vei. */
                       })
                   }}
                   data-testid="lenke-fallback-kopier"
@@ -2277,13 +1843,8 @@ export default function PosisjonsKart({
       )}
 
       {/* ── Chat-panel på venstre side (#709) ────────────────────────────────
-          Speiler listepanelet til høyre. Gutta er ofte på kartet fordi de skal
-          finne hverandre — da er det å måtte bytte fane for å skrive «vi er
-          her» én omvei for mye. */}
-      {/* Timeplan-panelet (#716) tar samme høyre kant som listepanelet — de
-          er gjensidig utelukkende via aapentPanel-unionen, så håndtakene
-          under skjules mens timeplan er ute, akkurat som de allerede
-          skjuler hverandre. */}
+          Speiler listepanelet til høyre: «vi er her» uten å bytte fane. */}
+      {/* Håndtakene skjules mens et annet panel er ute (#716). */}
       {visChat && !panelAapent && !timeplanAapent && (
         <>
           {/* Usynlig 44 px knapp, håndtaket flush venstre (#700) — speiler KartListePanel;
@@ -2349,16 +1910,11 @@ export default function PosisjonsKart({
               backdropFilter: 'var(--blur-card)',
               borderRight: '0.5px solid var(--kart-kant)',
               overflowY: 'auto',
-              // EKSPLISITT hidden. `overflow-y: auto` alene beregner
-              // `overflow-x` til `auto` (CSS-spec: en ikke-visible verdi på én
-              // akse tvinger den andre fra `visible` til `auto`), så panelet
-              // lot seg dra sidelengs så snart noe innhold var for bredt —
-              // chatten skal bare gå opp og ned (#710).
+              // EKSPLISITT: `overflow-y: auto` gjør ellers `overflow-x` til auto,
+              // og panelet lot seg dra sidelengs (#710).
               overflowX: 'hidden',
-              // Hindrer at panelets rubber-band (overscroll ved bunn/topp)
-              // forplanter seg videre til siden og flytter visual-viewporten
-              // — den ene dansevektoren skrivefeltet-i-flyt ikke løser av
-              // seg selv (#714).
+              // Panelets rubber-band skal ikke forplante seg og flytte visual
+              // viewport — det løser ikke skrivefeltet-i-flyt av seg selv (#714).
               overscrollBehaviorY: 'contain',
               pointerEvents: chatAapent ? 'auto' : 'none',
               zIndex: Z.PANEL,
@@ -2366,8 +1922,7 @@ export default function PosisjonsKart({
             }}
           >
             <div style={{ ...SEKSJON, marginBottom: 10 }}>Klubbchat</div>
-            {/* Rendres KUN når panelet er åpent: dynamic() henter da chunken
-                ved første åpning, og aldri for dem som bare ser på kartet. */}
+            {/* KUN når åpent, så chunken hentes først ved første åpning. */}
             {chatAapent && (
               <Chat
                 scope={{ type: 'klubb' }}
@@ -2376,9 +1931,7 @@ export default function PosisjonsKart({
                 profiler={chatProfiler}
                 visSeksjonsLabel={false}
                 autoScrollTilBunn
-                // Panelet, ikke vinduet: kartsiden låser vindusscroll, så
-                // Chats vanlige window.scrollTo gjorde ingenting og tråden ble
-                // stående midt oppe (#711).
+                // Panelet, ikke vinduet — kartsiden låser vindusscroll (#711).
                 scrollContainer={() => chatPanelRef.current}
               />
             )}
@@ -2387,15 +1940,8 @@ export default function PosisjonsKart({
       )}
 
       {/* ── Sidepanel med lista ──────────────────────────────────────────────
-          Håndtaket står alltid på høyre kant; panelet glir ut ved trykk.
-          Bredden er capet på 300 px: på en telefon i portrett ville 85 % dekket
-          hele kartet, og da er man like langt som før redesignet.
-
-          Håndtakene skjuler hverandre: med begge synlige sto de side om side
-          når et panel var ute, og det var uklart hvilket som lukket hva.
-          Samme gjelder timeplan-panelet (#716), som deler høyre kant med
-          lista. Flyttet ut i KartListePanel (#732-uttrekk, ingen
-          atferdsendring). */}
+          Håndtakene skjuler hverandre — med begge synlige var det uklart
+          hvilket som lukket hva. Deler høyre kant med timeplan-panelet (#716). */}
       <KartListePanel
         visHandtak={!chatAapent && !timeplanAapent}
         panelAapent={panelAapent}
@@ -2418,14 +1964,11 @@ export default function PosisjonsKart({
       />
 
       {/* ── Timeplan-panelet ──────────────────────────────────────────────
-          Deler høyre kant med listepanelet over (gjensidig utelukkende via
-          aapentPanel). Ingen eget håndtak (#716) — pilla i knapperaden er
-          eneste åpner, og panelet har sin egen lukkeknapp i toppen. */}
+          Ingen eget håndtak (#716) — pilla i knapperaden åpner, panelet har
+          egen lukkeknapp. */}
       {timeplanArrangement && (
         <TimeplanPanel
-          // Nøkkelen er arrangementets id (#716 review): panelets `poster`
-          // seedes kun ved mount, så uten den ble den forrige turens liste
-          // stående når en RSC-revalidering byttet aktuelt arrangement.
+          // `poster` seedes kun ved mount — remount når arrangementet byttes (#716).
           key={timeplanArrangement.id}
           arrangement={timeplanArrangement}
           initialPoster={timeplanPoster}
@@ -2454,26 +1997,13 @@ export default function PosisjonsKart({
   )
 }
 
-// aapneVeibeskrivelse() flyttet til lib/kart-navigasjon.ts (#732-uttrekk) —
-// TimeplanRad trenger samme veibeskrivelse-åpning, og en 'use client'-fil kan
-// ikke importere en funksjon fra en annen komponentfil uten å dra med seg
-// hele komponenten.
-
-// Hvor langt inn fra boblas venstre kant halen står (#708). «Ikke helt ut, men
-// mot enden» — 22 px lander like til høyre for symbolet, så halen ser ut til å
-// henge under det og ikke under midten av teksten.
+// Halens avstand fra boblas venstre kant (#708): like til høyre for symbolet.
+// MÅ speile `left` på .kart-boble-hale i kart.css.
 const HALE_FRA_VENSTRE = 22
 
-// Lagdeling over kartet.
-//
-// Leaflet har sine EGNE paner med faste z-index-verdier, og de er høye:
-// tile 200, overlay 400, shadow 500, marker 600, tooltip 650, popup 700.
-// Alt vi legger oppå kartet må ligge over dem, ellers blir det begravd av
-// innhold Leaflet tegner. Siktet lå først på 500 og forsvant under markørene
-// — usynlig i akkurat den situasjonen det finnes for (#704).
-//
-// Verdiene her starter derfor over 700, og er navngitt så neste overlay ikke
-// må gjette seg til hvor den hører hjemme.
+// Lagdeling over kartet. Leaflets egne paner går opp til 700 (tile 200,
+// overlay 400, shadow 500, marker 600, tooltip 650, popup 700), så alt vårt
+// starter over — ellers begraves det (#704).
 const Z = {
   SIKTE: 720,
   KNAPPER: 730,
@@ -2485,15 +2015,9 @@ const Z = {
 } as const
 
 // ── Delte stiler ────────────────────────────────────────────────────────────
-// Pillene er små med vilje (#704): kartet er innholdet, knappene er verktøy
-// som ligger oppå det. pointerEvents: auto fordi knapperad-wrapperen har
-// pointerEvents: none — kartet skal kunne panoreres mellom pillene.
-// Pillene bar mono-uppercase — teknisk og stramt. Sommer-løftet (#713) gjør
-// dem til vanlig skrift i normal setning: lettere å lese på et kart, og
-// mindre «kontrollpanel».
-// Toppradens piller er ~37 px høye; PilleKnapp legger usynlig 44 px treffflate rundt uten å endre utseendet (#700).
-// pointerEvents: auto på det ytre elementet — raden har pointer-events: none, og uten det ville
-// den usynlige utvidelsen (som arver none) ikke tatt imot trykk.
+// Små piller med vilje (#704, #713). PilleKnapp gir ~37 px pille 44 px treffflate
+// (#700). pointerEvents: auto på det ytre elementet — raden har none, som den
+// usynlige utvidelsen ellers ville arvet.
 function KartPille({ pilleStil, children, ...rest }: { pilleStil: React.CSSProperties; children: React.ReactNode } & Omit<React.ComponentProps<'button'>, 'style' | 'children'>) {
   return <PilleKnapp synligHoyde={37} style={{ pointerEvents: 'auto' }} pilleStil={pilleStil} {...rest}>{children}</PilleKnapp>
 }
@@ -2516,8 +2040,7 @@ const PILLE = {
 
 const PILLE_PRIMAER = {
   ...PILLE,
-  // Sol, ikke appens sand-aksent: den primære handlingen på kartet skal være
-  // det varmeste punktet på skjermen.
+  // Sol, ikke sand-aksenten: primærhandlingen skal være det varmeste punktet.
   background: 'var(--kart-sol)',
   color: 'var(--kart-sol-tekst)',
   border: 'none',
@@ -2531,20 +2054,12 @@ const HJELPETEKST = {
   lineHeight: 1.5,
 } as const
 
-// Alert zone-rammen rundt de varslende symbolene (#763). Piksel-lokal
-// geometri til én komponent — bevisst IKKE i lib/konstanter.ts, som er for
-// domene-konstanter, ikke layout-tall.
+// Alert zone-padding (#763). Layout-tall, bevisst ikke i lib/konstanter.ts.
 const SONE_PAD = 5
 
-// Sonens egen bredde-kostnad, brukt som flex-basis på sonen (se stilen der
-// for hele regnestykket): (antall indre knapper − 1) gap-er mellom dem à
-// 8px, pluss padding på begge sider, pluss 2px for rammens 1px border på
-// hver kant.
+// Sonens breddekostnad: indre gaps à 8px + padding begge sider + 2×1px ramme.
 const soneEkstra = (antall: number) => (antall - 1) * 8 + 2 * SONE_PAD + 2
 
-// Seksjonsetikettene sto som 9 px mono-uppercase med 2 px sperring — et
-// arkiv-uttrykk. Nå display-fonten i normal setning: samme rolle, lettere
-// stemme (#713).
 const SEKSJON = {
   fontFamily: 'var(--font-display)',
   fontSize: 15,

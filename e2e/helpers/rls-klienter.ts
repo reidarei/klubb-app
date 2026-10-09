@@ -3,18 +3,15 @@ import { adminKlient } from './admin-klient'
 import { SEED_PASSORD } from './auth'
 
 /**
- * Klient-fabrikker for e2e/rls/-suiten (#533). Til forskjell fra resten av
- * e2e-suiten (som går via `page` + UI) snakker RLS-testene direkte med
- * supabase-js som anon eller en innlogget bruker, og leser feltene PostgREST
- * faktisk returnerer — ingen `page`-fixture, ingen dev-server nødvendig.
+ * Klient-fabrikker for e2e/rls/-suiten (#533): snakker direkte med supabase-js
+ * som anon eller innlogget bruker, uten `page` eller dev-server.
  *
- * Se e2e/README.md § RLS-tester for hvorfor tre av fire RLS-nektelser gir
+ * Se e2e/README.md § RLS-tester for hvorfor de fleste RLS-nektelser gir
  * `data: []` uten feil, og hvorfor hver skrivetest MÅ verifisere med
- * service_role at raden faktisk er uendret.
+ * service_role at raden er uendret.
  */
 
-// De fire seedede brukerne fra supabase/seed.sql. Rollene speiler seed-
-// oppdateringene — endres en rolle der, må denne tabellen følge etter.
+// Speiler supabase/seed.sql — endres en rolle der, må denne følge etter.
 export const TESTBRUKERE = {
   ADMIN: { id: '00000000-0000-4000-8000-000000000001', epost: 'e2e-admin@klubb.test', rolle: 'admin' },
   PETTER: { id: '00000000-0000-4000-8000-000000000002', epost: 'petter.prove@klubb.test', rolle: 'medlem' },
@@ -23,10 +20,8 @@ export const TESTBRUKERE = {
 } as const
 
 /**
- * Sant når alle tre E2E_SUPABASE_*-variablene er satt. Samme mønster som
- * `harTestCreds()` i helpers/auth.ts, men RLS-suiten bruker ikke
- * TEST_EPOST/TEST_PASSORD (den logger ikke inn via UI) — den trenger derfor
- * sin egen vakt direkte på env-variablene.
+ * Sant når alle tre E2E_SUPABASE_*-variablene er satt. Egen vakt fordi
+ * RLS-suiten ikke bruker TEST_EPOST/TEST_PASSORD (jf. `harTestCreds()`).
  */
 export function harRlsMiljo(): boolean {
   return Boolean(
@@ -37,15 +32,11 @@ export function harRlsMiljo(): boolean {
 }
 
 /**
- * Kaster hvis anon-nøkkelen og service-nøkkelen er identiske. Uten denne
- * vakten kunne en feilkonfigurert .env.local (samme nøkkel kopiert inn to
- * ganger) gjort HELE RLS-suiten grønn av feil grunn — «anon»-klienten ville i
- * praksis vært en service_role-klient, og enhver RLS-policy ville sett ut til
- * å virke.
+ * Kaster hvis anon- og service-nøkkelen er identiske — ellers ville
+ * «anon»-klienten vært service_role, og hele RLS-suiten grønn av feil grunn.
  *
- * Kalles fra `anonKlient()` (og dermed indirekte fra `loggInnKlient()`), ikke
- * fra den enkelte speccen: en `beforeAll` i én fil beskytter bare den fila, og
- * kjøres ikke når man filtrerer suiten ned til en annen.
+ * Kalles fra `anonKlient()`, ikke fra hver spec: en `beforeAll` beskytter bare
+ * sin egen fil og kjøres ikke når suiten filtreres.
  */
 export function assertNoklerErUlike(): void {
   const anon = process.env.E2E_SUPABASE_ANON_KEY
@@ -59,13 +50,8 @@ export function assertNoklerErUlike(): void {
 }
 
 /**
- * Anon-klient uten sesjon. `persistSession`/`autoRefreshToken` er slått av —
- * dette er en kortlevd testklient, ikke en nettleserfane, og vi vil ikke ha
- * bakgrunnstimere som holder testprosessen i live etter siste assert.
- *
- * Nøkkelvakten kjøres HER, ikke i den enkelte speccen: da er det umulig å
- * opprette en klient uten at vakten har kjørt, uansett hvilken delmengde av
- * suiten som kjøres (`--grep`, én enkelt fil, én prosjekt-filtrering).
+ * Anon-klient uten sesjon. `persistSession`/`autoRefreshToken` av, så ingen
+ * bakgrunnstimere holder testprosessen i live etter siste assert.
  */
 export function anonKlient(): SupabaseClient {
   assertNoklerErUlike()
@@ -79,32 +65,20 @@ export function anonKlient(): SupabaseClient {
 /**
  * Memoiserte innloggede klienter, én per e-post per worker-prosess.
  *
- * GoTrue rate-limiter `sign_in_sign_ups` til 30 per 5 minutter per IP
- * (supabase/config.toml). RLS-suiten ber om ~26 innlogginger, resten av
- * e2e-suiten om noen til, og `retries: 1` i CI dobler et feilet delsett — uten
- * memoisering sprenger vi taket og får 429. Det verste med 429 her er ikke at
- * det er tregt: en feilet innlogging ser ut som et SIKKERHETSBRUDD i
- * rapporten (klienten får ingen sesjon, leser som anon, og en «kunne ikke
- * lese»-assert blir grønn av feil grunn).
- *
- * Merk at cachen ikke motsier gjenbruks-advarselen i `loggInnKlient()` under:
- * den advarer mot å gjenbruke ÉN klient PÅ TVERS AV brukere. Nøkkelen her er
- * e-posten, så hver bruker har sin egen klient og identitets-asserten under
- * kjøres når klienten opprettes.
+ * GoTrue rate-limiter innlogging til 30 per 5 min per IP (supabase/config.toml);
+ * RLS-suiten alene ber om ~26, og CI-retries dobler. En 429 er verre enn tregt:
+ * klienten leser da som anon, og en «kunne ikke lese»-assert blir grønn av feil grunn.
+ * Nøkkelen er e-posten, så ingen klient deles på tvers av brukere.
  */
 const innloggedeKlienter = new Map<string, SupabaseClient>()
 
 /**
- * Anon-klient som logger inn som `epost` (felles SEED_PASSORD for alle
- * seedede brukere). Asserter at `auth.getUser()` faktisk gir tilbake
- * BRUKEREN VI BA OM før klienten returneres — vakten mot «testen brukte feil
- * klient», altså at en spec ved en feiltakelse leser en annen brukers
- * sesjon (f.eks. en gjenbrukt klient delt mellom to brukere) og feilaktig
- * tolker det som at RLS slapp gjennom.
+ * Anon-klient innlogget som `epost` (felles SEED_PASSORD). Asserter at
+ * `auth.getUser()` gir BRUKEREN VI BA OM — vakt mot at en spec leser en annen
+ * brukers sesjon og feiltolker det som at RLS slapp gjennom.
  *
- * Klienten memoiseres per e-post (se kommentaren over `innloggedeKlienter`).
- * Sesjonen lever i minnet i workerens levetid; GoTrue-tokenet varer i 1 time,
- * langt mer enn en e2e-kjøring, så `autoRefreshToken: false` er uproblematisk.
+ * Memoisert per e-post. Tokenet varer 1 time, langt over en e2e-kjøring, så
+ * `autoRefreshToken: false` er uproblematisk.
  */
 export async function loggInnKlient(epost: string): Promise<SupabaseClient> {
   const bufret = innloggedeKlienter.get(epost)
@@ -134,5 +108,4 @@ export async function loggInnKlient(epost: string): Promise<SupabaseClient> {
   return klient
 }
 
-// Re-eksportert for at RLS-specene kan importere alt de trenger fra én fil.
 export { adminKlient }

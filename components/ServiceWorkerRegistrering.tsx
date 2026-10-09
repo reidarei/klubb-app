@@ -11,49 +11,32 @@ import {
   type PendingNav,
 } from '@/lib/pending-nav'
 
-// Hvor lenge vi lar tilbakeskrivingen av forsøkstelleren ta før vi navigerer
-// videre uansett. Speiler NAV_SKRIV_TIMEOUT_MS i public/sw.js: en hengende
-// Cache Storage-skriving skal aldri kunne blokkere selve navigasjonen — verste
-// utfall er da at loop-brytelsen (PUSH_KLIKK_MAKS_FORSOK) mister ett forsøk i
-// tellingen, ikke at push-klikket slutter å virke.
+// Tak på tilbakeskrivingen av forsøkstelleren (speiler public/sw.js): en
+// hengende cache-skriving skal aldri blokkere navigasjonen — verste utfall er
+// at loop-bryteren mister ett forsøk.
 const NAV_SKRIV_TIMEOUT_MS = 1000
 
-// Feltene SW-en sender med i check-pending-nav-svaret (kanal-stien, #626).
-// Kun telemetri — skal aldri styre forsøkstelling, ferskhet eller navigasjon.
+// Felt fra SW-ens check-pending-nav-svar. Kun telemetri — skal aldri styre
+// forsøkstelling, ferskhet eller navigasjon (#626).
 type KanalTelemetri = Pick<PendingNav, 'klikk_id' | 'forsok' | 'navigert'>
 
 export default function ServiceWorkerRegistrering() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    // Hele push-klikk-flyten under avhenger av at denne registreringen går
-    // gjennom. En console.error fanges verken av FeilFangst (den ser bare
-    // window.error og unhandledrejection) eller av noe annet — feilen ville
-    // forsvunnet sporløst, og push kunne vært dødt i månedsvis uten at vi
-    // visste det (#626-review).
+    // Meldes eksplisitt: FeilFangst ser ikke en fanget feil, og push kunne
+    // vært dødt i månedsvis uten spor (#626).
     navigator.serviceWorker
       .register('/sw.js')
       .catch((err: unknown) => meldKlientfeil('klient.sw.registrering.feilet', err))
 
     // Push-klikk-navigasjon: SW kan ikke navigere appen selv (openWindow er
-    // no-op når PWA-en allerede er åpen, client.navigate er upålitelig på
-    // iOS — #233, #262). I stedet lagrer SW-en URL-en i Cache Storage
-    // (NAV_CACHE, lib/pending-nav.ts), og vi leser den direkte herfra ved
-    // mount og hver visibility-change (#626).
-    //
-    // Cache Storage fremfor SW-melding/i-minne-tilstand er selve fiksen: en
-    // i-minne-variabel i SW-en river bort med den SW-instansen — en push-
-    // trigget SW-oppdatering (install kaller skipWaiting(), activate kaller
-    // clients.claim()) forkaster den gamle instansen med overleveringen FØR
-    // klienten rekker å lese den. Cache Storage er per-origin og upåvirket av
-    // hvilken SW-instans som lever, er byttet ut, eller kontrollerer siden.
+    // no-op i åpen PWA, client.navigate upålitelig på iOS — #233, #262). SW-en
+    // legger URL-en i Cache Storage, som overlever SW-bytte, og vi leser den
+    // ved mount og visibility-change (#626). Se CLAUDE.md § Policy: Navigasjon.
     function handterMelding(event: MessageEvent) {
       const data = event.data
       if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
-      // navigerTil er nå async (utsatt konsumering + bounded tilbakeskriving,
-      // #688) — denne callbacken awaiter den ikke, så en avvist promise ville
-      // blitt en unhandled rejection uten denne .catch()-en. navigerTil selv
-      // er fail-open og skal aldri kaste, men vi svelger den ikke stille: en
-      // uventet feil her logges i stedet for å forsvinne sporløst.
+      // Ikke awaitet — .catch() hindrer unhandled rejection og logger feilen.
       navigerTil(data.url, 'broadcast').catch((err: unknown) => {
         sendFeilBeacon(
           'klient.sw.pendingnav.feilet',
@@ -65,40 +48,18 @@ export default function ServiceWorkerRegistrering() {
       })
     }
 
-    // `kilde` sier hvilken av de tre stiene som faktisk leverte URL-en (#676).
-    // SW-en teller klikk, vi teller navigasjoner — differansen er tapet, og
-    // kilden viser hvilken sti som bærer i praksis. Uten det fikser vi i
-    // blinde: seks runder (#233, #262, #264, #626) er gjort uten å vite hvor
-    // ofte overleveringen ryker eller hvilken vei som faktisk virker.
-    //
-    // `entryHint` (#688) lar sjekkPendingNav gjenbruke entryen den allerede
-    // har lest (unngår et unødvendig ekstra Cache Storage-oppslag) — broadcast-
-    // og kanal-kallene under sender den ikke, og navigerTil leser da selv NAV-
-    // raden for å finne klikk_id/forsok. Siden det kun finnes ÉN pending-nav-
-    // rad om gangen (NAV_NOKKEL er en singel-nøkkel), er dette samme rad
-    // uansett hvilken sti som trigget navigasjonen.
+    // `kilde` viser hvilken av tre stier som leverte URL-en (#676).
+    // `entryHint` gjenbruker en allerede lest entry; uten den leser navigerTil
+    // selv. Det finnes kun ÉN pending-nav-rad om gangen, så det er samme rad.
 
-    // In-flight-guard for push-klikk-navigasjonen (review av PR #690).
-    // Cache-pollen (t=0) og SW-broadcasten kommer normalt inn omtrent
-    // samtidig — SW-en skriver entryen og broadcaster rett etterpå. Uten
-    // serialisering leste begge samme `forsok`, regnet seg begge fram til 1,
-    // skrev begge `navigert: true` og logget begge en rad: ett klikk ga to
-    // navigasjoner og to telemetri-rader, altså nøyaktig korrelasjonen #688
-    // innfører, ødelagt av seg selv.
-    //
-    // Tre deler, hver med sin grunn:
-    //  * `navKjede` serialiserer lese/øke/skrive, så kall nr. 2 ser nr. 1
-    //    sitt resultat i stedet for en foreldet lesning.
-    //  * `committetMaal` er terminal per MÅL i denne sidevisningen: idet
-    //    assign() er kalt, skal ingen annen kilde navigere dit igjen.
-    //  * `landingLogget` dekker landings-grenen, der entryen konsumeres.
-    //    Kall nr. 2 kan sitte på en entryHint lest FØR nr. 1 slettet raden,
-    //    og ville ellers logget samme landing en gang til.
-    //
-    // Markørene settes kun på stiene som faktisk fullførte, så en tidlig
-    // retur eller en kastet feil låser ingenting. De lever i effekt-closuren
-    // (ikke på modulnivå) — alle tre kildene deler samme closure, mens en ny
-    // mount starter med blanke ark.
+    // In-flight-guard: cache-pollen og SW-broadcasten kommer nesten samtidig,
+    // og ville ellers gitt to navigasjoner og to telemetri-rader per klikk (PR #690).
+    //  * `navKjede` serialiserer lese/øke/skrive.
+    //  * `committetMaal`: etter assign() navigerer ingen annen kilde dit igjen.
+    //  * `landingLogget`: kall nr. 2 kan ha en entryHint lest før nr. 1
+    //    slettet raden, og ville logget samme landing to ganger.
+    // Settes kun når stien fullførte, og lever i effekt-closuren (ny mount =
+    // blanke ark).
     let navKjede: Promise<void> = Promise.resolve()
     let committetMaal: string | null = null
     let landingLogget = false
@@ -110,18 +71,14 @@ export default function ServiceWorkerRegistrering() {
       kanalTelemetri?: KanalTelemetri,
     ): Promise<void> {
       const neste = navKjede.then(() => navigerTilIndre(raw, kilde, entryHint, kanalTelemetri))
-      // Kjeden må ikke forgiftes av en avvisning (alle senere kall ville
-      // arvet den), men den RETURNERTE promisen beholder den — det er den
-      // kallstedene rapporterer på.
+      // Kjeden skal ikke forgiftes av en avvisning, men den returnerte
+      // promisen beholder den — kallstedene rapporterer på den.
       navKjede = neste.catch(() => {})
       return neste
     }
 
-    // Bevisst UTEN try/catch (review av PR #690): en intern catch gjorde
-    // .catch()-ene på kallstedene til død kode, så en uventet feil kunne
-    // aldri bli synlig noe sted. Feilen bobler nå ut, og alle tre inngangene
-    // (broadcast, kanal, og cache via sjekkPendingNavTrygt) logger den som
-    // `klient.sw.pendingnav.feilet` — fail-open står, men ikke i stillhet.
+    // Bevisst UTEN try/catch: feilen skal boble til kallstedene, som alle
+    // logger `klient.sw.pendingnav.feilet` (PR #690).
     async function navigerTilIndre(
       raw: string,
       kilde: 'broadcast' | 'cache' | 'kanal',
@@ -129,33 +86,22 @@ export default function ServiceWorkerRegistrering() {
       kanalTelemetri?: KanalTelemetri,
     ) {
       const sti = lokalSti(raw)
-      if (sti === null) return // Ugyldig eller kryss-origin — ignorer.
+      if (sti === null) return // ugyldig eller kryss-origin
       const target = `${window.location.origin}${sti}`
 
-      // Identitets-vakt (#626-review): vi står allerede på målet. Uten den
-      // laster vi samme URL to ganger. Dekker også cold-start, der
-      // openWindow allerede har landet oss riktig sted.
+      // Står vi allerede på målet (også cold-start via openWindow), lastes
+      // ikke samme URL på nytt — vi konsumerer og logger landingen.
       if (target === window.location.href) {
-        // LES FØR DU SLETTER. Broadcast- og kanal-stien sender ingen
-        // entryHint, så en sletting først gjorde lesningen null: guarden
-        // under ble alltid sann, raden ble logget uten klikk_id/forsok, og
-        // oppføringen ble revet bort under føttene på cache-pollen som
-        // HADDE den (review av #688).
-        // Kanal-stien: SW-en har alt slettet raden, så lesPendingNav() finner
-        // tomt — feltene fra SW-svaret er eneste kilde. Her styrer de kun
-        // hvilken hendelse som logges, aldri en navigasjon (#626).
+        // LES FØR DU SLETTER: broadcast/kanal har ingen entryHint, og en
+        // sletting først ville gjort lesningen null (#688). På kanal-stien har
+        // SW-en alt slettet raden, så SW-svarets felt er eneste kilde.
         const entry: KanalTelemetri | null =
           entryHint ?? kanalTelemetri ?? (await lesPendingNav())
-        // Konsumer entryen: vi STÅR på målet, ingenting mer å bevare.
         await slettPendingNav()
-        // `navigert: true` betyr at raden alt er logget som navigert fra en
-        // TIDLIGERE side (item 7 under skrev den rett før assign) — det er
-        // selve bekreftelsen på at en tidligere navigasjon faktisk landet, og
-        // logges derfor som sin egen hendelse (push.klikk.landet) i stedet for
-        // en ny push.klikk.navigert, som ville kollidert med feil_logg sin
-        // per-klikk-dedup (migrasjon 154) eller dobbelttalt samme klikk. `landingLogget` er samme
-        // vern mot to samtidige kilder i SAMME sidevisning — gjelder begge
-        // grenene under, så maks én rad logges uansett hvilken.
+        // `navigert: true` = en tidligere side logget navigasjonen rett før
+        // assign; dette er landingen, egen hendelse så samme klikk ikke
+        // dobbelttelles (per-klikk-dedup, migrasjon 154). Maks én rad per
+        // sidevisning.
         if (!landingLogget) {
           landingLogget = true
           if (entry?.navigert === true) {
@@ -167,39 +113,28 @@ export default function ServiceWorkerRegistrering() {
         return
       }
 
-      // Én navigasjon per mål per sidevisning: kommer en annen kilde inn
-      // etter at assign() er kalt, er siden alt på vei bort — et nytt assign
-      // og en ny rad ville bare dobbelttalt klikket.
       if (committetMaal === target) return
 
-      // `kanalTelemetri` brukes BEVISST ikke her (#626): på main nullstilte
-      // kanal-stien forsøk og tidsstempel (entry var alltid tom), og å la
-      // SW-svarets forsok/ts styre loop-brytelsen ville endret navigasjonen.
-      // Kun klikk_id lånes, og den er ren korrelasjon.
+      // `kanalTelemetri` styrer BEVISST ikke loop-bryteren her; kun klikk_id
+      // lånes, som ren korrelasjon (#626).
       const entry = entryHint ?? (await lesPendingNav())
       const nesteForsok = (entry?.forsok ?? 0) + 1
       const klikkId = entry?.klikk_id ?? kanalTelemetri?.klikk_id
-      // Telemetriens forsøksnummer følger det FAKTISKE forsøket, også når
-      // cachen over nullstilles: med per-klikk-dedupen (migrasjon 154) ville
-      // et gjentatt forsok=1 for samme klikk_id ellers blitt slukt som duplikat.
+      // Telemetrien følger det FAKTISKE forsøket, ellers slukes et gjentatt
+      // forsok=1 for samme klikk_id av per-klikk-dedupen (migrasjon 154).
       const loggForsok = kanalTelemetri?.forsok !== undefined && !entry
         ? kanalTelemetri.forsok + 1
         : nesteForsok
 
-      // Tilbakeskrivingen må fullføre FØR assign — ellers river navigasjonen
-      // ned realmet før cache.put er ferdig, og loop-brytelsen
-      // (PUSH_KLIKK_MAKS_FORSOK) mister tellingen. Bounded (samme mønster
-      // som NAV_SKRIV_TIMEOUT_MS i public/sw.js): en hengende cache-skriving
-      // skal aldri kunne blokkere navigasjonen.
+      // Må fullføre FØR assign, ellers river navigasjonen ned realmet før
+      // cache.put er ferdig og loop-bryteren mister tellingen. Tidsbegrenset.
       await new Promise<void>((resolve) => {
         const timer = window.setTimeout(resolve, NAV_SKRIV_TIMEOUT_MS)
         skrivPendingNav({
           url: raw,
-          // `ts` friskes bevisst IKKE: den bevarte verdien er det egentlige
-          // gulvet i loop-brytelsen. Forsøkstelleren kan miste et forsøk
-          // (timeouten over), men et uendret tidsstempel gjør at entryen
-          // uansett faller ut på PUSH_KLIKK_VINDU_MS. Friskes den opp, blir
-          // PUSH_KLIKK_MAKS_FORSOK eneste bremsen — og den er ikke garantert.
+          // `ts` friskes bevisst IKKE: den er det garanterte gulvet i
+          // loop-bryteren (faller ut på PUSH_KLIKK_VINDU_MS). Forsøkstelleren
+          // kan miste et forsøk ved timeout.
           ts: entry?.ts ?? Date.now(),
           klikk_id: klikkId,
           forsok: nesteForsok,
@@ -222,14 +157,9 @@ export default function ServiceWorkerRegistrering() {
       forsok?: number,
       maal?: string,
     ) {
-      // Nøkkelnavnene (kilde/allerede_paa_maal/synlighet/klikk_id/forsok/maal)
-      // må matche KONTEKST_WHITELIST i lib/logg-sanitering.ts — parameteret
-      // over kan forbli camelCase, det er kun objekt-nøkkelen som teller
-      // (#681). `url` på denne raden settes automatisk av sendFeilBeacon til
-      // window.location.href — det er siden vi navigerer FRA, ikke dit vi
-      // skal. `maal` er sti-en vi faktisk navigerer TIL, så begge står på
-      // samme rad (en tidligere kommentar her ble lest som om `url` var
-      // målet — se #626 for hvordan den feiltolkningen oppsto).
+      // Objekt-nøklene MÅ stå i KONTEKST_WHITELIST i lib/logg-sanitering.ts
+      // (#681). `url` (satt av sendFeilBeacon) er siden vi navigerer FRA;
+      // `maal` er dit vi skal.
       sendFeilBeacon(
         'push.klikk.navigert',
         `push-klikk levert via ${kilde}`,
@@ -246,10 +176,8 @@ export default function ServiceWorkerRegistrering() {
       )
     }
 
-    // `push.klikk.landet` (#626): bekrefter at en TIDLIGERE navigasjon (den
-    // som logget push.klikk.navigert fra avreisesiden) faktisk endte opp på
-    // målet. Egen hendelse fremfor en ny push.klikk.navigert-rad — raden over
-    // er allerede logget for dette klikket, og en ny ville dobbelttalt det.
+    // Bekrefter at en tidligere logget push.klikk.navigert faktisk landet.
+    // Egen hendelse så klikket ikke dobbelttelles (#626).
     function loggPushLanding(kilde: string, klikkId: string | undefined, forsok: number | undefined, maal: string) {
       sendFeilBeacon(
         'push.klikk.landet',
@@ -265,13 +193,9 @@ export default function ServiceWorkerRegistrering() {
       )
     }
 
-    // Fallback for en enhet med ny SW men gammel cachet klient-bundle
-    // (#264): SW-en svarer på check-pending-nav ved å lese samme Cache
-    // Storage internt, så protokollen fungerer uendret selv om denne
-    // funksjonen aldri kalles av en gammel bundle. Bruker MessageChannel
-    // fordi navigator.serviceWorker.controller er null ved cold-start (siden
-    // lastet før SW tok kontroll) — registration.active fungerer uavhengig
-    // av kontroll-status, og MessageChannel garanterer at SW kan svare.
+    // Fallback-protokoll mot SW-en (#264). MessageChannel fordi
+    // serviceWorker.controller er null ved cold-start; registration.active
+    // virker uavhengig av kontroll-status.
     async function sjekkViaMessageChannel() {
       const reg = await navigator.serviceWorker.ready
       if (!reg.active) return
@@ -279,23 +203,15 @@ export default function ServiceWorkerRegistrering() {
       channel.port1.onmessage = (event) => {
         const data = event.data
         if (!data || data.type !== 'navigate' || typeof data.url !== 'string') return
-        // SW-en i check-pending-nav-grenen har allerede slettet cache-raden
-        // (den leser og sletter atomisk, public/sw.js) før den svarer her, så
-        // et eget lesPendingNav()-kall i navigerTil ville funnet tomt. Den
-        // sender nå klikk_id/forsok/navigert med isteden (#626). De går inn
-        // som TELEMETRI, ikke som en fabrikkert PendingNav: en entryHint ville
-        // latt SW-svaret styre forsøkstelling og tidsstempel, og dermed endret
-        // navigasjonen sammenlignet med før. Validert her, fordi meldingen
-        // kan komme fra en eldre SW som ikke sender feltene.
+        // SW-en har alt slettet cache-raden, så feltene fra svaret er eneste
+        // kilde. Sendes som telemetri, IKKE som entryHint, så de ikke styrer
+        // forsøkstelling/ts (#626). Valideres: eldre SW sender dem ikke.
         const kanalTelemetri: KanalTelemetri = {
           klikk_id: typeof data.klikk_id === 'string' ? data.klikk_id : undefined,
           forsok: typeof data.forsok === 'number' ? data.forsok : undefined,
           navigert: data.navigert === true || undefined,
         }
-        // Samme .catch() som broadcast-søsteren over: callbacken awaiter ikke
-        // den async navigerTil, så en avvist promise ville blitt en unhandled
-        // rejection. Asymmetri her inviterer til feil antakelse om at den ene
-        // stien er tryggere enn den andre (review av #688).
+        // Samme .catch() som broadcast-stien — ikke awaitet.
         navigerTil(data.url, 'kanal', undefined, kanalTelemetri).catch((err: unknown) => {
           sendFeilBeacon(
             'klient.sw.pendingnav.feilet',
@@ -309,49 +225,34 @@ export default function ServiceWorkerRegistrering() {
       reg.active.postMessage({ type: 'check-pending-nav' }, [channel.port2])
     }
 
-    // Cache-stien prøves FØRST og er uavhengig av navigator.serviceWorker.
-    // ready — det er kjernen i fiksen: er reg.active null, eller henger
-    // ready-promiset, skal en fersk cache-entry likevel navigere.
-    //
-    // Leser UTEN å slette (#688, lib/pending-nav.ts): konsumering skal skje
-    // når navigasjonen faktisk har lyktes, ikke ved lesing — leser og sletter
-    // vi før auth får omdirigert til /login, er målet borte for godt selv om
-    // vi aldri kom fram.
+    // Cache-stien først og uavhengig av serviceWorker.ready, som kan henge.
+    // Leser UTEN å slette: konsumering først når navigasjonen lyktes, ellers
+    // er målet borte hvis auth omdirigerer til /login (#688).
     async function sjekkPendingNav() {
       const entry = await lesPendingNav()
       if (!entry) {
-        // Cachen var tom (eller Cache Storage utilgjengelig) — fall tilbake
-        // til dagens MessageChannel-vei mot SW-en.
         await sjekkViaMessageChannel()
         return
       }
 
       const sti = lokalSti(entry.url)
       if (sti === null) {
-        // Ugyldig eller kryss-origin mål — ingen navigasjon, ingen retry.
         await slettPendingNav()
         return
       }
 
-      // Identitetssjekken kjører FØR ferskhetssjekken (review av #688): en
-      // innlogging som tar lengre tid enn PUSH_KLIKK_VINDU_MS lander riktig,
-      // og da er «foreldet» feil svar — det ville invertert signalet på selve
-      // flyten dette issuet innfører. Står vi på målet, LYKTES navigasjonen,
-      // uansett hvor lenge oppføringen har ligget.
+      // Identitet FØR ferskhet: en treg innlogging som lander riktig er en
+      // suksess, ikke «foreldet» (#688).
       const target = `${window.location.origin}${sti}`
       if (target === window.location.href) {
-        // Vi står allerede på målet. Delegér til navigerTil i stedet for å
-        // konsumere her: landings-grenen der er identisk, og da går også
-        // DENNE stien gjennom navKjede-serialiseringen og landingLogget-
-        // guarden (review av PR #690). To samtidige kilder — cache-poll og
-        // broadcast — ville ellers logget hver sin rad for samme landing.
+        // Via navigerTil så også denne stien går gjennom navKjede og
+        // landingLogget (PR #690).
         await navigerTil(entry.url, 'cache', entry)
         return
       }
 
       if (Date.now() - entry.ts >= PUSH_KLIKK_VINDU_MS) {
-        // Eldre enn vinduet — ikke en programfeil (klienten kan ha vært
-        // lukket lenge), men verdt å se i observability hvis det skjer ofte.
+        // Ikke en programfeil, men verdt å se hvis det skjer ofte.
         await slettPendingNav()
         sendFeilBeacon(
           'klient.pushklikk.foreldet',
@@ -364,8 +265,7 @@ export default function ServiceWorkerRegistrering() {
       }
 
       if ((entry.forsok ?? 0) >= PUSH_KLIKK_MAKS_FORSOK) {
-        // Loop-bryter: målet er forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten
-        // landing. Forkast oppføringen i stedet for å prøve i det uendelige.
+        // Loop-bryter: forkast etter PUSH_KLIKK_MAKS_FORSOK forsøk uten landing.
         await slettPendingNav()
         sendFeilBeacon(
           'klient.pushklikk.oppgitt',
@@ -380,15 +280,9 @@ export default function ServiceWorkerRegistrering() {
       await navigerTil(entry.url, 'cache', entry)
     }
 
-    // sjekkPendingNav er async, men kalles fra en event-handler og fra
-    // setTimeout — ingen av dem håndterer en avvist promise. De interne
-    // try/catch-ene i lib/pending-nav.ts dekker bare cache-oppslagene;
-    // fallback-stien (await navigator.serviceWorker.ready) er udekket, og en
-    // reject der ville blitt en unhandledrejection. Vi svelger den ikke: en
-    // stille catch her ville reintrodusert nøyaktig blindsonen #626 handler
-    // om — at overleveringen svikter uten spor. Warn-nivå fordi en avvist
-    // ready som regel er miljøet (privat modus, SW avregistrert), ikke en
-    // programfeil.
+    // Kalles fra event-handler og setTimeout, som ikke håndterer avvisning
+    // (f.eks. fra serviceWorker.ready). Logges, aldri stille (#626). Warn:
+    // en avvist ready er som regel miljøet, ikke en programfeil.
     function sjekkPendingNavTrygt() {
       sjekkPendingNav().catch((err: unknown) => {
         sendFeilBeacon(
@@ -408,12 +302,8 @@ export default function ServiceWorkerRegistrering() {
     navigator.serviceWorker.addEventListener('message', handterMelding)
     document.addEventListener('visibilitychange', handterVisibility)
 
-    // Race: ved cold-start (PWA åpnes fra lukket via notifikasjon) kan
-    // klienten mounte FØR SW har rukket å behandle notificationclick og
-    // skrive cache-entryen. Polle flere ganger med stigende delay dekker
-    // dette uten å spamme unødvendig hvis vi finner svaret tidlig.
-    // navigerTil kalles av handteren ovenfor; den vil avslutte siden
-    // umiddelbart, så ekstra poller blir aldri synlige etter første treff.
+    // Cold-start: klienten kan mounte FØR SW-en har skrevet cache-entryen,
+    // derav poll med stigende delay. Første treff navigerer bort.
     const forsoek = [0, 200, 800, 2000]
     const timers = forsoek.map(ms => window.setTimeout(sjekkPendingNavTrygt, ms))
 

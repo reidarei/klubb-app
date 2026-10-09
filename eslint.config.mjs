@@ -7,69 +7,35 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 // ---------------------------------------------------------------------------
 // Egendefinert regel: supabase-feil-maa-hentes
 // ---------------------------------------------------------------------------
-// Regelen ligger inline her, ikke i en egen fil under scripts/ eller
-// eslint-rules/. Grunnen er konkret: eslint.config.mjs speiles til klubb-app,
-// mens scripts/ kun speiles for de få filene som står i SCAN_SCRIPTS i
-// scripts/sync-klubb-app.mjs (#557) — en regelfil ville ikke vært blant dem, og
-// importen hadde gitt rød lint i klubb-app. Samme felle som Sentry-configene
-// falt i (#523).
+// Inline, ikke egen fil: eslint.config.mjs speiles til klubb-app, men
+// scripts/ gjør det ikke (#557) — en import ville gitt rød lint der (#523).
+// Policyen: se CLAUDE.md § Policy: Databasespørringer.
 //
-// Arkitektur: regelen sporer BRUK, ikke syntaksform. I stedet for å lete
-// etter «destrukturering med data uten error» ett skjema om gangen, spør den
-// for enhver Supabase-spørring: «ble .error faktisk lest et sted?» — uansett
-// hvordan resultatet endte opp i et navn. Det lukker en hel klasse blindsoner
-// i ett grep i stedet for å jage former én etter én slik pulje A/B måtte
-// rydde i etterkant.
+// Sporer BRUK, ikke syntaksform: for hver Supabase-spørring spørres «ble
+// error faktisk LEST?». Kun hentet ut er ikke nok — ellers slipper
+// `const { data, error } = await …; return data` gjennom.
 //
-// «Lest», ikke «hentet ut»: det holder ikke at nøkkelen `error` står i
-// destruktureringen — bindingen må faktisk refereres. Uten det kravet slapp
-// `const { data, error } = await …; return data` gjennom både denne regelen
-// og no-unused-vars, og hele feilklassen kunne gjeninnføres uten at noe
-// blokkerte. Destruktureringsstien og identifikator-stien stiller nå samme
-// krav; før var kun sistnevnte streng.
+// Gjenkjente skjemaer:
+//   1. const x = await supabase.from(...)  — brukt via x.data uten x.error
+//   2. (await supabase.from(...)).data
+//   3. const [{ data: a }, …] = await Promise.all([...])  (plass-korrelert)
+//   4. ternær, med await rundt hele eller inni hver gren
+//   5. ({ data } = await supabase.from(...))  (reassignment)
+//   6. let q = supabase.from(...); const { data } = await q
+//   7. supabase.from(...).then(({ data }) => ...)
+//   8. const { ['data']: d } = await ...
 //
-// Gjenkjente skjemaer (alle deler samme to hjelpere: erSupabaseSpoerring for
-// «er dette faktisk et Supabase-kall», og sjekkPattern/sjekkIdentifikatorbruk
-// for «ble data brukt uten at error ble hentet»):
-//   1. const x = await supabase.from(...)              (lagret, ikke destrukturert)
-//      — senere brukt via x.data uten at x.error noensinne leses
-//   2. const rader = (await supabase.from(...)).data     (umiddelbar aksess)
-//   3. const [{ data: a }, { data: b }] = await Promise.all([...])
-//      — korrelerer array-pattern-plasser med tilsvarende array-literal-elementer
-//   4. const { data } = await (x ? qA : qB)               (ternær — og omvendt:
-//      const { data } = x ? await qA : { data: [] }, se kaaringspoll-tiebreak)
-//   5. let data; ({ data } = await supabase.from(...))    (reassignment)
-//   6. let q = supabase.from(...); const { data } = await q  (lagret query-builder)
-//   7. supabase.from(...).select().then(({ data }) => ...)   (uten await)
-//   8. const { ['data']: d } = await ...                    (literal nøkkel)
+// Godtas: `const { data } = res` når res.error leses et annet sted, og
+// `.throwOnError()` i kjeden.
 //
-// Aksepterte former som IKKE flagges (fail-closed på annen måte):
-//   - `const { data } = res` der `res.error` er håndtert et annet sted —
-//     vanlig refaktorering, ikke en svelget feil.
-//   - `.throwOnError()` i kjeden — Supabase kaster da selv, så `data` kan
-//     ikke bære en skjult feil.
-//
-// Kjente unøyaktigheter i `.from`-matchen (den ser kun på metodenavnet i
-// kjeden, ikke på hva objektet foran faktisk er):
-//   - `supabase.storage.from('bucket')` matcher som om det var en PostgREST-
-//     spørring. Det er en FALSE POSITIVE, ikke en trygg retning å feile i —
-//     ufarlig i dag (ingen storage-kall i kodebasen bruker `.data` uten
-//     `.error`), men skriv en presis sjekk (indekssjekk mot `.storage`-leddet)
-//     hvis den formen dukker opp. Pinnet i RuleTester-en.
-//   - `Array.from(...)` traff samme sjekk og ble flagget når resultatet hadde
-//     et `.data`-felt (mønsteret finnes i lib/queries/agenda.ts). Unntas
-//     eksplisitt på objektnavnet `Array`. Også pinnet i RuleTester-en.
-//   - Identifikator-sporing (skjema 1 og 6) krever at variabelen har akkurat
-//     én definisjon (`variable.defs.length === 1`). Reassignments av samme
-//     navn er OK (dekket), men gjenbruk av navnet i en annen scope/skygge vi
-//     ikke klarer å skille fra, gir opp stille (false negative, ikke false
-//     positive — trygg retning å feile i for en lint-regel).
-//   - Kun array-literal som direkte argument til Promise.all(...) korreleres
-//     (skjema 3). `Promise.all(dynamiskListe)` kan vi ikke statisk analysere.
-//
-// Auth-kall (`supabase.auth.getUser()`) er bevisst utenfor: de destrukturerer
-// `data: { user }` og etterfølges nesten alltid av en null-sjekk som håndterer
-// feilen implisitt. Regelen ser kun etter `.from()` og `.rpc()` i kjeden.
+// Kjente unøyaktigheter (pinnet i RuleTester-en):
+//   - `.from` matches på metodenavn: `supabase.storage.from()` gir FALSE
+//     POSITIVE (ufarlig i dag; skriv en presis sjekk hvis formen dukker opp).
+//     `Array.from(...)` er unntatt eksplisitt.
+//   - Identifikator-sporing (1, 6) krever én definisjon, ellers gir den opp
+//     stille (false negative).
+//   - Kun array-literal i Promise.all korreleres, ikke dynamiske lister.
+//   - Auth-kall er utenfor: kun `.from()`/`.rpc()` sjekkes.
 const supabaseFeilMaaHentes = {
   meta: {
     type: 'problem',
@@ -83,7 +49,6 @@ const supabaseFeilMaaHentes = {
   create(context) {
     const sourceCode = context.sourceCode
 
-    // Finn variabelen `navn` er bundet til, sett fra scopet til `node`.
     function finnVariabel(scope, navn) {
       let s = scope
       while (s) {
@@ -94,18 +59,10 @@ const supabaseFeilMaaHentes = {
       return null
     }
 
-    // True hvis kjeden inneholder .from(...) eller .rpc(...) — altså en
-    // PostgREST-spørring, ikke et auth- eller storage-kall. Følger kjeden
-    // gjennom CallExpression/MemberExpression/AwaitExpression som før, men
-    // løser i tillegg opp ConditionalExpression (skjema 4, begge retninger)
-    // og enkle lokale identifikatorer (skjema 6 — lagret query-builder).
-    //
-    // `besokt` er en løkke-vakt: identifikator-oppslaget under følger
-    // `def.node.init`, og gjensidig selvrefererende deklarasjoner
-    // (`const a = b; const b = a`) fikk den til å sykle for alltid. tsc
-    // avviser slik TDZ-kode så den kan aldri merges — men språkserveren
-    // kjører regelen på hver tastetrykk-tilstand, og der var utfallet en
-    // hengt editor uten feilmelding.
+    // True hvis kjeden inneholder .from(...)/.rpc(...). Løser opp ternær
+    // (skjema 4) og enkle lokale identifikatorer (skjema 6).
+    // `besokt` er løkke-vakt: `const a = b; const b = a` hengte editoren
+    // (språkserveren kjører regelen også på kode tsc ville avvist).
     function erSupabaseSpoerring(node, besokt = new Set()) {
       let n = node
       while (n) {
@@ -113,17 +70,11 @@ const supabaseFeilMaaHentes = {
         besokt.add(n)
         if (n.type === 'CallExpression') {
           const p = n.callee?.property
-          // .throwOnError() er Supabase sitt eget fail-closed-idiom: feil
-          // kastes i stedet for å returneres, så `data` kan aldri bære en
-          // skjult feil. Å flagge den formen ville tvunget fram en
-          // eslint-disable med begrunnelsen «bevisst fail-open» — altså en
-          // løgn i akkurat det revisjonssporet regelen finnes for å beskytte.
+          // Fail-closed allerede: å flagge den ville tvunget fram en
+          // eslint-disable med en uriktig «bevisst fail-open»-begrunnelse.
           if (p?.type === 'Identifier' && p.name === 'throwOnError') return false
           if (p?.type === 'Identifier' && (p.name === 'from' || p.name === 'rpc')) {
-            // Array.from(...) er ikke en Supabase-spørring. Uten dette
-            // unntaket ble `const r = Array.from(x); return r.data` flagget
-            // (mønsteret finnes i lib/queries/agenda.ts) — en false positive,
-            // altså feil i den utrygge retningen for en lint-gate.
+            // Array.from(...) (finnes i lib/queries/agenda.ts) ga false positive.
             const obj = n.callee.object
             if (p.name === 'from' && obj?.type === 'Identifier' && obj.name === 'Array') return false
             return true
@@ -134,9 +85,7 @@ const supabaseFeilMaaHentes = {
         } else if (n.type === 'AwaitExpression') {
           n = n.argument
         } else if (n.type === 'ConditionalExpression') {
-          // Ternær kan ha await på hele uttrykket ELLER på hver gren for seg
-          // (se kaaringspoll/[id]/tiebreak/page.tsx) — sjekk begge grener.
-          // Samme besokt-sett videre, så vakten holder på tvers av rekursjonen.
+          // Begge grener; samme besokt-sett så vakten holder i rekursjonen.
           return (
             erSupabaseSpoerring(n.consequent, besokt) || erSupabaseSpoerring(n.alternate, besokt)
           )
@@ -153,9 +102,8 @@ const supabaseFeilMaaHentes = {
       return false
     }
 
-    // Navnet på en (evt. destrukturert) nøkkel — dekker både vanlig
-    // `{ data }`/`{ data: x }` og literal-nøkkel-formen `{ ['data']: x }`
-    // (skjema 8). Returnerer null for dynamiske nøkler vi ikke kan avgjøre.
+    // Nøkkelnavn i destrukturering, inkl. `{ ['data']: x }` (skjema 8).
+    // null for dynamiske nøkler.
     function noekkelNavn(property) {
       if (property.computed) {
         return property.key?.type === 'Literal' && typeof property.key.value === 'string'
@@ -165,7 +113,7 @@ const supabaseFeilMaaHentes = {
       return property.key?.type === 'Identifier' ? property.key.name : null
     }
 
-    // Samme idé for et MemberExpression-tilgangsledd (`x.data` / `x['data']`).
+    // Samme for `x.data` / `x['data']`.
     function medlemNavn(member) {
       if (member.computed) {
         return member.property?.type === 'Literal' && typeof member.property.value === 'string'
@@ -175,19 +123,16 @@ const supabaseFeilMaaHentes = {
       return member.property?.type === 'Identifier' ? member.property.name : null
     }
 
-    // Den lokale bindingen en destrukturerings-property skaper. Dekker
-    // `{ error }`, `{ error: feil }` og `{ error: feil = null }`. Returnerer
-    // null for former vi ikke kan spore (nested pattern o.l.).
+    // Bindingen fra `{ error }`, `{ error: feil }` eller `{ error: feil = null }`;
+    // null for nøstede mønstre.
     function bindingFor(property) {
       let v = property.value
       if (v?.type === 'AssignmentPattern') v = v.left
       return v?.type === 'Identifier' ? v : null
     }
 
-    // Slå opp scope-variabelen for en binding. `deklarasjonsnode` er noden
-    // som deklarerer den (VariableDeclarator eller funksjon for .then-params);
-    // reassignment-formen `({ data, error } = await …)` deklarerer ingenting,
-    // og faller tilbake til vanlig scope-oppslag på navn.
+    // `deklarasjonsnode` er deklarator eller .then-callback; reassignment har
+    // ingen og faller tilbake til scope-oppslag på navn.
     function finnBinding(identifikatorNode, deklarasjonsnode) {
       if (deklarasjonsnode) {
         const v = sourceCode
@@ -198,47 +143,35 @@ const supabaseFeilMaaHentes = {
       return finnVariabel(sourceCode.getScope(identifikatorNode), identifikatorNode.name)
     }
 
-    // True hvis `error`-bindingen fra destruktureringen faktisk LESES et sted.
-    // Uten denne sjekken passerte `const { data, error } = await … ; return data`
-    // både denne regelen og no-unused-vars — hele feilklassen fra #492/#495/
-    // #503/#504 kunne gjeninnføres uten at noe blokkerte, og regelens egen
-    // feilmelding («Hent ut «error» …») ledet koderen rett til den formen.
-    // Merk asymmetrien den lukker: identifikator-stien under har alltid krevd
-    // at `.error` leses; destruktureringsstien krevde bare at nøkkelen fantes.
+    // True hvis `error`-bindingen faktisk LESES (feilklassen fra #492/#495/
+    // #503/#504 — no-unused-vars fanger ikke `error` som bare hentes ut).
     function errorBindingLeses(property, deklarasjonsnode) {
       const binding = bindingFor(property)
-      // Former vi ikke kan spore (nested destrukturering, ukjent scope) — vær
-      // mild heller enn å flagge kode som kan være helt korrekt. En lint-gate
-      // skal feile i retning false negative, ikke false positive.
+      // Uklare former: vær mild — en lint-gate skal feile mot false negative.
       if (!binding) return true
       const variabel = finnBinding(binding, deklarasjonsnode)
       if (!variabel) return true
       return variabel.references.some(ref => ref.isRead())
     }
 
-    // Flagg et ObjectPattern (destrukturering) som har `data` uten at `error`
-    // både hentes ut OG leses. Brukt for både direkte destrukturering,
-    // Promise.all-elementer, .then-callbacker og reassignment.
+    // Flagg et ObjectPattern med `data` der `error` ikke både hentes ut og leses.
     function sjekkPattern(pattern, deklarasjonsnode) {
       if (pattern.type !== 'ObjectPattern') return
       let harData = false
       let errorProperty = null
       for (const p of pattern.properties) {
-        if (p.type !== 'Property') continue // RestElement o.l. — irrelevant
+        if (p.type !== 'Property') continue // RestElement o.l.
         const navn = noekkelNavn(p)
         if (navn === 'data') harData = true
         if (navn === 'error') errorProperty = p
       }
-      // Kun relevant når data faktisk brukes — `const { error } = await …`
-      // alene er en fullt gyldig skrivning vi ikke skal mase om.
+      // `const { error } = await …` alene er gyldig.
       if (!harData) return
       if (errorProperty && errorBindingLeses(errorProperty, deklarasjonsnode)) return
       context.report({ node: pattern, messageId: 'manglerError' })
     }
 
-    // True hvis `.error` leses fra en lagret svar-variabel. Brukes både av
-    // sjekkIdentifikatorBruk og av ObjectPattern-stien når init er en ren
-    // identifikator (`const { data } = res`).
+    // True hvis `.error` leses fra en lagret svar-variabel (`const { data } = res`).
     function errorLestPaaKilde(identifikatorNode) {
       const variabel = finnVariabel(
         sourceCode.getScope(identifikatorNode),
@@ -256,10 +189,8 @@ const supabaseFeilMaaHentes = {
       })
     }
 
-    // Flagg en lagret (ikke-destrukturert) variabel som brukes via `.data`
-    // uten at `.error` noensinne leses fra samme variabel (skjema 1 og 6-i-
-    // array). `deklarasjonsnode` sendes til getDeclaredVariables — kan være
-    // en VariableDeclarator (dekker både enkle og array-pattern-tilfeller).
+    // Flagg en lagret variabel brukt via `.data` uten at `.error` leses
+    // (skjema 1, og Identifier-plasser i skjema 3).
     function sjekkIdentifikatorBruk(deklarasjonsnode, identifikatorNode) {
       const variabler = sourceCode.getDeclaredVariables(deklarasjonsnode)
       const variabel = variabler.find(v => v.identifiers.includes(identifikatorNode))
@@ -280,9 +211,7 @@ const supabaseFeilMaaHentes = {
       }
     }
 
-    // `Promise.all([...])` — kun gjenkjent som sådan når det faktisk kalles
-    // på identifikatoren `Promise` (ingen lokal skygging sjekkes; teoretisk
-    // hull, praktisk ufarlig).
+    // Kun på identifikatoren `Promise` (lokal skygging sjekkes ikke).
     function erPromiseAll(node) {
       return (
         node.type === 'CallExpression' &&
@@ -295,8 +224,6 @@ const supabaseFeilMaaHentes = {
       )
     }
 
-    // `await x` → `x`, ellers uendret. Brukt til å se forbi et eventuelt
-    // AwaitExpression rundt Promise.all(...)-kallet.
     function pakkUt(node) {
       return node.type === 'AwaitExpression' ? node.argument : node
     }
@@ -305,9 +232,7 @@ const supabaseFeilMaaHentes = {
       VariableDeclarator(node) {
         if (!node.init) return
 
-        // Skjema 3: Promise.all-destrukturering. Korrelerer array-pattern-
-        // plassene 1:1 med array-literal-elementene — kun mulig når begge er
-        // statisk synlige (ikke en dynamisk bygget liste).
+        // Skjema 3: plassene korreleres 1:1 med array-literal-elementene.
         const pakketUt = pakkUt(node.init)
         if (
           erPromiseAll(pakketUt) &&
@@ -328,11 +253,8 @@ const supabaseFeilMaaHentes = {
         if (!erSupabaseSpoerring(node.init)) return
 
         if (node.id.type === 'ObjectPattern') {
-          // `const { data } = res`, der `res` er et lagret svar hvis `.error`
-          // allerede er håndtert — en naturlig refaktorering, ikke en svelget
-          // feil. Merk avgrensningen: `const { data } = await q` (skjema 6)
-          // faller IKKE hit, fordi init da er et AwaitExpression og `q` er en
-          // query-builder — der kan error kun komme fra destruktureringen.
+          // `const { data } = res` der res.error er håndtert. Skjema 6
+          // (`await q`) faller ikke hit — der kan error kun komme herfra.
           if (node.init.type === 'Identifier' && errorLestPaaKilde(node.init)) return
           sjekkPattern(node.id, node)
         } else if (node.id.type === 'Identifier') {
@@ -341,9 +263,7 @@ const supabaseFeilMaaHentes = {
         }
       },
 
-      // Skjema 2: umiddelbar property-aksess — `(await supabase…).data`.
-      // Error kan aldri hentes ut fra samme uttrykk her (det krever et nytt
-      // nettverkskall), så dette flagges uten videre brukssjekk.
+      // Skjema 2: error kan aldri leses fra samme uttrykk — flagges direkte.
       MemberExpression(node) {
         if (node.object.type !== 'AwaitExpression') return
         if (!erSupabaseSpoerring(node.object.argument)) return
@@ -357,14 +277,10 @@ const supabaseFeilMaaHentes = {
         if (node.left.type !== 'ObjectPattern') return
         if (node.right.type !== 'AwaitExpression') return
         if (!erSupabaseSpoerring(node.right.argument)) return
-        // Ingen deklarasjonsnode — bindingene kommer fra en `let` lenger opp,
-        // så errorBindingLeses faller tilbake til scope-oppslag.
         sjekkPattern(node.left, null)
       },
 
-      // Skjema 7: `.then(({ data }) => …)` i stedet for await. Kjeden foran
-      // .then er selve spørringen (ikke await-et — .then brukes nettopp i
-      // stedet for await), så vi sjekker node.callee.object direkte.
+      // Skjema 7: `.then(({ data }) => …)` — kjeden foran .then er spørringen.
       CallExpression(node) {
         if (node.callee.type !== 'MemberExpression') return
         if (node.callee.computed) return
@@ -374,8 +290,7 @@ const supabaseFeilMaaHentes = {
         if (!callback) return
         if (callback.type !== 'FunctionExpression' && callback.type !== 'ArrowFunctionExpression') return
         const param = callback.params[0]
-        // Deklarasjonsnoden er selve callbacken — getDeclaredVariables på en
-        // funksjon returnerer parameterbindingene.
+        // getDeclaredVariables på callbacken gir parameterbindingene.
         if (param?.type === 'ObjectPattern') sjekkPattern(param, callback)
       },
     }
@@ -386,70 +301,32 @@ const supabaseFeilMaaHentes = {
 // ---------------------------------------------------------------------------
 // Egendefinert regel: dato-tidssone-uavhengig (#675)
 // ---------------------------------------------------------------------------
-// Tredje gang samme bug-klasse slo til (#674, PR #736, PR #741/#740, se
-// CLAUDE.md § Arbeidsmåter) — en Date-verdi som er riktig i lokal tid blir
-// bare tilfeldigvis riktig når PROSESSEN står i UTC. Ligger inline av samme
-// grunn som supabaseFeilMaaHentes over (speiles til klubb-app, se
-// kommentaren der).
-//
-// Kodebasen har to ulike Date-betydninger som ser identiske ut i koden:
-//   1. «Oslo-kalenderdag som lokal Date» — det norskDatoNaa()/norskDag()
-//      returnerer (new Date(y, m-1, d), lokal midnatt). Lokale gettere og
-//      date-fns kalender-aritmetikk er RIKTIG på disse. toISOString() er
-//      FEIL — den gir UTC-instantet for LOKAL midnatt, som bare tilfeldigvis
-//      stemmer når prosessen kjører i UTC.
-//   2. «Instant» — new Date(iso). toISOString() riktig, lokale gettere feil.
-// Hele bug-klassen er én operasjon fra gruppe 2 brukt på en verdi fra
-// gruppe 1 (eller et null-argument new Date() brukt som om det var gruppe 1).
-//
-// Fire sjekker, bygget på én felles taint-hjelper (finnKilde) med enkel lokal
-// propagering: én-definisjons-variabler, new Date(<tainted>)-wrapping (ett
-// argument), og første argument til et lite sett date-fns-funksjoner som
-// bevarer Date-identiteten (addDays/subDays/startOfDay/endOfDay/addMonths/
-// subMonths). Samme besokt-løkkevakt som i supabaseFeilMaaHentes over —
-// nødvendig av samme grunn (gjensidig selvrefererende deklarasjoner).
-//
-//   Sjekk 1 — toISOString() på en Oslo-kalenderdag. Kilde: kall til
-//     norskDatoNaa()/norskDag() (kjenner kun callee-navn, som i regelen over).
-//   Sjekk 2 — dagstreng fra UTC. Kilde: null-argument new Date(). Flagges KUN
-//     når resultatet av toISOString() umiddelbart kappes til en KALENDERDAG:
-//     slice/substring(0, N) med N <= 10, eller split('T')[0]. Argumentene
-//     sjekkes, ikke bare metodenavnet — .slice(11, 19) er UTC-klokkeslettet og
-//     .split('.') stripper millisekunder, begge legitime instant-operasjoner.
-//     Et rent tidsstempel uten kapping (naa()-mønsteret) flagges heller ikke.
-//     Regelen står på «error»: ett falskt treff blir slått av, ikke rettet.
-//   Sjekk 3 — «nå» mutert i lokal tid. Kilde: null-argument new Date(), fulgt
-//     av setHours/setDate/setMonth/setFullYear/setMinutes. new Date(x) MED
-//     argument er aldri en kilde her — det er nettopp det som gjør
-//     «cursor = new Date(start); cursor.setDate(...)» trygt.
-//   Sjekk 4 — ÉN-HOPPS taint gjennom en lokal hjelpers parameter. Dette er
-//     selve #674-formen: dagStreng(addDays(norskDatoNaa(), n)) der
-//     function dagStreng(d) { return d.toISOString().slice(0, 10) }. Kallet og
-//     feilen står i hver sin funksjon, så sjekk 1–3 ser ingenting. Pass 1
-//     noterer under traverseringen hvilke PARAMETERE en funksjon behandler som
-//     instant (toISOString på dem, eller lokal mutering av dem); Program:exit
-//     sjekker så om et kallsted mater nettopp den parameteren med en
-//     Oslo-kalenderdag eller et null-argument new Date(). To passeringer, ikke
-//     én, slik at en hjelper definert NEDENFOR sitt eget kallsted også fanges.
-//     Treffet rapporteres på KALLSTEDET — det er der rettingen skal gjøres, og
-//     hjelperen selv er ikke gal for alle argumenter.
-//
-// HVA REGELEN FORTSATT IKKE SER (presist — ikke «taint gjennom parametere»,
-// det er sjekk 4 nå):
-//   a) Mer enn ETT hopp: hjelper A som sender parameteren sin videre til
-//      hjelper B som gjør toISOString(). Ingen interprosedyral fixpoint.
-//   b) Hjelpere på tvers av filer — en importert dagStreng er usynlig for
-//      ESLint uten typeinfo.
-//   c) Parametere som skrives om i kroppen (d = ...) hoppes bevisst over:
-//      verdien er da ikke lenger den kallstedet sendte inn.
-//   d) Destrukturerte og rest-parametere ({ dato }, ...datoer) — ingen stabil
-//      posisjon å knytte kallstedets argument til.
-//   e) Kilder utenfor de tre kjente (norskDatoNaa/norskDag/null-argument
-//      new Date), f.eks. en Date lest ut av et objekt eller returnert fra en
-//      annen fil.
-// Svaret på et treff er uansett «ikke skriv en lokal dato-hjelper — bruk
-// lib/dato.ts», ikke «ikke skriv toISOString()». Se CLAUDE.md § Policy:
+// Inline av samme grunn som regelen over. Bakgrunn og de to Date-betydningene
+// (Oslo-kalenderdag som lokal Date vs. instant): se CLAUDE.md § Policy:
 // Tidshåndtering.
+//
+// Én felles taint-hjelper (finnKilde) med lokal propagering: én-definisjons-
+// variabler, new Date(<tainted>) og første argument til DATO_PROPAGERENDE.
+//
+//   Sjekk 1 — toISOString() på norskDatoNaa()/norskDag() (kun callee-navn).
+//   Sjekk 2 — null-argument new Date().toISOString() kappet til KALENDERDAG
+//     (slice/substring(0, N≤10), split('T')[0]). Argumentene sjekkes:
+//     .slice(11, 19) og .split('.') er legitime instant-operasjoner, og et
+//     falskt treff på en «error»-regel blir slått av, ikke rettet.
+//   Sjekk 3 — null-argument new Date() mutert med set*. new Date(x) MED
+//     argument er aldri kilde (`cursor = new Date(start)` er trygt).
+//   Sjekk 4 — ÉN-hopps taint gjennom en lokal hjelpers parameter (#674-formen:
+//     dagStreng(addDays(norskDatoNaa(), n))). Pass 1 noterer hvilke parametere
+//     en funksjon behandler som instant; Program:exit sjekker kallstedene, så
+//     også hjelpere definert under kallstedet fanges. Rapporteres på KALLSTEDET.
+//
+// Blindsoner:
+//   a) Mer enn ett hopp (A → B → toISOString()).
+//   b) Hjelpere importert fra en annen fil (ingen typeinfo).
+//   c) Parametere som skrives om i kroppen (d = …) — bevisst.
+//   d) Destrukturerte og rest-parametere — ingen stabil posisjon.
+//   e) Andre kilder enn de tre kjente (Date fra objekt, annen fil).
+// Svaret på et treff er «bruk lib/dato.ts», ikke «ikke skriv toISOString()».
 const datoTidssoneUavhengig = {
   meta: {
     type: 'problem',
@@ -469,7 +346,6 @@ const datoTidssoneUavhengig = {
   create(context) {
     const sourceCode = context.sourceCode
 
-    // Samme oppslags-hjelper som i supabaseFeilMaaHentes over.
     function finnVariabel(scope, navn) {
       let s = scope
       while (s) {
@@ -480,20 +356,14 @@ const datoTidssoneUavhengig = {
       return null
     }
 
-    // date-fns-funksjoner som bevarer «hvilken Date er dette»-identiteten på
-    // sitt FØRSTE argument — addDays(x, n) er tainted nøyaktig som x.
+    // date-fns-funksjoner der resultatet er tainted nøyaktig som 1. argument.
     const DATO_PROPAGERENDE = new Set([
       'addDays', 'subDays', 'startOfDay', 'endOfDay', 'addMonths', 'subMonths',
     ])
 
-    // Generisk kilde-søk: følger `node` bakover via single-def-variabler,
-    // new Date(<tainted>)-wrapping (ETT argument — null-argument new Date()
-    // er alltid en KILDE, aldri en wrapper) og første argument til
-    // DATO_PROPAGERENDE, og spør `kildeAv` ved hvert steg. Returnerer det
-    // FØRSTE ikke-null svaret fra `kildeAv`, ellers null — sjekk 4 trenger å
-    // vite HVILKEN kilde som traff (hvilken funksjon, hvilken parameter-
-    // posisjon), ikke bare at det finnes en. `besokt` er løkke-vakten — se
-    // kommentaren på samme sted i supabaseFeilMaaHentes.
+    // Følger `node` bakover og returnerer første ikke-null svar fra `kildeAv`
+    // (sjekk 4 trenger å vite HVILKEN kilde). Null-argument new Date() er
+    // alltid kilde, aldri wrapper. `besokt`: løkke-vakt, se regelen over.
     function finnKilde(node, kildeAv, besokt = new Set()) {
       let n = node
       while (n) {
@@ -528,13 +398,11 @@ const datoTidssoneUavhengig = {
       return null
     }
 
-    // Boolsk form for sjekk 1–3, som kun trenger ja/nei.
+    // Ja/nei-form for sjekk 1–3.
     function erTaintet(node, erKilde) {
       return finnKilde(node, n => (erKilde(n) ? true : null)) === true
     }
 
-    // Kilde 1: et kall til norskDatoNaa()/norskDag(...). Kjenner kun
-    // callee-navnet — samme grensesnitt-antagelse som supabaseFeilMaaHentes.
     function erOsloKalenderdagKilde(node) {
       return (
         node.type === 'CallExpression' &&
@@ -543,8 +411,6 @@ const datoTidssoneUavhengig = {
       )
     }
 
-    // Kilde 2: et null-argument new Date() — «nå», regnet i prosessens
-    // LOKALE tidssone. new Date(<noe>) MED argument matcher aldri dette.
     function erNullArgNewDateKilde(node) {
       return (
         node.type === 'NewExpression' &&
@@ -554,14 +420,8 @@ const datoTidssoneUavhengig = {
       )
     }
 
-    // Sjekk 2-hjelper: er DENNE toISOString()-kall-noden umiddelbart fulgt av
-    // et kall som plukker ut KALENDERDAGEN? ARGUMENTENE må sjekkes, ikke bare
-    // metodenavnet: .slice(11, 19) er UTC-KLOKKESLETTET og .split('.') er
-    // «strip millisekunder» — begge legitime instant-operasjoner som aldri
-    // skal flagges. Godtatt som daguttrekk er slice/substring(0, N) med
-    // 1 <= N <= 10 (dag, måned eller år — alle er UTC-kalenderfelt og like
-    // tidssone-følsomme) og split('T')[0]. naa()s rene tidsstempel (ingen
-    // kapping i det hele tatt) fyrer heller ikke.
+    // Sjekk 2: følges toISOString() umiddelbart av et daguttrekk? N kan være
+    // 1–10: år og måned er like tidssone-følsomme som dagen.
     const DAG_KAPPE_METODER = new Set(['slice', 'substring', 'split'])
 
     function erTallLiteral(node, godtar) {
@@ -577,8 +437,7 @@ const datoTidssoneUavhengig = {
           erTallLiteral(args[1], v => v >= 1 && v <= 10)
         )
       }
-      // split: separatoren må være 'T', OG resultatet må indekseres med [0].
-      // split('T')[1] er klokkeslettet, split('.') er millisekund-strippingen.
+      // Kun split('T')[0] — [1] er klokkeslettet.
       if (args.length < 1 || args[0].type !== 'Literal' || args[0].value !== 'T') return false
       const indeks = kall.parent
       return (
@@ -602,25 +461,19 @@ const datoTidssoneUavhengig = {
 
     const MUTASJONS_METODER = new Set(['setHours', 'setDate', 'setMonth', 'setFullYear', 'setMinutes'])
 
-    // ── Sjekk 4: én-hopps taint gjennom en lokal hjelpers parameter ─────────
-    // Pass 1 (under traverseringen) fyller paramBruk: funksjonsnode → hvilke
-    // parameter-POSISJONER kroppen behandler som et instant. Pass 2
-    // (Program:exit) matcher kallstedene mot den. Se filhode-kommentaren for
-    // hvorfor to passeringer, og for blindsonene a–e.
+    // ── Sjekk 4 ──────────────────────────────────────────────────────────────
+    // paramBruk: funksjonsnode → parameterposisjoner kroppen behandler som instant.
     const paramBruk = new Map()
     const kallsteder = []
 
-    // Kilde for pass 1: en identifikator som refererer en PARAMETER i en
-    // funksjon i denne fila. Returnerer funksjonen og posisjonen, så pass 2
-    // vet hvilket argument på kallstedet som er det farlige.
+    // En identifikator som refererer en parameter → { fn, posisjon }.
     function parameterKilde(n) {
       if (n.type !== 'Identifier') return null
       const variable = finnVariabel(sourceCode.getScope(n), n.name)
       if (!variable || variable.defs.length !== 1) return null
       const def = variable.defs[0]
       if (def.type !== 'Parameter') return null
-      // Skrives parameteren om i kroppen, er verdien ikke lenger den
-      // kallstedet sendte inn — da tør vi ikke konkludere (blindsone c).
+      // Blindsone c
       if (variable.references.some(r => r.isWrite())) return null
       // indexOf gir -1 for destrukturerte og rest-parametere (blindsone d).
       const posisjon = def.node.params.indexOf(def.name)
@@ -639,9 +492,7 @@ const datoTidssoneUavhengig = {
       bruk[slag].add(treff.posisjon)
     }
 
-    // Kallstedets callee → funksjonsnoden, for LOKALE hjelpere (deklarasjon
-    // eller arrow/function-uttrykk bundet til én const). Et importert navn har
-    // def.type 'ImportBinding' og faller ut her (blindsone b).
+    // Callee → funksjonsnode for LOKALE hjelpere. Importer faller ut (blindsone b).
     function lokalFunksjon(kall) {
       const variable = finnVariabel(sourceCode.getScope(kall), kall.callee.name)
       if (!variable || variable.defs.length !== 1) return null
@@ -659,8 +510,7 @@ const datoTidssoneUavhengig = {
 
     return {
       CallExpression(node) {
-        // Kall på en bar identifikator er potensielle hjelper-kallsteder og
-        // samles til pass 2. De kan aldri være x.toISOString() selv.
+        // Potensielle hjelper-kallsteder, til pass 2.
         if (node.callee.type === 'Identifier') {
           kallsteder.push(node)
           return
@@ -671,16 +521,14 @@ const datoTidssoneUavhengig = {
 
         if (metode === 'toISOString') {
           const dagKapping = harDagKappingEtterpaa(node)
-          // Pass 1 for sjekk 4 — noteres uansett om vi rapporterer her: en
-          // hjelper er ikke gal i seg selv, bare for feil argument.
+          // Pass 1 for sjekk 4 — noteres uansett: hjelperen er bare gal for
+          // feil argument.
           noterParamBruk(node.callee.object, 'iso')
           if (dagKapping) noterParamBruk(node.callee.object, 'isoDag')
-          // Sjekk 1
           if (erTaintet(node.callee.object, erOsloKalenderdagKilde)) {
             context.report({ node, messageId: 'isoPaaOsloDag' })
             return
           }
-          // Sjekk 2 — kun når resultatet faktisk kappes til en dagstreng.
           if (dagKapping && erTaintet(node.callee.object, erNullArgNewDateKilde)) {
             context.report({ node, messageId: 'utcDagstreng' })
           }
@@ -695,8 +543,7 @@ const datoTidssoneUavhengig = {
         }
       },
 
-      // Pass 2 for sjekk 4. Først her kjenner vi alle funksjonene i fila, så
-      // en hjelper som er definert NEDENFOR sitt eget kallsted fanges også.
+      // Pass 2 for sjekk 4 — først nå kjenner vi alle funksjonene i fila.
       'Program:exit'() {
         for (const kall of kallsteder) {
           const fn = lokalFunksjon(kall)
@@ -705,8 +552,7 @@ const datoTidssoneUavhengig = {
           if (!bruk) continue
           for (let i = 0; i < kall.arguments.length; i++) {
             const arg = kall.arguments[i]
-            // Et spread flytter alle posisjoner etter seg — da vet vi ikke
-            // lenger hvilket argument som treffer hvilken parameter.
+            // Spread forskyver posisjonene etter seg.
             if (arg.type === 'SpreadElement') break
             const farlig =
               (bruk.iso.has(i) && erTaintet(arg, erOsloKalenderdagKilde)) ||
@@ -725,100 +571,41 @@ const datoTidssoneUavhengig = {
 // ---------------------------------------------------------------------------
 // Egendefinert regel: supabase-mutasjon-maa-sjekkes (#760)
 // ---------------------------------------------------------------------------
-// Tilstøtende hull til supabaseFeilMaaHentes over, funnet under review av
-// #759: den regelen sporer KONSUMERT `data` — en ren mutasjon uten
-// `.select()` har ingen `data` å henge seg på, så en `delete()`/`update()`
-// der HELE resultatet forkastes (ingen destrukturering, ingen tilordning) var
-// usynlig for den. En slik mutasjon kan feile stille — testrader ble
-// liggende igjen i `e2e/kart-markering.spec.ts` fordi en opprydding aldri
-// leste `error`. Egen regel, ikke en utvidelse av regelen over: de sporer
-// forskjellige ting (konsumert data vs. forkastet resultat), og å slå dem
-// sammen ville gjort en presis regel uklar. Ligger inline av samme grunn som
-// supabaseFeilMaaHentes (speiles til klubb-app, se kommentaren der).
+// Det tilstøtende hullet til regelen over, som sporer KONSUMERT data: en ren
+// mutasjon der hele resultatet forkastes har ingen data å henge seg på.
+// Egen regel fordi de sporer ulike ting. Inline av samme grunn. Policyen: se
+// CLAUDE.md § Policy: Databasespørringer.
 //
-// Fire former, én regel:
-//   1. ExpressionStatement — en awaitet (eller forkastet) mutasjonskjede som
-//      egen setning: `await supabase.from('x').delete().eq('id', 1)` uten
-//      verken destrukturering eller tilordning. Kjeden må inneholde
-//      `.from(...)` PLUSS et av verbene insert/update/upsert/delete, ELLER
-//      `.rpc(...)` (RPC-ene våre er tilstandsendrende, se
-//      supabaseFeilMaaHentes sin auth-kommentar for hvorfor .rpc() teller
-//      likt som .from() der òg). Ender kjeden i `.then(cb)`, godtas den kun
-//      hvis cb leser error — `({ error }) => { if (error) … }` eller
-//      `res => { if (res.error) … }`. `.then(() => {})` og `.catch(…)` alene
-//      flagges: Supabase-feil ligger i resultatet, ikke som rejection, så
-//      `.catch` fanger dem aldri. Avsluttende `.catch`/`.finally` skrelles av
-//      før vurderingen.
-//   2. VariableDeclarator — en ObjectPattern-destrukturering av en
-//      mutasjonskjede der `error` ikke LESES: `const { count } = …`,
-//      `const { error } = …` uten bruk, og `const { error: _error } = …`
-//      (som no-unused-vars slipper forbi pga `^_`). Bindingen spores via
-//      scope-manageren, som errorBindingLeses i regelen over. Har mønsteret
-//      en `data`-nøkkel, er saken regel 1 sin (den stiller samme lesekrav —
-//      ingen dobbeltrapport); det samme gjelder et `{ data, … }`-mønster i
-//      en then-callback.
-//   3. Promise.all/allSettled med en array-literal: hvert element som er en
-//      mutasjonskjede vurderes som om det sto alene. Forkastes resultatet
-//      (`await Promise.all([…delete(), …])` som egen setning), flagges
-//      hvert mutasjonselement som ikke leser error i en egen .then(cb).
-//      Destruktureres resultatet (`const [a, { error }] = await
-//      Promise.all([...])`), korreleres plassene 1:1 som i skjema 3 i
-//      regelen over: en ObjectPattern-plass må lese error (data-nøkkel ⇒
-//      regel 1 sin sak), en Identifier-plass godtas (falsk negativ — vi følger
-//      ikke `a.error` videre), og en manglende plass (`const [a] = …` med to
-//      elementer, eller elision `[, b]`) er et forkastet resultat. For
-//      allSettled godtas enhver bundet plass: verdien er `{ status, value }`,
-//      ikke Supabase-resultatet, og vi prøver ikke å lese error ut av den.
-//   4. AssignmentExpression — reassignment `({ error } = await …delete())`
-//      eller `({ count } = …)`: samme krav som skjema 2. Bindingen kommer
-//      fra en `let` lenger opp, så den slås opp via scope-kjeden i stedet
-//      for deklaratoren.
+// Mutasjonskjede = `.from(...)` + insert/update/upsert/delete, eller `.rpc(...)`
+// (RPC-ene våre er tilstandsendrende). Fire former:
+//   1. Forkastet kjede som egen setning. Ender den i `.then(cb)`, godtas den
+//      kun hvis cb leser error.
+//   2. Destrukturering der `error` ikke LESES (`{ count }`, ubrukt `{ error }`,
+//      `{ error: _error }` som no-unused-vars slipper forbi).
+//   3. Promise.all/allSettled med array-literal: forkastet ⇒ hvert element
+//      vurderes alene; destrukturert ⇒ plass-korrelert som skjema 3 over.
+//      Identifier-plass godtas (falsk negativ), manglende plass/elision er
+//      forkastet, allSettled godtar enhver bundet plass ({ status, value }).
+//   4. Reassignment `({ error } = await …)` — samme krav som 2.
+// Har mønsteret en `data`-nøkkel, er saken regel 1 sin (ingen dobbeltrapport).
 //
-// Kjeden analyseres uten identifikator-oppslag — bevisst forskjellig fra
-// supabaseFeilMaaHentes, som MÅ følge enkeltdefinisjons-identifikatorer for
-// å spore skjema 1/6. Her ville det motsatte skjedd: en LAGRET query-builder
-// som awaites i en senere, separat setning
-// (`const q = admin.from('x').delete(); const { error } = await q.eq(...)`,
-// se lib/actions/posisjon-opprydding.ts ~:78) ville fått verbet på den
-// FØRSTE setningen til å utløse et treff på en variabel (`q`) som aldri i
-// seg selv er en ExpressionStatement eller mangler en feilsjekk — et falskt
-// treff. Uten identifikator-oppslag faller denne formen naturlig utenfor:
-// `q.eq(...)` inneholder verken `.from` eller et verb i seg selv.
+// Kjeden analyseres BEVISST uten identifikator-oppslag (motsatt av regelen
+// over): en lagret query-builder awaitet i en senere setning
+// (`const q = admin.from('x').delete(); … await q.eq(...)`, se
+// lib/actions/posisjon-opprydding.ts) ville ellers gitt falskt treff.
 //
-// Kontrakten — det ENESTE som godtas for en mutasjonskjede:
-//   - `.throwOnError()` i kjeden — samme idiom, samme begrunnelse som i
-//     supabaseFeilMaaHentes: Supabase kaster selv, så stillhet er umulig.
-//   - `error` som faktisk LESES — i en destrukturering (skjema 2/3/4) eller
-//     i en `.then(cb)`-callback (`({ error }) => …` / `res => … res.error`).
-//   - Avsluttende `.catch()`/`.finally()` endrer IKKE vurderingen i noen
-//     retning: de skrelles av, og det som står igjen vurderes som over.
-//   - Ikke-mutasjonskjeder (`.select().then(…)`, se
-//     components/chat/hooks/useChatReaksjoner.ts ~:40) er regel 1s domene og
-//     vurderes aldri her, uansett hva callbacken gjør.
-//   - `eslint-disable-next-line` med begrunnelse — for bevisst fire-and-
-//     forget (typen finnes, se § Bevisst fail-open i supabaseFeilMaaHentes;
-//     omfanget her er ukjent til noen har telt, jf. #760).
+// Godtas: `.throwOnError()` i kjeden, `error` som faktisk leses (destrukturering
+// eller .then-callback), og `eslint-disable-next-line` med begrunnelse.
+// Avsluttende `.catch()`/`.finally()` skrelles av og endrer ingenting —
+// Supabase-feil ligger i resultatet, aldri som rejection.
 //
-// HVA REGELEN IKKE SER (presist, ikke «alt annet») — bevisst: en regel på
-// 'error' som gjetter gir falske treff, og de blir slått av, ikke rettet:
-//   - `const res = await supabase.from(...).delete()` uten at `res.error`
-//     leses — Identifier-deklaratorer hoppes over. Å avgjøre om feilen
-//     sjekkes krever å følge `res` videre (`return res`, `haandter(res)`)
-//     inn i et annet scope; å flagge hver gang `res` forlater funksjonen
-//     ville gitt falske treff på korrekt kode.
-//   - En mutasjonskjede sendt som ARGUMENT til en hjelperfunksjon
-//     (`kjørMutasjon(supabase.from('x').delete())`) — om hjelperen leser
-//     error, står i en annen funksjon, ofte en annen fil, og ESLint har
-//     ingen kallgraf på tvers. Promise.all/allSettled er unntaket: der
-//     kjenner vi semantikken (skjema 3).
-//   - `Promise.all(liste)` med en dynamisk bygget liste — elementene er
-//     ikke statisk synlige.
-//   - Nøstet destrukturering av error (`{ error: { message } }`) godtas
-//     uten lesesjekk.
-//   - `Array.from(...)`-uklarheten arves fra supabaseFeilMaaHentes: kjeden
-//     ser kun på metodenavnet, ikke hva objektet foran faktisk er, og
-//     `Array.from(...)` unntas eksplisitt på objektnavnet «Array» av samme
-//     grunn som der.
+// Blindsoner (falske negativer, bevisst — en «error»-regel som gjetter blir slått av):
+//   - `const res = await …delete()` — om res.error sjekkes avgjøres i et
+//     annet scope (`return res`, `haandter(res)`).
+//   - Kjede sendt som argument til en hjelper (ingen kallgraf på tvers).
+//   - `Promise.all(liste)` med dynamisk liste.
+//   - Nøstet `{ error: { message } }` godtas uten lesesjekk.
+//   - `.from` matches på metodenavn, med samme `Array.from`-unntak som over.
 const MUTASJON_VERB = new Set(['insert', 'update', 'upsert', 'delete'])
 
 const supabaseMutasjonMaaSjekkes = {
@@ -832,10 +619,8 @@ const supabaseMutasjonMaaSjekkes = {
     },
   },
   create(context) {
-    // Går kjeden CallExpression/MemberExpression/TSNonNullExpression bakover
-    // fra ytterste ledd og noterer hvilke ingredienser den inneholder. Ingen
-    // identifikator-oppslag — se filhode-kommentaren for hvorfor det er
-    // riktig retning her (motsatt av supabaseFeilMaaHentes).
+    // Går kjeden bakover og noterer ingrediensene. Ingen identifikator-
+    // oppslag, se regelhodet.
     function analyserKjede(node) {
       let n = node
       let harFra = false
@@ -850,8 +635,6 @@ const supabaseMutasjonMaaSjekkes = {
               harThrowOnError = true
             } else if (p.name === 'from') {
               const obj = n.callee.object
-              // Array.from(...) er ikke en Supabase-spørring — samme unntak
-              // (og samme begrunnelse) som i supabaseFeilMaaHentes.
               if (!(obj?.type === 'Identifier' && obj.name === 'Array')) harFra = true
             } else if (p.name === 'rpc') {
               harRpc = true
@@ -875,10 +658,8 @@ const supabaseMutasjonMaaSjekkes = {
       return (harFra && harVerb) || harRpc
     }
 
-    // Pakk av await/void/TS non-null «!» på YTTERSTE nivå av selve
-    // setningen/initialiseringen. Nøstet «!» midt i kjeden (som i
-    // `admin!.from('x').update({}).eq('id', 1)`) trenger ingen håndtering
-    // her — analyserKjede sin egen TSNonNullExpression-gren tar den.
+    // Pakk av await/void/«!» på ytterste nivå. «!» midt i kjeden tas av
+    // analyserKjede.
     function pakkYtreNivaa(node) {
       let n = node
       while (true) {
@@ -895,9 +676,7 @@ const supabaseMutasjonMaaSjekkes = {
       return n
     }
 
-    // Navnet på en (evt. destrukturert) nøkkel — samme hjelper som i
-    // supabaseFeilMaaHentes (duplisert, ikke importert — filen speiles til
-    // klubb-app som ren JS uten en delt modul mellom reglene).
+    // Duplisert fra regelen over med vilje: ingen delt modul (speiles til klubb-app).
     function noekkelNavn(property) {
       if (property.computed) {
         return property.key?.type === 'Literal' && typeof property.key.value === 'string'
@@ -907,7 +686,6 @@ const supabaseMutasjonMaaSjekkes = {
       return property.key?.type === 'Identifier' ? property.key.name : null
     }
 
-    // Metodenavnet på et kall `x.navn(...)`, ellers null.
     function kallNavn(node) {
       if (node?.type !== 'CallExpression') return null
       const c = node.callee
@@ -915,17 +693,13 @@ const supabaseMutasjonMaaSjekkes = {
       return c.property.name
     }
 
-    // Ble bindingen `error` i et ObjectPattern faktisk LEST? Nøkkelen alene
-    // holder ikke: `{ error: _error }` slipper forbi no-unused-vars (`^_`).
-    // Bindingen slås opp via getDeclaredVariables på deklarator/callback —
-    // samme grep som errorBindingLeses i supabaseFeilMaaHentes.
+    // Ble `error` faktisk LEST? Nøkkelen alene holder ikke (`{ error: _error }`).
     function errorLestIPattern(pattern, deklarasjonsnode) {
       for (const p of pattern.properties) {
         if (p.type !== 'Property' || noekkelNavn(p) !== 'error') continue
         let v = p.value
         if (v?.type === 'AssignmentPattern') v = v.left
-        // Nøstet destrukturering (`{ error: { message } }`) — vær mild som
-        // regel 1: false negative er trygg retning for en lint-gate.
+        // Nøstet: vær mild (false negative er trygg retning).
         if (v?.type !== 'Identifier') return true
         const variabel = finnBinding(v, deklarasjonsnode)
         if (!variabel) return true
@@ -934,8 +708,7 @@ const supabaseMutasjonMaaSjekkes = {
       return false
     }
 
-    // Deklarert i deklarasjonsnoden (deklarator/callback), ellers — for
-    // reassignment, der bindingen er en `let` lenger opp — via scope-kjeden.
+    // Uten deklarasjonsnode (reassignment): via scope-kjeden.
     function finnBinding(identifikator, deklarasjonsnode) {
       if (deklarasjonsnode) {
         const v = context.sourceCode
@@ -950,18 +723,14 @@ const supabaseMutasjonMaaSjekkes = {
       return null
     }
 
-    // Et ObjectPattern bundet til et mutasjonsresultat: godtatt hvis det har
-    // data (regel 1 sin sak, samme lesekrav) eller leser error.
+    // Godtatt hvis mønsteret har data (regel 1 sin sak) eller leser error.
     function patternHaandtererFeil(pattern, deklarasjonsnode) {
       if (pattern.properties.some(p => p.type === 'Property' && noekkelNavn(p) === 'data')) return true
       return errorLestIPattern(pattern, deklarasjonsnode)
     }
 
-    // Leser then-callbacken error? Godtatt: første parameter er `{ error }`
-    // (lest) eller en identifikator `res` der `res.error` leses. Alt annet —
-    // `() => {}`, en funksjonsreferanse vi ikke ser inn i — er forkastet.
-    // Har mønsteret `data`, er saken regel 1 sin (samme lesekrav, ingen
-    // dobbeltrapport).
+    // Godtatt: `({ error }) => …` (lest) eller `res => … res.error`. En
+    // funksjonsreferanse vi ikke ser inn i regnes som forkastet.
     function thenLeserError(thenKall) {
       const cb = thenKall.arguments[0]
       if (!cb || (cb.type !== 'ArrowFunctionExpression' && cb.type !== 'FunctionExpression')) return false
@@ -984,9 +753,7 @@ const supabaseMutasjonMaaSjekkes = {
       })
     }
 
-    // Er et forkastet uttrykk en mutasjon som ikke håndterer feilen? Felles
-    // for form 1 og Promise.all-elementene. Avsluttende .catch()/.finally()
-    // skrelles av — de endrer ikke vurderingen.
+    // Felles for form 1 og Promise.all-elementene.
     function forkastetMutasjonUtenSjekk(uttrykk) {
       let expr = pakkYtreNivaa(uttrykk)
       if (expr.type !== 'CallExpression') return false
@@ -995,16 +762,13 @@ const supabaseMutasjonMaaSjekkes = {
       }
       const kjede = analyserKjede(expr)
       if (kjede.harThrowOnError) return false
-      // Ikke-mutasjoner (f.eks. .select().then(…) i useChatReaksjoner.ts
-      // ~:40) er regel 1s domene og vurderes aldri her.
+      // Ikke-mutasjoner (.select().then(…)) er regel 1s domene.
       if (!erMutasjonskjede(kjede)) return false
       if (kallNavn(expr) === 'then' && thenLeserError(expr)) return false
       return true
     }
 
-    // `Promise.all([...])` / `Promise.allSettled([...])` med array-literal
-    // → { settled, elementer }, ellers null. Som i regel 1: kun gjenkjent på
-    // identifikatoren `Promise` (lokal skygging sjekkes ikke).
+    // Promise.all/allSettled med array-literal → { settled, elementer }.
     function promiseAllListe(node) {
       if (node?.type !== 'CallExpression') return null
       const c = node.callee
@@ -1018,13 +782,8 @@ const supabaseMutasjonMaaSjekkes = {
     }
 
     return {
-      // Form 1: en forkastet mutasjonskjede som egen setning — også når den
-      // ender i .then()/.catch(). Supabase-feil ligger i RESULTATET, ikke som
-      // rejection, så .catch() fanger dem aldri; kun en .then() som faktisk
-      // leser error teller som feilhåndtering.
+      // Form 1 (og 3 når Promise.all forkastes).
       ExpressionStatement(node) {
-        // Form 3a: `await Promise.all([...])` som egen setning — hele lista
-        // forkastes, så hvert mutasjonselement vurderes som om det sto alene.
         let ytre = pakkYtreNivaa(node.expression)
         while (kallNavn(ytre) === 'catch' || kallNavn(ytre) === 'finally') {
           ytre = ytre.callee.object
@@ -1047,8 +806,7 @@ const supabaseMutasjonMaaSjekkes = {
         if (!node.init) return
         const init = pakkYtreNivaa(node.init)
 
-        // Form 3b: `const [a, { error }] = await Promise.all([...])` —
-        // plassene korreleres 1:1 med elementene.
+        // Form 3, destrukturert.
         const alle = node.id.type === 'ArrayPattern' ? promiseAllListe(init) : null
         if (alle) {
           // Plassene fra og med et RestElement er bundet (til resten-lista).
@@ -1059,14 +817,12 @@ const supabaseMutasjonMaaSjekkes = {
             if (rest !== -1 && i >= rest) return
             let plass = node.id.elements[i]
             if (plass?.type === 'AssignmentPattern') plass = plass.left
-            // Manglende plass eller elision: resultatet forkastes.
             if (!plass) {
               context.report({ node: el, messageId: 'forkastetMutasjon' })
               return
             }
-            // allSettled-verdien er { status, value } — enhver binding godtas.
             if (alle.settled) return
-            // Identifier: vi følger ikke `a.error` videre (falsk negativ).
+            // Identifier: `a.error` følges ikke (falsk negativ).
             if (plass.type !== 'ObjectPattern') return
             if (patternHaandtererFeil(plass, node)) return
             context.report({ node: el, messageId: 'forkastetMutasjon' })
@@ -1074,7 +830,7 @@ const supabaseMutasjonMaaSjekkes = {
           return
         }
 
-        // Form 2: destrukturering som ikke LESER error.
+        // Form 2
         if (node.id.type !== 'ObjectPattern') return
         if (init.type !== 'CallExpression') return
         const kjede = analyserKjede(init)
@@ -1084,8 +840,7 @@ const supabaseMutasjonMaaSjekkes = {
         context.report({ node, messageId: 'forkastetMutasjon' })
       },
 
-      // Form 4: reassignment — `({ error } = await …delete())`. Samme krav
-      // som form 2; bindingen slås opp via scope (ingen deklarator).
+      // Form 4
       AssignmentExpression(node) {
         if (node.operator !== '=' || node.left.type !== 'ObjectPattern') return
         const hoeyre = pakkYtreNivaa(node.right)
@@ -1124,30 +879,14 @@ const config = [
       },
     },
     rules: {
-      // Gjeret er lukket (pulje C): 0 kjente forekomster gjenstår, og
-      // regelen dekker nå bruk (ikke bare destruktureringssyntaks) — se
-      // kommentaren over for hvilke skjemaer som er dekket. Står på «error»:
-      // en ny svelget feil skal blokkere build, ikke bare varsle.
+      // De tre hk-reglene står på «error» med 0 kjente treff: et nytt treff
+      // skal blokkere, ikke bare varsle.
       'hk/supabase-feil-maa-hentes': 'error',
-      // Vakten mot tidssone-avhengige Date-mønstre (#675) — tredje gang samme
-      // bug-klasse slo til (#674, PR #736, PR #741/#740). 0 kjente forekomster
-      // etter fiksene i samme PR. Se filhode-kommentaren over regel-
-      // definisjonen for hva den bevisst ikke kan se.
       'hk/dato-tidssone-uavhengig': 'error',
-      // Vakten mot en forkastet Supabase-mutasjon (#760) — det tilstøtende
-      // hullet regelen over ikke dekker (den sporer konsumert data; en ren
-      // mutasjon uten .select() har ingen data å henge seg på). 0 kjente
-      // forekomster etter opprydding i #760 (PR 1+2). Se filhode-
-      // kommentaren over regel-definisjonen for hva den bevisst ikke ser.
       'hk/supabase-mutasjon-maa-sjekkes': 'error',
-      // Død kode akkumulerte usett: eslint-config-next slår ikke på
-      // no-unused-vars, så en import som mistet sin siste bruker ble stående.
-      // Fanget først da en ubrukt norskAar-import ble oppdaget manuelt (#566).
-      //
-      // args: 'none' — ubrukte funksjonsargumenter er legitime i mock-signaturer
-      // (testene har ~80 av dem) og sier ingenting om død kode.
-      // caughtErrors: 'none' — «catch {}» uten binding er allerede idiomet vårt.
-      // varsIgnorePattern — «_navn» er den etablerte måten å si «med vilje».
+      // eslint-config-next slår ikke på denne (#566).
+      // args: 'none' — ubrukte argumenter er legitime i mock-signaturer.
+      // varsIgnorePattern '^_' — etablert måte å si «med vilje».
       'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
     },
   },

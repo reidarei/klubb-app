@@ -1,27 +1,15 @@
-// Én kilde for hva hver varseltype HETER på norsk.
+// Én kilde for hva hver varseltype heter på norsk — både i kontrollpanelet
+// og i varselhistorikken. Ren data uten IO, så også 'use client'-filer
+// (VarselLogg) kan importere den.
 //
-// Bakgrunn: teksten lå tidligere i to uavhengige maps på samme side —
-// `innstillingLabels` i innstillinger/page.tsx (kontrollpanelet) og
-// `typeLabels` i innstillinger/VarselLogg.tsx (historikken). De var nøklet
-// forskjellig (noekkel vs. type), hadde ulike navn på samme varsel
-// («@-mention i chat» / «Chat-mention») og manglet begge halvparten av
-// typene — historikken viste rå nøkler som `kaaringspoll_ingen_stemmer`.
-//
-// Fila er ren data uten IO, slik at både server components og client
-// components (VarselLogg er 'use client') kan importere den.
-//
-// Kartet-gruppen under avledes av SYMBOLER_VARSLER (#767) i stedet for å
-// stå som egne literaler — symbolenes varseltyper (fra klubbens eget
-// register, lib/klubb-symboler.ts) har ikke lenger en egen oppføring her,
-// panel/kort-teksten bor på selve symbolet i lib/markering-symboler.ts. Et
-// nytt varslende symbol får dermed rader her helt av seg selv.
+// Kartet-gruppen avledes av SYMBOLER_VARSLER (#767); teksten bor på symbolet
+// i lib/markering-symboler.ts, så et nytt varslende symbol får rad her selv.
 
 import { SYMBOLER_VARSLER } from './markering-symboler'
 
 /**
- * Mapping fra `type` (slik den lagres i varsel_logg) til `noekkel` (slik den
- * ligger i varsel_innstillinger). Historisk fikk de litt forskjellige navn for
- * de tre påminnelses-/purretypene; resten er identiske.
+ * `type` (varsel_logg) → `noekkel` (varsel_innstillinger). Kun de tre
+ * påminnelses-/purretypene har avvikende navn; resten er identiske.
  */
 export function typeTilNoekkel(type: string): string {
   if (type === 'paaminne_7') return 'paaminnelse_7d'
@@ -32,36 +20,25 @@ export function typeTilNoekkel(type: string): string {
 
 type VarselTekst = {
   /**
-   * Etikett i admin-kontrollpanelet. Utelates for typer som ikke har en egen
-   * bryter i varsel_innstillinger (i dag kun bursdagsgratulasjon, som ikke
-   * lenger sendes — etiketten står igjen for historiske rader, se under).
-   *
-   * Feltet er dermed MARKØREN for «dette er en bryter», ikke bare en tekst —
-   * les den gjennom erVarselBryter() under i stedet for å sjekke `panel`
-   * direkte på et kallsted.
+   * Etikett i kontrollpanelet. Utelates for typer uten bryter (i dag kun
+   * bursdagsgratulasjon). Feltet er MARKØREN for «dette er en bryter» — les
+   * det via erVarselBryter(), ikke direkte.
    */
   panel?: string
   /** Kort navn i varselhistorikken, der raden også viser mottaker og kanal. */
   kort: string
 }
 
-// Panel-etikettene i BEGGE kartene under følger én form, slik at admin ser
-// hva han faktisk skrur av uten å slå opp i koden:
-//   1. Hendelsen som utløser varselet, som substantivfrase — aldri
-//      «Varsel ved …» (raden ER et varsel; prefikset sa ingenting).
-//   2. Tidspunktet står alltid eksplisitt når det finnes («7 dager før»,
-//      «på purredatoen»). Tidligere hadde purringen «(3 d før)» mens
-//      arrangør-purringen ikke sa noe om når den går.
-//   3. Presiseringen i parentes: hvem som får varselet når det IKKE er alle,
-//      eller hvilken knapp som utløser det når det er manuelt.
+// Panel-etikettene i begge kartene følger én form:
+//   1. Hendelsen som substantivfrase — aldri «Varsel ved …».
+//   2. Tidspunktet eksplisitt når det finnes («7 dager før», «på purredatoen»).
+//   3. I parentes: hvem som får det når det ikke er alle, eller hvilken knapp
+//      som utløser det når det er manuelt.
 /**
- * Kartet-gruppen, avledet av symbolregisteret (#767) — se filhode-kommentaren.
- *
- * Egen konstant og ikke en spread rett inn i objektet under: da finnes de to
- * nøkkelsettene hver for seg og kan sjekkes mot hverandre. Blandes de i ett
- * objektliteral, vinner den siste stille — en håndskrevet oppføring med samme
- * navn som en symboltype ville overstyrt symbolets panel/kort-tekst uten at
- * noe sa fra. Pinnet i __tests__/varsel-typer.test.ts.
+ * Kartet-gruppen, avledet av symbolregisteret (#767). Egen konstant, ikke
+ * spread rett inn under, så nøkkelsettene kan sjekkes mot hverandre — i ett
+ * objektliteral ville en navnekollisjon stille overstyrt symbolets tekst.
+ * Pinnet i __tests__/varsel-typer.test.ts.
  */
 export const SYMBOL_TEKSTER: Record<string, VarselTekst> = Object.fromEntries(
   SYMBOLER_VARSLER.map(s => [s.varsel.type, { panel: s.varsel.panel, kort: s.varsel.kort }]),
@@ -85,18 +62,13 @@ export const OEVRIGE_TEKSTER: Record<string, VarselTekst> = {
     panel: 'Purring til de som ikke har svart (automatisk 3 dager før)',
     kort: 'Purring uten svar',
   },
-  // Egen nøkkel, ikke et unntak fra purring_aktiv: manuell purring er en
-  // bevisst handling admin gjør, og skal kunne stå på selv om den automatiske
-  // 3-dagers-purringen er skrudd av. Se #547 for hvorfor det ikke lot seg
-  // gjøre med et «ignorer bryteren»-flagg.
+  // Egen nøkkel, så manuell purring virker selv om den automatiske er av (#547).
   purring_manuell: {
     panel: 'Purring til de som ikke har svart (fra «Purre disse»-knappen)',
     kort: 'Purring uten svar (manuell)',
   },
-  // Egen type, ikke et alias for purring_manuell: mottakergruppen er motsatt
-  // (de som HAR svart kanskje, ikke de uten svar) og oppfordringen er en
-  // annen («bestem deg», ikke «svar»). En som har svart kanskje skal ikke se
-  // «Purring uten svar» i innboksen sin. Se #596.
+  // Egen type, ikke alias for purring_manuell: annen mottakergruppe og annen
+  // oppfordring — en kanskje-svarer skal ikke se «Purring uten svar» (#596).
   purring_kanskje: {
     panel: 'Purring til de som har svart kanskje (fra «Bestem dere»-knappen)',
     kort: 'Purring til kanskje-gruppa (manuell)',
@@ -130,10 +102,8 @@ export const OEVRIGE_TEKSTER: Record<string, VarselTekst> = {
 
   // ── Chat ─────────────────────────────────────────────────────────────────
   mention: { panel: '@-mention i chat (til den som nevnes)', kort: '@-mention i chat' },
-  // Fem broadcast-typer, én per chat-flate (#612) — egen nøkkel per flate,
-  // ikke én felles «chat_ny», slik at admin kan dempe f.eks. den varme
-  // klubbchatten uten å samtidig kutte varsler om arrangement-kommentarer.
-  // beskrivelse i migrasjon 134 er ordrett lik panel-teksten under.
+  // Én nøkkel per chat-flate (#612), så admin kan dempe klubbchatten alene.
+  // beskrivelse i migrasjon 134 er ordrett lik panel-teksten.
   chat_klubb: { panel: 'Ny melding i klubbchatten', kort: 'Melding i klubbchat' },
   chat_arrangement: { panel: 'Ny melding i en arrangement-chat', kort: 'Melding i arrangement-chat' },
   chat_poll: { panel: 'Ny kommentar på en avstemming', kort: 'Kommentar på avstemming' },
@@ -142,26 +112,19 @@ export const OEVRIGE_TEKSTER: Record<string, VarselTekst> = {
   'privat-melding': { panel: 'Ny privatmelding (til mottakeren)', kort: 'Ny privatmelding' },
 
   // ── Posisjon ─────────────────────────────────────────────────────────────
-  // Manuell og gjentakbar: én mann trykker «Pling» på en annen i kartlista.
-  // Erstatningen for bakgrunnssporing, som iOS ikke gir en PWA (#695).
+  // Manuell erstatning for bakgrunnssporing, som iOS ikke gir en PWA (#695).
   posisjon_pling: {
     panel: 'Pling om hvor noen er (fra «Pling»-knappen på kartet)',
     kort: 'Pling om posisjon',
   },
 
   // ── Bursdag ──────────────────────────────────────────────────────────────
-  // bursdag_i_dag er IKKE en etterfølger til bursdagsgratulasjon under —
-  // sistnevnte gikk til bursdagsbarnet selv og sendes ikke lenger (#643),
-  // dette går til alle ANDRE aktive medlemmer, automatisk hver morgen, uten
-  // kobling til gratulasjonen i klubbchatten (#638).
+  // Ikke etterfølgeren til bursdagsgratulasjon: denne går til alle ANDRE (#638).
   bursdag_i_dag: {
     panel: 'Bursdag i klubben (om morgenen, til alle andre enn bursdagsbarnet)',
     kort: 'Bursdag i klubben',
   },
-  // Typen sendes ikke lenger (#643 — mention-varselet fra den automatiske
-  // chat-posten dekker samme behov, og de to sammen ga bursdagsmannen to
-  // varsler om samme gratulasjon). Etiketten må likevel bli stående: historiske
-  // varsel_logg-rader fra før #643 skal vises med navn her, ikke som rå nøkkel.
+  // Sendes ikke lenger (#643), men etiketten må stå for historiske rader.
   bursdagsgratulasjon: { kort: 'Bursdagsgratulasjon' },
 
   // ── Pass ─────────────────────────────────────────────────────────────────
@@ -190,8 +153,7 @@ export const OEVRIGE_TEKSTER: Record<string, VarselTekst> = {
     panel: 'Daglig alarm om feil i appen (til de som får feilvarsler)',
     kort: 'Feilalarm',
   },
-  // Ikke en varseltype, men en rad i samme tabell — den slår av utsending til
-  // alle andre enn test-eposten. Ligger sist i panelet av samme grunn.
+  // Ikke en varseltype, men en rad i samme tabell — derfor sist i panelet.
   test_modus: { panel: 'Testmodus — alle varsler går kun til test-eposten', kort: 'Testmodus' },
 }
 
@@ -205,40 +167,27 @@ export const VARSEL_TEKSTER: Record<string, VarselTekst> = {
 }
 
 /**
- * Visningsrekkefølge i kontrollpanelet. Utledes av rekkefølgen nøklene står i
- * VARSEL_TEKSTER — string-nøkler i et JS-objekt bevarer insertion order, så vi
- * slipper en parallell liste som kan drifte fra tekstene. Nøkler som ikke står
- * her sorteres alfabetisk til slutt av kallstedet.
+ * Visningsrekkefølge i kontrollpanelet — insertion order i VARSEL_TEKSTER, så
+ * ingen parallell liste kan drifte. Ukjente nøkler sorteres alfabetisk sist
+ * av kallstedet.
  */
 export const VARSEL_REKKEFOLGE = Object.keys(VARSEL_TEKSTER)
 
 /**
- * Er `noekkel` en BRYTER i admin-kontrollpanelet — altså noe som lovlig kan ha
- * (eller få) en rad i varsel_innstillinger?
+ * Er `noekkel` en bryter i kontrollpanelet, altså lov å ha en rad i
+ * varsel_innstillinger? Speiler erKjentFlagg() i lib/app-innstillinger.ts.
+ * Ikke det samme som «finnes i VARSEL_TEKSTER»: oppføringer kun for historiske
+ * rader (bursdagsgratulasjon, #643) har ingen `panel` (#767).
  *
- * Speiler erKjentFlagg() i lib/app-innstillinger.ts, som er samme vakt for
- * app_innstillinger. Skillet mot «finnes i VARSEL_TEKSTER» er reelt: registeret
- * rommer også oppføringer som KUN finnes for å gi historiske varsel_logg-rader
- * et navn (i dag bursdagsgratulasjon, som ikke sendes lenger, #643). De har
- * bevisst ingen `panel`, og en rad for en slik nøkkel ville dukket opp i
- * kontrollpanelet som en bryter uten etikett (#767-review).
- *
- * `panel` ER markøren som skiller de to — derfor leses den her, ett sted, i
- * stedet for som en løs `?.panel`-sjekk hos hver kaller.
- *
- * Object.hasOwn først, ikke `in`: `'toString' in VARSEL_TEKSTER` er sant, så
- * `in` slipper gjennom hele Object.prototype. Panel-sjekken alene ville også
- * avvist dem (en funksjon har ingen `.panel`), men da tilfeldig — ikke fordi
- * vakten faktisk sa nei.
+ * Object.hasOwn, ikke `in` — `'toString' in VARSEL_TEKSTER` er sant.
  */
 export function erVarselBryter(noekkel: string): boolean {
   return Object.hasOwn(VARSEL_TEKSTER, noekkel) && VARSEL_TEKSTER[noekkel].panel !== undefined
 }
 
 /**
- * Panel-etikett for en `noekkel`. Faller tilbake til DB-ens beskrivelse og så
- * til selve nøkkelen, slik at en varseltype lagt inn direkte i databasen uten
- * tekst her fortsatt vises — bare med dårligere navn.
+ * Panel-etikett for en `noekkel`, med fallback til DB-ens beskrivelse og så
+ * nøkkelen — en type lagt inn direkte i DB vises da fortsatt.
  */
 export function varselPanelNavn(noekkel: string, fallback?: string | null): string {
   return VARSEL_TEKSTER[noekkel]?.panel ?? fallback ?? noekkel

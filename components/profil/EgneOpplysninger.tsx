@@ -16,27 +16,14 @@ type Props = {
 }
 
 /**
- * Egne opplysninger på /profil (#683) — samme felter som medlemsdetaljsiden
- * (`FaktaRad`), men med label og verdi på SAMME linje i stedet for
- * label-over-verdi. FaktaRad er ~50 px/rad; fem slike ville lagt ~250 px
- * mellom heroen og Privatmeldinger og skjøvet resten av siden under folden
- * på iPhone (390×844) — problemet #589 ryddet opp i. Raden her er ~36 px.
+ * Egne opplysninger på /profil (#683). Label og verdi på SAMME linje (~36 px)
+ * i stedet for label-over-verdi som `FaktaRad` (~50 px), så resten av siden
+ * ikke skyves under folden (#589).
  *
- * Høyde er en RETNINGSLINJE her, ikke et krav: målet «hold Privatmeldinger
- * over folden» ble satt under planleggingen av #683, ikke av issuet selv.
- * Der de to kolliderer vinner lesbarheten — derfor wrapper verdien fritt
- * (se OpplysningRad) i stedet for å kappes med ellipsis: `matallergier`
- * tillater 200 tegn (MATALLERGIER_MAKS_LENGDE) og er ment for fraser som
- * «tåler ikke rå løk». Kun profiler som faktisk HAR lang tekst betaler
- * høyden for det.
+ * Høyden er en retningslinje, ikke et krav: lesbarhet vinner, så verdien
+ * wrapper i stedet for å kappes (`matallergier` tillater 200 tegn).
  *
- * Rad-layouten (`OpplysningRad`, `opplysningVerdiStil`) er delt med
- * `/profil/rediger` (#685) — de to skal se ut som samme skjema i to
- * tilstander, ikke to forskjellige.
- *
- * Stikkord er fritekst siden #685 — produkteieren ville ikke ha faste pills
- * — feltet er nå en vanlig rad på linje med de fem andre, ikke en egen
- * chip-blokk.
+ * Rad-layouten er delt med `/profil/rediger` (#685) — samme skjema i to tilstander.
  */
 export default function EgneOpplysninger({
   navn,
@@ -48,23 +35,18 @@ export default function EgneOpplysninger({
   stikkord,
   children,
 }: Props) {
-  // Truthy-sjekk, ikke != null: et tomt visningsnavn betyr «har ikke et eget
-  // visningsnavn» — samme sak som null — og raden skal da skjules, ikke vises
-  // som «Ikke satt».
+  // Truthy, ikke != null: tomt visningsnavn = ikke satt, og raden skjules.
   const visVisningsnavn = visningsnavn && visningsnavn !== navn
 
   return (
-    // Boks med rader (Skjema.tsx). SkjemaGruppe rendrer en <section> med «Om deg»
-    // som overskrift — e2e finner seksjonen slik.
+    // e2e finner seksjonen via «Om deg»-overskriften.
     <SkjemaGruppe tittel="Om deg">
       {visVisningsnavn && <Rad label="Visningsnavn" verdi={visningsnavn} />}
       <Rad
         label="Fødselsdato"
         verdi={fodselsdato ? formaterDato(`${fodselsdato}T12:00:00Z`, 'd. MMMM yyyy') : null}
       />
-      {/* E-post og telefon er bevisst IKKE mailto:/tel:-lenker slik de er på
-          medlemsdetaljsiden — dette er dine egne opplysninger, og å ringe
-          eller maile seg selv er ikke en handling noen vil gjøre. */}
+      {/* Bevisst ikke tel:/mailto: — ingen ringer eller mailer seg selv. */}
       <Rad label="Telefon" verdi={telefon} />
       <Rad label="E-post" verdi={epost} mono />
       <Rad label="Matallergier" verdi={matallergier} />
@@ -85,17 +67,12 @@ function Rad({
 }) {
   return (
     <OpplysningRad label={label}>
-      {/* Bevisst «Ikke satt», ikke «—»: appen bruker «—» på medlemsdetaljsiden
-          der det betyr «denne mannen har ingen». Her, på EGEN profil, betyr
-          et tomt felt «du har ikke fylt ut dette ennå» — to ulike ting, to
-          ulike konvensjoner. Ikke slå dem sammen for konsistens. */}
-      {/* .opplysning-verdi er felles feste for e2e-vakten som sjekker at
-          verdien wrapper i stedet for å kappes — samme klasse bærer det
-          redigerbare feltet på /profil/rediger. */}
+      {/* Bevisst «Ikke satt», ikke «—»: på medlemsdetaljsiden betyr «—» «han
+          har ingen», her betyr tomt «du har ikke fylt ut». Ikke slå dem sammen. */}
+      {/* .opplysning-verdi er feste for e2e-vakten som sjekker at verdien
+          wrapper — samme klasse står på feltet i /profil/rediger. */}
       <div className="opplysning-verdi" style={opplysningVerdiStil({ mono, dempet: !verdi })}>
-        {/* `||`, ikke `??`: en tom streng skal behandles som «ikke satt».
-            Alle verdiene her er strenger (ingen 0-felle), og en blank celle
-            er umulig å skille fra en renderingsfeil. #683-review. */}
+        {/* `||`, ikke `??`: tom streng = ikke satt (#683). */}
         {verdi || 'Ikke satt'}
       </div>
     </OpplysningRad>

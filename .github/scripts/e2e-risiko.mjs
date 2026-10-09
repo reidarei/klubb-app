@@ -1,128 +1,80 @@
 // Kalles som `node .github/scripts/e2e-risiko.mjs` — ingen shebang, se
-// samme begrunnelse som i .github/scripts/ci-minuttbudsjett.mjs (Windows-
-// checkout/vitest-transform, fila er uansett ikke kjørbar).
+// ci-minuttbudsjett.mjs for hvorfor.
 //
-// Risiko-gating av e2e (#663).
+// Risiko-gating av e2e (#663). Kjøres i pr-check.yml ETTER budsjettvakten,
+// FØR `Avgjør e2e-omfang`: hopper over e2e når ingen fil i PR-en kan påvirke
+// en kjørende flyt (docs, CI-skript, tester).
 //
-// Kjøres i pr-check.yml ETTER budsjettvakten, FØR `Avgjør e2e-omfang`. Henter
-// filene i PR-en fra GitHub API-et og avgjør om NOEN av dem kan påvirke en
-// kjørende flyt i appen. Kan de ikke det (ren dokumentasjon, interne
-// CI-skript, tester) er full e2e-dekning ren spilltid — se #663 for tallene.
+// FEILRETNINGEN ER BEVISST MOTSATT AV BUDSJETTVAKTEN:
+//   - Budsjettvakten feiler LUKKET (beskytter kvote): kan ikke måle ⇒ kutt e2e.
+//   - Denne feiler ÅPENT (beskytter dekning): kan ikke avgjøre fillista ⇒
+//     kjør e2e. Skal aldri «rettes» til å peke samme vei.
 //
-// FEILRETNINGEN ER MOTSATT AV BUDSJETTVAKTEN, OG DET ER BEVISST:
-//   - Budsjettvakten feiler LUKKET: kan den ikke måle forbruket, KUTTES e2e.
-//     Konsekvensen av en feilmåling der er «for mye kjørt», og det ville
-//     spist av kvoten vakten skal beskytte.
-//   - Denne vakten feiler ÅPENT: kan den ikke avgjøre hvilke filer PR-en
-//     rører (API-feil, tom filliste, avvik i antall), KJØRES e2e. Å kutte på
-//     en filliste vi ikke stoler på ville kunne slippe en reell atferds-
-//     endring gjennom udekket — nøyaktig det #663 IKKE skal gjøre. De to
-//     vaktene beskytter ulike ting (kvote vs. dekning) og skal derfor aldri
-//     "rettes" til å peke samme vei.
+// Klassifiseringen er STI-BASERT, ikke innholds-basert (#661): en ren
+// kommentarendring i kodefil kjører full e2e. En «bare kommentarer»-heuristikk
+// må håndtere direktiver (@ts-expect-error ER atferd), blokk-/JSX-kommentarer
+// og `//` i strenger — bommer den, mister en ekte endring dekning. Bygges ikke.
+// Eneste innholds-unntak er public/sw.js sin maskingenererte CACHE_VERSION-linje.
 //
-// AVGRENSNING: KLASSIFISERINGEN ER STI-BASERT, IKKE INNHOLDS-BASERT (#661).
-// En PR som KUN endrer en kodekommentar i en kodefil (f.eks. en presisering i
-// lib/varsler.ts) regnes som RISIKO og kjører full e2e, selv om ingen atferd
-// kan ha endret seg. Det er et bevisst scope-kutt, ikke en forglemmelse.
-// Å avgjøre «dette er bare kommentarer» krever en heuristikk over patch-
-// teksten som må håndtere eslint-disable-direktiver, @ts-expect-error /
-// @ts-ignore (som ER atferd — de slår av typesjekk), blokk-kommentarer over
-// flere linjer, JSX-kommentarer og strenger som inneholder to skråstreker
-// (URL-er). Bommer en slik heuristikk ÉN vei, forsvinner dekningen på en ekte
-// atferdsendring — den dyre feilen hele vakten finnes for å unngå. Gevinsten
-// er en håndfull PR-er i måneden. Prisen er en skjør heuristikk på nettopp
-// den stien der en feil ikke oppdages. Vi bygger den ikke.
-// `public/sw.js` er det ENESTE innholds-baserte unntaket, og er bevisst
-// ekstremt smalt: én eksakt linjeform som er maskingenerert av
-// `npm run stamp-versjon` — ikke en tolkning av vilkårlig kildekode.
-//
-// Vakten er IKKE en flakiness-mitigering — se docs/ci-minuttbudsjett.md for
-// hvorfor (#659 er en separat sak). En PR som rører app-kode kjører alltid
-// full suite, uansett hvor rød e2e har vært i det siste.
+// Ikke en flakiness-mitigering (#659 er egen sak, se docs/ci-minuttbudsjett.md).
 
 import { appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 // ─── Trygg-listen — alt utenfor disse regnes som RISIKO ────────────────────
 //
-// e2e/** og playwright.config.ts er BEVISST utelatt fra denne lista (ikke en
-// forglemmelse). En endring i selve suiten kan gjøre den ugyldig på måter en
-// filnavn-sjekk ikke fanger — en knekt spec som aldri kjører ville blitt
-// merget uoppdaget. Rør aldri denne beslutningen uten å ta den til produkteieren.
+// e2e/** og playwright.config.ts er BEVISST utelatt: en knekt spec som aldri
+// kjører ville ellers blitt merget uoppdaget. Ikke endre uten produkteieren.
 
 export const TRYGGE_MAPPER = ['docs', 'Design', 'V2 UCs', '.github', '.claude', 'scripts', '__tests__']
 
-// Kun filer som IKKE allerede dekkes av *.md-regelen i erTryggSti(). Lista
-// inneholdt tidligere fem markdown-navn som aldri kunne treffes — og tre av
-// dem bar klubb-identitet inn i en fil som er MÅ MATCHE mot det offentlige
-// klubb-app-repoet (se CLAUDE.md § Policy: Synk til klubb-app).
+// Ikke legg markdown-navn her — *.md dekkes av erTryggSti(), og fila er MÅ
+// MATCHE mot offentlige klubb-app (ingen klubbnavn).
 export const TRYGGE_FILER = ['.env.example', '.gitignore', 'lib/versjon.json']
 
-// Matcher KUN en hel +/- linje som setter CACHE_VERSION til en literal streng
-// — ikke en substreng midt i en annen linje. Se erTryggStiEllerUnntak().
-// `$`-ankeret er bevisst CR-følsomt: kommer patchen med CRLF, blir \r med i
-// linja og matchen feiler ⇒ fila regnes som risiko ⇒ e2e kjører. Feil vei er
-// her den trygge veien, så vi normaliserer ikke bort \r.
+// Kun en hel +/- linje. `$` er bevisst CR-følsomt: CRLF ⇒ ingen match ⇒
+// risiko ⇒ e2e kjører, som er den trygge feilretningen.
 export const CACHE_VERSION_LINJE = /^[+-]const CACHE_VERSION = '[^']*'$/
 
-// Er denne ene fila trygg? Tar hele fil-objektet fra GitHub sitt
-// pulls/{n}/files-endepunkt: { filename, previous_filename, patch, status }.
+// Tar fil-objektet fra pulls/{n}/files: { filename, previous_filename, patch, status }.
 export function erTryggFil(fil) {
-  // Rename fra app-kode til noe trygt (eller omvendt) skal ALDRI skjule seg
-  // bak det nye navnet alene — begge navn må ligge i trygg-listen. Uten
-  // dette kunne `lib/varsler.ts` → `docs/gammel-varsler.ts` (samme innhold)
-  // sett trygg ut fordi kun det nye filnavnet ble sjekket.
+  // Ved rename må BEGGE navn være trygge — ellers ser `lib/varsler.ts` →
+  // `docs/gammel-varsler.ts` trygg ut.
   const gammel = fil.previous_filename
   if (gammel && !erTryggSti(gammel)) return false
   return erTryggStiEllerUnntak(fil)
 }
 
-// Stien alene, uten patch-innhold: matcher TRYGGE_MAPPER (prefiks på
-// segmentgrense, aldri substring — «libx/versjon.json» skal IKKE matche
-// mappen «lib») eller TRYGGE_FILER (eksakt), eller er en *.md-fil overalt.
+// Kun stien. Mappe-prefiks matches på segmentgrense, aldri substring.
 function erTryggSti(sti) {
   if (sti.endsWith('.md')) return true
   if (TRYGGE_FILER.includes(sti)) return true
   return TRYGGE_MAPPER.some(m => sti === m || sti.startsWith(m + '/'))
 }
 
-// Fullstendig avgjørelse for én fil, inkludert public/sw.js-spesialregelen.
-// Delt ut fra erTryggFil() for lesbarhet — se punktene i filhode-planen:
-//   1. filename ELLER previous_filename utenfor trygg-listen ⇒ ikke trygg
-//   2. *.md overalt ⇒ trygg (dekket av erTryggSti)
-//   3. public/sw.js ⇒ trygg KUN hvis hele patchen er ETT CACHE_VERSION-bump
-//   4. alt annet ⇒ ikke trygg
 function erTryggStiEllerUnntak(fil) {
   if (fil.filename === 'public/sw.js') {
-    // public/sw.js er IKKE i TRYGGE_FILER over med vilje — den er trygg kun
-    // i det aller vanligste tilfellet (stamp-versjon sitt CACHE_VERSION-bump),
-    // ikke ethvert innhold i fila. Mangler patch (GitHub returnerer ikke
-    // patch for veldig store differ) kan vi ikke verifisere det ⇒ ikke trygg.
+    // Trygg KUN når patchen er ett stamp-versjon-bump av CACHE_VERSION. Uten
+    // patch (GitHub utelater den for store differ) kan det ikke verifiseres.
     if (!fil.patch) return false
     let plussTreff = 0
     let minusTreff = 0
     for (const linje of fil.patch.split('\n')) {
-      // Merk: ingen guard mot «+++»/«---» her. GitHubs `patch`-felt starter på
-      // «@@» og inneholder ALDRI filhodene fra en unified diff, så en slik
-      // guard beskyttet ingenting — men den slapp ekte innholdslinjer som
-      // begynner med «++» eller «--» (f.eks. en dekrementert teller) gjennom
-      // som «ren CACHE_VERSION-endring». Se testen som pinner nettopp det.
+      // Ingen «+++»/«---»-guard: GitHubs `patch` har aldri filhoder, og en
+      // guard ville sluppet gjennom ekte linjer som «--teller» (pinnet i test).
       if (!linje.startsWith('+') && !linje.startsWith('-')) continue
       if (!CACHE_VERSION_LINJE.test(linje)) return false
       if (linje.startsWith('+')) plussTreff++
       else minusTreff++
     }
-    // Nøyaktig én linje ut og én inn — altså et ekte bump. Uten denne sjekken
-    // passerte også en patch som KUN sletter CACHE_VERSION-linja, og en patch
-    // helt uten +/- linjer i det hele tatt, som «trygg» (tom løkke ⇒ true).
+    // Nøyaktig én ut og én inn — ellers ville ren sletting eller en tom
+    // patch passert.
     return plussTreff === 1 && minusTreff === 1
   }
   return erTryggSti(fil.filename)
 }
 
-// Avgjør om e2e trengs for en liste av filer. TOM LISTE ⇒ true — defensivt,
-// se filhode-kommentaren om feilretning. Én eneste ikke-trygg fil er nok til
-// å kreve full dekning.
+// Tom liste ⇒ e2e (fail-open, se filhodet).
 export function trengerE2e(filer) {
   const risikoFiler = filer.filter(f => !erTryggFil(f)).map(f => f.filename)
   return { e2e: filer.length === 0 || risikoFiler.length > 0, risikoFiler }
@@ -130,9 +82,7 @@ export function trengerE2e(filer) {
 
 // ─── Nettverk: hent PR-filene ────────────────────────────────────────────
 
-// Paginerer GET /repos/{repo}/pulls/{n}/files. GitHub caps per_page på 100
-// og totalt 3000 filer over 30 sider — maksSider er derfor 30 by default,
-// ikke et vilkårlig tall.
+// maksSider = 30 fordi GitHub capper på 100 per side og 3000 filer totalt.
 export async function hentPrFiler({ repo, prNummer, token, fetchImpl = fetch, maksSider = 30 }) {
   const filer = []
   for (let side = 1; side <= maksSider; side++) {
@@ -157,8 +107,8 @@ export async function hentPrFiler({ repo, prNummer, token, fetchImpl = fetch, ma
 
 // ─── Rapportering ────────────────────────────────────────────────────────
 
-// Alt kan kastes i JS, ikke bare Error. Denne vakten leser feiltekst i sine
-// fail-open-grener, og en `e.message` på en kastet streng ville kastet der.
+// Alt kan kastes i JS — `e.message` på en kastet streng ville selv kastet
+// inne i fail-open-grenen.
 function feilTekst(e) {
   if (e instanceof Error && e.message) return e.message
   if (typeof e === 'string' && e) return e
@@ -194,15 +144,13 @@ function tabell({ antallFiler, risikoFiler, verdikt, ekstraRad }) {
   return rader.join('\n')
 }
 
-// Eksportert for test. De fire fail-open-grenene under er sikkerhetskritiske,
-// og en PR som kun rører denne fila gates ut av e2e av vakten selv — vitest er
-// derfor eneste kontroll på dem. `fetchImpl` injiseres kun av testene.
+// Eksportert for test: en PR som kun rører denne fila gates ut av e2e av
+// vakten selv, så vitest er eneste kontroll på fail-open-grenene.
 export async function main({ fetchImpl } = {}) {
   const repo = process.env.GITHUB_REPOSITORY
   const token = process.env.GITHUB_TOKEN
   const prNummer = process.env.PR_NUMMER
-  // Tom streng og manglende variabel behandles likt: begge er «ikke målt».
-  // Number('') er 0 og hadde sluppet gjennom en ren Number.isFinite-sjekk.
+  // Tom streng = «ikke målt»; Number('') er 0 og ville passert isFinite.
   const raaAntall = process.env.ENDREDE_FILER
   const forventetAntall = raaAntall === undefined || raaAntall === '' ? NaN : Number(raaAntall)
 
@@ -213,9 +161,7 @@ export async function main({ fetchImpl } = {}) {
     return
   }
 
-  // Fullstendighetssjekken lenger nede er selve grunnen til at vi tør stole på
-  // en trygg-vurdering. Mangler måltallet, er den vakten borte — og en vakt som
-  // slår seg selv av i stillhet er verre enn ingen vakt. Fail-open i stedet.
+  // Uten måltallet faller fullstendighetssjekken under bort stille — fail-open.
   if (!Number.isFinite(forventetAntall)) {
     console.error('::warning::ENDREDE_FILER mangler eller er ikke et tall — kan ikke verifisere at fillista er fullstendig, kjører e2e (fail-open).')
     skrivOutput(true)
@@ -227,11 +173,6 @@ export async function main({ fetchImpl } = {}) {
   try {
     filer = await hentPrFiler({ repo, prNummer, token, ...(fetchImpl ? { fetchImpl } : {}) })
   } catch (e) {
-    // `e.message` på en ikke-Error (en kastet streng, et objekt) ville selv
-    // kastet HER — i den ene grenen som skal garantere fail-open. Resultatet
-    // ble et hardt feilet steg i stedet for `risiko=true`. Jobben blir riktig
-    // nok rød, så dekning går ikke tapt stille, men vakten skal svare på
-    // kontrakten sin, ikke rakne i den.
     const melding = feilTekst(e)
     console.error(`::warning::Klarte ikke hente PR-filer: ${melding} — kjører e2e (fail-open).`)
     skrivOutput(true)
@@ -239,10 +180,7 @@ export async function main({ fetchImpl } = {}) {
     return
   }
 
-  // Antallet API-et faktisk ga oss MÅ stemme med PR-metadataens changed_files.
-  // Et avvik betyr fillista er ufullstendig (paginering brutt, delvis svar) —
-  // en falsk trygg-vurdering på en ufullstendig liste er nøyaktig risikoen
-  // denne vakten finnes for å unngå.
+  // Må stemme med PR-ens changed_files — avvik betyr ufullstendig liste.
   if (filer.length !== forventetAntall) {
     const melding = `Hentet ${filer.length} filer, PR-en oppgir ${forventetAntall} — målefeil, kjører e2e (fail-open).`
     console.error(`::warning::${melding}`)
@@ -261,8 +199,7 @@ export async function main({ fetchImpl } = {}) {
   }))
 }
 
-// Kjør kun main() når filen kjøres direkte (`node e2e-risiko.mjs`), ikke når
-// funksjonene importeres av vitest.
+// Ikke kjør main() når vitest importerer fila.
 const kjortDirekte = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
 if (kjortDirekte) {
   main().catch(e => {

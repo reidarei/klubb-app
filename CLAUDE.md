@@ -111,10 +111,22 @@ Erfaringen bak policyen: et issue skrevet med diagnose og foreslått løsning vi
 
 - Skriv en kort kommentar når en betingelse, regex, off-by-one-justering eller tilsynelatende redundans har en grunn som ikke leses rett ut av variabelnavnene.
 - Det er greit å referere til issue-nummer (f.eks. `// se #165 for bakgrunn`) når det hjelper en fremtidig leser å finne kontekst.
-- Hold dem korte (én linje, maks to). Ikke skriv flerlinjede docstrings eller essays.
 - Fortsatt nei: kommentarer som kun gjengir hva koden gjør (`// loop over array`), eller TODO-er uten eier/dato.
 
-Når reviewer foreslår en forklarende kommentar — default er nå å legge den inn, ikke avvise den.
+Når reviewer foreslår en forklarende kommentar — default er å legge den inn, ikke avvise den.
+
+**Hva som hører hjemme hvor.** En kommentar verifiseres av ingen test, så en utdatert kommentar ved koden blir et premiss for neste leser — menneske eller agent. Velg derfor stedet etter hva teksten er:
+
+| Teksten er … | Hører hjemme |
+|---|---|
+| Hvorfor koden er slik **nå** (felle, edge-case, iOS-quirk, tilsynelatende redundans) | Kommentar ved koden — 1–3 linjer, lenger kun når fellen krever det |
+| Hvordan den ble slik («fram til #699 var …», «review fant …») | Issue/PR/commit. I koden: konklusjonen + `(#699)` |
+| Et register som speiler koden (event-navn, statuser, symboler) | En type eller `as const` — så glidning gir typefeil. Mønster: `lib/logg-hendelser.ts` |
+| En kontrakt («rekkefølgen er bindende», «må matche migrasjon X») | En test eller lint-regel når det er mulig; kommentaren peker til vakten |
+| Policy som står i CLAUDE.md | Én linje: `// se CLAUDE.md § Policy: Varsler` — ikke gjenfortalt |
+| En lengre designbegrunnelse | `docs/` med peker fra koden |
+
+Unntak: kjørte migrasjoner endres aldri, så en lang toppforklaring der blir ikke utdatert mot sin egen kode og er akseptabel.
 
 ## Policy: Varsler
 
@@ -484,7 +496,7 @@ To tillatte mønstre:
 - **(a) Server-side side-effekt uten revalidering**, der ferskheten kommer av at målsiden er dynamisk rendret. **Start den tidlig og `await` den før svaret** — ren fire-and-forget blir i blant kuttet når en serverless-plattform (f.eks. Vercel) fryser funksjonen etter at svaret er sendt.
 - **(b) Klientkomponent + `useEffect` + action + `router.refresh()`** når tellingen må oppdateres umiddelbart i UI-et.
 
-**Ufravikelig for mønster (a): catch-en skal alltid gå til `logg.feil('<omraade>.feilet', err)` — aldri `console.error`, aldri en tom lambda.** `logg.feil()` returnerer en promise, så formen er `.catch((err: unknown) => logg.feil('<omraade>.feilet', err).catch(() => {}))` (den ytre catch-en hindrer at loggingen selv blir en uhåndtert rejection). Raden i `feil_logg` er kvitteringen e2e-tester leser: en side som svarer 200 og rendrer fint, men svelger et kast i en tom lambda, er per definisjon usynlig for dem. Nytt event-navn skal samtidig inn i event-taksonomien i filhodet til `lib/logg.ts`.
+**Ufravikelig for mønster (a): catch-en skal alltid gå til `logg.feil('<omraade>.feilet', err)` — aldri `console.error`, aldri en tom lambda.** `logg.feil()` returnerer en promise, så formen er `.catch((err: unknown) => logg.feil('<omraade>.feilet', err).catch(() => {}))` (den ytre catch-en hindrer at loggingen selv blir en uhåndtert rejection). Raden i `feil_logg` er kvitteringen e2e-tester leser: en side som svarer 200 og rendrer fint, men svelger et kast i en tom lambda, er per definisjon usynlig for dem. Nytt event-navn skal samtidig inn i registeret `lib/logg-hendelser.ts` (typen krever det).
 
 Tredje gang samme problem slår til bør vurderes som en arkitektonisk vakt (jf. § Arbeidsmåter), ikke en ny lapp.
 

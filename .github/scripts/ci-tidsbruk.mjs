@@ -1,95 +1,56 @@
-// Kalles som `node .github/scripts/ci-tidsbruk.mjs` — ingen shebang, se samme
-// begrunnelse som i .github/scripts/ci-minuttbudsjett.mjs (Windows-checkout/
-// vitest-transform, fila er uansett ikke kjørbar).
+// Kalles som `node .github/scripts/ci-tidsbruk.mjs` — ingen shebang, se
+// ci-minuttbudsjett.mjs for hvorfor.
 //
-// CI-tidsbruk (#664): svarer på «hvor mye tid går til hvilket steg, hvordan
-// utvikler det seg, og hvor mye av forbruket er reruns». `ci-minuttbudsjett.mjs`
-// måler TOTALFORBRUK mot kvote; dette verktøyet måler HVOR tiden går.
+// CI-tidsbruk (#664): HVOR tiden går (steg, trend, reruns).
+// ci-minuttbudsjett.mjs måler totalforbruk mot kvote.
 //
-// KJØRES MANUELT, ALDRI FRA EN WORKFLOW. Det er et bevisst scope-kutt fra
-// issuet: en scheduled workflow som målte CI-tidsbruk ville selv brukt av
-// kvoten den måler. Verktøyet skriver derfor aldri til $GITHUB_OUTPUT eller
-// $GITHUB_STEP_SUMMARY — det er ikke en vakt, det er en rapport for et
-// menneske som lurer.
+// KJØRES MANUELT, ALDRI FRA EN WORKFLOW — en scheduled måling ville brukt av
+// kvoten den måler. Skriver derfor aldri til $GITHUB_OUTPUT/STEP_SUMMARY.
 //
 // FORBEHOLD (les før du tolker tallene):
-// - Jobb-basert vs. run-basert: dette verktøyet summerer PER JOBB (GitHubs
-//   faktiske faktureringsenhet — ceil per jobb). `ci-minuttbudsjett.mjs`
-//   summerer PER RUN (run_started_at → updated_at), og korrigerer siden #668
-//   for reruns via et eget attempts-oppslag (hentTidligereForsokMinutter()).
-//   Den korreksjonen bor IKKE i forbrukMinutter() selv — funksjonen isolert,
-//   slik DENNE fila importerer og bruker den (§ 3, budsjett.runBasertMin), er
-//   fortsatt den UKORRIGERTE run-basisen: kun siste forsøk per kjøring. § 3
-//   legger derfor selv til minuttene fra de TIDLIGERE forsøkene (alle unntatt
-//   siste per run — ikke § 2 sine «reruns», som inkluderer siste forsøk og
-//   ville telt det dobbelt) for et korrigert anslag, i stedet for å late som `budsjett.runBasertMin` alene er
-//   sammenlignbart med jobb-basert total. Se docs/ci-minuttbudsjett.md
-//   § Hvor tiden faktisk går.
-// - `ukjent` i gating-seksjonen betyr «kjøring fra før #663, ingen
-//   markørsteg» — IKKE «e2e kjørte». De to må aldri slås sammen: en rapport
-//   som telte `ukjent` som `kjorte` ville løyet om gatingens effekt for enhver
-//   kjøring eldre enn markørstegene.
-// - «E2e kjørte» avgjøres av ETT delt predikat, `e2eKjorte()`: et `if:`-hoppet
-//   steg returneres fortsatt av jobs-API-et (med conclusion 'skipped'), så
-//   stegets EKSISTENS sier ingenting om at det kjørte. Både gating-tabellen og
-//   E2e-min i trendtabellen går gjennom det predikatet — to kopier av sjekken
-//   driftet fra hverandre og fikk de to seksjonene til å motsi hverandre.
-// - Gating klassifiseres per `run_attempt` (høyeste forsøk vinner), ikke på
-//   tvers av forsøk. Forutsetter at workflowen har ÉN jobb (`sjekk`); får den
-//   flere, og bare noen av dem reruns, ser klassifiseringen kun de rerunnede.
-// - Vinduet er en glidende periode (`--dager` tilbake fra nå), ikke
-//   kalendermåned som budsjettvakten. De to tallene er derfor målt over ulike
-//   perioder selv når de sammenlignes i § 3 — se merknaden der.
-// - `gh` CLI er i praksis en forutsetning: uten `--repo`/`GITHUB_REPOSITORY`
-//   og `GH_TOKEN`/`GITHUB_TOKEN` faller verktøyet tilbake til `gh repo view`
-//   og `gh auth token`. PAT-en i `.env.local` er en Issues-PAT uten
-//   `actions:read` og duger ikke til dette.
+// - Dette summerer PER JOBB (GitHubs faktureringsenhet). forbrukMinutter() er
+//   run-basert og UKORRIGERT for reruns (korreksjonen bor i budsjettvaktens
+//   hentTidligereForsokMinutter()), så § 3 legger selv til tidligere forsøk —
+//   ikke § 2 sine reruns, som inkluderer siste forsøk og ville dobbelttelt.
+// - `ukjent` i gating = kjøring fra før #663 uten markørsteg, aldri «kjørte».
+// - «E2e kjørte» avgjøres KUN av e2eKjorte(), delt mellom § 5 og § 6 — to
+//   kopier av sjekken driftet og fikk seksjonene til å motsi hverandre.
+// - Gating klassifiseres per høyeste `run_attempt`. pr-check.yml har nå to
+//   jobber (kjerne ‖ sjekk): reruns bare én av dem, ser klassifiseringen kun
+//   den rerunnede.
+// - Glidende vindu (`--dager`), ikke kalendermåned som budsjettvakten.
+// - Trenger `gh` eller et token med `actions:read` — Issues-PAT-en i
+//   `.env.local` duger ikke.
 
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { forbrukMinutter, E2E_KOST_MIN } from './ci-minuttbudsjett.mjs'
 
 // ─── Konstanter — strengkoblet til .github/workflows/pr-check.yml ──────────
-// Endrer noen et av disse tre stegnavnene der uten å oppdatere her, ryker
-// klassifiseringen STILLE (alt havner i 'ukjent') — pinnet av en test som
-// leser pr-check.yml og asserterer at navnene finnes bokstavelig.
+// Endret navn der ⇒ alt havner stille i 'ukjent'. Pinnet av en test som
+// leser pr-check.yml.
 export const STEG_E2E = 'E2e (Playwright)'
 export const MARKOER_LAV_RISIKO = 'E2e hoppet over — lav risiko'
 export const MARKOER_BUDSJETT = 'E2e hoppet over — budsjettvakten kuttet'
 
 // ─── Ren logikk (testbar uten nettverk) ─────────────────────────────────────
 
-// Sant KUN når e2e-steget faktisk KJØRTE. Et `if:`-hoppet steg returneres
-// fortsatt av jobs-API-et med `conclusion: 'skipped'`, så «steget finnes i
-// jobben» er ikke det samme som «e2e kjørte». Predikatet er bevisst DELT
-// mellom klassifiserE2e() og grupperPerUke(): da trendtabellen hadde sin egen
-// eksistens-sjekk ble E2e-min ≈ Jobb-min for hver PR-uke uansett gating, og
-// § 6 motsa § 5 i samme rapport.
-//
-// Skillet er «ble steget HOPPET OVER» kontra «rakk det å kjøre» — ikke en
-// hviteliste av konklusjoner. Et avbrutt steg (`cancelled`, timeout) brukte
-// Actions-minutter og skal telle; en hviteliste på success/failure ville
-// under-rapportert nettopp de kjøringene som kostet mest. Tidsstemplene er
-// den ærlige kilden: skipped-steg har ingen.
+// Et `if:`-hoppet steg returneres fortsatt av API-et (conclusion 'skipped'),
+// så eksistens ≠ kjørte. Delt mellom klassifiserE2e() og grupperPerUke().
+// Ingen hviteliste på success/failure: et avbrutt steg brukte minutter og
+// skal telle. Tidsstemplene avgjør — skipped-steg har ingen.
 export function e2eKjorte(steg) {
   if (steg?.name !== STEG_E2E) return false
   if (steg.conclusion === 'skipped') return false
   return Boolean(steg.started_at && steg.completed_at)
 }
 
-// Summerer minutter for en liste av JOBBER (ikke runs) — GitHubs faktiske
-// faktureringsenhet. `Math.ceil` PER JOBB, samme prinsipp som
-// forbrukMinutter() i ci-minuttbudsjett.mjs, men på jobb-nivå: to jobber på
-// samme run (f.eks. et rerun-forsøk) telles begge, mens run-basert telling
-// kun ser det siste forsøket.
+// `Math.ceil` PER JOBB, slik GitHub fakturerer.
 export function jobbMinutter(jobber) {
   let minutter = 0
   let utelatt = 0
   for (const jobb of jobber) {
-    // Pågående/queued jobber mangler started_at/completed_at. De har ikke
-    // brukt et endelig antall minutter ennå — hopp over og tell dem separat
-    // i stedet for å la dem forgifte summen med NaN (samme fella som
-    // forbrukMinutter() i ci-minuttbudsjett.mjs vokter mot).
+    // Pågående/queued mangler tider ⇒ NaN i summen. Tell dem separat.
     if (!jobb.started_at || !jobb.completed_at) {
       utelatt++
       continue
@@ -105,16 +66,10 @@ export function jobbMinutter(jobber) {
   return { minutter, utelatt }
 }
 
-// Splitter jobber i «første forsøk» (run_attempt ≤ 1, eller mangler feltet)
-// og «reruns» (run_attempt ≥ 2). Reruns er usynlige i standardvisningen
-// («gh run list» viser én rad per run uansett antall forsøk) — dette er
-// selve blindsonen issuet ber om å lukke.
-//
-// `tidligereForsokMin` er et ANNET snitt: alle forsøk unntatt SISTE per run —
-// nøyaktig det run-basert telling ikke ser, og det budsjettvakten henter via
-// attempts-endepunktet. `rerunMin` inkluderer siste forsøk og kan derfor ikke
-// legges oppå run-basert telling (#668-review). `sisteForsokPerRun` (run_id →
-// run.run_attempt) er fasit når den finnes; ellers høyeste forsøk blant jobbene.
+// `rerunMin` = run_attempt ≥ 2 (usynlig i «gh run list»).
+// `tidligereForsokMin` = alle forsøk unntatt SISTE per run — det run-basert
+// telling ikke ser. Bare den kan legges oppå run-basert (#668).
+// `sisteForsokPerRun` er fasit når den finnes; ellers høyeste blant jobbene.
 export function forsokFordeling(jobber, sisteForsokPerRun = new Map()) {
   const forsteForsokJobber = jobber.filter(j => (j.run_attempt ?? 1) <= 1)
   const rerunJobber = jobber.filter(j => (j.run_attempt ?? 1) > 1)
@@ -130,24 +85,16 @@ export function forsokFordeling(jobber, sisteForsokPerRun = new Map()) {
   const tidligereJobber = jobber.filter(j => (j.run_attempt ?? 1) < (sisteForsok.get(j.run_id) ?? 1))
   const { minutter: tidligereForsokMin } = jobbMinutter(tidligereJobber)
 
-  // `utelatt` fra BEGGE delkallene, ikke kastet: pågående jobber er utelatt
-  // fra begge sider av rerun-brøken, og en prosent som ikke sier hvor mye den
-  // ikke så, ser mer komplett ut enn den er.
+  // `utelatt` fra begge sider av brøken, så rapporten kan si hva den ikke så.
   return { forsteForsokMin, rerunMin, tidligereForsokMin, runsMedFlereForsok, utelatt: forsteForsokUtelatt + rerunUtelatt }
 }
 
-// Terskel for å slå steg sammen til «Øvrige steg»: et steg som verken utgjør
-// 1 % av totalen ELLER 30 sekunder er støy i en rapport ment å vise hvor
-// tiden faktisk går — «Installer avhengigheter» på 3 sekunder drukner ellers
-// tabellen uten å bidra med informasjon.
+// Steg under BÅDE 1 % og 30 s slås sammen til «Øvrige steg» (støy).
 const OEVRIGE_ANDEL_TERSKEL = 0.01
 const OEVRIGE_SEKUNDER_TERSKEL = 30
 
-// Aggregerer steg-varighet på tvers av jobber, gruppert på stegnavn.
-// «Ufordelt» er jobbens egen varighet minus summen av stegene — jobbens
-// started_at ligger typisk et par sekunder før det første steget starter
-// (runner-oppstart, checkout av selve jobben), og den differansen skal være
-// synlig, ikke forsvinne stille inn i det største steget.
+// «Ufordelt» = jobbvarighet minus stegene (runner-oppstart o.l.) — skal
+// synes, ikke forsvinne inn i det største steget.
 export function stegFordeling(jobber) {
   const agg = new Map()
   let stegSekunderTotalt = 0
@@ -162,9 +109,7 @@ export function stegFordeling(jobber) {
       }
     }
     for (const steg of jobb.steps ?? []) {
-      // Skippede steg mangler tidsstempler (eller har started_at ===
-      // completed_at) — 0 sekunder bidrar ingenting til fordelingen og skal
-      // ikke stå i tabellen som en rad med «0».
+      // Skippede steg mangler tider eller har 0 s — ingen «0»-rader.
       if (!steg.started_at || !steg.completed_at) continue
       const start = new Date(steg.started_at).getTime()
       const slutt = new Date(steg.completed_at).getTime()
@@ -200,21 +145,13 @@ export function stegFordeling(jobber) {
   return store.sort((a, b) => b.sekunder - a.sekunder)
 }
 
-// Klassifiserer én kjørings forhold til risiko-gatingen (#663). `jobber` er
-// ALLE jobber for DENNE runen (på tvers av forsøk — filter=all-kallet gir
-// oss det i ett svar, se hentJobber()).
-//
-// 'ukjent' er en EGEN kategori, aldri slått sammen med 'kjorte': en kjøring
-// fra før #663 har ingen markørsteg og intet e2e-steg, og skal aldri leses
-// som «e2e kjørte» av en rapport som forsøker å måle gatingens effekt.
+// `jobber` = alle jobber for runen, på tvers av forsøk (se hentJobber()).
+// 'ukjent' slås aldri sammen med 'kjorte' (se filhodet).
 export function klassifiserE2e(run, jobber) {
   if (run.event !== 'pull_request') return 'hendelse'
 
-  // Klassifiser PER FORSØK — høyeste run_attempt vinner. En run der forsøk 1
-  // ble budsjettkuttet og forsøk 2 faktisk kjørte e2e skal telles som
-  // «kjorte»; blander vi forsøkene, forsvinner nettopp rerun-effekten dette
-  // verktøyet finnes for å vise. Trygt så lenge workflowen har én jobb (se
-  // forbeholdet i filhodet).
+  // Høyeste run_attempt vinner: forsøk 1 budsjettkuttet + forsøk 2 kjørte =
+  // «kjorte». Se filhodet om forbeholdet med flere jobber.
   const sisteForsok = Math.max(1, ...jobber.map(j => j.run_attempt ?? 1))
   const alleSteg = jobber.filter(j => (j.run_attempt ?? 1) === sisteForsok).flatMap(j => j.steps ?? [])
 
@@ -229,9 +166,7 @@ export function klassifiserE2e(run, jobber) {
   return 'ukjent'
 }
 
-// ISO 8601-ukenøkkel («2026-W36») for et gitt tidspunkt, UTC-basert (samme
-// begrunnelse som foersteIManeden() i ci-minuttbudsjett.mjs — GitHubs
-// tidsstempler er UTC).
+// ISO 8601-ukenøkkel («2026-W36»), UTC fordi GitHubs tidsstempler er UTC.
 function isoUkeNoekkel(dato) {
   const d = new Date(Date.UTC(dato.getUTCFullYear(), dato.getUTCMonth(), dato.getUTCDate()))
   const dagNr = d.getUTCDay() || 7 // søndag = 0 i getUTCDay() → 7, mandag = 1
@@ -241,10 +176,8 @@ function isoUkeNoekkel(dato) {
   return `${d.getUTCFullYear()}-W${String(ukeNr).padStart(2, '0')}`
 }
 
-// Grupperer en liste av { run, jobber }-poster per ISO-uke (basert på
-// run.created_at). e2eMin er varigheten til jobbene som INNEHOLDER
-// e2e-steget — hele jobben, ikke steget isolert, slik at Chromium-install og
-// Supabase-oppstart telles med (samme logikk som E2E_KOST_MIN måler).
+// e2eMin = hele jobben som kjørte e2e, ikke steget isolert, så Chromium-
+// install og Supabase-oppstart telles med (som E2E_KOST_MIN).
 export function grupperPerUke(poster) {
   const uker = new Map()
   for (const { run, jobber } of poster) {
@@ -257,9 +190,7 @@ export function grupperPerUke(poster) {
 
     gruppe.jobbMin += jobbMinutter(jobber).minutter
 
-    // e2eKjorte(), ikke «steget finnes»: en gatet PR har steget i jobben med
-    // conclusion 'skipped', og skulle den telt, ville E2e-min vært lik
-    // Jobb-min for hver PR-uke — kolonnen som skal vise at gatingen virker.
+    // e2eKjorte(), ikke «steget finnes» — ellers E2e-min ≈ Jobb-min.
     const e2eJobber = jobber.filter(j => (j.steps ?? []).some(e2eKjorte))
     gruppe.e2eMin += jobbMinutter(e2eJobber).minutter
 
@@ -289,11 +220,8 @@ function feilForRespons(res, url, kontekst) {
   return new Error(`GitHub API ga ${res.status} ${res.statusText} for ${url}`)
 }
 
-// Paginerer repos/{repo}/actions/runs?created=>=siden — ALLE workflows i
-// repoet, ikke bare pr-check.yml, slik at § Forbruk i vinduet kan vise
-// per-workflow-fordeling. Kaster ved pagineringstak (fail-closed, samme
-// begrunnelse som hentForbrukForManeden() i ci-minuttbudsjett.mjs) — en
-// ufullstendig sum som SER komplett ut er verre enn en feilmelding.
+// ALLE workflows (for § 1 per-workflow). Kaster ved pagineringstak: en
+// ufullstendig sum ser komplett ut.
 export async function hentRuns({ repo, token, siden, fetchImpl = fetch, maksSider = 10 }) {
   const kjoringer = []
   for (let side = 1; side <= maksSider; side++) {
@@ -308,9 +236,8 @@ export async function hentRuns({ repo, token, siden, fetchImpl = fetch, maksSide
   throw new Error(`Flere enn ${maksSider * 100} kjøringer i vinduet — pagineringstaket nådd, forbruket kan ikke måles fullstendig.`)
 }
 
-// Henter jobber for ÉN run. `filter=all` gir jobber fra ALLE forsøk i ett
-// kall, hver med sitt eget run_attempt-felt — verifisert mot GitHubs API, og
-// derfor ingen grunn til å iterere /attempts/{n}/jobs separat.
+// `filter=all` gir jobber fra ALLE forsøk i ett kall, hver med run_attempt
+// (verifisert) — ingen /attempts/{n}/jobs-iterasjon nødvendig.
 export async function hentJobber({ repo, runId, token, fetchImpl = fetch, maksSider = 5 }) {
   const jobber = []
   for (let side = 1; side <= maksSider; side++) {
@@ -327,10 +254,8 @@ export async function hentJobber({ repo, runId, token, fetchImpl = fetch, maksSi
 
 // ─── Aggregering + rapport ───────────────────────────────────────────────
 
-// Bygger hele datagrunnlaget: henter runs i vinduet, henter jobber for hver
-// (batchet 5 om gangen med fremdrift til STDERR), og aggregerer i alle
-// formene rapporten trenger. Eksportert separat fra byggRapport() slik at
-// --json kan skrive den strukturerte dataen direkte, uten å gå via markdown.
+// Skilt fra byggRapport() så --json kan skrive dataen direkte. Fremdrift går
+// til stderr, så stdout forblir ren JSON.
 export async function kjorRapport({ dager, repo, token, workflowNavn, fetchImpl = fetch, naa = new Date() }) {
   const siden = new Date(naa.getTime() - dager * 24 * 60 * 60 * 1000).toISOString()
 
@@ -360,8 +285,7 @@ export async function kjorRapport({ dager, repo, token, workflowNavn, fetchImpl 
 
   const forsok = forsokFordeling(alleJobber, new Map(runs.map(run => [run.id, run.run_attempt ?? 1])))
 
-  // Samme funksjon budsjettvakten bruker — ikke en kopi. Se filhode-forbeholdet
-  // om at vinduet her er glidende, ikke kalendermåned.
+  // Samme funksjon budsjettvakten bruker — ikke en kopi.
   const runBasertMin = forbrukMinutter(runs)
 
   const workflowPoster = poster.filter(p => p.run.name === workflowNavn)
@@ -389,9 +313,7 @@ export async function kjorRapport({ dager, repo, token, workflowNavn, fetchImpl 
   }
 }
 
-// Formaterer datagrunnlaget fra kjorRapport() som lesbar markdown — ment for
-// terminalen, ikke som en $GITHUB_STEP_SUMMARY (se filhode: dette er ikke en
-// vakt).
+// Markdown for terminalen, ikke for step summary.
 export function byggRapport(data) {
   const { dager, repo, workflowNavn, vindu, antallKjoringer, jobb, forsok, budsjett, steg, gating, ukeTrend } = data
   const linjer = []
@@ -429,8 +351,7 @@ export function byggRapport(data) {
   linjer.push(
     `Jobb-basert (dette verktøyet): ${jobb.totalMin} min. Run-basert (\`forbrukMinutter()\`, UKORRIGERT — kun siste forsøk per kjøring, slik budsjettvakten så det FØR #668): ${budsjett.runBasertMin} min. Differanse: **${budsjett.differanseMin} min**.`,
   )
-  // Kun forsøkene run-basert telling IKKE ser (alle unntatt siste per run) —
-  // § 2 sin rerunMin inkluderer siste forsøk, som runBasertMin allerede har med.
+  // tidligereForsokMin, ikke rerunMin — se forsokFordeling().
   const korrigertRunBasert = budsjett.runBasertMin + forsok.tidligereForsokMin
   linjer.push(
     `Korrigert for reruns (tidligere forsøk, dvs. alle unntatt siste per kjøring — ingen nye kall): ${budsjett.runBasertMin} + ${forsok.tidligereForsokMin} = **${korrigertRunBasert} min**, mot ${jobb.totalMin} min jobb-basert.`,
@@ -443,9 +364,8 @@ export function byggRapport(data) {
   linjer.push(`## 4. Steg-fordeling — ${workflowNavn}`)
   linjer.push('')
   const stegTotal = steg.reduce((s, r) => s + r.sekunder, 0)
-  // «Snitt/forekomst», ikke «Snitt/kjøring»: rad.antall teller stegFOREKOMSTER
-  // på tvers av jobber. Sammenfaller så lenge workflowen har én jobb per run,
-  // men slutter å stemme i det noen legger til en matrix.
+  // «Snitt/forekomst», ikke «/kjøring»: rad.antall teller stegforekomster på
+  // tvers av jobber, og pr-check.yml har flere jobber per run.
   linjer.push('| Steg | Sekunder | Snitt/forekomst | Andel |')
   linjer.push('|---|---|---|---|')
   for (const rad of steg) {
@@ -512,9 +432,7 @@ function tokenFraGh() {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
 
-  // `--dager` uten `=N` gir parseArgs boolean true, og Number(true) er 1 —
-  // altså en «gyldig» kjøring på ett døgn i stedet for en feilmelding.
-  // Derfor kreves en STRENG her, ikke bare et endelig tall.
+  // Krev streng: `--dager` uten `=N` gir true, og Number(true) er 1.
   const dager = args.dager !== undefined ? Number(typeof args.dager === 'string' ? args.dager : NaN) : 30
   if (!Number.isFinite(dager) || dager <= 0) {
     console.error(`--dager må skrives som --dager=N med et positivt tall, fikk «${args.dager}».`)
@@ -525,8 +443,7 @@ async function main() {
   const workflowNavn = typeof args.workflow === 'string' ? args.workflow : 'PR-sjekk'
   const somJson = args.json === true
 
-  // Aldri hardkod repo-navnet — disse filene speiles til det offentlige
-  // klubb-app-repoet, og lekkasjevakten greper etter klubbnavn.
+  // Aldri hardkod repo-navnet — fila speiles til offentlige klubb-app.
   const repo = (typeof args.repo === 'string' && args.repo) || process.env.GITHUB_REPOSITORY || repoFraGh()
   if (!repo) {
     console.error('Fant ikke repo — oppgi --repo=eier/navn, sett GITHUB_REPOSITORY, eller logg inn med «gh auth login».')
@@ -550,13 +467,10 @@ async function main() {
     return
   }
 
-  // --json på stdout skal forbli rent — all fremdrift går til stderr
-  // (se kjorRapport()).
   console.log(somJson ? JSON.stringify(data, null, 2) : byggRapport(data))
 }
 
-// Kjør kun main() når filen kjøres direkte (`node ci-tidsbruk.mjs`), ikke når
-// funksjonene importeres av vitest.
+// Ikke kjør main() når vitest importerer fila.
 const kjortDirekte = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
 if (kjortDirekte) {
   main().catch(e => {

@@ -1,6 +1,7 @@
 // Sentrale domene-konstanter. Tegnegrenser speiler check-constraints i
-// databasen (chatten har 500, innlegg/meldinger har 2000) — endringer
-// her må følges av tilsvarende migrasjon.
+// databasen — endringer her må følges av tilsvarende migrasjon.
+
+import type { LoggHendelse } from '@/lib/logg-hendelser'
 
 export const CHAT_MIN_LENGDE = 1
 export const CHAT_MAKS_LENGDE = 500
@@ -8,379 +9,268 @@ export const CHAT_MAKS_LENGDE = 500
 export const INNLEGG_MIN_LENGDE = 1
 export const INNLEGG_MAKS_LENGDE = 2000
 
-// Antall dager før et arrangement vi sender hver type påminnelse.
-// LANG = lang varsel (uka før), KORT = dagen før, PURRING = purring til
-// dem som ikke har svart enda.
+// Dager før et arrangement hver påminnelse sendes. PURRING går til dem som
+// ikke har svart ennå.
 export const PAAMINNELSE_DAGER = {
   LANG: 7,
   KORT: 1,
   PURRING: 3,
 } as const
 
-// Avreise-blokka nederst på tur-kortet (#669): ansiktene til alle som har
-// svart ja, pluss kondensstripa. Vises fra AVREISE_VINDU_DAGER dager før
-// avreise og kun på turer — møter har ingen reise å telle ned til.
-//
-// Verdien er den samme som PAAMINNELSE_DAGER.LANG i dag, men holdes bevisst
-// atskilt: den ene styrer når vi SENDER et varsel, den andre når kortet
-// skifter utseende. Flyttes den ene, skal ikke den andre følge med av vanvare.
+// Fra hvor mange dager før avreise tur-kortet viser avreise-blokka (#669).
+// Lik PAAMINNELSE_DAGER.LANG i dag, men bevisst atskilt: den ene styrer når vi
+// sender varsel, den andre når kortet skifter utseende.
 export const AVREISE_VINDU_DAGER = 7
 
-// Tilgangsvinduet etter en pass-godkjenning. Admin har eksplisitt sagt
-// 1 dag — kort vindu reduserer eksponering hvis godkjenneren glemmer å
-// trekke tilbake.
+// Tilgangsvinduet etter pass-godkjenning. Kort med vilje: begrenser
+// eksponeringen hvis godkjenneren glemmer å trekke tilbake.
 export const PASS_TILGANG_TIMER = 24
 
-// Møtemodus (#780) — klokkeslett (norsk tid) møtemodus varer TIL, dagen ETTER
-// møtets startdato. Et møte som starter 00:30 skal likevel vare til 06:00
-// NESTE morgen, ikke samme natt — endringen er bevisst valgt (se #780).
-// Møtets eget slutt_tidspunkt ignoreres bevisst; se lib/moetemodus.ts.
+// Møtemodus varer til dette klokkeslettet (norsk tid) dagen ETTER møtets
+// startdato — også for et møte som starter 00:30. Møtets slutt_tidspunkt
+// ignoreres bevisst (#780, se lib/moetemodus.ts).
 export const MOETEMODUS_SLUTT_KLOKKE = '06:00'
 
-// Møtemodus slår seg på så mange timer FØR møtets start.
-// Rådataspørringen i lib/posisjon.ts henter derfor også arrangementer som starter
-// innen dette vinduet — andre predikater over de radene må selv kreve start <= nå.
+// Møtemodus slår seg på så mange timer før start. Rådataspørringen i
+// lib/posisjon.ts henter derfor også kommende møter — andre predikater over
+// de radene må selv kreve start <= nå.
 export const MOETEMODUS_FOER_START_TIMER = 2
 
-// Retry-vindu (i dager) for kåringsvinner-varselet: cronen leter etter
-// avsluttede-men-uvarslede kåringspoller helt til riktig markør for pollens utfall er satt
-// (vinner_varslet_paa eller tiebreak_varslet_paa, se #521)
-// ELLER polls avsluttet_paa faller ut av dette vinduet. kjorPaaminnelser
-// kjører kåringsblokka KUN på slot 1 (én gang daglig), altså 7 reelle
-// retry-forsøk før en permanent uvarslebar poll faller ut av køen. Se #504.
+// Retry-vindu for kåringsvarselet: cronen prøver på nytt til riktig markør
+// (vinner_/tiebreak_varslet_paa, #521) er satt eller avsluttet_paa faller ut
+// av vinduet. Kåringsblokka kjører kun på slot 1, så dette gir 7 forsøk (#504).
 export const KAARING_VARSEL_RETRY_DAGER = 7
 
-// Kommentarseksjonen på agenda-arrangementer kollapses automatisk når
-// det er stille i 4 dager; brukeren kan fortsatt åpne manuelt via chevron.
-// se #316
+// Kommentarseksjonen på agenda-kort kollapses etter så mange stille dager (#316).
 export const KOMMENTARER_KOLLAPS_DAGER = 4
 
-// Agenda-vinduet bakover: forsiden viser arrangementer, polls og meldinger
-// som er høyst AGENDA_VINDU_MND måneder gamle. Alt eldre er tilgjengelig
-// via /tidligere (full historikk, paginert). Issue #176.
+// Forsiden viser innhold høyst så mange måneder gammelt; eldre ligger på
+// /tidligere (#176).
 export const AGENDA_VINDU_MND = 12
 
-// Sidestørrelse for /tidligere-paginering (keyset/cursor-basert).
-// Lavt nok til at siden er rask, høyt nok til at brukeren ikke trykker
-// «Last mer» for mye.
+// Sidestørrelse for /tidligere (keyset-paginering).
 export const TIDLIGERE_SIDESTOERRELSE = 30
 
-// Maks antall bilder per melding-innlegg. Cap forhindrer at én melding
-// dominerer feeden visuelt og begrenser R2-opplastinger per POST.
+// Maks bilder per melding — hindrer at én melding dominerer feeden og
+// begrenser R2-opplastinger per POST.
 export const MELDING_MAKS_BILDER = 10
 
-// Terskel i piksler fra bunnen av siden for å regne brukeren som «nær
-// bunn» i chatten. Under terskelen auto-scroller vi når andres melding
-// kommer inn; over terskelen lar vi ham være i fred. Se #238.
+// Innenfor så mange px fra bunnen auto-scroller chatten når andres melding
+// kommer inn; lenger opp lar vi ham være i fred (#238).
 export const CHAT_NAER_BUNN_TERSKEL_PX = 150
 
-// Luft mellom skrivefeltet og tastaturets overkant i kartets sidepaneler
-// (chat, #714, og timeplanen, #716), der feltet ligger i normal flyt i
-// stedet for forankret til viewporten.
+// Luft mellom skrivefeltet og tastaturet i kartets sidepaneler (#714, #716),
+// der feltet ligger i normal flyt.
 export const CHAT_TASTATUR_LUFT_PX = 12
 
-// Maks tegn i valgfri hilsen ved purring av arrangøransvarlig.
-// Tilfeldigvis samme verdi som CHAT_MAKS_LENGDE, men definert separat
-// fordi hilsenen ikke lagres i DB — den går rett inn i sendVarsel-
-// meldingen. De to grensene kan utvikle seg uavhengig. Se #267.
+// Maks tegn i hilsen ved purring. Lik CHAT_MAKS_LENGDE, men separat: hilsenen
+// lagres ikke i DB og kan utvikle seg uavhengig (#267).
 export const PURRING_MAKS_LENGDE = 500
 
-// Maks tegn i valgfri hilsen ved varsling om arrangement.
-// Tilfeldigvis samme verdi som PURRING_MAKS_LENGDE — semantisk separat
-// så de to grensene kan utvikle seg uavhengig. Se #282.
+// Maks tegn i hilsen ved «Varsle nå». Separat av samme grunn som over (#282).
 export const VARSLE_MAKS_LENGDE = 500
 
-// Emoji-pool for automatiske bursdagsgratulasjonar i klubb-chat.
-// 16 symboler som passer tonen — alkohol, feiring, klasse. Se #328.
+// Emoji-pool for automatiske bursdagsgratulasjoner i klubb-chat (#328).
 export const BURSDAG_EMOJI_POOL = [
   '🤩', '❤️', '🥂', '🎉', '🎩', '🍺', '🍻', '🌟',
   '🥳', '🍾', '💎', '😁', '👏', '🍸', '😘', '🥰',
 ] as const
 
-// Antall cron-slots i det norske vinduet 07–10 der vi forsøker å sende.
-// Slot-logikken garanterer at meldingen sendes seinest i siste slot.
+// Antall cron-slots i det norske vinduet 07–10. Slot-logikken garanterer at
+// meldingen sendes seinest i siste slot.
 export const BURSDAG_VINDU_SLOTS = 4
 
-// Antall unike emoji som trekkes frå BURSDAG_EMOJI_POOL per gratulasjon.
+// Antall unike emoji som trekkes fra BURSDAG_EMOJI_POOL per gratulasjon.
 export const BURSDAG_EMOJI_ANTALL = 5
 
-// Variasjoner i hilsen-ord og utropstegn for bursdagsgratulasjonar.
-// Kombinert gir fire mulige meldingsmønstre per post. Se #328.
+// Variasjoner i hilsen-ord og utropstegn for bursdagsgratulasjoner (#328).
 export const BURSDAG_HILSNER = ['Gratulerer', 'Grattis'] as const
 export const BURSDAG_UTROPSTEGN = ['!', '!!'] as const
 
-// Emoji-pool for reaksjons-picker i chat og kommentarer.
-// Brukes i Chat.tsx, MeldingReaksjoner.tsx og KommentarReaksjoner.tsx.
+// Emoji-pool for reaksjons-pickeren i chat og kommentarer.
 export const REAKSJON_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '🙌'] as const
 
-// Long-press-varighet før reaksjons-picker åpnes. 350 ms vinner kappløpet mot
-// iOS sin innebygde link-preview (~500 ms) og er over accidental-touch-
-// terskelen, men merkes umiddelbart som «noe skjer». Brukes av MeldingTommel,
-// MeldingKort og KommentarerPaaKort. se #468.
+// Long-press før reaksjons-pickeren åpnes. 350 ms vinner over iOS sin
+// link-preview (~500 ms) og er over terskelen for utilsiktet berøring (#468).
 export const LONG_PRESS_MS = 350
 
-// Bevegelsesterskel (px) før et hold tolkes som scroll-intensjon og long-press-
-// timeren avbrytes. Sammenlign kvadrert avstand mot LONG_PRESS_BEVEGELSE_PX ** 2
-// for å slippe kvadratrot. se #359-review / #468.
+// Bevegelse (px) før et hold tolkes som scroll og long-press avbrytes.
+// Sammenlign mot kvadratet for å slippe kvadratrot (#468).
 export const LONG_PRESS_BEVEGELSE_PX = 10
 
-// Apples minste anbefalte trykkmål, kortside. Brukes av components/ui/Treffflate.tsx
-// til å regne ut usynlig treffområde rundt små visuelle kontroller. Se #700.
+// Apples minste anbefalte trykkmål, kortside (#700). Se CLAUDE.md § Policy: Trykkflater.
 export const MIN_TREFFMAAL_PX = 44
 
 // ─── FEILLOGGING / OBSERVABILITY ─────────────────────────────────────────────
 
-// Antall klient-feil vi tillater per IP+profil per minutt via /api/logg-feil.
-// Overskridelse returnerer 429. In-memory per Vercel-instans — deles ikke på
-// tvers av instanser, men er god nok til å stoppe utilsiktede stormer.
+// Klientfeil per IP+profil per minutt via /api/logg-feil (429 over). In-memory
+// per Vercel-instans — ikke globalt, men nok til å stoppe utilsiktede stormer.
 export const LOGG_FEIL_RATE_LIMIT_PER_MIN = 10
 
-// Antall dager feil_logg-rader beholdes. Sletting utføres av sjekk-klientfeil-cron.
-// Hevet fra 30 til 180 da feilloggen begynte å motta server-feil og ikke bare
-// klientfeil (#496) — 30 dager er nok til å feilsøke, men for kort til å se om
-// noe kommer igjen sesongvis. Se docs/feilstrategi.md § 4.
+// Levetid for feil_logg-rader (slettes av sjekk-klientfeil-cron). 180 og ikke
+// 30 fordi loggen også tar server-feil og bør vise sesongmønstre (#496).
+// Se docs/feilstrategi.md § 4.
 export const LOGG_FEIL_RETENSJONSDAGER = 180
 
-// Antall klientfeil siste 24t som trigger admin-varsel i sjekk-klientfeil-cron.
-// 0 = varsle på alle feil (>= 1 feil siste døgn). Bevisst valg: etter at begge
-// kjente feilklassene ble lukket (#465/#466) skal loggen være stille, så hver
-// ny feil er verdt et varsel. Var kort innom 3 den 16. juli 2026.
+// Antall klientfeil siste 24 t som utløser admin-varsel. 0 = varsle på hver
+// feil: etter #465/#466 skal loggen være stille.
 export const KLIENT_FEIL_ALARM_TERSKEL = 0
 
-// Event-navn som IKKE teller mot alarmen i sjekk-klientfeil-cronet (#498-review).
-// Terskelen er bevisst 0 — ett treff i døgnet varsler alle med
-// faar_feilvarsler. Disse fyrer på kjent transiente forhold som ikke
-// krever menneskelig inngripen, og ville gjort morgenvarselet til støy:
-//   ai.datoforslag.feilet     — 429/529/timeout fra Anthropic, i bakgrunnen
-//                               mens brukeren skriver
-//   varsel.push.feilet        — web-push mot en enhet som er offline/treg
-//                               (410 Gone håndteres separat: abonnementet slettes)
-//   varsel.push.timeout       — samme klasse som over, bare navngitt separat
-//                               (#612): PUSH_TIMEOUT_MS-deadlinen ER tilfellet
-//                               «treg enhet». Uten denne raden ville #612 gjort
-//                               en bevisst ignorert klasse alarmerende igjen —
-//                               i samme slengen som push-volumet ble ganget
-//                               med 17. Se #612-review.
+// Event-navn som ikke teller mot alarmen — kjent transiente forhold som ikke
+// krever inngripen (#498, #612). Radene skrives fortsatt til feil_logg.
+//   ai.datoforslag.feilet     — 429/529/timeout fra Anthropic i bakgrunnen
+//   varsel.push.feilet        — push mot offline/treg enhet (410 håndteres separat)
+//   varsel.push.timeout       — PUSH_TIMEOUT_MS-deadlinen, samme klasse som over
 //   varsel.logg.insert.feilet — én varsel_logg-rad feilet, varselet gikk ut
-//
-// Radene skrives fortsatt til feil_logg og er søkbare der — de utløser bare
-// ikke varsel. Å legge til et event her er en BEVISST handling som gjør oss
-// blinde for akkurat den eventen i alarmkanalen; det er ikke en opprydding.
-// Å heve terskelen i stedet ville gjort fire ekte feil tause, og det er feil
-// retning for en alarm vi nettopp bygde for å slutte å være blinde.
+// Å legge til et event her gjør oss blinde for det i alarmkanalen — et bevisst
+// valg, ikke opprydding. Å heve terskelen i stedet ville gjort ekte feil tause.
 export const ALARM_IGNORERTE_EVENTS = [
   'ai.datoforslag.feilet',
   'varsel.push.feilet',
   'varsel.push.timeout',
   'varsel.logg.insert.feilet',
-] as const
+] as const satisfies readonly LoggHendelse[]
 
-// Maksimal størrelse på kontekst-JSON sendt til /api/logg-feil (i KB).
-// Hindrer at store payloads metter tabellen — typisk stacktrace er < 2 KB.
+// Maks kontekst-JSON til /api/logg-feil (KB). Typisk stacktrace er < 2 KB.
 export const LOGG_KONTEKST_MAKS_KB = 4
 
-// Maks tegn i event-navn (dot-separert, f.eks. «varsel.send.feilet»).
+// Maks tegn i event-navn (dot-separert, f.eks. «varsel.push.feilet»).
 export const LOGG_EVENT_MAKS_LENGDE = 128
 
-// Grenser for rå nøkkelNAVN som gjengis i logg og feil_logg (#681, #711).
-// Et feltnavn fra vår egen kode er alltid en kort JS-identifikator; er navnet
-// lengre enn dette, er det per definisjon ikke et vi har skrevet, og skal
-// kappes framfor å blåse opp raden. Verdien er samtidig lengdegrensen i
-// NOEKKELNAVN_FORM (lib/logg-sanitering.ts) — regexen bygges AV konstanten, så
-// de to kan ikke drifte fra hverandre.
+// Maks lengde på rå nøkkelnavn i logg (#681, #711). Våre egne feltnavn er
+// alltid kortere; lengre navn kappes. NOEKKELNAVN_FORM (lib/logg-sanitering.ts)
+// bygges av denne, så de kan ikke drifte.
 export const LOGG_NOEKKEL_MAKS_TEGN = 40
 
-// Maks antall nøkkelnavn vi gjengir fra ETT feilobjekt i feil_logg.kontekst
-// (#711-review). En supabase-feil har fire; en fremmed feilstruktur kan ha
-// hundrevis, og poenget med feltet er formen på feilen, ikke en full
-// opptelling. Resten telles som «+N_flere» slik at kappingen aldri blir stille.
+// Maks nøkkelnavn gjengitt fra ett feilobjekt i feil_logg.kontekst (#711).
+// Resten telles som «+N_flere», så kappingen aldri blir stille.
 export const LOGG_NOEKLER_MAKS_ANTALL = 12
 
-// Sperrevindu mellom to automatiske reloads etter en chunk-feil (#575).
-// Klienten reloader for å hente fersk HTML når den mangler en kodebit, men
-// hvis den ferske HTML-en OGSÅ feiler ville vi reloadet i evig løkke. Andre
-// forsøk innen vinduet gir feilsiden i stedet — en ærlig blindvei framfor en
-// usynlig løkke. 30 s er godt over en normal sidelast og kort nok til at et
-// ekte nytt tilfelle senere i økten fortsatt selvhelbredes.
+// Sperrevindu mellom to automatiske reloads etter chunk-feil (#575). Hindrer
+// evig reload-løkke hvis fersk HTML også feiler; 30 s er godt over en normal
+// sidelast, men kort nok til at et nytt tilfelle senere selvhelbredes.
 export const CHUNK_RELOAD_SPERRE_MS = 30_000
 
-// Hard cap på antall rader sjekk-klientfeil-cronet henter for å regne ut
-// topp 3 event-navn i alarmteksten (#496). Dedup-indeksen i feil_logg
-// begrenser allerede verste konsensfall per (profil/event/minutt), men
-// grensen her hindrer at selve aggregerings-spørringen blir treg under en
-// reell storm.
+// Tak på rader sjekk-klientfeil henter for topp-3-eventene i alarmteksten
+// (#496) — holder aggregeringen rask under en reell storm.
 export const TOPP_EVENT_HENT_GRENSE = 5000
 
-// Minste tekstlengde før auto-uttrekk av festedato kjøres (bakgrunnskall mens
-// brukeren skriver + server-action-terskel). Satt lavt fordi klubbens innlegg
-// ofte er korte og direkte («Pils i dag?», «Fotball i morgen») — en for høy
-// terskel ville blokkert nettopp de innleggene funksjonen er til for.
+// Minste tekstlengde før auto-uttrekk av festedato kjøres. Lav fordi
+// klubbens innlegg ofte er korte («Pils i dag?»).
 export const DATO_FORSLAG_MIN_TEGN = 10
 
 // ─── AKTIVITETSMÅLING ────────────────────────────────────────────────────────
 
-// Ett treff telles maks én gang per enhet per 30 minutter — hindrer at en
-// bruker som blar mellom flere sider på kort tid blåser opp treff-tallet.
-// Admins beslutning, se #484.
+// Et treff telles maks én gang per enhet per 30 min, så bla-runder ikke
+// blåser opp tallet (#484).
 export const AKTIVITET_TREFF_THROTTLE_MIN = 30
 
-// Antall uker som vises i uke-grafen på /innstillinger/bruk.
+// Antall uker i uke-grafen på /innstillinger/bruk.
 export const AKTIVITET_GRAF_UKER = 8
 
-// Antall dager som inngår i snitt-beregningene (DAU-snitt, snitt treff/dag)
-// på /innstillinger/bruk.
+// Antall dager i snitt-beregningene på /innstillinger/bruk.
 export const AKTIVITET_SNITT_DAGER = 30
 
-// Tema-valg — «dark» er default for alle eksisterende brukere.
-// Cookie er HttpOnly og speiles til localStorage for klient-synk.
+// Tema-valg. Cookien er HttpOnly og speiles til localStorage for klient-synk.
 export const TEMA_COOKIE = 'tema' as const
 export const TEMA_STORAGE_KEY = 'hk-tema' as const
 export const TEMA_VALG = ['system', 'dark', 'light'] as const
 export type TemaValg = typeof TEMA_VALG[number]
-// CustomEvent-navn for klient-side tema-bytte. Dispatches av UtseendeValg,
-// lyttes av TemaSync — bruk konstanten for å unngå magiske strenger.
+// CustomEvent for klient-side tema-bytte (UtseendeValg → TemaSync).
 export const TEMA_EVENT = 'temaEndret' as const
 
-// Facebook-importen tok med Messenger-stickers som vanlige bilder — «likes»
-// lagret som PNG. De er reaksjoner, ikke bilder noen har delt, og hører ikke
-// hjemme i bildearkivet. Alle ligger under et /sticker-<id>-filnavn.
-// Brukes som PostgREST-mønster: .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
+// Messenger-stickers fra Facebook-importen ligger som bilder med
+// /sticker-<id>-filnavn. De er reaksjoner og holdes utenfor bildearkivet.
+// Brukes som: .not('bilde_url', 'like', CHAT_STICKER_MONSTER)
 export const CHAT_STICKER_MONSTER = '%/sticker-%'
 
-// Antall rader vist i «Hva er nytt»-endringsloggen (/om-appen) før «Vis
-// eldre» trengs. Se #595.
+// Rader i «Hva er nytt» (/om-appen) før «Vis eldre» trengs (#595).
 export const ENDRINGSLOGG_SYNLIGE = 10
 
-// Hard deadline på et enkelt web-push-forsøk (lib/push.ts). Uten en frist kan
-// én hengende APNs/FCM-socket holde hele sendVarsel-Promise.all-en til Vercels
-// 10 s-funksjonsvegg — funksjonen drepes, klienten får 500 på en melding som
-// ER lagret, og mannen sender den samme meldingen på nytt (#612). 3 s er godt
-// over normal push-latency (typisk < 500 ms) og godt under 10 s-veggen selv
-// med andre mottakere i samme Promise.all.
+// Frist per web-push-forsøk (lib/push.ts). Uten den kan én hengende socket
+// holde sendVarsel til Vercels 10 s-vegg — funksjonen drepes og avsenderen
+// sender en lagret melding på nytt (#612). 3 s er godt over normal latency.
 export const PUSH_TIMEOUT_MS = 3000
 
-// Terskel (ms) for fanout-varigheten i sendChatVarsler før vi logger
-// varsel.chat.fanout.treg — chat går fra 0 til opptil 17 mottakere per
-// melding (#612), og en treg fanout bør synes før den oppleves som en treg
-// «Send»-knapp av avsenderen.
+// Terskel for å logge varsel.chat.fanout.treg — en treg fanout skal synes
+// før den merkes som en treg «Send»-knapp (#612).
 export const CHAT_FANOUT_TREG_MS = 1500
 
-// E-post-døgnbudsjett for chat (#612-review). Resend free tier har et hardt
-// tak på 100 e-poster per DØGN — en helt annen grense enn RESEND_BATCH_MAKS
-// (100 per kall) i lib/epost.ts, som ikke beskytter mot noe her. Chat kan med
-// ~15 e-postaktive mottakere brenne hele døgnkvoten på syv meldinger, og
-// kvoten deles med 06:00-cronen: uten en vakt kan gutteprat spise
-// 7-dagers-påminnelsen for en tur.
-//
-// Vakten gjelder KUN e-postkanalen for chat_*-typene. Push og in-app-raden går
-// alltid, og ikke-chat-varsler (påminnelser, pass-tilgang, kåringer) rammes
-// aldri — hele poenget er at de har forrang. 70 gir ~30 e-posters margin til
-// resten av døgnet, som holder til en full påminnelsesrunde til alle 18.
+// E-post-døgnbudsjett for chat_*-typene (#612). Resend free tier har 100
+// e-poster per døgn (ikke det samme som RESEND_BATCH_MAKS per kall), og
+// kvoten deles med påminnelses-cronen. 70 lar ~30 stå igjen til en full
+// påminnelsesrunde. Push, in-app og ikke-chat-varsler rammes aldri.
 export const EPOST_DOEGNBUDSJETT_CHAT = 70
 
-// Vinduet (timer) budsjettet telles over. Rullerende 24 t, ikke kalenderdøgn:
-// Resend nullstiller på UTC-midnatt, men et rullerende vindu er strengere enn
-// leverandørens og kan aldri la oss bruke opp kvoten rett før nullstilling.
+// Budsjettet telles over rullerende 24 t, ikke kalenderdøgn — strengere enn
+// Resends UTC-nullstilling, så kvoten aldri brukes opp rett før nullstilling.
 export const EPOST_BUDSJETT_VINDU_TIMER = 24
 
-// Hvor lenge dra-ned-for-oppdater venter på /api/ping før den gir opp og viser
-// «Oppdatering feilet» (#572). Sjenerøs med vilje: på ustabilt mobilnett er en
-// treg forbindelse ikke det samme som ingen forbindelse, og en falsk «feilet»
-// er verre enn å vente et sekund til. Endepunktet gjør null arbeid, så alt
-// over dette er reelt tapt kontakt.
+// Hvor lenge dra-ned-for-oppdater venter på /api/ping (#572). Sjenerøs fordi
+// tregt mobilnett ikke er det samme som ingen forbindelse; endepunktet gjør
+// null arbeid, så alt over dette er reelt tapt kontakt.
 export const DRA_NED_PING_TIMEOUT_MS = 6000
 
-// Stikkord på medlemsprofilen (#639, fritekst siden #685). Grensen speiler
-// check-constraint profiles_stikkord_gyldig (migrasjon 142) — endres den
-// her, må migrasjonen følge etter. MERK semantikk-endring i #685: dette var
-// tidligere maks tegn PER STIKKORD i en liste (STIKKORD_MAKS_ANTALL styrte
-// antallet); stikkord ble fritekst i én streng, og grensen gjelder nå HELE
-// feltet, som MATALLERGIER_MAKS_LENGDE under.
+// Stikkord på medlemsprofilen (#639). Gjelder HELE fritekstfeltet siden #685,
+// ikke per stikkord. Speiler check-constraint profiles_stikkord_gyldig
+// (migrasjon 142).
 export const STIKKORD_MAKS_LENGDE = 200
 
-// Matallergier på medlemsprofilen. Speiler check-constraint
-// profiles_matallergier_gyldig (migrasjon 141) — endres den her, må
-// migrasjonen følge etter. Fritekst og ikke avkrysning: allergier er for
-// varierte til en fast liste, og «tåler ikke rå løk» skal kunne stå der.
+// Matallergier på profilen. Speiler profiles_matallergier_gyldig (migrasjon
+// 141). Fritekst fordi allergier er for varierte til en fast liste.
 export const MATALLERGIER_MAKS_LENGDE = 200
 
-// Tidspunktet koblingstabellen `innspill_kobling` ble tatt i bruk (migrasjon
-// 136, kjørt mot prod 2026-08-26 19:47 UTC). Fra og med da skriver
-// innsendings-ruten alltid en kobling-rad, så «ingen rad» på et nyere
-// ønske-issue betyr at det ikke kom fra appen — ikke at koblingen er tapt.
-// Brukes av lib/innspill-kobling.ts som diskriminator i stedet for å tolke
-// overskriften i issue-teksten. Se #632.
-//
-// Merk det smale gapet mellom migrasjonen og deployen av koden som skriver
-// raden: app-issues fra det vinduet har fortsatt markøren i body, så de
-// dekkes av fallbacken. En fersk instans har ingen eldre issues i det hele
-// tatt, og treffer aldri fallback-grenen.
+// Når innspill_kobling ble tatt i bruk (migrasjon 136). Et nyere ønske-issue
+// uten kobling-rad kom ikke fra appen; eldre faller tilbake til markøren i
+// body (#632, se lib/innspill-kobling.ts). Issues fra gapet mellom migrasjon
+// og deploy har markøren og dekkes av fallbacken.
 export const INNSPILL_KOBLING_INNFOERT = new Date('2026-08-26T19:47:00Z')
 
 // ─── BURSDAGSBILDE (#641) ─────────────────────────────────────────────────
 
-// Lease-vinduene under speiler EKSAKT migrasjon 140 (krev_bursdagsbilde()) —
-// endres tallene her, må RPC-en i migrasjonen følge etter, og omvendt.
+// Lease-vinduene under speiler EKSAKT krev_bursdagsbilde() i migrasjon 140 —
+// endres de her, må RPC-en følge etter, og omvendt.
 //
-// Hvor lenge en 'paagaar'-rad regnes som en hengende (ikke bare treg) kjøring
-// som kan reclaimes av neste cron-invokasjon.
+// Etter så lenge regnes en 'paagaar'-rad som hengende og kan reclaimes.
 export const BURSDAGSBILDE_LEASE_MIN = 10
-// Hvor lenge en admin-tvunget generering («Generer»-knappen) blokkerer en NY
-// tvunget generering av samme rad — kort, fordi en admin som dobbelttrykker
-// skal vente sekunder, ikke minutter, men lang nok til at ett ekte
-// Vertex-kall (§ *_MODELL_MS under) rekker å fullføre uforstyrret.
+// Hvor lenge admins «Generer» blokkerer en ny tvunget generering av samme
+// rad — sekunder ved dobbelttrykk, men nok til at ett Vertex-kall fullfører.
 export const BURSDAGSBILDE_TVING_LEASE_SEK = 60
-// Maks antall AUTOMATISKE forsøk før cron gir opp en rad permanent. Admins
-// «Generer»-knapp går både RUNDT taket og teller ikke opp mot det (se
-// migrasjon 140) — ellers ville to prøvegenereringer i september etterlatt
-// cron med tre forsøk igjen på selve bursdagen.
+// Maks AUTOMATISKE forsøk før cron gir opp raden. Admins «Generer» går rundt
+// taket og teller ikke, så prøvegenereringer ikke spiser bursdagens forsøk.
 export const BURSDAGSBILDE_MAKS_FORSOK = 5
 
-// Budsjett per steg i genererBursdagsbilde() (lib/bursdagsbilde-generering.ts).
-// Summen (5+30+10=45 s) skal være STRENGT mindre enn maxDuration (60 s) på
-// cron-ruta, med minst 10 s margin — ellers dreper Vercel funksjonen midt i
-// en R2-opplasting, og raden blir stående i status 'paagaar' til leasen
-// utløper i stedet for å bli et ærlig 'feilet'.
+// Budsjett per steg i genererBursdagsbilde(). Summen (45 s) skal ligge minst
+// 10 s under cron-ruta sin maxDuration (60 s) — ellers drepes funksjonen midt
+// i en R2-opplasting og raden henger i 'paagaar' i stedet for 'feilet'.
 export const BURSDAGSBILDE_BUDSJETT_HENT_MS = 5000 // hente profilbildet server-side
 export const BURSDAGSBILDE_BUDSJETT_MODELL_MS = 30000 // Vertex-kallet
 export const BURSDAGSBILDE_BUDSJETT_R2_MS = 10000 // opplasting til R2
 
-// Størrelsescap på profilbildet vi sender til Vertex som input. Samme
-// terskel som andre bilde-opplastinger i appen (lib/actions/bilde-
-// opplasting.ts) — et profilbilde skal aldri være større enn dette uansett,
-// men vi validerer eksplisitt siden bildet her hentes server-side fra en
-// URL vi ikke selv kontrollerte opplastingen av (eldre Supabase Storage-bilder).
+// Størrelsescap på input-profilbildet. Samme som andre opplastinger, men
+// valideres eksplisitt fordi bildet hentes fra en URL vi ikke selv
+// kontrollerte opplastingen av (eldre Supabase Storage-bilder).
 export const BURSDAGSBILDE_INPUT_MAKS_MB = 5
 
-// Hvor mange klubbkamerater som er med på bursdagsbildet ved siden av
-// bursdagsbarnet. Tallet er et TAK på tre ting samtidig, ikke en smakssak:
-// hvor mange ansikter modellen klarer å holde gjenkjennelige i én scene,
-// hvor mange profilbilder vi rekker å hente innenfor
-// BURSDAGSBILDE_BUDSJETT_HENT_MS, og hvor mange menns ansikter som sendes
-// til Google per bursdag (se docs/ai-act-vurdering.md). Økes det, må alle
-// tre vurderes på nytt — særlig den siste.
+// Klubbkamerater på bursdagsbildet ved siden av bursdagsbarnet. Et TAK på tre
+// ting: ansikter modellen holder gjenkjennelige, profilbilder vi rekker å hente
+// innen HENT-budsjettet, og ansikter sendt til Google (docs/ai-act-vurdering.md).
+// Økes det, må alle tre vurderes på nytt.
 export const MEDGJESTER_MAKS_ANTALL = 2
 
-// Ferskhetsvindu for push-klikk-URL-en lagret i Cache Storage (#626).
-// public/sw.js er en statisk fil og kan ikke importere denne konstanten —
-// literalen der (30_000) må holdes i synk manuelt ved endring, samme mønster
-// som tegnegrensene mot DB-constraints øverst i denne fila.
+// Ferskhetsvindu for push-klikk-URL-en i Cache Storage (#626). public/sw.js
+// kan ikke importere denne — literalen der må holdes i synk manuelt.
 export const PUSH_KLIKK_VINDU_MS = 30_000
 
 // ─── PUSH-KLIKK-TELEMETRI (#688) ──────────────────────────────────────────
 
-// Egen rate-limit-bøtte for push-klikk-telemetri, adskilt fra vanlige
-// klientfeil (LOGG_FEIL_RATE_LIMIT_PER_MIN). Uten skillet konkurrerer de om
-// samme 10/min, og en droppet push-beacon er umulig å skille fra en tapt
-// navigasjon — nøyaktig grunn 3 i #688. Høyere enn klientfeil-grensen fordi
-// ett klikk normalt genererer FLERE rader (push.klikk + push.klikk.navigert
-// + evt. push.klikk.innlogging) fra samme IP/profil i rask rekkefølge.
+// Egen rate-limit-bøtte for push-klikk-telemetri, så en droppet beacon ikke
+// konkurrerer med klientfeil og blir umulig å skille fra tapt navigasjon.
+// Høyere fordi ett klikk normalt gir flere rader i rask rekkefølge.
 export const PUSH_TELEMETRI_RATE_LIMIT_PER_MIN = 20
 
-// Eksplisitt liste (ikke en prefiks-regel) over event-navn som telles mot
-// PUSH_TELEMETRI_RATE_LIMIT_PER_MIN i stedet for LOGG_FEIL_RATE_LIMIT_PER_MIN.
-// En prefiks-regel («push.*») ville sluppet et feilstavet event inn i
-// telemetri-bøtta usett — eksplisitt liste tvinger et bevisst valg per event.
+// Event-navn som telles mot telemetri-bøtta. Eksplisitt liste, ikke prefiks:
+// et feilstavet «push.*»-event skal ikke slippe inn usett.
 export const PUSH_TELEMETRI_EVENTS = [
   'push.klikk',
   'push.klikk.navigert',
@@ -388,239 +278,160 @@ export const PUSH_TELEMETRI_EVENTS = [
   'push.klikk.innlogging',
   'klient.pushklikk.foreldet',
   'klient.pushklikk.oppgitt',
-] as const
+] as const satisfies readonly LoggHendelse[]
 
-// Vindu (ms) for å bære et push-klikk-mål gjennom /login (#688). Lengre enn
-// PUSH_KLIKK_VINDU_MS med vilje: her skjer ingen overraskende navigasjon —
-// brukeren har nettopp logget inn selv og forventer å lande der varselet
-// pekte. 10 minutter dekker en treg innlogging (glemt passord, tilbakestilling
-// underveis) uten å holde målet i live så lenge at det føles vilkårlig.
+// Vindu for å bære et push-klikk-mål gjennom /login (#688). Lengre enn
+// PUSH_KLIKK_VINDU_MS fordi brukeren selv logger inn og forventer å lande der;
+// 10 min dekker en treg innlogging med passord-tilbakestilling.
 export const PUSH_KLIKK_LOGIN_VINDU_MS = 600_000
 
-// Maks antall ganger klienten forsøker å navigere til et push-klikk-mål før
-// oppføringen forkastes. Loop-bryter: uten et tak kunne en målside som alltid
-// redirecter et annet sted (eller en URL som aldri blir «vi står her») holde
-// klienten i en evig runde med tilbakeskriving + navigasjon.
+// Loop-bryter: maks navigasjonsforsøk mot et push-klikk-mål før oppføringen
+// forkastes, i tilfelle målet alltid redirecter et annet sted.
 export const PUSH_KLIKK_MAKS_FORSOK = 2
 
 // ─── POSISJONSDELING (#693) ───────────────────────────────────────────────
 
-// Hvor lenge én «Del posisjonen min» varer før den slår seg av selv. Verdien
-// er en avveining mot NØYAKTIG ETT problem: at noen deler og glemmer det.
-// For kort, og du må trykke på nytt midt i kvelden; for lang, og «tidsbegrenset»
-// blir en påstand uten innhold. 8 timer dekker en kveld ute eller en dag på
-// tur, og er kort nok til at ingenting står og deler mens du sover.
-//
-// Hvert trykk FORNYER vinduet — knappen er «del i 8 timer fra nå», ikke
-// «del til et fast klokkeslett».
+// Hvor lenge én «Del posisjonen min» varer. Avveid mot at noen deler og
+// glemmer det: 8 t dekker en kveld eller en turdag, men ikke natta. Hvert
+// trykk fornyer vinduet («8 timer fra nå»).
 export const POSISJON_DELING_TIMER = 8
 
 // Hvor langt tilbake sporet vises når det IKKE pågår et arrangement (#698).
-//
-// Opprinnelig ble sporet kun tegnet under et arrangement, og ellers klippet til
-// siste punkt. Produkteieren flyttet seg hjemmefra til jobb og så at bildet
-// hans flyttet seg uten å legge igjen noe — poenget var å se hvor man har
-// vært, ikke bare hvor man er. Punktene ble lagret hele tiden; det var kun
-// visningen som skjulte dem.
-//
-// 24 timer avgrenser det til «hvor har vi vært i dag og i natt». Uten en grense
-// ville et spor vokst så lenge delingen ble fornyet, og kartet blitt uleselig.
-// Pågår et arrangement, gjelder ikke grensen — da avgrenser arrangementet
-// isteden, og en tur over flere dager skal vises i sin helhet.
+// Uten grense ville sporet vokst så lenge delingen fornyes. Under et
+// arrangement avgrenser arrangementet i stedet, så flerdagsturer vises hele.
 export const POSISJON_SPOR_TIMER = 24
 
-// Maks antall posisjonspunkter kartet henter i én spørring. Speiler PostgREST
-// sin max_rows (supabase/config.toml) — ber vi om mer, kapper den likevel der,
-// og gjør det STILLE. Spørringen må derfor sortere synkende og snu i JS, ellers
-// er det de ELDSTE punktene som overlever avkortingen og kartet viser alle
-// frosset på gamle posisjoner uten en eneste feilmelding (#717).
+// Speiler PostgREST max_rows (supabase/config.toml), som kapper STILLE.
+// Spørringen må derfor sortere synkende og snu i JS — ellers overlever de
+// eldste punktene og kartet fryser på gamle posisjoner (#717).
 export const POSISJON_PUNKT_MAKS = 1000
 
-// Over denne alderen regnes et punkt som gammelt, og kartet demper prikken.
-// Poenget er ikke å skjule punktet, men å hindre at det leses som «her er han
-// NÅ»: uten bakgrunnsposisjon på iOS er et punkt bare like ferskt som forrige
-// gang mannen hadde appen oppe, og 30 minutter er nok til at han har rukket å
-// gå et helt annet sted.
-// Minste flytting (meter) før en innmelding blir et NYTT punkt i sporet i
-// stedet for å oppdatere tiden på det forrige (#695). Terskelen er bevisst
-// større enn typisk GPS-drift i by (±10–30 m): uten den ville en mann som
-// sitter tre timer på samme pub tegnet et spor som ser ut som vandring, og
-// prikkene ville ligget oppå hverandre på samme fortau.
+// Minste flytting (m) før en innmelding blir et NYTT punkt i stedet for å
+// oppdatere forrige (#695). Over typisk GPS-drift i by (±10–30 m), så en mann
+// som sitter på samme pub ikke tegner et spor som ser ut som vandring.
 export const POSISJON_MIN_FLYTT_M = 60
 
+// Over denne alderen dempes prikken, så den ikke leses som «her er han NÅ».
+// Uten bakgrunnsposisjon på iOS er et punkt bare like ferskt som sist appen
+// var oppe.
 export const POSISJON_FERSK_MINUTTER = 30
 
-// Markeringer på kartet (#697) — «møt meg her», «bussen går herfra».
-//
-// Tegngrensen speiler check-constraint kart_markering_tekst_gyldig (migrasjon
-// 145) — endres den her, må migrasjonen følge etter. 60 er lavt med vilje: en
-// markering er en etikett ved siden av en nål på et kart, ikke et innlegg, og
-// lengre tekst ville uansett ikke fått plass uten å dekke kartet under.
+// Markeringer på kartet (#697). Speiler kart_markering_tekst_gyldig
+// (migrasjon 145). Lav fordi det er en etikett ved en nål, ikke et innlegg.
 export const KART_MARKERING_MAKS_LENGDE = 60
 
-// Admin-styrt navn og emoji på de varslende kartsymbolene (/innstillinger/kart).
-// Speiler check-constraintene i migrasjon 156. Navnet er kort fordi det står
-// i versaler under emojien i en smal symbolknapp; emoji-grensen er i code
-// points (en sammensatt emoji kan være ~10), «én emoji» sjekkes for seg.
+// Navn og emoji på de varslende kartsymbolene. Speiler migrasjon 156. Navnet
+// står i versaler i en smal knapp; emoji-grensen er i code points (en
+// sammensatt emoji kan være ~10), «én emoji» sjekkes for seg.
 export const KART_SYMBOL_NAVN_MAKS = 16
 export const KART_SYMBOL_EMOJI_MAKS = 16
 
-// «Om klubben» (/innstillinger/om-klubben). Speiler check-constraintene i
-// migrasjon 157 (klubb_info.sted / om_tekst) — endres begge steder.
+// «Om klubben». Speiler migrasjon 157 (klubb_info.sted / om_tekst).
 export const KLUBB_STED_MAKS = 60
 export const KLUBB_OM_MAKS = 2000
 
-// Levetid for en markering satt UTENOM et arrangement. Pågår et arrangement med
-// sluttid, arver markeringen den i stedet. 12 timer dekker en kveld og natta
-// etter, og er kort nok til at kartet ikke fylles opp av gamle nåler ingen
-// husker hvorfor står der.
+// Levetid for en markering satt UTENOM et arrangement (ellers arver den
+// arrangementets sluttid). 12 t dekker en kveld og natta etter.
 export const KART_MARKERING_TIMER = 12
 
-// Hvor lenge «Pling»-knappen står låst og dempet etter et trykk. Den er en
-// KVITTERING, ikke en sperre mot spam: uten den så knappen helt uendret ut
-// etter trykket, og man visste ikke om plinget faktisk gikk ut. Når den går
-// tilbake til normal er det samtidig invitasjonen til å spørre en gang til.
+// Hvor lenge «Pling» står låst og dempet etter et trykk. En kvittering for at
+// plinget gikk ut, ikke en spam-sperre.
 export const POSISJON_PLING_KVITTERING_SEK = 10
 
-// Startzoom når kartet har ett eller flere punkter å vise. 14 er gatenivå —
-// nært nok til at du ser hvilken kvartal han står i, men ikke så nært at to
-// menn i samme gate faller utenfor hverandres skjermbilde.
+// Startzoom med punkter å vise. 14 er gatenivå.
 export const POSISJON_KART_ZOOM = 14
 
-// Fallback-utsnitt når INGEN deler. Kartet må åpne et sted, og et tomt
-// verdenskart sier mindre enn klubbens egen bydel. Verdiene er eksempel-bydel;
-// de bor i klubb-config fordi en nedstrøms klubb holder til et annet sted.
+// Zoom når ingen deler. Selve koordinatene bor i klubb-config, fordi en
+// nedstrøms klubb holder til et annet sted.
 export const POSISJON_KART_FALLBACK_ZOOM = 12
 
-// Timeplan på kartet (#716) — «17:00 Middag på Lorry», én linje per post.
-//
-// Speiler check-constraint timeplan_post_tekst_gyldig (migrasjon 147) —
-// endres den her, må migrasjonen følge etter. 120, ikke KART_MARKERING_
-// MAKS_LENGDEs 60: en timeplanlinje («Avgang fra Grønland, husk pass») har
-// ikke samme plassbegrensning som en etikett ved siden av en nål.
+// Timeplan på kartet (#716). Speiler timeplan_post_tekst_gyldig (migrasjon
+// 147). Høyere enn markeringer fordi en timeplanlinje ikke står ved en nål.
 export const TIMEPLAN_TEKST_MAKS_LENGDE = 120
 
-// Adresse som alternativ til å velge punkt i kartet (#732) — «Karl Johans
-// gate 1». Speiler check-constraint timeplan_post_adresse_gyldig (migrasjon
-// 149). Samme 120 som TIMEPLAN_TEKST_MAKS_LENGDE: begge er fritekst uten
-// spesiell plassbegrensning, og to ulike tall ville vært en vilkårlig
-// forskjell å huske.
+// Adresse i timeplanen (#732). Speiler timeplan_post_adresse_gyldig
+// (migrasjon 149).
 export const TIMEPLAN_ADRESSE_MAKS_LENGDE = 120
 
-// Hvor lenge «Lenke kopiert»-kvitteringen står etter et langtrykk på en
-// kartmarkering (#719). Samme rolle som POSISJON_PLING_KVITTERING_SEK —
-// lenge nok til å se den, ikke så lenge at den føles klistret fast.
+// Hvor lenge «Lenke kopiert» står etter langtrykk på en markering (#719).
 export const KART_LENKE_KOPIERT_KVITTERING_SEK = 3
 
-// Ankomst via en delt steds-lenke (#753) — kartet skal FØDES vidt og zoome
-// synlig inn på koordinatet, i stedet for å bare stå der ferdig innzoomet.
+// Ankomst via delt steds-lenke (#753): kartet starter vidt og zoomer synlig inn.
 //
-// Sluttzoom: på 390 px bredde spenner z14 (POSISJON_KART_ZOOM) ≈ 2,9 km —
-// et helt nabolag, nettopp det som ble klaget på. z17 ≈ 360 m: kvartalet,
-// gatenavn og bygningsomriss leselig. z18 ≈ 180 m — fristende enda nærmere,
-// men koordinatet er siktet inn for hånd av et menneske på et kart i moderat
-// zoom, og en siktefeil på 30–50 m er da en fjerdedel av skjermen på z18.
-// 17 og ikke 18.
+// Sluttzoom: på 390 px er z17 ≈ 360 m (kvartal og gatenavn leselig). Ikke 18:
+// koordinatet er siktet inn for hånd, og 30–50 m siktefeil blir da en
+// fjerdedel av skjermen.
 export const KART_DELT_STED_ZOOM = 17
 
-// Utsnittet kartet FØDES i før det flyr inn mot KART_DELT_STED_ZOOM. Fem
-// nivåer lavere enn sluttzoomen = 32× skalaendring — umulig å overse at
-// kartet beveger seg. Samme tall som POSISJON_KART_FALLBACK_ZOOM, men egen
-// konstant fordi betydningen her er en annen (startpunkt for en flyvning,
-// ikke et hvilenivå uten data).
+// Startutsnittet før innflyvningen — fem nivåer (32×) under sluttzoom, så
+// bevegelsen ikke kan overses. Samme tall som POSISJON_KART_FALLBACK_ZOOM,
+// men annen betydning.
 export const KART_DELT_STED_START_ZOOM = 12
 
-// Eksplisitt varighet på innzoomingen. Uten den regner Leaflet selv ut en
-// varighet fra panoreringsavstanden — som her er null (kartet flyr rett inn,
-// flytter seg ikke sidelengs) — og lander på under et sekund, raskt nok til
-// at bevegelsen blir oversett.
+// Eksplisitt varighet: uten den regner Leaflet varigheten fra
+// panoreringsavstanden (her null) og blir for rask til å legges merke til.
 export const KART_DELT_STED_FLY_SEK = 1.2
 
-// Maks ventetid på at startutsnittets fliser er tegnet før innzoomingen
-// starter. Å zoome inn over en grå, utegnet flate river bort halve poenget
-// (å SE hvor det bærer), men et flislag som feiler eller et nett som henger
-// skal aldri kunne holde ankomsten hengende for godt — derfor en fail-open
-// timeout ved siden av 'load'-eventet.
+// Maks ventetid på at startflisene er tegnet før innzoomingen. Fail-open
+// ved siden av 'load', så et hengende flislag aldri blokkerer ankomsten.
 export const KART_DELT_STED_FLY_VENT_MS = 1200
 
-// Kartets startutsnitt (#735) — hvor nært to punkter må være for å regnes
-// som samme «sted» når velgKlyngeUtsnitt() (lib/kart-klynge.ts) avgjør hvem
-// startutsnittet skal ramme inn. 50 km: en mann på Gardermoen mens resten
-// er i Oslo (37 km) skal fortsatt telle med i utsnittet før avreise, mens en
-// splitt over et helt hav (fly-avstand) er godt utenfor.
+// Avstand for å regne to punkter som samme «sted» i velgKlyngeUtsnitt()
+// (lib/kart-klynge.ts, #735). 50 km: Gardermoen–Oslo (37 km) teller med,
+// en splitt over et hav gjør det ikke.
 export const KART_KLYNGE_AVSTAND_M = 50_000
 
-// Hvor stor andel av POSISJONENE hovedklyngen må utgjøre for at startutsnittet
-// skal ramme inn KUN den (markeringer stemmer ikke — se lib/kart-klynge.ts).
-// STRENGT flertall (mer enn halvparten) — en klynge på akkurat halvparten
-// vinner ikke alene, og ved en 5/4/3-splitt (42 %) viser kartet fortsatt alt
-// i stedet for å gjemme to tredjedeler av gjengen bak den største
-// enkeltgruppa (#735).
+// Andel av POSISJONENE hovedklyngen må ha for at startutsnittet rammer inn
+// kun den. Strengt flertall: ved 5/4/3-splitt vises alle (#735).
 export const KART_KLYNGE_MIN_ANDEL = 0.5
 
 // ─── STEDSSØK PÅ KARTET (#757) ────────────────────────────────────────────
 
-// Tegngrenser for søketeksten i StedSok. Nedre grense hindrer et
-// enkelt-tegn-søk som uansett ikke gir treff verdt kostnaden mot Nominatim;
-// øvre er en raus fritekst-adresse ("Karl Johans gate 1, Oslo, Norge").
+// Tegngrenser for søket. Nedre hindrer enkelt-tegn-søk mot Nominatim.
 export const STED_SOK_MIN_LENGDE = 2
 export const STED_SOK_MAKS_LENGDE = 120
 
-// Maks antall kandidater vist etter ett søk. Nominatims `limit`-parameter
-// settes til samme tall — vi henter aldri flere treff enn vi faktisk viser.
+// Maks kandidater vist; Nominatims `limit` settes likt.
 export const STED_SOK_MAKS_TREFF = 5
 
-// Timeout på ETT Nominatim-kall (geokod() og sokSteder() deler denne).
-// Samme 5 s som geokod() hardkodet før denne konstanten fantes.
+// Timeout på ETT Nominatim-kall (delt av geokod() og sokSteder()).
 export const GEOKODING_TIMEOUT_MS = 5000
 
-// Levetid på cachede søkeresultater i sokSted()-actionen. Nominatims
-// bruksvilkår krever caching av respons; 7 dager er lenge nok til at et
-// gjentatt søk på samme sted/nærhet ikke går til tjenesten på nytt, og kort
-// nok til at et sted som får nytt navn (skifter eier, endrer skilting)
-// retter seg selv innen rimelig tid.
+// Cache-levetid for søkeresultater. Nominatims vilkår krever caching; 7 dager
+// lar et omdøpt sted rette seg selv innen rimelig tid.
 export const STED_SOK_CACHE_SEK = 7 * 24 * 3600
 
-// Minste avstand mellom to utgående Nominatim-kall fra sokSted() — Nominatims
-// grense er 1 req/s. Håndheves PER SERVER-INSTANS, ikke globalt (se
-// docs/geokoding.md § Interaktivt stedssøk for hvorfor det er godtatt).
+// Minste avstand mellom Nominatim-kall (grense 1 req/s). Per server-instans,
+// ikke globalt — se docs/geokoding.md § Interaktivt stedssøk.
 export const NOMINATIM_MIN_AVSTAND_MS = 1000
 
-// Halv bredde/høyde (i grader) på viewbox rundt kartets senter når søket har
-// en nærhet å vekte mot (#757). `bounded=0` gjør boksen til en PREFERANSE,
-// ikke et filter — et treff langt utenfor bare rangeres lavere, forsvinner
-// ikke. 0.5° er omtrent en storby-region (~55 km nord-sør ved norsk
-// breddegrad), stort nok til at søk etter et sted i nabobyen fortsatt
-// fungerer, men skjevt nok til å foretrekke stedet nærmest kartutsnittet
-// framfor et likelydende sted på andre siden av kloden.
+// Halv bredde/høyde (grader) på viewbox rundt kartets senter. Med bounded=0
+// er boksen en preferanse, ikke et filter. 0,5° ≈ en storby-region (~55 km
+// nord-sør), så nabobyen fortsatt treffes.
 export const STED_SOK_VIEWBOX_GRADER = 0.5
 
-// «Nærmeste pub» (#727): søkeradius rundt utgangspunktet, i meter. 5 km dekker
-// byen med god margin; finnes ingen pub innenfor, er svaret «ingen i nærheten»
-// heller enn en pub man ikke gidder gå til.
+// «Nærmeste pub» (#727): søkeradius i meter. Ingen innenfor = «ingen i
+// nærheten» heller enn en pub man ikke gidder gå til.
 export const PUB_SOK_RADIUS_M = 5000
 
-// Overpass-spørringens egen tidsgrense (sekunder) — serveren gir opp etter
-// dette. Klientens GEOKODING_TIMEOUT_MS (5 s) er den som faktisk teller.
+// Overpass-serverens egen tidsgrense. Klientens GEOKODING_TIMEOUT_MS er den
+// som faktisk teller.
 export const OVERPASS_TIMEOUT_SEK = 5
 
-// Lenke-forhåndsvisning i chatten. Serveren henter siden et medlem lenket
-// til og leser tittel/bilde ut av <head>. Tidsgrensen holder et tregt
-// nettsted fra å henge kortet; bytegrensen holder oss unna å laste ned
-// hele artikkelen (DN-forsiden er ~500 KB, og alt vi trenger står i head).
+// Lenke-forhåndsvisning i chatten. Tidsgrensen hindrer at et tregt nettsted
+// henger kortet; bytegrensen holder oss unna å laste hele artikkelen (alt vi
+// trenger står i <head>).
 export const LENKE_HENT_TIDSGRENSE_MS = 5000
 export const LENKE_HENT_MAKS_BYTES = 512 * 1024
 export const LENKE_MAKS_OMDIRIGERINGER = 4
-// Levetid for en hentet forhåndsvisning — i serverens minne og i telefonens
-// HTTP-cache. En artikkeltittel endrer seg sjelden etter publisering.
+// Levetid for en hentet forhåndsvisning, i serverminne og telefonens HTTP-cache.
 export const LENKE_CACHE_SEK = 24 * 3600
 export const LENKE_MAKS_LENGDE = 2048
 
-// Fondsrapport (#785): kvartalsvis innlegg med kontantstatus og fordeling.
-// Antall EGNE farge-tokens (--fond-farge-1..6) før eierne deler siste,
-// nøytrale token (--fond-farge-7) — se lib/fondsrapport.ts fargeToken().
-// Lengden på ref-en («~a1b2c3d4», de SISTE hex-tegnene av profil-UUID-en) som
-// identifiserer en eier i teksten uten å lekke hele id-en — bare nok til å
-// skille de ~18 medlemmene fra hverandre, se lib/fondsrapport.ts refFor().
+// Fondsrapport (#785), se lib/fondsrapport.ts.
+// Antall egne farge-tokens (--fond-farge-1..6) før resten deler den nøytrale
+// --fond-farge-7 (fargeToken()).
+// Lengden på eier-ref-en (siste hex-tegn av profil-UUID) — nok til å skille
+// medlemmene uten å lekke hele id-en (refFor()).
 export const FONDSRAPPORT_EGNE_FARGER = 6
 export const FONDSRAPPORT_REF_LENGDE = 8

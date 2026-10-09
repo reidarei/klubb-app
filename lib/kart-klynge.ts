@@ -1,17 +1,10 @@
-// Kartets startutsnitt (#735) — hvem regnes med når kartet zoomes inn ved
-// åpning.
+// Kartets startutsnitt: hvem regnes med når kartet zoomes inn ved åpning.
+// Å ramme inn alt er galt når noen er underveis — én mann igjen på
+// avreisestedet drar utsnittet over et helt hav (#735).
 //
-// Å ramme inn ALLE punkter (hver manns siste posisjon + hver markering) er
-// riktig når gjengen er samlet, men galt når noen er underveis: én mann som
-// fortsatt står på avreisestedet drar utsnittet over et helt hav, og kartet
-// blir ubrukelig for dem som faktisk er framme (#735).
-//
-// Ingen Date-bruk her, med vilje: to telefoner som åpner kartet tjue
-// minutter fra hverandre skal beregne SAMME utsnitt av SAMME punktsett.
-// Å vekte punkter etter ferskhet ble vurdert og forkastet — det ville gjort
-// utsnittet avhengig av NÅR man ser på kartet, ikke bare HVOR punktene er,
-// og to menn som åpner appen med noen minutters mellomrom kunne da fått
-// ulikt utsnitt av identisk data. Regelen holder seg derfor til ren geografi.
+// Ingen Date-bruk, med vilje: to telefoner som åpner kartet med minutters
+// mellomrom skal beregne SAMME utsnitt av samme punktsett. Ferskhetsvekting
+// er derfor forkastet — regelen er ren geografi.
 
 import { avstandM } from './geo-avstand'
 import { KART_KLYNGE_AVSTAND_M, KART_KLYNGE_MIN_ANDEL } from './konstanter'
@@ -19,48 +12,30 @@ import { KART_KLYNGE_AVSTAND_M, KART_KLYNGE_MIN_ANDEL } from './konstanter'
 /**
  * Velger hvilke punkter startutsnittet skal ramme inn.
  *
- * Posisjoner og markeringer holdes bevisst ATSKILT, og bare posisjonene
- * stemmer over hvor utsnittet havner. Markeringer er steder, ikke menn: de
- * blir liggende igjen lenge etter at gjengen har dratt videre, og hvis de
- * fikk stemme kunne 8 mann i Lisboa tape 8–8 mot 4 mann på Gardermoen pluss
- * 4 gamle markeringer samme sted. I verste fall kunne en klynge markeringer
- * alene vunnet, og kartet ville åpnet et sted INGEN befinner seg.
+ * Bare posisjonene stemmer over hvor utsnittet havner. Markeringer er steder,
+ * ikke menn: de blir liggende etter at gjengen har dratt videre, og fikk de
+ * stemme kunne gamle markeringer vippe utsnittet — i verste fall dit INGEN er.
  *
- * Steg for steg:
- * 1. Finnes ingen posisjoner, klynges det ikke — alle markeringene returneres
- *    (#699). Det er «ram inn alt», som før denne funksjonen fantes: det er
- *    ingenting å klynge PÅ, og markeringene er alt kartet har å vise.
- * 2. Posisjonene klynges. To posisjoner hører til samme klynge hvis avstanden
- *    mellom dem er under KART_KLYNGE_AVSTAND_M, ELLER de er transitivt lenket
- *    via andre posisjoner («single linkage» — en posisjon trenger bare være
- *    nær ÉN annen i klyngen, ikke nær alle). Union-Find (disjoint-set) finner
- *    disse klyngene effektivt.
- * 3. Har den største klyngen et STRENGT flertall (mer enn KART_KLYNGE_MIN_ANDEL
- *    av posisjonene), er DEN hovedtyngden. Ellers er hovedtyngden alle
- *    posisjonene — ved f.eks. en 5/4/3-splitt på 12 mann er ingen gruppe over
- *    halvparten, og kartet skal fortsatt vise alle i stedet for å gjemme to
- *    tredjedeler av gjengen bak den største enkeltgruppa.
- * 4. Markeringene som ligger innenfor KART_KLYNGE_AVSTAND_M av et punkt i
- *    hovedtyngden legges til. En markering på den andre siden av kloden skal
- *    ikke dra utsnittet dit (#735).
+ * 1. Ingen posisjoner → alle markeringene returneres («ram inn alt», #699).
+ * 2. Posisjonene klynges med single linkage: under KART_KLYNGE_AVSTAND_M fra
+ *    ÉN annen i klyngen holder (transitivt). Union-Find.
+ * 3. Har største klynge STRENGT flertall (> KART_KLYNGE_MIN_ANDEL), er den
+ *    hovedtyngden; ellers alle posisjonene (f.eks. 5/4/3 av 12 → vis alle).
+ * 4. Markeringer innenfor KART_KLYNGE_AVSTAND_M av hovedtyngden legges til (#735).
  *
- * Renser IKKE bort noe fra kartet eller lista — kallstedet bruker
- * returverdien KUN til fitBounds/senter. Alt tegnes uansett (se
- * PosisjonsKart.tsx).
+ * Fjerner ikke noe fra kartet — returverdien brukes KUN til fitBounds/senter.
  */
 export function velgKlyngeUtsnitt(
   posisjoner: [number, number][],
   markeringer: [number, number][],
 ): [number, number][] {
-  // Ingen posisjoner: markeringene er alt vi har, og alle skal med (#699).
   if (posisjoner.length === 0) return [...markeringer]
 
   const foreldre = posisjoner.map((_, i) => i)
 
   function finnRot(i: number): number {
     while (foreldre[i] !== i) {
-      // Sti-komprimering: peker rett på besteforelder, halverer stien for
-      // neste oppslag. Ren ytelse — endrer ikke hvilke røtter som finnes.
+      // Sti-halvering — ren ytelse, endrer ikke hvilke røtter som finnes.
       foreldre[i] = foreldre[foreldre[i]]
       i = foreldre[i]
     }
@@ -96,16 +71,12 @@ export function velgKlyngeUtsnitt(
     if (klynge.length > storste.length) storste = klynge
   }
 
-  // Hovedtyngden: den største klyngen hvis den har strengt flertall, ellers
-  // alle posisjonene (ingen klar hovedtyngde ⇒ kartet skal vise alle mann).
   const hovedtyngde: [number, number][] =
     storste.length / posisjoner.length > KART_KLYNGE_MIN_ANDEL
       ? storste.map(i => posisjoner[i])
       : posisjoner
 
-  // Markeringene deltok ikke i avstemningen, men blir med i utsnittet hvis de
-  // uansett ligger der gjengen er — ellers ville kartet zoomet forbi stedet
-  // man nettopp satte en markering på.
+  // Ellers ville kartet zoomet forbi stedet man nettopp satte en markering på.
   const naere = markeringer.filter(([mLat, mLng]) =>
     hovedtyngde.some(([pLat, pLng]) => avstandM(mLat, mLng, pLat, pLng) < KART_KLYNGE_AVSTAND_M),
   )

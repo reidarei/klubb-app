@@ -47,16 +47,10 @@ export type KommentarScope =
 // gapet må minst dekke utvidX, ellers stjeler den fra tekstfeltet.
 const KOMMENTAR_SEND_TREFF = treffflateRundt({ hoyde: 24, bredde: 24 })
 
-// Avkort-pilas treffflate vokser usynlig til minstemål uten å flytte layout
-// (#700/#793). Kan ikke bruke <Treffflate> (rendrer <button>) fordi pila
-// ligger inni kortets ytre <a> — se KommentarMiniatyr for samme begrunnelse.
+// Ikke <Treffflate> (rendrer <button>): pila ligger inni kortets ytre <a> (#700/#793).
 const KOMMENTAR_EKSPANDER_TREFF = treffflateRundt({ hoyde: 14, bredde: 14 })
 
-/**
- * Brukes i kommentarradene for å styre + knapp-synlighet.
- * Holder ID-en til raden der picker er åpen (null = lukket).
- * Åpnes via long-press; lukkes ved valg eller trykk utenfor raden.
- */
+/** ID-en til raden med åpen reaksjons-picker (null = lukket). Åpnes via long-press. */
 type AktivReaksjonId = string | null
 
 // Kommentarer lengre enn dette avkortes med en ekspander-pil (#793).
@@ -69,8 +63,6 @@ function snippet(tekst: string | null, maks = AVKORT_GRENSE): string {
   return rensket.slice(0, maks - 1) + '…'
 }
 
-// Ren URL-hjelper for navigasjon til detaljsiden. Uttømmende switch over
-// KommentarScope (tre varianter) — TS kontrollerer at alle scope-grenene er dekket.
 export function detaljUrl(scope: KommentarScope): string {
   switch (scope.type) {
     case 'arrangement': return `/arrangementer/${scope.id}`
@@ -80,23 +72,17 @@ export function detaljUrl(scope: KommentarScope): string {
 }
 
 /**
- * Render av én kommentars tekstinnhold, avkortet med en ekspander-pil for
- * lange kommentarer (#793). Egen komponent — ikke en lokal variabel inni
- * .map() — fordi ekspandert-tilstanden er lokal per kommentar; en useState
- * kalt inni en map-callback ville brutt rules of hooks.
- *
- * Beholder null-guard mot tom rad (se #281). inneILenke: kommentarene
- * rendres inni kortets ytre <a>, så ekte lenker ville nøstet <a>-i-<a> (#465)
- * — samme begrunnelse gjelder ekspander-pila, derfor <span role="button">
- * og ikke <Treffflate> (som rendrer <button>).
+ * Én kommentars tekst, avkortet med ekspander-pil (#793). Egen komponent fordi
+ * ekspandert-tilstanden er per kommentar (useState i .map() bryter rules of hooks).
+ * Null-guard mot tom rad (#281). Alt rendres inni kortets ytre <a>, derfor
+ * inneILenke (#465) og <span role="button"> i stedet for <button>.
  */
 function KommentarTekst({ tekst }: { tekst: string }) {
   const [utvidet, setUtvidet] = useState(false)
   const rensket = tekst.replace(/\s+/g, ' ').trim()
   if (!rensket) return null
   const langTekst = rensket.length > AVKORT_GRENSE
-  // Avkortet visning er allerede whitespace-kollapset av snippet() og flyter
-  // som normal brødtekst. Utvidet visning beholder linjeskift fra originalen.
+  // Avkortet er whitespace-kollapset; utvidet beholder originalens linjeskift.
   const visning = utvidet ? tekst.trim() : snippet(tekst)
 
   function toggle(e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) {
@@ -117,8 +103,7 @@ function KommentarTekst({ tekst }: { tekst: string }) {
     >
       <Linkified text={visning} inneILenke />
       {langTekst && (
-        // Ytre span bærer den synlige avstanden til teksten; indre span bærer
-        // treffflatens egne negative marginer uforstyrret av den avstanden.
+        // Ytre span: avstand til teksten. Indre: treffflatens negative marginer.
         <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 4 }}>
           <span
             role="button"
@@ -146,9 +131,7 @@ function KommentarTekst({ tekst }: { tekst: string }) {
   )
 }
 
-// Subkomponent for bilde-miniatyr i kommentar-raden. Rendres kun når
-// kommentaren har bilde_url — fallback til tekstlig «📷 Bilde» ved lastefeil
-// slik at raden ikke blir blank. Tap navigerer til detaljsiden.
+// Fallback til «📷 Bilde» ved lastefeil så raden ikke blir blank.
 function KommentarMiniatyr({ src, href }: { src: string; href: string }) {
   const [feilet, setFeilet] = useState(false)
   const router = useRouter()
@@ -162,12 +145,8 @@ function KommentarMiniatyr({ src, href }: { src: string; href: string }) {
     )
   }
 
-  // Navigasjon skjer via eksplisitt router.push, ikke via en ytre <a>: hele
-  // kommentar-seksjonens rot-div har onClick={stopp} (stopPropagation) som svelger
-  // klikk før de når kort-Link-en, så miniatyren må navigere selv. Bruker
-  // <div role="button"> — ikke <button> — fordi miniatyren rendres inne i kortets
-  // ytre <a>, og <button> i <a> er ugyldig HTML (React 19 hydration-advarsel).
-  // Samme mønster som toggle-headeren under (<span role="button" tabIndex={0}>).
+  // Navigerer selv: seksjonens rot-div svelger klikk (stopp) før de når kort-Link-en.
+  // <div role="button">, ikke <button>: <button> i kortets <a> er ugyldig HTML.
   function naviger(e: MouseEvent | KeyboardEvent) {
     e.stopPropagation()
     router.push(href)
@@ -196,12 +175,8 @@ function relativTid(iso: string): string {
 }
 
 /**
- * Delt stil for de to header-variantene (chevron-toggle og navigerende label).
- * Ligger felles fordi de skal SE identiske ut — de skiller seg kun i oppførsel;
- * to parallelle kopier var nettopp mønsteret som driftet fra hverandre i #648.
- * Horisontal padding med kompenserende negativ margin utvider treffområdet
- * uten å flytte teksten (den sto tidligere med padding '8px 0', altså et
- * treffområde nøyaktig like bredt som teksten).
+ * Delt stil for de to header-variantene (chevron-toggle og navigerende label) —
+ * de skal se identiske ut; to kopier driftet fra hverandre (#648).
  */
 const HEADER_STIL = {
   display: 'inline-flex',
@@ -222,12 +197,9 @@ const HEADER_STIL = {
 } as const
 
 /**
- * Kollapsbar kommentar-seksjon på arrangement- og pollkort. Viser opp til 3
- * siste kommentarer og har et inline input-felt under dem for å legge til
- * ny kommentar uten å navigere bort fra agenda.
- *
- * Alle klikk og tastatur-hendelser må stoppe propagasjon — ellers trigger
- * den ytre Link-wrapperen navigering til detaljsiden. Default ekspandert.
+ * Kollapsbar kommentar-seksjon på agendakort: opp til 3 siste kommentarer +
+ * inline input. Alle klikk/tastetrykk må stoppe propagasjon, ellers navigerer
+ * kortets ytre Link til detaljsiden.
  */
 export default function KommentarerPaaKort({
   kommentarer,
@@ -246,48 +218,37 @@ export default function KommentarerPaaKort({
   startKollapset?: boolean
   /** Totalt antall kommentarer (for korrekt overskrift når listen er begrenset til 3). */
   totaltAntall?: number
-  /** Aktive profiler — brukes til @mention-forslag på navn. `@alle` er alltid tilgjengelig uansett, siden den ikke krever profil-data. */
+  /** For @mention-forslag. `@alle` er alltid tilgjengelig uten profil-data. */
   profiler?: ChatProfil[]
-  /** Innlogget brukers id — ekskluderes fra mention-forslag (han nevner ikke seg selv). */
+  /** Ekskluderes fra mention-forslag. */
   brukerId?: string
-  /** Innlogget brukers navn — trengs for å rendre optimistisk kommentar-rad. se #316 */
+  /** Trengs for å rendre optimistisk rad; utelatt = ingen optimistisk fase (#316). */
   brukerNavn?: string
-  /** Innlogget brukers bilde_url — trengs for optimistisk rad-avatar. se #316 */
+  /** For avatar på optimistisk rad (#316). */
   brukerBildeUrl?: string | null
-  /** Innlogget brukers rolle — trengs for gul glød på optimistisk rad. se #316 */
+  /** For gul glød på optimistisk rad (#316). */
   brukerRolle?: string | null
-  /** Tommel opp-knapp (MeldingTommel) plassert til venstre for input-pillen.
-   * Kun sendt inn av MeldingKort — poll-/arrangement-kort har ingen
-   * kort-nivå-reaksjoner i DB ennå. KommentarerPaaKort er ren layout-vert
-   * her og eier ingen reaksjons-state selv. Se #468. */
+  /** Tommel opp-knapp til venstre for input-pillen. Kun fra MeldingKort — andre
+   * kort har ingen kort-nivå-reaksjoner. Komponenten er ren layout-vert (#468). */
   tommel?: ReactNode
 }) {
   const visTall = totaltAntall ?? kommentarer.length
   const [apen, setApen] = useState(!startKollapset)
   const [tekst, setTekst] = useState('')
   const [mentionSøk, setMentionSøk] = useState<string | null>(null)
-  // Optimistiske rader som vises umiddelbart etter send, fjernes når server-refresh lander
   const [optimistiske, setOptimistiske] = useState<KommentarKortData[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const [sender, startTransition] = useTransition()
   const router = useRouter()
 
-  // Styrer hvilken kommentar-rad som viser reaksjons-picker.
-  // null = ingen åpen; ellers ID-en til raden der picker er synlig.
   const [aktivReaksjonId, setAktivReaksjonId] = useState<AktivReaksjonId>(null)
-  // Long-press timer ref — brukes på touch for å åpne picker etter 350 ms hold.
-  // Redusert fra 500 ms fordi 500 uten visuell feedback føles «dødt» — 350 er
-  // fortsatt over accidental-touch-terskelen men merkes umiddelbart som «noe skjer».
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Startkoordinater for gjeldende long-press — brukes til å canselle timeren
-  // hvis fingeren beveger seg > 10 px (scroll-intensjon, ikke long-press). se #359-review.
+  // Startpunkt, for å avbryte long-press ved scroll-bevegelse.
   const longPressStartRef = useRef<{ x: number; y: number } | null>(null)
-  // ID-en til raden som er «under aktivt trykk» — brukes til subtil scale-transform
-  // som visuell feedback før 350 ms-terskelen. null = ingen aktiv presse.
+  // Raden under aktivt trykk — gir visuell feedback før LONG_PRESS_MS er nådd.
   const [pressetId, setPressetId] = useState<string | null>(null)
 
-  // Trykk utenfor raden med åpen picker lukker den. Uten dette lukket den seg
-  // bare ved valg av reaksjon — på mobil fantes ingen vei ut (#793-oppfølging).
+  // Trykk utenfor raden lukker pickeren — ellers fantes ingen vei ut på mobil (#793).
   useEffect(() => {
     if (aktivReaksjonId === null) return
     const lukkVedTrykkUtenfor = (e: PointerEvent) => {
@@ -300,34 +261,21 @@ export default function KommentarerPaaKort({
 
   const mentionForslag = lagMentionForslag(mentionSøk, profiler, brukerId)
 
-  // Flett optimistiske rader inn etter server-radene, men dropp en optimistisk
-  // rad så snart en matchende server-rad er kommet inn (samme avsender-navn +
-  // samme innhold). Match på innhold+avsender — IKKE på id, siden temp-id og
-  // server-id er ulike. Dette gjør dobbel-frame-racen strukturelt umulig: i det
-  // øyeblikket router.refresh() leverer server-raden, skygger den den optimistiske
-  // raden, uavhengig av React-batching-timing. Avsender-navn er den eneste
-  // avsender-identifikatoren KommentarKortData bærer på klienten; den optimistiske
-  // raden er alltid avsenderens egen, så navne-kravet hindrer falske positiver der
-  // to ulike medlemmer tilfeldigvis skriver samme tekst. se #316
+  // En optimistisk rad skygges av server-raden med samme avsender-navn + innhold
+  // (ikke id — temp-id og server-id er ulike). Da kan dobbel-rad ikke oppstå
+  // uansett batching-timing. Navnet er eneste avsender-id KommentarKortData har (#316).
   const serverNokler = new Set(
     kommentarer.map(k => `${k.avsender.navn} ${k.innhold ?? ''}`),
   )
   const usynkroniserte = optimistiske.filter(
     o => !serverNokler.has(`${o.avsender.navn} ${o.innhold ?? ''}`),
   )
-  // Cap visningen til siste 3 — server caper også til 3, så en optimistisk rad
-  // pusher den eldste ut visuelt i stedet for å legge til en fjerde. Nyeste står
-  // sist (lista er kronologisk, eldste øverst), så .slice(-3) gir de 3 nyeste. se #316
+  // Siste 3 som serveren (kronologisk, nyeste sist): en optimistisk rad skyver
+  // den eldste ut i stedet for å bli en fjerde (#316).
   const visteKommentarer = [...kommentarer, ...usynkroniserte].slice(-3)
 
-  // Tre tidligere uavhengige betingelser (chevron på visTall, liste på
-  // visteKommentarer, inline-felt på apen/kommentarer) kunne komme i utakt
-  // når et korts kommentarer alle lå utenfor agenda-queryens topp-30-uttak
-  // (se #648) — telleren sa "6 kommentarer", men listen var tom, og
-  // inline-feltet sto synlig fordi `apen` aldri fikk en chevron å bli
-  // togglet av. Avledet fra én kilde (visteKommentarer) så tilstanden ikke
-  // kan uttrykkes igjen: kanEkspandere styrer om det finnes en liste å
-  // åpne/lukke, utvidet er den faktiske synlige listen.
+  // Begge avledet fra visteKommentarer, ikke visTall/apen: telleren kan vise
+  // kommentarer som ikke er med i agenda-uttaket, og da finnes ingen liste (#648).
   const kanEkspandere = visteKommentarer.length > 0
   const utvidet = apen && kanEkspandere
 
@@ -349,8 +297,6 @@ export default function KommentarerPaaKort({
     e.stopPropagation()
   }
 
-  // Long-press på mobil: hold i 350 ms åpner reaksjons-picker for denne raden.
-  // pointerdown/up dekker touch-enheter.
   const startLongPress = useCallback((kommentarId: string) => (e: React.PointerEvent) => {
     e.stopPropagation()
     longPressStartRef.current = { x: e.clientX, y: e.clientY }
@@ -360,16 +306,13 @@ export default function KommentarerPaaKort({
     }, LONG_PRESS_MS)
   }, [])
 
-  // Cancel timer hvis fingeren beveger seg mer enn LONG_PRESS_BEVEGELSE_PX —
-  // tolkes som scroll-intensjon, ikke long-press. Terskelen matcher iOS' egne
-  // heuristikker for tap-vs-scroll.
+  // Bevegelse over terskelen er scroll-intensjon, ikke long-press.
   const sjekkBevegelse = useCallback((e: React.PointerEvent) => {
     const start = longPressStartRef.current
     if (!start || longPressRef.current === null) return
     const dx = e.clientX - start.x
     const dy = e.clientY - start.y
     if (dx * dx + dy * dy > LONG_PRESS_BEVEGELSE_PX ** 2) {
-      // mer enn LONG_PRESS_BEVEGELSE_PX unna startpunkt
       clearTimeout(longPressRef.current)
       longPressRef.current = null
       longPressStartRef.current = null
@@ -396,7 +339,6 @@ export default function KommentarerPaaKort({
     setTekst('')
     setMentionSøk(null)
 
-    // Map fra det lokale KommentarScope til CHAT_KONFIG-scopet.
     const chatScope: ChatScope =
       scope.type === 'arrangement'
         ? { type: 'arrangement', arrangementId: scope.id }
@@ -404,13 +346,11 @@ export default function KommentarerPaaKort({
           ? { type: 'poll', pollId: scope.id }
           : { type: 'melding', meldingId: scope.id }
 
-    // Temp-nøkkel — samme «temp-»-prefiks som Chat.tsx bruker for å signalisere
-    // at raden ikke er bekreftet fra server ennå. se #316
+    // «temp-»-prefikset markerer ubekreftet rad, som i Chat.tsx (#316).
     const tempId = `temp-${crypto.randomUUID()}`
 
-    // Vis kommentaren umiddelbart hvis vi har nok brukerdata til å rendre raden.
-    // Uten brukerdata (f.eks. «Tidligere»-seksjon der props ikke sendes) hopper
-    // vi over den optimistiske fasen og venter på server-refresh. se #316
+    // Uten brukerdata (f.eks. «Tidligere», der props ikke sendes) hoppes den
+    // optimistiske fasen over, og vi venter på server-refresh (#316).
     if (brukerNavn) {
       setOptimistiske(o => [
         ...o,
@@ -432,14 +372,10 @@ export default function KommentarerPaaKort({
       try {
         await sendChatMelding(chatScope, melding, null)
         await router.refresh()
-        // Backstop-opprydding: innholds-dedupen i render (se serverNokler) skygger
-        // allerede den optimistiske raden så snart server-raden lander, så ingen
-        // dobbel-rad synes uavhengig av batching-timing. Dette filteret rydder bort
-        // selve state-raden så lista ikke vokser ubegrenset — og fanger rader som
-        // aldri fikk en server-match. se #316
+        // Dedupen i render skjuler allerede raden; dette rydder state så lista
+        // ikke vokser, og fanger rader som aldri fikk server-match (#316).
         setOptimistiske(o => o.filter(r => r.id !== tempId))
       } catch {
-        // Rollback: fjern optimistisk rad og gjenopprett input
         setOptimistiske(o => o.filter(r => r.id !== tempId))
         setTekst(melding)
       }
@@ -454,15 +390,9 @@ export default function KommentarerPaaKort({
       }}
       onClick={stopp}
     >
-      {/* To varianter av headeren, avhengig av kanEkspandere (se #648):
-          agenda-queryen henter de 30 globalt nyeste kommentarene innenfor
-          samme 12-mnd-vindu (cutoffIso) som arrangementene, på tvers av ALLE
-          arrangementer, og caper til 3 per kort. En kommentar faller altså ut
-          både om den er eldre enn cutoff og om den ikke er blant de 30
-          nyeste. Et kort hvis kommentarer alle er ute av det uttaket får
-          telleren (visTall) uten at visteKommentarer har noe å vise. Da er
-          det ikke noe å ekspandere — headeren blir en navigerende label i
-          stedet for en chevron som toggler en tom seksjon. */}
+      {/* Agenda-queryen henter bare de 30 globalt nyeste kommentarene (innen
+          cutoff), så et kort kan ha teller uten noe å vise. Da blir headeren en
+          navigerende label i stedet for en chevron som toggler tomt (#648). */}
       {visTall > 0 && (kanEkspandere ? (
         <span
           role="button"
@@ -507,9 +437,7 @@ export default function KommentarerPaaKort({
               router.push(detaljUrl(scope))
             }
           }}
-          // Tallet må stå FØRST i labelen: aria-label overstyrer tekstinnholdet,
-          // så en ren handlingstekst ville skjult antallet for skjermleser —
-          // chevron-varianten annonserer det.
+          // aria-label overstyrer tekstinnholdet, så antallet må med i labelen.
           aria-label={`${visTall} ${visTall === 1 ? 'kommentar' : 'kommentarer'} — åpne for å lese`}
           style={HEADER_STIL}
         >
@@ -517,10 +445,7 @@ export default function KommentarerPaaKort({
         </span>
       ))}
 
-      {/* Kommentar-liste — kun synlig når utvidet (apen && kanEkspandere).
-          Optimistiske rader flettes inn via visteKommentarer, deduppes mot
-          server-rader på innhold+avsender og capes til siste 3, så ingen
-          dobbel-rad eller fjerde rad synes. se #316 */}
+      {/* Kommentar-liste (inkl. optimistiske rader, maks 3) */}
       {utvidet && (
         <div
           style={{
@@ -532,34 +457,29 @@ export default function KommentarerPaaKort({
         >
           {visteKommentarer.map(k => {
             const erTempRad = k.id.startsWith('temp-')
-            // Temp-rader (optimistiske) har ikke server-ID ennå — picker skjules
+            // Temp-rader har ingen server-ID å reagere på.
             const pickerApen = !erTempRad && aktivReaksjonId === k.id
             return (
               <div
                 key={k.id}
-                // Brukes av «trykk utenfor lukker»-lytteren til å kjenne igjen raden
+                // Leses av «trykk utenfor lukker»-lytteren.
                 data-kommentar-rad={k.id}
                 style={{
                   display: 'flex',
                   gap: 8,
                   alignItems: 'flex-start',
-                  // Subtil scale + opacity som visuell feedback under 350 ms-vinduet.
-                  // Signaliserer «noe skjer» før picker faktisk åpner. se #359-review.
                   transform: pressetId === k.id ? 'scale(0.98)' : 'scale(1)',
                   opacity: pressetId === k.id ? 0.85 : 1,
                   transition: 'transform 120ms ease-out, opacity 120ms ease-out',
-                  // Under long-press: hindre tekst-seleksjon og iOS callout-meny
-                  // (kopier/del-popup) som ellers stjeler gesture. se #359-review.
+                  // Ellers stjeler tekstmarkering og iOS-callout gesten (#359).
                   userSelect: pressetId === k.id ? 'none' : undefined,
                   WebkitUserSelect: pressetId === k.id ? 'none' : undefined,
                   WebkitTouchCallout: pressetId === k.id ? 'none' : undefined,
                 }}
-                // Mobil: long-press (350 ms) åpner picker
                 onPointerDown={!erTempRad ? startLongPress(k.id) : undefined}
                 onPointerMove={sjekkBevegelse}
                 onPointerUp={avbrytLongPress}
                 onPointerCancel={avbrytLongPress}
-                // Hindre iOS context-meny når vi er midt i et long-press
                 onContextMenu={e => {
                   if (pressetId === k.id) e.preventDefault()
                 }}
@@ -590,10 +510,8 @@ export default function KommentarerPaaKort({
                     >
                       {k.avsender.navn}
                     </span>
-                    {/* relativTid regnes ut i render (formatDistanceToNowStrict); server-render og hydrering
-                        skjer sekunder fra hverandre, og krysser vi en minutt-grense i det vinduet blir
-                        teksten ulik → hydration-feil (React #418, logget i feil_logg — se #466). suppressHydrationWarning
-                        er Reacts tiltenkte mekanisme for tidsstempler. */}
+                    {/* Relativ tid kan krysse en minuttgrense mellom SSR og hydrering
+                        → React #418 (#466). suppressHydrationWarning er mekanismen for tidsstempler. */}
                     <span
                       suppressHydrationWarning
                       style={{
@@ -607,17 +525,14 @@ export default function KommentarerPaaKort({
                       {relativTid(k.opprettet)}
                     </span>
                   </div>
-                  {/* KommentarTekst rendrer kun når det finnes tekst — unngår
-                      tom div ved ren-bilde-kommentarer. Se #281/#350 */}
+                  {/* Ingen tom div ved ren-bilde-kommentarer (#281/#350). */}
                   {k.innhold && <KommentarTekst tekst={k.innhold} />}
-                  {/* Bilde-miniatyr rendres i tillegg til tekst hvis kommentaren
-                      har bilde_url — både tekst og miniatyr vises når begge finnes */}
+                  {/* Miniatyr i tillegg til tekst når begge finnes. */}
                   {k.bilde_url && (
                     <KommentarMiniatyr src={k.bilde_url} href={detaljUrl(scope)} />
                   )}
-                  {/* Reaksjons-rad: badges alltid synlige, + knapp kun ved long-press.
-                      brukerId er alltid satt i denne konteksten (agendaforside), men
-                      KommentarReaksjoner returnerer null ved tomme reaksjoner og lukket picker. */}
+                  {/* Badges alltid synlige, + kun ved long-press. Returnerer null
+                      ved tomme reaksjoner og lukket picker. */}
                   {brukerId && !erTempRad && (
                     <KommentarReaksjoner
                       meldingId={k.id}
@@ -634,22 +549,13 @@ export default function KommentarerPaaKort({
         </div>
       )}
 
-      {/* Inline kommentar-input — synlig når listen faktisk er utvidet, eller
-          når det ikke finnes noen kommentar overhodet ennå (visTall === 0).
-          IKKE på `apen` alene: uten kommentarer å ekspandere finnes ingen
-          chevron å toggle apen med, så apen blir stående på sin
-          initialverdi (true) — å henge feltet på apen alene ville da vist
-          det igjen for et kort man ikke kan lese kommentarene til
-          (nøyaktig bugen i #648, i ny drakt). */}
+      {/* IKKE på `apen` alene: uten chevron å toggle med står apen på true, og
+          feltet ville vist for et kort man ikke kan lese kommentarene til (#648). */}
       {(utvidet || visTall === 0) && (
         <div style={{ marginTop: kommentarer.length > 0 ? 10 : 0 }} onClick={stopp}>
-        {/* Mention-velger ligger over hele raden (tommel + pille) så chips
-            ikke krysser den runde rammen. Komponenten returnerer null når
-            det ikke er forslag, så ingen tom margin. */}
+        {/* Over hele raden (tommel + pille) så chips ikke krysser den runde rammen. */}
         <MentionVelger forslag={mentionForslag} onVelg={velgMention} />
-        {/* Tommel (hvis sendt inn) + input-pille i samme rad. Uten tommel-prop
-            er dette identisk med tidligere layout — ingen ekstra wrapper-
-            effekt for poll-/arrangement-kort. Se #468. */}
+        {/* Tommel (kun fra MeldingKort) + input-pille i samme rad (#468). */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {tommel}
         <div

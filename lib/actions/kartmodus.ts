@@ -42,11 +42,10 @@ export async function settKartmodus(paa: boolean, gjeldendeSti: string) {
 
   const cookieStore = await cookies()
   const cookieNavn = status.modus === 'reise' ? REISEMODUS_COOKIE : MOETEMODUS_COOKIE
-  const eventPrefix = status.modus === 'reise' ? 'reisemodus' : 'moetemodus'
 
   if (paa) {
     cookieStore.delete(cookieNavn)
-    logg.warn(`${eventPrefix}.paa`, { arrangement_id: status.arrangementId })
+    logg.warn(status.modus === 'reise' ? 'reisemodus.paa' : 'moetemodus.paa', { arrangement_id: status.arrangementId })
   } else {
     cookieStore.set(cookieNavn, status.arrangementId, {
       httpOnly: true,
@@ -60,7 +59,7 @@ export async function settKartmodus(paa: boolean, gjeldendeSti: string) {
       // før det.
       expires: new Date(status.sluttTidspunkt),
     })
-    logg.warn(`${eventPrefix}.av`, { arrangement_id: status.arrangementId })
+    logg.warn(status.modus === 'reise' ? 'reisemodus.av' : 'moetemodus.av', { arrangement_id: status.arrangementId })
   }
 
   // Layout leser hentKartmodus() på hver request uansett (cache() dedupliserer

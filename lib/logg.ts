@@ -1,168 +1,6 @@
 // Sentral observability-modul. All server-side logging skal gå gjennom
 // logg.warn() / logg.feil() — ikke console.error/warn direkte.
-//
-// Event-taksonomi (dot-separert navnerom):
-//   varsel.send.feilet          — sendPush/sendEpost-feil i lib/varsler.ts
-//   varsel.epost.feilet         — Resend API-feil i lib/epost.ts
-//   varsel.url.relativ          — url som verken er absolutt eller starter med «/» (#507)
-//   varsel.url.fremmed          — url pekte ut av appen (eller var malformert); push fikk «/varsler/{id}» når varsel-raden finnes, ellers «/» — aldri stien fra URL-en (#687)
-//   varsel.push.feilet          — web-push-feil i lib/push.ts
-//   bilde.opplast.feilet        — R2-opplasting feiler
-//   video.opplast.feilet        — video-upload feiler
-//   tema.ugyldig                — ukjent tema-verdi
-//   chat.varsler.feilet         — sendChatVarsler() kastet uventet fra sendVarslerEtterPost (chat.ts try/catch), meldingen er alt lagret (#612)
-//   kaaringspoll.varsler.feilet — varsler etter kåringspoll-hendelse feiler
-//   cron.paaminne.feilet        — enkelt-oppgave i påminnelses-cron feiler
-//   bursdagsgratulasjon.feilet  — insert-feil eller uventet exception
-//   vitals.insert.feilet        — web-vitals-rad feiler i DB
-//   github.webhook.feilet       — webhook-konfigurasjons- eller varselfeil
-//   bli-utvikler.issue.feilet   — GitHub Issue-oppretting feiler
-//   ai.datoforslag.feilet       — Anthropic dato-forslag feiler (auth/transient)
-//   aktivitet.tell.feilet       — tell_aktivitet-RPC feiler i /api/aktivitet
-//   tidligere.hent.feilet       — arrangement/melding/poll-spørring feiler på /tidligere (#492)
-//   poll.aggregat.feilet        — tell_poll_stemmer-RPC feiler i lib/queries/poll.ts (#492)
-//   varsel.innstilling.feilet   — varsel_innstillinger-oppslag (aktiv/test-modus) feiler (#503)
-//   varsel.fortidssperre.feilet — arrangementer-oppslag for fortids-sperren feiler (#503)
-//   varsel.mottakere.feilet     — mottaker-oppslag (profiles) feiler i lib/varsler.ts (#503)
-//   varsel.mottakere.tomme      — eksplisitt mottakerliste ga 0 aktive treff utenfor testmodus (#503)
-//   varsel.dedup.feilet         — dedup-select mot varsel_logg feiler, sender likevel (#503)
-//   varsel.preferanser.feilet   — varsel_preferanser/push_subscriptions-oppslag feiler (#503)
-//   varsel.logg.insert.feilet   — insert i varsel_logg feiler for én mottaker, sender likevel (#503)
-//   varsel.scope.feilet         — arrangement/poll-oppslag for @-mention-tittel feiler, sender likevel (#503)
-//   pass.varsler.feilet         — varsel etter pass-tilgang-hendelse feiler i lib/actions/pass.ts (#503)
-//   pass.stempel.feilet         — stemple_pass_varslet()-RPC feiler etter vellykket varsel (#504)
-//   cron.klientfeil.varsel.feilet — alarm-varsel i sjekk-klientfeil-cronet feiler, retention kjører videre (#503)
-//   cron.klientfeil.mottakere.tomme — warn: ingen har faar_feilvarsler, døgnalarmen fyrer aldri (#582)
-//   github.webhook.mottakere.tomme  — warn: ingen har faar_issue_varsler, innspill når bare innsenderen (#582)
-//   cron.paaminne.hentForDag.feilet          — arrangementer-oppslag for en påminnelsesdag feiler (#504)
-//   cron.paaminne.hentArrangorPurringer.feilet — arrangoransvar-oppslag for dagens purringer feiler (#504)
-//   cron.paaminne.kaaring.fersk.feilet   — «åpne kåringspoller»-spørringen feiler (#495/#504)
-//   cron.paaminne.kaaring.retry.feilet   — «uvarslede avsluttede kåringspoller»-spørringen feiler (#495/#504)
-//   cron.paaminne.kaaring.profiler.feilet — mottaker-oppslag for kåringsvarsel feiler, DEN ufravikelige (#495/#504)
-//   cron.paaminne.kaaring.feilet — behandleKaaringspoller() kastet, fanget i kjorPaaminnelser (#504)
-//   cron.paaminne.kaaring.rpc.feilet     — avslutt_kaaringspoll-RPC-en feilet for én poll (#504)
-//   cron.paaminne.kaaring.tom_rpc        — avslutt_kaaringspoll returnerte ingen rad (#504)
-//   cron.paaminne.kaaring.fersk_ikke_lukket — warn: fersk poll ble ikke lukket (ikke_moden / kappløp), utsettes til retry (#504)
-//   bursdagsgratulasjon.profiler.feilet  — profiler-med-fødselsdato-oppslag feiler (#504)
-//   bursdagsgratulasjon.avsendere.feilet — avsender-admin-oppslag feiler (#504)
-//   bursdagsgratulasjon.chatvarsel.feilet — sendChatVarsler for gratulasjonen kastet; retryes neste slot via dedup_noekkel (#642)
-//   bursdagsvarsel.profiler.feilet — profiler-oppslag (alle aktive) feiler i det egne bursdagsvarselet, sendes ikke til noen (#638)
-//   bursdagsvarsel.feilet          — sendVarsel for bursdagsvarselet kastet for ett bursdagsbarn; retryes neste slot via dedup_noekkel, neste bursdagsbarn er upåvirket (#638)
-//   cron.paaminne.jobb.feilet            — kjorPaaminnelser() kastet ut av handleren; de andre cron-jobbene kjørte likevel (#638-review)
-//   cron.bursdagsgratulasjon.jobb.feilet — kjorBursdagsgratulasjon() kastet; bursdagsvarselet kjørte likevel samme slot (#638-review)
-//   cron.bursdagsvarsel.jobb.feilet      — kjorBursdagsvarsel() kastet ut av sin egen try/catch (#638-review)
-//   logg.feillogg.insert.feilet — feil_logg-inserten fra logg.feil() selv feilet/timet ut (#496)
-//   pass.varsel.oppslag.feilet  — navn-/tur-berikelse for pass-varsel feiler etter committet skriving, sender likevel (pulje A)
-//   fond.eiendom.oppslag.feilet    — gammel markedsverdi-oppslag feiler før oppdatering/sletting (pulje A)
-//   fond.verdipapir.oppslag.feilet — gammel verdi-oppslag feiler før oppdatering/sletting (pulje A)
-//   fond.kontant.oppslag.feilet    — gammel kontantsaldo-oppslag feiler før oppdatering (pulje A)
-//   fond.oppgjor.profiler.feilet   — profil-oppslag for visningsnavn-matching i fond-oppgjør feiler (pulje A)
-//   fond.oppgjor.innskudd.feilet   — innskudd-rader-oppslag i fond-oppgjør feiler (pulje A)
-//   fond.oppgjor.saldo.feilet      — kontantsaldo-oppslag for diff-visning i fond-oppgjør feiler (pulje A)
-//   album.revalidering.oppslag.feilet    — arrangement_id-oppslag for revalidatePath feiler etter committet album-mutasjon (pulje A)
-//   album.slett.bilder_oppslag.feilet    — bilder-oppslag for R2-opprydding feiler før album slettes (pulje A)
-//   arrangement.slett.bilde_oppslag.feilet — bilde_url-oppslag for R2-opprydding feiler før arrangement slettes (pulje A)
-//   arrangement.kobletPoll.oppslag.feilet  — koblet kåringspoll-oppslag feiler på arrangementsiden, siden rendres uten lenken (pulje B)
-//   tidligere.minProfil.oppslag.feilet     — egen rolle-oppslag feiler på /tidligere, faller tilbake til «ikke admin» (pulje B)
-//   album.profiler.oppslag.feilet          — @mention-profiler-oppslag feiler på albumsiden (pulje C)
-//   arrangement.rediger.gjeldendeAnsvar.oppslag.feilet — forhåndsvalgt dropdown-verdi feiler på rediger-siden (pulje C)
-//   innspill.profiler.oppslag.feilet       — innsender-navn-oppslag feiler på innspill-siden (pulje C)
-//   tiebreak.profiler.oppslag.feilet       — kandidat-navn/bilde-oppslag feiler på tiebreak-siden (pulje C)
-//   medlem.rediger.generalsekretaer.oppslag.feilet — GS-confirm-dialog-oppslag feiler på medlem-rediger-siden (pulje C)
-//   bli-utvikler.profil.oppslag.feilet     — innsender-navn-oppslag feiler ved innspill-opprettelse (pulje C)
-//   cron.klientfeil.mottakere.feilet       — admin-mottaker-oppslag feiler i sjekk-klientfeil-cronet, alarm uteblir (pulje C)
-//   github.webhook.mottakere.feilet        — admin-mottaker-oppslag feiler i GitHub-webhooken, 500 så GitHub retryer (pulje C)
-//   admin.varsel_logg.hent.feilet          — varsel_logg-oppslag feiler i admin-API-et; klienten får generisk 500 (pulje C-review)
-//   klient.chat.meldinger.feilet           — chat-meldingshenting feiler i nettleseren (pulje C-review)
-//   klient.chat.reaksjoner.feilet          — reaksjonshenting feiler i nettleseren (pulje C-review)
-//   varsel.dedup.ingen_noekkel  — tillatDuplikat: false uten arrangementId/pollId/dedupNoekkel i lib/varsler.ts — ingen nøkkel å deduplisere på, sjekken under er en no-op (#518)
-//   samtaler.marker_lest.oppdatering.feilet — samtale_chat-oppdateringen til lest = true feiler ved sidelast, siden rendres videre (#539)
-//   samtaler.marker_lest.feilet — markerSamtaleLest() kastet uventet fra /samtaler/[id] (#539)
-//   ulest.marker_chat_sett.feilet — markerChatSett() kastet uventet fra /chat (startes tidlig, awaites før svar — var fire-and-forget og ble kuttet av Vercel)
-//   klient.ressurs.feilet       — en <script>/<link> lastet ikke i nettleseren: appen mangler kode (#575)
-//   klient.bilde.feilet         — warn: et <img> lastet ikke. Kosmetisk og oftest transient på mobil (#603)
-//   varsel.push.timeout         — sendPush traff PUSH_TIMEOUT_MS-deadline (Promise.race), svelges som andre push-feil (#612)
-//   chat.varsler.mention.feilet   — @-mention-benet i sendChatVarsler kastet; nevnte legges tilbake i broadcast (#612)
-//   chat.varsler.broadcast.feilet — broadcast-benet i sendChatVarsler kastet, mention-benet er upåvirket (#612)
-//   varsel.chat.fanout.treg       — warn: sendChatVarsler brukte over CHAT_FANOUT_TREG_MS på mottaker-oppslag + begge sendVarsel-kall (#612)
-//   varsel.epost.budsjett.chat_hoppet — warn: e-postkanalen droppet for et chat-varsel, døgnforbruket er over EPOST_DOEGNBUDSJETT_CHAT. Push+in-app gikk (#612-review)
-//   varsel.epost.budsjett.feilet  — tellingen av døgnforbruk feilet; vakten feiler ÅPENT og sender e-post som normalt (#612-review)
-//   varsel.preferanser.lagring.feilet — upserten i /api/varsel-preferanser feiler; medlemmets kanal-/nivåvalg ble ikke lagret (#614-review)
-//   klient.varsel_preferanser.feilet  — klienten fikk ikke lagret kanal-/nivåvalget på /profil (nettverk eller 500 fra ruta) (#614-review)
-//   push.klikk                  — warn: SERVICE WORKER teller hvert trykk på et push-varsel (#676). Bærer klikk_id (#688, korrelasjons-ID generert i notificationclick — binder raden til den påfølgende push.klikk.navigert/push.klikk.innlogging), maal, hadde_maal, antall_klienter, synlig_klient og handling (focus/openWindow) — rettet i #681 etter at ingen av feltene sto i whitelisten og radene kom inn tomme. Ikke en feil — halvparten av et regnskap.
-//   push.klikk.navigert         — warn: KLIENTEN teller hver gang et push-klikk faktisk FORSØKER en navigasjon (#676). Bærer kilde (broadcast/cache/kanal/login — sistnevnte fra #688), allerede_paa_maal, synlighet, klikk_id og forsok (hvilket navigasjonsforsøk raden gjelder, #688), og maal (sti-en vi navigerer TIL, #626). `url` på raden settes automatisk av sendFeilBeacon til window.location.href — det er AVREISESIDEN, ikke målet; en tidligere lesning av denne raden forvekslet de to (#626, tabellen i issue-kommentaren 2026-09-19 var feiltolket telemetri, rettet 2026-10-01). Differansen mot push.klikk ER tapet; uten begge tallene er en mislykket overlevering usynlig.
-//   push.klikk.landet           — warn: KLIENTEN bekrefter at en navigasjon fra en tidligere side faktisk landet på målet (#626). Bærer klikk_id, kilde, forsok og maal. push.klikk minus (push.klikk.landet + push.klikk.navigert med allerede_paa_maal: true) = det reelle tapet.
-//   klient.pushklikk.foreldet   — warn: push-klikk-URL-en lå lagret, men var eldre enn vinduet da klienten leste den (#626)
-//   klient.sw.registrering.feilet — navigator.serviceWorker.register('/sw.js') avviste; push og push-klikk-navigasjon er dødt på den enheten (#626-review)
-//   klient.sw.pendingnav.feilet — warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review)
-//   push.klikk.innlogging       — warn: klienten bar et push-klikk-mål GJENNOM /login (#688) — sesjonen var utløpt da varselet ble trykket, brukeren logget inn, og målet ble bevart i stedet for å falle til agendaen. Bærer klikk_id og maal (den lokale stien).
-//   klient.pushklikk.oppgitt    — warn: push-klikk-målet ble forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten at klienten landet der — oppføringen forkastes for å bryte en potensiell løkke (#688). Bærer klikk_id, maal og forsok.
-//   bli-utvikler.kobling.feilet — insert i innspill_kobling feiler etter opprettet issue, markøren i body dekker fallback (#632)
-//   github.webhook.kobling.oppslag.feilet — innspill_kobling-oppslag feiler; faller tilbake til body-markøren (#632)
-//   github.webhook.kobling.kun_body — warn: DB-koblingen manglet, body-markøren reddet varselet (issue fra før migrasjon 136) (#632)
-//   github.webhook.kobling.tapt — verken DB-rad eller body-markør funnet for et issue fra appen; varselet kan ikke sendes (#632)
-//   innspill.koblinger.oppslag.feilet — innspill_kobling-batchoppslag feiler på /innspill, faller tilbake til body-parsing (#632)
-//   github.webhook.innspill.uten_endringslogg — FEIL: brukerinnspill lukket som gjennomført uten merket endringslogg-oppføring. Et innspill skal leveres og kommenteres, eller avslås — aldri noe midt imellom, så dette er kontraktbrudd, ikke en normaltilstand. Fyrer IKKE på not_planned/duplicate (legitime utfall); bærer `versjon` så «glemt merkelapp» kan skilles fra «lukket før deploy» (#633)
-//   server.render.feilet        — feil kastet i server component / action / route handler, fanget av onRequestError. Bærer `digest` (koblingen til raden app/error.tsx skriver fra klienten) og en MASKERT melding — eneste sted vi persisterer meldingstekst, se loggRenderFeil() (#631)
-//   server.render.sesjon_utloept — warn: render-feilen var en død sesjon (PGRST301 / AUTH_INGEN_SESJON), ikke en programfeil. Egen event så den ikke drukner i server.render.feilet og ikke vekker døgnalarmen (#631)
-//   server.render.logging.feilet — warn (stdout only): loggRenderFeil() eller den dynamiske importen av lib/logg kastet inne i onRequestError. Siste skanse — vi står i Next sin feilhåndtering, så en throw her ville maskert den ekte feilen (#631)
-//   bursdagsbilde.generering.levert — VELLYKKET generering: bytes, mime_type og modell fra Vertex-svaret. Ren observability på warn-kanalen (eneste ikke-Sentry stdout-kanal) — det man trenger å se ved «first light» (#641)
-//   bursdagsbilde.generering.feilet — Vertex-, R2- eller DB-oppdaterings-steget i genererBursdagsbilde() feilet; fingerprint = feilklasse ('auth'/'kvote'/'ugyldig'/'blokkert'/'transient'/'r2'/'db-update') (#641)
-//   bursdagsbilde.profiler.feilet   — fail-closed mottakerspørring (aktive profiler m/ fødselsdato) feiler i cron-ruta; kastes videre, IKKE tolket som «ingen har bursdag» (#641)
-//   bursdagsbilde.claim.feilet      — krev_bursdagsbilde()-RPC-en feiler (ikke 0-rader, som er normalt — en faktisk spørringsfeil) (#641)
-//   bursdagsbilde.slett.feilet      — R2-sletting feiler: enten det GAMLE bildet ved erstatning (raden peker alt på det nye), opprydding av et ferskt objekt etter feilet DB-oppdatering (fingerprint 'opprydding'), eller admin-slettingen der R2-objektet ER borte men raden ikke ble nullet (fingerprint 'db-update-etter-r2' — 'sti' i konteksten er det som gjør manuell opprydding mulig) (#641)
-//   bursdagsbilde.input.avvist      — profilbildet kunne ikke hentes/valideres server-side (HTTP-feil, ugyldig MIME, for stort) før noe Vertex-kall i det hele tatt ble forsøkt (#641)
-//   cron.bursdagsbilde.jobb.feilet  — hoved- eller nødpasset i bursdagsbilde-cronet kastet ut av sin egen try/catch; det andre passet kjørte likevel (#641)
-//   logg-feil.kontekst.strippet     — warn: scrubKontekst() droppet minst én nøkkel fra en klient-innsendt kontekst. Bærer count, sample (kommaseparerte nøkkelnavn, kappet i antall og lengde, og kun de som har form som en identifikator fra vår egen kode), ugyldige (antallet som ikke hadde den formen — nøklene er klient-kontrollerte, så formen er PII-vakten) og fingerprint = klient-eventet som mistet felter (ikke `event`: den nøkkelen ville overskrevet event-navnet i stdout-linja). Belte-og-sele mot __tests__/logg-kontekst-dekning.test.ts: fanger en gammel cachet klient-bundle som sender et felt vakten aldri så (#681)
-//   posisjon.deling.feilet          — upsert i posisjon_deling feiler; mannen får «klarte ikke lagre», ingen prikk settes på kartet (#693/#695)
-//   posisjon.punkt.feilet           — insert av et nytt sporpunkt feiler etter at delingen er lagret (#695)
-//   posisjon.punkt.oppdatering.feilet — oppdatering av tidsstempel på et eksisterende punkt feiler (mannen står stille) (#695)
-//   posisjon.siste_punkt.feilet     — warn: oppslag av forrige punkt feiler; vi legger inn et nytt punkt i stedet for å nekte deling (#695)
-//   posisjon.punkt.slett.feilet     — sletting av eget spor ved «slutt å dele» feiler; delingen står fortsatt på (#695)
-//   posisjon.stopp.feilet           — sletting av egen delingsrad feiler; brukeren får beskjed om å prøve igjen (#693)
-//   posisjon.paagaaende.feilet      — warn: oppslaget av «hvilket arrangement pågår nå» feiler i den FAIL-OPEN varianten (finnPaagaaendeArrangement); posisjonen lagres videre, bare som et løst punkt uten spor-tilhørighet. Den STRENGE varianten kaster i stedet, og feilen dukker da opp som kartmodus.oppslag.feilet (#695/#723/#780)
-//   posisjon.pling.avsender.feilet  — warn: navneoppslag for pling-teksten feiler; varselet sendes med «Noen» som avsender (#695)
-//   cron.posisjon.rydd.feilet       — opprydding av utgåtte posisjonsspor feiler i påminnelses-cronet; de andre jobbene kjører videre (#695)
-//   cron.posisjon.jobb.feilet       — ryddPosisjonsspor() kastet ut av sin egen try/catch; påminnelsene kjørte likevel (#695)
-//   kart.markering.feilet           — insert av en kartmarkering feiler; mannen får «klarte ikke lagre», ingen nål settes (#697)
-//   kart.markering.slett.feilet     — sletting av en kartmarkering feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#697)
-//   kart.chat.hent.feilet           — warn: klubbchat-meldingene kunne ikke hentes til kartets chat-panel; kartet rendres videre med tomt panel (#709)
-//   kart.chat.profiler.feilet       — warn: profil-oppslaget for chat-panelet feilet; navn og avatarer mangler i panelet (#709)
-//   klient.posisjon.nektet          — warn: nettleseren nektet posisjon (avslått tillatelse, timeout eller ingen fix). Ikke en programfeil — men uten den vet vi ikke om iOS-PWA-en glemmer tillatelsen mellom økter, som er det åpne spørsmålet i #693
-//   kart.<symbol>.mottakere.feilet  — feil: mottakeroppslaget for et varslende symbols alert feilet. Markeringen står, varselet uteblir. <symbol> er id-en fra registeret (lib/markering-symboler.ts) — hvert symbol setter sin egen loggMottakere-streng i klubbens datafil (lib/klubb-symboler.ts), så navnene er literaler der, ikke her (#747, #759, #767)
-//   kart.<symbol>.varsel.feilet     — feil: sendVarsel() kastet for et varslende symbols alert. Markeringen er allerede lagret. Samme <symbol>-forklaring som over (#747, #759, #767)
-//   kart.timeplan.hent.feilet       — warn: timeplan-postene for det aktuelle arrangementet kunne ikke hentes; panelet får en egen, synlig feiltilstand — ALDRI en tom liste (#716)
-//   kart.timeplan.opprett.feilet    — insert av en timeplan-post feiler (arrangement-oppslag eller selve inserten); mannen får «klarte ikke lagre», teksten legges tilbake i feltet (#716)
-//   kart.timeplan.opprett.arrangement_borte — warn: inserten fikk 23503 på arrangement_id, altså ble turen slettet mellom vakten og inserten (geokodingen kan ligge inntil 5 s imellom). Normal samtidighet, ikke serverfeil — mannen får samme «finnes ikke lenger» som vakten gir
-//   kart.timeplan.opprett.retry_les_feilet — «Prøv igjen» traff 23505 (raden er lagret), men den lagrede raden kunne ikke leses tilbake; posten svares ut uten sted framfor med et punkt vi ikke har dekning for
-//   kart.timeplan.opprett.uten_kvittering  — warn: inserten gikk fint, men PostgREST ga ingen rad tilbake; svaret faller tilbake på verdiene vi selv skrev. Bærer sample = postens id
-//   kart.timeplan.slett.feilet      — sletting av en timeplan-post feiler (spørringsfeil, ikke RLS-avvisning — den gir 0 rader, ikke error) (#716)
-//   reisemodus.paa                  — warn: et medlem slo reisemodus PÅ (for seg selv, på denne enheten). Bærer arrangement_id. Ikke en feil — halvparten av produktsignalet arkitekturstyret ba om i #723
-//   tema.lagre.feilet             — feil: serverskriving av tema-valget feilet. Valget ligger allerede i localStorage, så brukeren merker ingenting — det følger bare ikke med til neste enhet (#742)
-//   reisemodus.av                   — warn: et medlem slo reisemodus AV for turen. Bærer arrangement_id. DEN andre halvparten: slår 14 av 18 den av dag én, er funksjonen feil, og da må tallet finnes (#723)
-//   moetemodus.paa                  — warn: et medlem slo møtemodus PÅ (for seg selv, på denne enheten). Bærer arrangement_id. Samme signal som reisemodus.paa, egen møte-variant (#780)
-//   moetemodus.av                   — warn: et medlem slo møtemodus AV for møtet. Bærer arrangement_id. Samme signal som reisemodus.av, egen møte-variant (#780)
-//   kartmodus.oppslag.feilet        — arrangement- eller flagg-oppslaget bak reisemodus/møtemodus feiler; modusen faller til AV (fail-open mot VANLIG APP — aldri til fullskjermkart ved en feiltakelse). hentKartmodus() bruker de strenge helper-variantene nettopp for at en DB-feil ikke skal se ut som «ingen tur/møte» eller «kill-switch av» (#723, navnet flyttet fra reisemodus.oppslag.feilet da resolveren ble felles for begge moduser i #780)
-//   kart.symbol.tilpasning.feilet     — warn: oppslaget i kart_symbol_tilpasning feilet; kartet og varselet bruker registerets standardnavn og -emoji (/innstillinger/kart)
-//   klubb.info.feilet                 — warn: oppslaget i klubb_info feilet; Klubb-siden og agendaen bruker standardverdiene fra lib/klubb-config.ts (/innstillinger/om-klubben)
-//   kart.symbol.ukjent                 — warn: erGyldigSymbol() koerserte et symbol utenfor registeret til STANDARD_SYMBOL. Migrasjon 152 (#767) bytter constrainten fra verdiliste til format-check, så en slik verdi ikke lenger nødvendigvis feiler i databasen — dette er signalet som erstatter den tapte 23514. Bærer sample = den avviste verdien (klient-kontrollert, men et symbol-navn, ikke fritekst)
-//   kart.sok.tidsavbrudd                — warn: interaktivt stedssøk (sokSted-actionen) traff Nominatims GEOKODING_TIMEOUT_MS. Søketeksten logges ALDRI (#757)
-//   klient.kart.sok.feilet              — sokSted()-actionen AVVISTE i nettleseren (utløpt sesjon, nettverksbrudd); mannen får «Søket svarer ikke», knappen låses opp. Bærer kun feilmeldingen, aldri søketeksten (#757-review)
-//   klient.kart.pub.feilet              — naermestePub()-actionen AVVISTE i nettleseren (utløpt sesjon, nettverksbrudd). Bærer kun feilmeldingen, aldri koordinater (#727)
-//   kart.sok.feilet                     — feil: interaktivt stedssøk feilet (ikke-OK status, nettverksfeil, uventet svarformat). Søketeksten logges ALDRI (#757)
-//   kart.pub.tidsavbrudd                — warn: «Nærmeste pub» (naermestePub-actionen) traff GEOKODING_TIMEOUT_MS mot Overpass. Koordinater logges ALDRI (#727)
-//   kart.pub.feilet                     — feil: «Nærmeste pub» feilet (ikke-OK status, nettverksfeil, uventet svarformat). Koordinater logges ALDRI (#727)
-//   arrangement.koble.feilet        — koble() feiler i opprettArrangement etter at arrangementet er committet; loggføres og opprettelsen fortsetter (#760)
-//   admin.opprett_medlem.profil.feilet — navn/visningsnavn-oppdateringen feiler etter at auth-brukeren alt er opprettet; admin får passordet uansett (#760)
-//   push.abonnement.lagring.feilet  — upsert av push-abonnement feiler i /api/push/subscribe (#760)
-//   push.abonnement.sletting.feilet — sletting av push-abonnement feiler i /api/push/subscribe (#760)
-//   cron.klientfeil.retention.feilet — retention-slettingen i feil_logg feiler; cronet svarer 500 med slettetGamle: null (#760)
-//   kaaringspoll.opprett.opprydding.feilet — kompenserende poll-sletting feiler etter feilet valg-insert; den opprinnelige feilen kastes uansett (#760)
-//   poll.opprett.opprydding.feilet  — kompenserende poll-sletting feiler etter feilet valg-insert; den opprinnelige feilen kastes uansett (#760)
-//   melding.opprett.opprydding.feilet — kompenserende melding-sletting feiler etter feilet bilde-insert; den opprinnelige feilen kastes uansett (#760)
-//   album.bump.feilet               — warn: oppdatert-bump på album feiler etter vellykket bildeopplasting (#760)
-//   album.auto_omslag.feilet        — warn: automatisk omslagssetting feiler etter vellykket bildeopplasting (#760)
-//   fond.historikk.feilet           — insert i fond_verdi_historikk feiler; selve verdien er allerede lagret (#760)
+// Event-navnene er registrert som type i lib/logg-hendelser.ts.
 
 import { naa } from '@/lib/dato'
 import { SENTRY_DSN } from '@/lib/config'
@@ -170,6 +8,7 @@ import { maskerRadverdier } from '@/lib/sentry-scrub'
 import type { Json } from '@/lib/supabase/database.types'
 import { utdragNoekkelnavn } from '@/lib/logg-sanitering'
 import { LOGG_NOEKLER_MAKS_ANTALL } from '@/lib/konstanter'
+import type { LoggHendelse } from '@/lib/logg-hendelser'
 
 // ─── PII-SCRUBBING ──────────────────────────────────────────────────────────
 
@@ -598,7 +437,7 @@ export const logg = {
    * Logg en forventet, ikke-kritisk hendelse til stdout. Ikke Sentry.
    * Bruk for: validerings-avvisning, blokkert utsending, manglende konfig.
    */
-  warn(event: string, data?: Record<string, unknown>) {
+  warn(event: LoggHendelse, data?: Record<string, unknown>) {
     const ts = naa()
     console.log(
       JSON.stringify({ ts, nivaa: 'warn', event, ...scrubbet(data) })
@@ -619,7 +458,7 @@ export const logg = {
    * feil_logg bedre fingerprint-gruppering på tvers av instanser.
    */
   async feil(
-    event: string,
+    event: LoggHendelse,
     error: unknown,
     opts?: {
       fingerprint?: string

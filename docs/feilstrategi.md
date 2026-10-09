@@ -133,7 +133,7 @@ Grunnen til at dette har fått et eget avsnitt: en alarm som går på bagateller
 
 Sentry er en ekstern tjeneste som samler feil og viser hvor i koden de oppsto, og `feil_logg` er en tabell i vår egen database. Begge beskrives nærmere nedenfor.
 
-Hver logglinje har et *event-navn* — en kort, punktdelt tekst som `varsel.send.feilet` — slik at samme type feil kan telles og grupperes. Navnene er samlet i `lib/logg.ts`.
+Hver logglinje har et *event-navn* — en kort, punktdelt tekst som `varsel.push.feilet` — slik at samme type feil kan telles og grupperes. Navnene er registrert som type i `lib/logg-hendelser.ts`: et navn som mangler der gir typefeil.
 
 ### Døgnalarmen
 

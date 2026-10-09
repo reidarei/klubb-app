@@ -12,6 +12,7 @@
 // fordi den aldri kan velte kallstedet (ingen promise å håndtere).
 
 import { CHUNK_RELOAD_SPERRE_MS } from '@/lib/konstanter'
+import type { LoggHendelse } from '@/lib/logg-hendelser'
 
 const MELDING_MAKS_TEGN = 200
 const STACK_MAKS_TEGN = 2000
@@ -177,7 +178,7 @@ export function proevChunkReload(): boolean {
  * den skal kunne pinnes i test uten å montere en React-komponent.
  */
 export function klassifiserRessursfeil(tagName: string): {
-  event: string
+  event: LoggHendelse
   nivaa: 'warn' | 'error'
 } {
   return tagName.toLowerCase() === 'img'
@@ -213,7 +214,7 @@ export function bildeKilde(url: string): string {
 }
 
 export function sendFeilBeacon(
-  event: string,
+  event: LoggHendelse,
   message: string,
   stack?: string,
   ekstra?: Record<string, unknown>,
@@ -263,7 +264,7 @@ export function sendFeilBeacon(
  *
  * Ikke for uventede exceptions — de fanges allerede av FeilFangst.
  */
-export function meldKlientfeil(event: string, feil: unknown): void {
+export function meldKlientfeil(event: LoggHendelse, feil: unknown): void {
   const melding =
     feil && typeof feil === 'object' && 'message' in feil
       ? String((feil as { message: unknown }).message)

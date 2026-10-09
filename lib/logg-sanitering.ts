@@ -1,19 +1,13 @@
 // Sanitering av klient-innsendt feilkontekst på vei inn i feil_logg.
-//
-// Lå tidligere inline i app/api/logg-feil/route.ts. Flyttet ut fordi Next
-// begrenser hva en route-fil kan eksportere — saniteringen var dermed umulig å
-// pinne i test, og det var nettopp der blob:-bugen under fikk ligge i fred.
-// Route-handleren er hovedkalleren; modulen er server-side (bruker Buffer).
-// Formvakten på nøkkelNAVN nederst (utdragNoekkelnavn) deles i tillegg med
-// lib/logg.ts — se #711-reviewen: samme lekkasjeflate, to inngangsdører.
+// Egen modul (ikke i route-fila) så den kan testes — Next begrenser hva en
+// route-fil kan eksportere. Server-side (Buffer). Formvakten nederst deles
+// med lib/logg.ts: samme lekkasjeflate, to inngangsdører (#711).
 
 import { LOGG_KONTEKST_MAKS_KB, LOGG_NOEKKEL_MAKS_TEGN } from '@/lib/konstanter'
 
-// Felter vi tillater fra klienten. Alt annet strippes stille.
-// Speiler KONTEKST_WHITELIST i lib/logg.ts, med klient-spesifikke tillegg.
-// Eksportert (ikke bare modul-lokal) fordi __tests__/logg-kontekst-dekning.test.ts
-// (#681) må kunne lese den for å statisk verifisere at hvert felt et
-// sendFeilBeacon()/loggPushKlikk()-kall faktisk sender står her.
+// Felter vi tillater fra klienten; alt annet strippes STILLE. Speiler
+// KONTEKST_WHITELIST i lib/logg.ts + klient-tillegg. Eksportert for
+// __tests__/logg-kontekst-dekning.test.ts, som sjekker at alt klienten sender står her (#681).
 export const KONTEKST_WHITELIST = new Set([
   'profil_id',
   'arrangement_id',
@@ -25,14 +19,12 @@ export const KONTEKST_WHITELIST = new Set([
   'fingerprint',
   'sample',
   'status',
-  // Klient-spesifikke feltere som er OK å lagre (sanitiseres nedenfor)
+  // Klient-spesifikke, saniteres i saniterVerdi()
   'message',
   'stack',
   'digest',
   'url',
-  // Diagnosefelter fra lib/klient-logg.ts (#575). Ingen av dem er
-  // bruker-identifiserende: de beskriver klienten og feilen, ikke personen.
-  // Legger du til et felt der, må det inn her — ellers strippes det stille.
+  // Diagnosefelter fra lib/klient-logg.ts (#575) — beskriver klienten, ikke personen.
   'name', // Error-klassenavn: TypeError / ChunkLoadError / Error
   'cause', // underliggende feil når en wrapper har kastet på nytt
   'appversjon', // hvilken bundle klienten faktisk kjørte
@@ -40,10 +32,7 @@ export const KONTEKST_WHITELIST = new Set([
   'standalone', // PWA eller vanlig nettleserfane
   'nettverk', // effectiveType (4g/3g/…), mangler i Safari
   'ressurs', // URL-en til en <script>/<link>/<img> som ikke lastet
-  // Push-klikk-diagnosefelter (#676/#681). Sw.js og ServiceWorkerRegistrering.tsx
-  // sendte disse fra #676, men ingen sto i whitelisten — de strippet stille,
-  // og radene ble tomme ({}). Ingen er personidentifiserende: alle beskriver
-  // klientens tilstand ved klikket, ikke medlemmet.
+  // Push-klikk-diagnose fra sw.js og ServiceWorkerRegistrering.tsx (#676/#681).
   'maal', // pathname til varselets mål (sanitiseres nedenfor, samme gren som `url`)
   'hadde_maal', // boolean: hadde notifikasjonen en gyldig same-origin-URL
   'maal_grunn', // 'mangler' | 'ugyldig' | 'kryss_origin' | 'gyldig' — HVORFOR target ble null (#687)
@@ -53,14 +42,11 @@ export const KONTEKST_WHITELIST = new Set([
   'kilde', // 'broadcast' | 'cache' | 'kanal' | 'login' (#688): hvilken sti som leverte navigasjonen
   'allerede_paa_maal', // boolean: klienten sto allerede på målet
   'synlighet', // document.visibilityState på klient-siden
-  // #688: korrelasjons-ID og forsøksteller for push-klikk-navigasjonskjeden.
-  'klikk_id', // genereres i notificationclick (sw.js), IKKE i push-payloaden — binder push.klikk til den påfølgende push.klikk.navigert/push.klikk.innlogging. Tilfeldig per klikk, ikke personidentifiserende.
-  'forsok', // tall: hvilket navigasjonsforsøk raden gjelder (PUSH_KLIKK_MAKS_FORSOK er loop-bryteren)
+  'klikk_id', // tilfeldig per klikk (sw.js), binder push.klikk til .navigert/.innlogging (#688)
+  'forsok', // navigasjonsforsøk nr.; PUSH_KLIKK_MAKS_FORSOK er loop-bryteren (#688)
 ])
 
-// Grenser for klient-strengfelter. Rå error-messages/stacks kan inneholde
-// PII (variabelverdier med navn, e-poster i URL-parametre osv.) — vi trunker
-// aggressivt og fjerner query-strings fra URL. Se #366 review-runde.
+// Rå messages/stacks kan bære PII — trunker aggressivt (#366).
 const MESSAGE_MAKS_TEGN = 200
 const STACK_MAKS_BYTES = 2048
 
@@ -75,11 +61,9 @@ function trunker(verdi: string): string {
 }
 
 /**
- * Saniter en ressurs-URL: en asset som ikke lastet.
- *
- * Origin beholdes (i motsetning til `url`) fordi assetene kan ligge på et annet
- * domene enn appen — R2 — og «hvilken host svarte ikke» er halve svaret. Query
- * strippes fortsatt: signerte URL-er kan bære token. (#575)
+ * Saniter URL-en til en asset som ikke lastet. Origin beholdes (motsatt av
+ * `url`): assets kan ligge på R2, og «hvilken host» er halve svaret. Query
+ * strippes: signerte URL-er kan bære token (#575).
  */
 function saniterRessurs(verdi: string): string {
   let u: URL
@@ -89,15 +73,11 @@ function saniterRessurs(verdi: string): string {
     return trunker(verdi)
   }
 
-  // data: bærer selve filen i URL-en. Payloaden er både enorm og potensielt et
-  // bilde av et medlem — behold kun mediatypen, aldri innholdet etter kommaet.
+  // data: bærer selve filen (kanskje et bilde av et medlem) — kun mediatypen.
   if (u.protocol === 'data:') return `data:${u.pathname.split(',')[0]}`
 
-  // blob: og andre ikke-hierarkiske skjemaer har ingen egen host: `origin`
-  // arves fra den INDRE URL-en, og hele den indre URL-en ligger også i
-  // `pathname`. `origin + pathname` limte dem derfor sammen til
-  // «https://hosthttps://host/uuid» — en streng som ser ut som en korrupt URL
-  // fra appen, men som var loggens egen feil. Behold protokollen i stedet.
+  // blob: o.l.: `origin` arves fra den indre URL-en, som også ligger i
+  // `pathname` — origin + pathname ville gitt «https://hosthttps://host/uuid».
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     return trunker(`${u.protocol}${u.pathname}`)
   }
@@ -107,16 +87,8 @@ function saniterRessurs(verdi: string): string {
 
 export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
   if (typeof verdi !== 'string') return verdi
-  // `cause` og `name` trunkeres som message: de er korte i praksis, men er
-  // fritekst fra et error-objekt og skal ikke kunne blåse opp raden (#575).
-  // `kilde`/`handling`/`synlighet` (#681) er klient-kontrollerte strenger som
-  // SKAL være korte enums ('broadcast'/'focus'/'visible' osv.) — trunker dem
-  // likevel, av samme grunn: en buggy eller ondsinnet klient skal ikke kunne
-  // skrive KB med søppel inn i et felt vi forventer er noen tegn langt.
-  // `kilde` kan nå også være 'login' (#688): push-klikk-mål levert via
-  // /login-innboksen i stedet for cache/broadcast/kanal. `klikk_id` (#688) er
-  // en generert UUID/fallback-streng — kort i praksis, men trunkeres av samme
-  // grunn som resten av denne gruppa.
+  // Korte felt i praksis (enums, UUID-er), men klient-kontrollert fritekst —
+  // en buggy klient skal ikke kunne blåse opp raden (#575, #681, #688).
   if (
     nokkel === 'message' ||
     nokkel === 'digest' ||
@@ -131,12 +103,9 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     return trunker(verdi)
   }
   if (nokkel === 'stack') {
-    // Trunker på reell byte-lengde (UTF-8) — .length teller kodepunkter og
-    // undervurderer størrelsen for norske tegn og emoji (opp til 4× feil).
+    // Byte-lengde, ikke .length: æøå og emoji er flere byte (opptil 4×).
     const bytes = Buffer.byteLength(verdi, 'utf8')
     if (bytes <= STACK_MAKS_BYTES) return verdi
-    // Kutt på tegn til byte-grensen holder — enkel loop dropper bakerste
-    // tegn til vi er under grensen. Sjelden hot path (kun ved storrestacks).
     let kuttet = verdi
     while (Buffer.byteLength(kuttet, 'utf8') > STACK_MAKS_BYTES) {
       kuttet = kuttet.slice(0, -Math.max(1, Math.floor(kuttet.length / 20)))
@@ -144,14 +113,9 @@ export function saniterVerdi(nokkel: string, verdi: unknown): unknown {
     return kuttet + '…'
   }
   if (nokkel === 'url' || nokkel === 'maal') {
-    // Behold kun pathname — query-params kan inneholde e-post, token, navn.
-    // `maal` (#681) er varselets navigasjonsmål og går gjennom samme gren som
-    // `url`: begge ender opp som ren pathname, og blir dermed direkte
-    // sammenlignbare når man leter etter «traff push-klikket målet?» — uten
-    // dette ville de to feltene sett forskjellige ut for samme sti av
-    // formateringsgrunner, ikke reelle. Hash (f.eks. «#kommentarer») faller
-    // bort som URL().pathname aldri inkluderer — akseptert kostnad, samme som
-    // for `url`.
+    // Kun pathname — query kan bære e-post/token. `maal` og `url` saniteres
+    // likt så de er direkte sammenlignbare («traff push-klikket målet?», #681).
+    // Hash faller bort; akseptert.
     try {
       return new URL(verdi, RELATIV_BASE).pathname
     } catch {
@@ -171,11 +135,7 @@ export function scrubKontekst(data: unknown): Record<string, unknown> {
   return result
 }
 
-/**
- * True hvis den scrubbede konteksten er større enn taket. Buffer.byteLength for
- * reell UTF-8-størrelse — .length undervurderer multibyte-tegn (norsk, emoji)
- * og kan slippe gjennom for stor payload.
- */
+/** True hvis konteksten overstiger taket, målt i UTF-8-byte (ikke .length). */
 export function kontekstForStor(kontekstStr: string): boolean {
   return Buffer.byteLength(kontekstStr, 'utf8') > LOGG_KONTEKST_MAKS_KB * 1024
 }
@@ -183,19 +143,11 @@ export function kontekstForStor(kontekstStr: string): boolean {
 // ─── FORMVAKT PÅ RÅ NØKKELNAVN ───────────────────────────────────────────────
 
 /**
- * Nøkkelnavn vi er villige til å gjengi ordrett i en logglinje eller i
- * feil_logg.kontekst (#681, generalisert i #711-reviewen).
- *
- * Kapping begrenser VOLUM, ikke PII: både en klient og et fremmed feilobjekt
- * kan ha «ola@example.com» eller en hel URL som nøkkelNAVN. Et feltnavn fra VÅR
- * kildekode er alltid en JS-identifikator, mens en epostadresse, en setning
- * eller en URL aldri er det — derfor er formen, ikke innholdet, kriteriet. Den
- * beholder hele diagnoseverdien (utvikleren skal kunne lese HVILKET felt det
- * gjelder) og lukker PII-flaten. Digest og allowlist ble vurdert og forkastet:
- * en digest er uleselig, og en allowlist er selvmotsigende når feltet finnes
- * nettopp for å fange strukturer vi ikke kjenner.
- *
- * Bygges AV LOGG_NOEKKEL_MAKS_TEGN slik at lengdegrensen står ett sted.
+ * Nøkkelnavn vi gjengir ordrett i logg (#681, #711). Kapping begrenser volum,
+ * ikke PII: et nøkkelNAVN kan være en e-post eller URL. Våre feltnavn er alltid
+ * JS-identifikatorer, de andre aldri — derfor er formen kriteriet. (En allowlist
+ * passer ikke: feltet finnes for å fange strukturer vi ikke kjenner.)
+ * Lengdegrensen hentes fra LOGG_NOEKKEL_MAKS_TEGN.
  */
 export const NOEKKELNAVN_FORM = new RegExp(
   '^[a-zA-Z][a-zA-Z0-9_]{0,' + (LOGG_NOEKKEL_MAKS_TEGN - 1) + '}$',
@@ -211,12 +163,9 @@ export type NoekkelUtdrag = {
 }
 
 /**
- * Formvaliderer og kapper en liste rå nøkkelnavn før de logges.
- *
- * Tellerne returneres ved siden av navnene med vilje: en kaller som filtrerer
- * bort ALT skal fortsatt kunne skrive noe diagnostisk («+3_ukjent_form») i
- * stedet for et tomt felt. Stille filtrering er nøyaktig blindsonen #676/#711
- * handlet om — en rad som ser tom ut forteller ingenting om hvorfor.
+ * Formvaliderer og kapper rå nøkkelnavn før logging. Tellerne returneres så
+ * kalleren kan skrive noe diagnostisk («+3_ukjent_form») i stedet for et tomt
+ * felt — stille filtrering var blindsonen i #676/#711.
  */
 export function utdragNoekkelnavn(
   noekler: string[],
@@ -224,8 +173,7 @@ export function utdragNoekkelnavn(
 ): NoekkelUtdrag {
   const gyldige = noekler.filter((k) => NOEKKELNAVN_FORM.test(k))
   return {
-    // slice() på tegn kommer I TILLEGG til lengdegrensen i regexen, ikke i
-    // stedet for: endrer noen formen en dag, står volumgrensen fortsatt.
+    // Redundant med regexen med vilje: endres formen, står volumgrensen.
     lesbare: gyldige
       .slice(0, maksAntall)
       .map((k) => k.slice(0, LOGG_NOEKKEL_MAKS_TEGN)),

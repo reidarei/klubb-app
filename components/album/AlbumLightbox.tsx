@@ -23,17 +23,11 @@ import {
   type Punkt,
 } from '@/lib/bilde-zoom'
 
-// Fullskjerm-galleri for album. Pil-knapper, swipe, pinch-zoom og X for å
-// lukke. Krysser mellom bilder uten å unmounte hele overlayet — det
-// gir en stabil følelse selv om bildene tar tid å laste.
-//
-// Touch-håndtering: vi måler horisontalt drag og bytter bilde hvis terskelen
-// er passert (og brukeren ikke er zoomet inn, #625). Vertikal scroll fanges
-// ikke (bildet fyller skjermen). All gest-matematikk (pinch, panorering,
-// sveip-terskel) ligger i lib/bilde-zoom.ts og er enhetstestet der — en
-// pinch-gest kan ikke automatiseres i Playwright. Selve gest-MASKINEN her
-// (pekerbokføring, trykk vs. sveip) dekkes av
-// __tests__/album-lightbox-gest.test.tsx, som kjører i jsdom.
+// Fullskjerm-galleri: piler, sveip, pinch-zoom, X. Bytter bilde uten å
+// unmounte overlayet, så det føles stabilt mens bilder laster.
+// Gest-matematikken er enhetstestet i lib/bilde-zoom.ts (pinch kan ikke
+// automatiseres i Playwright); gest-maskinen her dekkes av
+// __tests__/album-lightbox-gest.test.tsx (#625).
 export default function AlbumLightbox({
   bilder,
   startIndex,
@@ -47,11 +41,9 @@ export default function AlbumLightbox({
   autoAapneKommentarer = false,
   lukkVedTrykk = false,
 }: {
-  // reaksjoner er valgfri: AlbumSeksjon (arrangement-forhåndsvisning) sender
-  // ikke reaksjonsdata og bruker denne lightboxen kun til rask forhåndsvisning
-  // — reaksjonsraden er scopet til album/[id]-siden (#480). brukerId er derfor
-  // også valgfri; raden rendres kun når begge er til stede. Samme gating
-  // gjelder kommentar-knappen/sheeten (#481) — profiler kreves i tillegg.
+  // reaksjoner/brukerId er valgfrie: reaksjonsraden hører kun til album/[id]
+  // (#480), og kommentarene krever i tillegg profiler (#481). Andre flater
+  // bruker lightboxen som ren forhåndsvisning.
   bilder: { id: string; bilde_url: string; reaksjoner?: ReaksjonGruppe[]; kommentarAntall?: number }[]
   startIndex: number
   onLukk: () => void
@@ -61,13 +53,10 @@ export default function AlbumLightbox({
   brukerId?: string
   profiler?: ChatProfil[]
   erAdmin?: boolean
-  // Deep-link (?bilde=) fra en mention-varsel — åpner sheeten med det samme
-  // i stedet for at brukeren må trykke kommentar-knappen selv.
+  // Deep-link (?bilde=) fra mention-varsel: åpner kommentar-sheeten direkte.
   autoAapneKommentarer?: boolean
-  // Chat (#625) har ingen navigasjon eller X-knapp å falle tilbake på i den
-  // enkleste bruken — et trykk hvor som helst (uten drag/pinch) skal lukke,
-  // slik den gamle BildeLightbox gjorde. Album-flatene lar denne stå av
-  // (default false) siden de har X-knapp, piler og reaksjonsrad å treffe.
+  // Chatten (#625): et trykk hvor som helst (uten drag/pinch) lukker. Av på
+  // album-flatene, der trykk skal treffe X, piler og reaksjonsrad.
   lukkVedTrykk?: boolean
 }) {
   const router = useRouter()
@@ -75,14 +64,12 @@ export default function AlbumLightbox({
   const [montert, setMontert] = useState(false)
   const [sheetAapen, setSheetAapen] = useState(autoAapneKommentarer)
   const [pending, startTransition] = useTransition()
-  // Speiler sheetAapen i en ref så det globale keydown-listeneret (bundet én
-  // gang) leser fersk verdi uten å re-binde effekten ved hver sheet-toggle.
+  // Ref-speil så peker-handlerne leser fersk verdi.
   const sheetAapenRef = useRef(sheetAapen)
   sheetAapenRef.current = sheetAapen
 
   // ─── Pinch-zoom + panorering (#625) ────────────────────────────────────
-  // skala/pos er selve transformen på <img>. Refs holder gest-tilstand som
-  // ikke skal trigge re-render underveis (kun start/slutt-verdiene gjør).
+  // skala/pos er transformen på <img>; refs holder gest-tilstand som ikke skal re-rendre.
   const [skala, setSkala] = useState(MIN_SKALA)
   const [pos, setPos] = useState<Punkt>({ x: 0, y: 0 })
   const imgRef = useRef<HTMLImageElement>(null)
@@ -90,34 +77,29 @@ export default function AlbumLightbox({
   const pointereRef = useRef<Map<number, Punkt>>(new Map())
   const pinchStartRef = useRef<{ dist: number; skala: number; fokus: Punkt; pos: Punkt } | null>(null)
   const dragStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
-  // true fra pointerdown med 2 fingre til pointerup med 0 fingre — hindrer
-  // at en ujevnt avsluttet pinch (fingrene løftes ikke helt samtidig, så
-  // komponenten kortvarig ser 1 finger igjen) tolkes som et sveip.
+  // true fra 2 fingre ned til 0 fingre — en ujevnt avsluttet pinch (kortvarig
+  // 1 finger igjen) skal ikke tolkes som sveip.
   const pinchetRef = useRef(false)
   const dragDeltaXRef = useRef(0)
-  // true så lenge minst én peker er nede. MÅ være state, ikke en avledning av
-  // pointereRef.current.size: ref-endringer trigger ingen re-render, så
-  // willChange/transition under ble hengende i gest-tilstand etter en gest der
-  // pointerup ikke endret skala/pos (snapp til samme verdi) — og da uteble den
-  // myke overgangen ved neste snapp. Alle tre stiene som tømmer pointereRef
-  // (onPointerUp, window-opprydding, sheet-åpning) må nullstille denne.
+  // Minst én peker nede. MÅ være state, ikke avledet av pointereRef: en ref
+  // re-rendrer ikke, og willChange/transition ble hengende i gest-tilstand.
+  // Alle tre stiene som tømmer pointereRef (onPointerUp, window-opprydding,
+  // sheet-åpning) må nullstille den.
   const [gestAktiv, setGestAktiv] = useState(false)
 
-  // Mount-flag for portal — createPortal kan ikke kalles på server
+  // createPortal kan ikke kalles på server.
   useEffect(() => {
     setMontert(true)
   }, [])
 
-  // Nullstill zoom/pan når aktivt bilde bytter — ellers arver neste bilde
-  // forrige bildes zoom-nivå, som ikke gir mening.
+  // Neste bilde skal ikke arve forrige bildes zoom.
   useEffect(() => {
     setSkala(MIN_SKALA)
     setPos({ x: 0, y: 0 })
   }, [index])
 
-  // Kommentar-sheeten krymper bildet til 40dvh (se justifyContent-kommentaren
-  // lenger ned) — zoom gir ikke mening der, og gesttilstanden må nullstilles
-  // så den ikke henger igjen når sheeten lukkes.
+  // Sheeten krymper bildet til 40dvh — zoom gir ikke mening der, og
+  // gesttilstand skal ikke henge igjen når sheeten lukkes.
   useEffect(() => {
     if (!sheetAapen) return
     setSkala(MIN_SKALA)
@@ -152,11 +134,9 @@ export default function AlbumLightbox({
     }
   }, [])
 
-  // FELLE: ikke kall setPointerCapture her (i motsetning til BildeCropper).
-  // Zoom-laget dekker hele skjermen, så pekeren kan aldri forlate det — en
-  // capture ville bare retarget pointerup og dermed brutt click på X-,
-  // pil- og reaksjonsknappene på touch (en bug som ikke synes på desktop,
-  // siden musepekeren der aldri "sender" som touch gjør).
+  // FELLE: ikke setPointerCapture her (i motsetning til BildeCropper). Laget
+  // dekker hele skjermen, så capture ville bare retarget pointerup og brutt
+  // click på X-, pil- og reaksjonsknappene på touch (synes ikke på desktop).
   function onPointerDown(e: React.PointerEvent) {
     if (sheetAapenRef.current) return
     pointereRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -221,7 +201,7 @@ export default function AlbumLightbox({
         )
         setPos(klemt)
       } else {
-        // Ikke zoomet: hold kun styr på horisontal drift for sveip-terskelen.
+        // Ikke zoomet: kun horisontal drift, for sveip-terskelen.
         dragDeltaXRef.current = e.clientX - start.x
       }
     }
@@ -235,18 +215,15 @@ export default function AlbumLightbox({
       pinchStartRef.current = null
     }
     if (pointereRef.current.size === 1) {
-      // Fra 2 til 1 finger: re-seed draget fra den gjenværende pekeren, ellers
-      // gjør den ingenting og brukeren må slippe helt og ta på igjen for å
-      // panorere videre. dragStartRef ble nullet ved pinch-start.
-      // Sveip-sperren står: dragDeltaXRef oppdateres uansett kun ved skala 1,
-      // og pinchetRef blokkerer fortsatt navigasjon ut gesten.
+      // 2 → 1 finger: re-seed draget fra gjenværende peker (dragStartRef ble
+      // nullet ved pinch-start), ellers må han slippe helt for å panorere videre.
+      // pinchetRef sperrer fortsatt sveip ut gesten.
       const [rest] = Array.from(pointereRef.current.values())
       dragStartRef.current = { x: rest.x, y: rest.y, px: pos.x, py: pos.y }
       dragDeltaXRef.current = 0
     }
     if (pointereRef.current.size > 0) return
-    // Siste finger er sluppet: gesten er over, så transition slås på igjen i
-    // samme render som snapp-verdiene under — det er den som animerer snappen.
+    // Transition slås på i samme render som snapp-verdiene — det animerer snappen.
     setGestAktiv(false)
 
     const snappSkala = snapp(skala)
@@ -275,19 +252,11 @@ export default function AlbumLightbox({
     dragDeltaXRef.current = 0
   }
 
-  // Foreldreløse pekere: pointerup treffer kun zoom-laget når pekeren faktisk
-  // slippes DER — en peker kan miste eieren og lande på en søsken-knapp i
-  // stedet (mus, uten implisitt pointer capture, er ett kjent tilfelle i
-  // e2e-drag; pilene er vertikalt sentrert, nøyaktig der et sveip lander).
-  // Uten denne oppryddingen ble pekeren liggende
-  // i pointereRef resten av økten: neste pointerdown ga size===2 → tolket som
-  // pinch → pointerup returnerte på size>0 → verken sveip, pinch eller trykk
-  // virket igjen. window ser hvert eneste pointerup, også de vi ikke eier.
-  //
-  // Rekkefølge: React sin delegerte lytter sitter på portal-containeren
-  // (document.body) og fyrer før window sin bubble-lytter, så et pointerup PÅ
-  // laget er allerede håndtert og slettet når vi kommer hit — has()-sjekken
-  // gjør denne til en ren opprydder for de foreldreløse.
+  // Foreldreløse pekere: et pointerup kan lande på en søsken-knapp (f.eks.
+  // pilene, midt i sveipet) i stedet for zoom-laget. Da ble pekeren liggende i
+  // pointereRef, neste trykk ble tolket som pinch, og ingen gest virket mer.
+  // React-lytteren (på document.body) fyrer før window-lytteren, så pointerup
+  // PÅ laget er allerede slettet — has()-sjekken gjør dette til ren opprydding.
   useEffect(() => {
     function ryddPeker(e: PointerEvent) {
       if (!pointereRef.current.has(e.pointerId)) return
@@ -297,8 +266,6 @@ export default function AlbumLightbox({
         dragStartRef.current = null
         dragDeltaXRef.current = 0
         pinchetRef.current = false
-        // Samme nullstilling som i onPointerUp: en foreldreløs peker som ryddes
-        // her ville ellers latt willChange/transition henge i gest-tilstand.
         setGestAktiv(false)
       }
     }
@@ -347,15 +314,12 @@ export default function AlbumLightbox({
 
   const erOmslag = coverBildeId === aktiv.id
 
-  // Portal til <body> så fixed-positioning ikke begrenses av layout-
-  // containeren (maxWidth 480, position: relative). Uten portal havner
-  // overlayet inn i den smale kolonnen og bildet i ovenkanten av den.
+  // Portal til <body>, ellers begrenser layout-containeren (maxWidth 480,
+  // position: relative) fixed-posisjoneringen.
   //
-  // Overlayet selv har INGEN gest-handlers (touch-action avgjøres av unionen
-  // fra hit-testet element og oppover ancestors, og kan ikke re-aktiveres av
-  // en etterkommer — touchAction:none her ville drept scrollingen i alt som
-  // ligger inni, særlig kommentar-sheeten). Gest-håndteringen bor i stedet på
-  // det indre zoomLag-et rett under, som dekker nøyaktig samme flate.
+  // Overlayet har INGEN gest-handlers: touchAction:none på en ancestor kan ikke
+  // oppheves av en etterkommer og ville drept scrollingen i kommentar-sheeten.
+  // Gestene bor på zoom-laget, som dekker samme flate.
   const innhold = (
     <div
       role="dialog"
@@ -373,9 +337,7 @@ export default function AlbumLightbox({
         zIndex: 9999,
       }}
     >
-      {/* Zoom-lag: eneste sted med touchAction:'none' og pointer-handlers.
-          position:absolute inset:0 dekker akkurat samme flate som overlayet,
-          så et trykk/sveip/pinch hvor som helst på bildet treffes riktig. */}
+      {/* Zoom-lag: eneste sted med touchAction:'none' og pointer-handlers. */}
       <div
         ref={zoomLagRef}
         onPointerDown={onPointerDown}
@@ -387,19 +349,15 @@ export default function AlbumLightbox({
           inset: 0,
           touchAction: 'none',
           display: 'flex',
-          // Når kommentar-sheeten er åpen krymper bildet til øvre del av
-          // skjermen (sheeten dekker resten nedenfra, se BildeKommentarSheet
-          // som starter på top: 42dvh) — flex-start i stedet for center gjør
-          // at bildet flytter seg opp i stedet for å forbli midtstilt bak sheeten.
+          // Med sheeten åpen (starter på top: 42dvh) flyttes bildet opp i
+          // stedet for å stå midtstilt bak den.
           alignItems: sheetAapen ? 'flex-start' : 'center',
           justifyContent: 'center',
-          // Et 4x-skalert bilde maler ellers utenfor det fikserte overlayet;
-          // laget dekker nøyaktig samme flate og er den naturlige klippeflaten.
+          // Et 4x-skalert bilde maler ellers utenfor overlayet.
           overflow: 'hidden'
         }}
       >
-        {/* Bilde — pointerEvents: none så touchene treffer zoom-laget rundt.
-            Navigasjon skjer via pil-knappene, sveip og pinch-zoom. */}
+        {/* pointerEvents: none så touchene treffer zoom-laget rundt. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
@@ -414,20 +372,16 @@ export default function AlbumLightbox({
             pointerEvents: 'none',
             transform: `translate(${pos.x}px, ${pos.y}px) scale(${skala})`,
             transformOrigin: 'center',
-            // Kun mens en peker er nede: permanent willChange holder bildet i
-            // et eget kompositor-lag hele tiden, som koster minne til ingen
-            // nytte når ingen gest pågår.
+            // Kun under gest: permanent willChange koster et kompositor-lag i minnet.
             willChange: gestAktiv ? 'transform' : undefined,
-            // Ingen transition mens en peker er nede — ellers henger
-            // panoreringen/zoomen synlig etter fingeren.
+            // Ingen transition under gest, ellers henger bildet etter fingeren.
             transition: gestAktiv ? 'none' : 'transform 0.15s ease-out',
           }}
         />
       </div>
 
-      {/* Lukk-knapp — skjult mens sheeten er åpen (sheeten har sin egen).
-          Toppkontrollene bruker --header-topp, ikke bare safe-area: den har
-          ekstra luft i installert app forbi iOS' Liquid Glass-slør (#787). */}
+      {/* Skjult når sheeten (med egen lukk) er åpen. --header-topp, ikke bare
+          safe-area: ekstra luft forbi iOS' Liquid Glass-slør (#787). */}
       {!sheetAapen && (
         <button
           type="button"
@@ -473,8 +427,7 @@ export default function AlbumLightbox({
         </div>
       )}
 
-      {/* Pil-knapper — vises alltid (ikke bare som sveip-fallback): de er
-          eneste inngang for VoiceOver/skjermleser, som ikke kan sveipe gesten. */}
+      {/* Pilene vises alltid: eneste inngang for VoiceOver, som ikke kan sveipe. */}
       {bilder.length > 1 && !sheetAapen && (
         <>
           <button
@@ -530,25 +483,15 @@ export default function AlbumLightbox({
         </>
       )}
 
-      {/* Reaksjoner på det aktive bildet — kun når brukerId er oppgitt (album/[id]-
-          siden). key={aktiv.id} er KRITISK: lightboxen unmounter ikke ved
-          bildebytte (samme <AlbumBildeReaksjoner>-instans ville ellers beholde
-          forrige bildes optimistiske state) — key tvinger React til å remounte
-          komponenten når aktivt bilde endres, slik at useAlbumBildeReaksjoner
-          re-initialiseres med riktig `initial`. */}
+      {/* key={aktiv.id} er KRITISK: lightboxen unmounter ikke ved bildebytte,
+          så uten key beholdt raden forrige bildes optimistiske state. */}
       {brukerId && !sheetAapen && (
         <div
-          // Teknisk overflødig siden #625: gest-handlerne bor nå på
-          // zoomLag-diven (et SØSKEN av denne reaksjonsraden, ikke en
-          // ancestor), så et touchstart her når dem uansett aldri via
-          // bubbling. Latt stå som defensiv rest — se historikken før #625
-          // for hvorfor den opprinnelig var nødvendig (swipe-handlerne lå
-          // da på selve overlayet, en faktisk ancestor).
+          // Overflødig siden #625 (gest-handlerne bor på et søsken, ikke en
+          // ancestor) — latt stå som defensiv rest.
           onTouchStart={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            // Admin-kontrollene bor nå øverst til venstre (20. juli), så
-            // reaksjonsraden kan alltid ligge i bunnen uten ekstra offset.
             bottom: 'max(20px, env(safe-area-inset-bottom))',
             left: '50%',
             transform: 'translateX(-50%)',
@@ -562,8 +505,7 @@ export default function AlbumLightbox({
           }}
         >
           <AlbumBildeReaksjoner key={aktiv.id} bildeId={aktiv.id} brukerId={brukerId} initial={aktiv.reaksjoner ?? []} />
-          {/* Kommentar-knapp — kun når profiler er sendt med (album/[id]-siden,
-              #481). Åpner BildeKommentarSheet for det aktive bildet. */}
+          {/* Kun når profiler er sendt med (album/[id], #481). */}
           {albumId && profiler && (
             <button
               type="button"
@@ -589,12 +531,8 @@ export default function AlbumLightbox({
         </div>
       )}
 
-      {/* Handlinger (kun synlig for admin/eier) — kompakt pill øverst til
-          venstre (X-en bor øverst til høyre, telleren i midten). Flyttet fra
-          bunnen og krympet etter admins tilbakemelding 20. juli: «Omslag»
-          med accent-stil når bildet ER omslaget, ellers nøytral knapp som
-          setter det. Kort label + fontSize 11 så pillen ikke kolliderer med
-          den sentrerte telleren på smale skjermer. */}
+      {/* Admin/eier-handlinger øverst til venstre. Kort label + fontSize 11 så
+          pillen ikke kolliderer med den sentrerte telleren på smale skjermer. */}
       {kanRedigere && albumId && !sheetAapen && (
         <div
           style={{
@@ -650,9 +588,7 @@ export default function AlbumLightbox({
         </div>
       )}
 
-      {/* Bilde-kommentarer (#481) — key={aktiv.id} tvinger remount ved
-          bildebytte (samme grunn som AlbumBildeReaksjoner over: usendt
-          tekst/edit-state skal ikke overleve til neste bilde). */}
+      {/* key: usendt tekst/edit-state skal ikke overleve til neste bilde (#481). */}
       {sheetAapen && brukerId && albumId && (
         <BildeKommentarSheet
           key={aktiv.id}

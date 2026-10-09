@@ -93,7 +93,7 @@ ikke kom noe.
   nære treff høyere, men aldri utelukker et reelt treff langt unna. Se
   `STED_SOK_VIEWBOX_GRADER` i `lib/konstanter.ts`.
 - **Søketeksten logges aldri** — verken ved treff, tidsavbrudd eller feil (kun
-  event-navnet, se `lib/logg.ts`).
+  event-navnet, se `lib/logg-hendelser.ts`).
 - Et valgt treff er PRIVAT og MIDLERTIDIG inntil brukeren går videre: «Sett
   markering her» ruter gjennom den eksisterende sikte-/bekreftelsesflyten
   (`bekreftSted()` i `PosisjonsKart.tsx`) før noe lagres som en delt `kart_markering`-rad.

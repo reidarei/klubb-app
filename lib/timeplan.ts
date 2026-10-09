@@ -22,25 +22,13 @@ type ArrangementRad = {
 /**
  * Arrangementet timeplan-knappen på kartet skal peke til (#716).
  *
- * «Aktuelt» = ikke over ennå: et pågående arrangement (med SENEST start ved
- * overlapp — samme regel som finnPaagaaendeArrangement(), slik at «Sporer
- * X»-pilla og timeplan-panelet aldri navngir to ulike arrangementer på
- * samme skjerm), ellers det nærmeste FRAMTIDIGE. Ingen 7-dagersgrense: en
- * timeplan legges typisk inn lenge før avreise, og en usynlig vegg uten
- * forklaring er verre enn ingen grense i det hele tatt.
+ * «Aktuelt» = pågående (SENEST start ved overlapp), ellers nærmeste framtidige.
+ * Pågående-regelen og fraværet av typefilter MÅ speile finnPaagaaendeArrangement(),
+ * ellers kan «Sporer X»-pilla og timeplan-panelet navngi ulike arrangementer.
+ * Ingen grense framover: timeplaner legges inn lenge før avreise.
  *
- * Ingen typefilter — et årsmøte kan ha et program like gjerne som en tur.
- * Filtreres møter bort, kunne denne helperen og finnPaagaaendeArrangement()
- * (som heller ikke filtrerer) navngi to forskjellige arrangementer på samme
- * skjerm.
- *
- * Fail CLOSED (kaster), til forskjell fra finnPaagaaendeArrangement() som
- * feiler åpent. Der er utfallet av en feilet spørring «posisjonen lagres
- * uten spor-tilhørighet» — fortsatt nyttig. Her ville et fail-open gitt et
- * TOMT panel som lyver om innholdet i en beslutning («ingenting på
- * programmet» leses som «ingen har lagt inn noe», ikke som «vi klarte ikke
- * hente det»). Kallstedet (page.tsx) skal la feilen boble til feilsiden,
- * akkurat som for delinger/punkter/markeringer på samme side.
+ * Fail CLOSED: et tomt panel ville løyet («ingen har lagt inn noe»), så
+ * feilen skal boble til feilsiden fra page.tsx.
  */
 export async function finnAktuellArrangement(
   supabase: SupabaseClient,
@@ -55,24 +43,14 @@ export async function finnAktuellArrangement(
 
   const FELTER = 'id, tittel, start_tidspunkt, slutt_tidspunkt, sensurerte_felt'
 
-  // To parallelle spørringer i stedet for én med en OR-streng: vi trenger
-  // BEGGE kandidatsettene for å avgjøre riktig vinner i JS (pågående slår
-  // framtidig), og en RPC eller en tredje, sekvensiell rundtur ble avvist
-  // under planleggingen — dette er fortsatt bølge 1, bare to promise-er i
-  // stedet for én.
+  // To parallelle spørringer: begge kandidatsettene trengs for å velge vinner
+  // i JS (pågående slår framtidig), uten en ekstra sekvensiell rundtur.
   const [
     { data: paagaaendeData, error: paagaaendeFeil },
     { data: fremtidigData, error: fremtidigFeil },
   ] = await Promise.all([
-    // Bred nedre grense, kun for å holde spørringen bounded — den ekte
-    // avgrensningen gjøres i filteret under. Fram til #735 lå
-    // ARRANGEMENT_ANTATT_TIMER her, og gjaldt da BEGGE grener: en flerdagstur
-    // falt ut av kandidatsettet 12 timer etter start, og helperen hoppet til
-    // nærmeste FRAMTIDIGE arrangement. På turen 17.–20. september ville
-    // timeplan-panelet fra og med kl. 21 UTC dag 1 vist et tomt program for
-    // julebordet, mens «Sporer Reisekomiteen»-pilla sto ved siden av — nøyaktig
-    // det denne helperens egen doc-kommentar lover at ikke skal skje.
-    // finnPaagaaendeArrangement() fikk rettelsen i #736; denne ble glemt.
+    // Bred nedre grense, kun for bounded spørring. ARRANGEMENT_ANTATT_TIMER
+    // hører hjemme i filteret under, ellers faller flerdagsturer ut (#735/#736).
     supabase
       .from('arrangementer')
       .select(FELTER)
@@ -95,15 +73,11 @@ export async function finnAktuellArrangement(
     throw new Error(`Kunne ikke hente kommende arrangement: ${fremtidigFeil.message}`)
   }
 
-  // Blant kandidatene i vinduet: filtrer bort dem som faktisk ER over (har
-  // sluttid, og den er passert). new Date(...).getTime() — ALDRI streng-
-  // sammenligning av ISO-tidsstempler (…+00:00 vs …Z er ikke det samme
-  // sortert leksikalsk, se finnPaagaaendeArrangement()-historikken).
+  // getTime(), ALDRI strengsammenligning av ISO-tidsstempler: «…+00:00» og «…Z»
+  // sorterer ikke likt leksikalsk.
   const naaMs = Date.now()
-  // Med sluttid: pågår til sluttiden, uansett hvor lenge siden det startet.
-  // Uten sluttid: antatt varighet fra start — den grenen MÅ ha en cap, ellers
-  // ville et gammelt arrangement uten sluttid pågått for alltid. Speiler
-  // finnPaagaaendeArrangement() nøyaktig (#735/#736).
+  // Med sluttid: til sluttiden. Uten: capet antatt varighet (speiler
+  // finnPaagaaendeArrangement(), #735/#736).
   const tidligstStartMs = new Date(tidligstStart).getTime()
   const paagaaende = ((paagaaendeData ?? []) as ArrangementRad[]).filter(a =>
     a.slutt_tidspunkt
@@ -111,8 +85,7 @@ export async function finnAktuellArrangement(
       : new Date(a.start_tidspunkt).getTime() >= tidligstStartMs,
   )
 
-  // Listen er sortert desc på start_tidspunkt, så første element er den som
-  // startet SIST — riktig vinner ved overlapp.
+  // Sortert desc, så første element startet SIST — vinner ved overlapp.
   const vinner = paagaaende[0] ?? (fremtidigData?.[0] as ArrangementRad | undefined) ?? null
   if (!vinner) return null
 

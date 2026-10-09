@@ -10,49 +10,27 @@ import { KJENTE_FLAGG, erKjentFlagg } from '@/lib/app-innstillinger'
 import { erVarselBryter } from '@/lib/varsel-typer'
 
 export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean) {
-  // Autorisasjon FØR alt annet, og via ensureAdmin() (Policy: Auth) — ikke
-  // getProfil() + service-role-klient som før. Service role omgår RLS helt; det
-  // var allerede feil form, men ble direkte farlig da handlingen gikk fra å
-  // kunne UPDATE en seedet rad til også å kunne SETTE INN nye (#767-review).
-  // ensureAdmin() gir brukerens egen klient, så er_admin()-policyene på
-  // varsel_innstillinger (migrasjon 009 + 152) er det som faktisk slipper
-  // skrivingen gjennom.
+  // Brukerens egen klient, ikke service role: upserten kan SETTE INN rader, så
+  // er_admin()-policyene på varsel_innstillinger må være det som slipper
+  // skrivingen gjennom (#767).
   const { supabase } = await ensureAdmin()
 
-  // Valider mot registeret av kjente varseltyper — samme vakt som
-  // oppdaterAppInnstilling() har for app_innstillinger. Uten den kunne en
-  // ukjent nøkkel opprette en tilfeldig, uleselig rad i tabellen.
-  //
-  // erVarselBryter() og ikke «finnes i VARSEL_TEKSTER»: registeret rommer
-  // også oppføringer uten `panel`, som finnes kun for å navngi historiske
-  // varsel_logg-rader (bursdagsgratulasjon, #643). De er ikke brytere, og
-  // upserten under ville gitt dem en rad som dukket opp som en bryter uten
-  // etikett i kontrollpanelet (#767-review). Vakten dekker fortsatt
-  // prototype-hullet — se erVarselBryter().
+  // erVarselBryter(), ikke «finnes i VARSEL_TEKSTER»: registeret har også
+  // oppføringer uten `panel` (bare for å navngi historiske varsel_logg-rader,
+  // #643). En rad for dem ville dukket opp som etikettløs bryter (#767).
+  // Vakten dekker også prototype-hullet — se erVarselBryter().
   if (!erVarselBryter(noekkel)) {
     throw new Error(`Ukjent varsel-innstilling: ${noekkel}`)
   }
 
-  // upsert (ikke update): migrasjon 152 (#767) slutter å seede rader for
-  // symbol-avledede varseltyper (fra SYMBOLER_VARSLER, se lib/klubb-symboler.ts), og
-  // innstillinger/page.tsx flikker inn en syntetisk rad for bryteren i UI-et.
-  // Trykker admin på en slik bryter FØR raden finnes, ville update() vært en
-  // stille no-op — 0 rader rammet, ingen feil, og valget forsvinner ved neste
-  // sidelast. onConflict='noekkel' matcher unique-constrainten fra 007.
+  // upsert, ikke update: symbol-avledede varseltyper seedes ikke (mig. 152,
+  // #767), og UI-et viser en syntetisk rad — update() ville vært en stille
+  // no-op før raden finnes.
   //
-  // Payloaden bærer KUN noekkel/aktiv/oppdatert — verken `beskrivelse` (som for
-  // test_modus ER test-eposten) eller `dager_foer` (7 og 1 på påminnelses-
-  // radene) leses eller skrives. PostgREST bygger kolonnelisten for et ENKELT
-  // objekt av payloadens egne nøkler, så setningen blir `on conflict (noekkel)
-  // do update set aktiv = …, oppdatert = …` og øvrige kolonner står urørt.
-  // Det gjør operasjonen atomisk — ingen les-før-skriv som kan skrive tilbake
-  // en `beskrivelse` oppdaterTestEpost endret imellom — og neste kolonne noen
-  // legger til i tabellen arver beskyttelsen uten at noen må huske den.
-  //
-  // NB: nullingen lib/app-innstillinger.ts advarer mot er reell, men gjelder
-  // BULK-upsert (array-payload), der supabase-js sender ?columns= som unionen
-  // av alle objektenes nøkler og et objekt uten nøkkelen får NULL ved konflikt
-  // (defaultToNull: false påvirker kun nye rader, ikke merge).
+  // Payloaden bærer KUN noekkel/aktiv/oppdatert. For et enkelt objekt blir
+  // `do update set` bare disse kolonnene, så `beskrivelse` (= test-eposten for
+  // test_modus) og `dager_foer` står urørt, atomisk uten les-før-skriv.
+  // Nullingen lib/app-innstillinger.ts advarer mot gjelder kun BULK-upsert.
   const { error } = await supabase
     .from('varsel_innstillinger')
     .upsert({ noekkel, aktiv, oppdatert: naa() }, { onConflict: 'noekkel' })
@@ -61,11 +39,9 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
   revalidatePath('/innstillinger', 'layout')
 }
 
-// Returnerer resultat i stedet for å kaste: kallet skjer fra en
-// startTransition() i TestEpostVelger, og en avvist server action i en
-// transition propagerer til nærmeste error boundary i React 19 — altså ville
-// hele /innstillinger blitt byttet ut med feilskjermen fordi et nedtrekk
-// feilet. Samme mønster som fond.ts (#459). Feilen vises inline ved velgeren.
+// Returnerer resultat i stedet for å kaste: kalles fra startTransition() i
+// TestEpostVelger, og et kast der ville byttet hele /innstillinger ut med
+// error boundary-en (#459, samme mønster som fond.ts).
 export async function oppdaterTestEpost(
   epost: string,
 ): Promise<{ ok: true } | { ok: false; feil: string }> {
@@ -87,9 +63,6 @@ export async function oppdaterTestEpost(
   // serveren — men en deaktivert admin midt i økta ville treffe her.
   if (!mottaker) return { ok: false, feil: 'Fant ingen aktiv admin med den eposten' }
 
-  // Uten error-uthenting ville en feilet update sett ut som suksess i UI-et
-  // (Policy: Databasespørringer) — nedtrekket ville sprette tilbake ved neste
-  // lasting uten at noen forsto hvorfor.
   const { error: skriveFeil } = await admin
     .from('varsel_innstillinger')
     .update({ beskrivelse: epost, oppdatert: naa() })
@@ -100,25 +73,18 @@ export async function oppdaterTestEpost(
   return { ok: true }
 }
 
-// Oppdaterer ett funksjonsflagg i app_innstillinger.
-// Bruker ensureAdmin() per Policy: Auth — returnerer RLS-klienten som er
-// autentisert som admin, slik at er_admin()-policyen på tabellen slår til.
+// RLS-klienten fra ensureAdmin(), så er_admin()-policyen slår til.
 export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
-  // Valider mot registeret av kjente flagg først — en ukjent nøkkel skal aldri
-  // føre til at vi oppretter en tilfeldig rad i app_innstillinger.
+  // En ukjent nøkkel skal aldri opprette en tilfeldig rad via upserten.
   if (!erKjentFlagg(noekkel)) {
     throw new Error(`Ukjent app-innstilling: ${noekkel}`)
   }
 
   const { supabase } = await ensureAdmin()
 
-  // upsert (ikke update) slik at en manglende rad opprettes i stedet for stille
-  // no-op på friske instanser (klubb-app). beskrivelse sendes med fra metadata
-  // fordi kolonnen er nullable (migrasjon 111) — for INSERT-grenens skyld, slik
-  // at raden får riktig tekst fra første stund i stedet for NULL. onConflict=
-  // 'noekkel' matcher primærnøkkelen; se KJENTE_FLAGG i lib/app-innstillinger.ts
-  // for hvorfor et enkelt-objekt-upsert IKKE nuller utelatte felt ved konflikt
-  // (#771).
+  // upsert, ikke update: på friske instanser (klubb-app) mangler raden.
+  // beskrivelse sendes med for INSERT-grenens skyld (nullable, mig. 111). Se
+  // KJENTE_FLAGG for hvorfor enkelt-objekt-upsert ikke nuller felt (#771).
   const { error } = await supabase
     .from('app_innstillinger')
     .upsert(
@@ -127,20 +93,15 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
     )
   if (error) throw error
 
-  // Revalider layout i tillegg til de flagg-gatede sidene og innstillinger —
-  // TopHeader lever i delt layout og trenger en ny server-render for at
-  // visFond/visChat-props endres.
+  // Layout også: TopHeader sine visFond/visChat-props kommer fra delt layout.
   revalidatePath('/', 'layout')
   revalidatePath('/fond')
   revalidatePath('/chat')
   revalidatePath('/innstillinger', 'layout')
 }
 
-// Oppdaterer per-admin toggle for automatisk bursdagsgratulasjon.
-// Skrives til profiles-tabellen med innlogget brukers RLS-kontekst —
-// ingen kan skru på/av for andre.
+// Per-admin bryter, skrevet med egen RLS-kontekst — ingen kan endre andres.
 export async function oppdaterBursdagsgratulasjon(aktiv: boolean) {
-  // ensureAdmin() (Policy: Auth) kaster ved avvist tilgang i stedet for stille retur.
   const { supabase, user } = await ensureAdmin()
   const { error } = await supabase
     .from('profiles')

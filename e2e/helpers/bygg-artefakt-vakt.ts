@@ -2,46 +2,27 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 /**
- * Artefaktvakt (#659): bekrefter at den appen `webServer` faktisk serverer i
- * denne kjøringen er bygget mot TEST-instansen, ikke mot et tomt/dummy-bygg
- * eller — verre — en sky-Supabase-instans. Kalt fra e2e/global-setup.ts, ikke
- * bare fra pr-check.yml, slik at den også fanger et foreldet LOKALT bygg (en
- * utvikler som byttet Supabase-prosjekt i .env.local uten å bygge på nytt).
+ * Artefaktvakt (#659): bekrefter at appen `webServer` serverer er bygget mot
+ * TEST-instansen, ikke et tomt bygg eller en sky-Supabase. Kalt fra
+ * e2e/global-setup.ts, så den også fanger et foreldet LOKALT bygg.
  *
- * Bakgrunn (#659): fra og med denne saken kjører e2e mot PRODUKSJONSBYGG
- * (`next build` + `next start`), ikke `next dev` — se playwright.config.ts.
- * NEXT_PUBLIC_*-variabler bakes inn i bundelen ved BYGGETID. Feil miljø der
- * er derfor ikke en runtime-feil som viser seg i én test; det er en STILLE
- * feil bakt inn i hele artefaktet, og en vakt som kun sjekker
- * webServer.env ville ikke sett det (se kommentaren i playwright.config.ts
- * om at de oppføringene nå er inerte for den serverte appen i CI).
+ * e2e kjører mot produksjonsbygg, der NEXT_PUBLIC_* bakes inn ved byggetid:
+ * feil miljø er en stille feil i hele artefaktet, usynlig for en vakt som kun
+ * sjekker webServer.env.
  */
 
-// Byggkatalogen next build/start skriver til/leser fra. Speiler `distDir` i
-// next.config.ts (samme env-variabel, samme fallback) — ellers ser vakten på
-// en annen katalog enn den den serverte appen faktisk ble bygget til.
+// Må speile `distDir` i next.config.ts, ellers ser vakten på feil katalog.
 const DIST_DIR = process.env.NEXT_DIST_DIR ?? '.next'
 
-// Mønster for en Supabase-PROSJEKT-URL i skyen. Verifisert av database-
-// arkitekten (#659) å matche prod-referansen korrekt, og ALDRI matche docs-
-// strenger som «example.supabase.co» eller «project-id.supabase.co» —
-// subdomenet til en ekte prosjekt-ref er alltid 20 tegn.
+// En ekte prosjekt-ref er alltid 20 tegn, så docs-strenger som
+// «example.supabase.co» matcher aldri.
 const SKY_SUPABASE_MOENSTER = /https:\/\/[a-z0-9]{20}\.supabase\.co/g
 
-// Filendelser som ALDRI er den SERVERTE artefakten og derfor hoppes over:
-// - binærfiler (bilder, fonter) kan uansett ikke inneholde en URL-streng.
-// - .map (kildekart) inneholder `sourcesContent` — hele det ORIGINALE
-//   TS-kildekoden, ordrett, ikke bare det kompilerte resultatet. Det gjør at
-//   ETHVERT hardkodet server-side strengliteral (f.eks.
-//   KJENT_PROD_SUPABASE_URL i lib/config.ts, som eksisterer for å hindre
-//   init-admin-scriptet i å kjøre mot prod) dukker opp i kildekartet UANSETT
-//   hvilken Supabase-URL bygget faktisk peker mot — verifisert lokalt (#659):
-//   et bygg mot dummy-env ga 6 treff, samtlige i `.map`-filer, 0 i faktisk
-//   servert kode. `next start` server ALDRI disse filene til en klient
-//   (productionBrowserSourceMaps er false som default, og server-kildekart
-//   er uansett kun for stack traces, ikke en del av responsen på en request)
-//   — å telle dem ville gjort vakten permanent rød uansett hvor riktig bygget
-//   faktisk er, nøyaktig svikten styret ville unngå for klubbdomenet.
+// Hoppes over fordi de aldri er servert kode:
+// - binærfiler kan ikke inneholde en URL-streng.
+// - .map har `sourcesContent` med ordrett TS-kilde, så hardkodede literaler
+//   (f.eks. KJENT_PROD_SUPABASE_URL i lib/config.ts) ville gjort vakten
+//   permanent rød uansett bygg. `next start` serverer dem aldri til klient.
 const HOPP_OVER_ENDELSER = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.avif',
   '.woff', '.woff2', '.ttf', '.eot', '.otf',
@@ -61,19 +42,15 @@ function lesAlleFilerSomTekst(dir: string): string[] {
     try {
       ut.push(fs.readFileSync(full, 'utf8'))
     } catch {
-      // Ulesbar fil (f.eks. binær som ikke traff endelses-filteret over) —
-      // irrelevant for en ren URL-streng-vakt.
+      // Ulesbar fil — irrelevant for en URL-streng-vakt.
     }
   }
   return ut
 }
 
 /**
- * Kaster hvis byggartefaktet ikke er det vi forventer. Kalles fra
- * e2e/global-setup.ts, som ALLTID kjører etter at webServer allerede har
- * svart på helsesjekken (Playwrights egen rekkefølge: plugin-setup, deriblant
- * webServer, kjører FØR config.globalSetup) — så mappen finnes garantert når
- * denne kalles, forutsatt at webServer faktisk er konfigurert.
+ * Kaster hvis byggartefaktet ikke er det vi forventer. Playwright starter
+ * webServer FØR globalSetup, så bygget finnes når denne kalles.
  */
 export function verifiserByggArtefakt(testUrl: string) {
   const distSti = path.resolve(__dirname, '..', '..', DIST_DIR)
@@ -90,9 +67,7 @@ export function verifiserByggArtefakt(testUrl: string) {
     )
   }
 
-  // POSITIV FØRST: uten denne er vakten grønn også på et tomt/manglende bygg
-  // — «ingen prod-URL funnet» er like sant når bygget er riktig som når det
-  // ikke finnes i det hele tatt.
+  // Positiv sjekk først: «ingen sky-URL funnet» er også sant for et tomt bygg.
   const fantTestUrl = innhold.some(tekst => tekst.includes(testUrl))
   if (!fantTestUrl) {
     throw new Error(
@@ -103,15 +78,9 @@ export function verifiserByggArtefakt(testUrl: string) {
     )
   }
 
-  // NEGATIV, bevisst avgrenset til sky-Supabase-mønsteret — ALDRI klubbdomenet.
-  // PROD_URL bygges fra KLUBB_DOMENE (lib/config.ts) og havner i bundelen
-  // uansett hvor riktig NEXT_PUBLIC_BASE_URL er (ICS-ruta ekker BASE_URL
-  // ubetinget, se e2e/sikkerhetsvakt.spec.ts) — en vakt på klubbdomenet ville
-  // vært permanent rød, og en permanent rød vakt slås av innen en måned.
-  //
-  // Kun mulig å telle rent fordi .map er filtrert bort over — se
-  // kommentaren ved HOPP_OVER_ENDELSER for hvorfor kildekart alene ville gjort
-  // denne tellingen permanent > 0.
+  // Negativ sjekk, bevisst kun sky-Supabase — ALDRI klubbdomenet: det havner
+  // i bundelen uansett (via KLUBB_DOMENE i lib/config.ts), og en permanent
+  // rød vakt blir slått av.
   const skyTreff = innhold.reduce(
     (sum, tekst) => sum + (tekst.match(SKY_SUPABASE_MOENSTER)?.length ?? 0),
     0,
@@ -126,19 +95,14 @@ export function verifiserByggArtefakt(testUrl: string) {
   }
 }
 
-// Eksplisitt liste over ruter som LOVLIG kan være prerendret (statisk HTML
-// generert ved byggetid). I dag kun /manifest.webmanifest — en generert,
-// innholdsuavhengig fil (app/manifest.ts). Rutene under (app)/-gruppen leser
-// tema- og sesjons-cookies i sine layouts og er derfor dynamiske; blir en av
-// dem statisk uten at noen merker det, ville en test som forventer FERSK
-// DB-state kunne lese byggetids-HTML i stedet. Se e2e/global-setup.ts.
+// Ruter som lovlig kan være prerendret. (app)/-rutene er dynamiske fordi
+// layouten leser cookies; blir en statisk uten at noen merker det, kan en test
+// som forventer fersk DB-state lese byggetids-HTML.
 const TILLATTE_PRERENDRET_RUTER = new Set(['/manifest.webmanifest'])
 
 /**
- * Prerender-vakt (#659): ruter i `<distDir>/prerender-manifest.json` skal
- * være en delmengde av TILLATTE_PRERENDRET_RUTER. En ny statisk rute er ikke
- * nødvendigvis feil, men skal være et BEVISST valg — denne vakten gjør det
- * synlig i stedet for stille.
+ * Prerender-vakt (#659): prerendrede ruter må stå i TILLATTE_PRERENDRET_RUTER,
+ * så en ny statisk rute er et bevisst valg, ikke stille.
  */
 export function verifiserPrerenderManifest() {
   const distSti = path.resolve(__dirname, '..', '..', DIST_DIR)

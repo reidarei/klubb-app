@@ -1,40 +1,23 @@
-// URL-ene for veibeskrivelse fra en kartmarkering (#711), utvidet med
-// adresse-varianter for timeplan-poster (#732).
-//
-// Skilt ut som rene funksjoner fordi selve NAVIGERINGEN ikke lar seg teste
-// meningsfullt: den setter window.location, og et custom URL-skjema gir
-// verken en request Playwright kan avskjære eller en sidebytte i Chromium.
-// Det som faktisk kan gå galt — at koordinatene eller adressen forsvinner,
-// eller at parameternavnene er feil — er ren strengbygging, og den testes her.
+// URL-er for veibeskrivelse fra en kartmarkering (#711) eller timeplan-post (#732).
+// Rene funksjoner fordi selve navigeringen (window.location + custom URL-skjema)
+// ikke lar seg teste i Playwright — strengbyggingen kan.
 
 /**
- * Google Maps-appens eget URL-skjema, for et koordinat.
- *
- * Brukes FØR https-varianten i en installert PWA på iOS: `window.open` med en
- * https-URL åpner en in-app-nettleser som legger seg oppå appen, og den blir
- * stående igjen etter at Maps har tatt over via universal link. App-skjemaet
- * hopper rett til appen.
- *
- * Gjør ingenting hvis Google Maps ikke er installert — derfor finnes
- * nett-varianten under som fallback.
+ * Google Maps-appens URL-skjema, for et koordinat. Gjør ingenting uten appen
+ * installert — derfor nett-varianten som fallback (se aapneVeibeskrivelse).
  */
 export function googleMapsAppUrl(lat: number, lng: number): string {
   return `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
 }
 
-/**
- * Vanlig https-lenke, for et koordinat. Fallback for den som ikke har appen,
- * og den eneste varianten som gir mening utenfor iOS.
- */
+/** Vanlig https-lenke, for et koordinat. Fallback for den som ikke har appen. */
 export function googleMapsNettUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
 }
 
 /**
- * Samme app-skjema som over, men for en fritekst-adresse (#732). Brukt når en
- * timeplan-post har `adresse` satt — Google er bedre på gateadresser enn
- * Nominatim (vår geokoder), så navigering skal gå på TEKSTEN, ikke på et
- * koordinat vi eventuelt klarte å geokode fram.
+ * App-skjemaet for en fritekst-adresse (#732). Google er bedre på gateadresser
+ * enn Nominatim, så navigering går på TEKSTEN, ikke et geokodet koordinat.
  */
 export function googleMapsAppUrlAdresse(adresse: string): string {
   return `comgooglemaps://?daddr=${encodeURIComponent(adresse)}&directionsmode=driving`
@@ -50,20 +33,14 @@ export type Reisemaal = { lat: number; lng: number } | { adresse: string }
 /**
  * Åpner veibeskrivelse til et sted i Google Maps.
  *
- * `comgooglemaps://` FØRST, ikke https (#711). I en installert PWA på iOS
- * åpner `window.open` med en https-URL en in-app-nettleser som legger seg oppå
- * appen — observert som en merkelig hvit browser-aktig sak oppå appen — og
- * den blir stående igjen etter at Maps-appen har tatt over via universal link.
- * App-skjemaet hopper rett til appen uten det mellomleddet.
+ * `comgooglemaps://` FØRST (#711): i en installert iOS-PWA åpner en https-URL
+ * en in-app-nettleser oppå appen, som blir stående igjen etter at Maps har tatt
+ * over via universal link.
  *
- * Fallback til https etter en kort frist, for den som ikke har Google Maps
- * installert: da gjør app-skjemaet ingenting, og uten fallbacken ville knappen
- * vært død. Fristen avbrytes hvis siden mister fokus — det betyr at Maps
- * faktisk åpnet, og da skal vi ikke i tillegg åpne en nettleser.
+ * Fallback til https etter en kort frist for den som ikke har appen (ellers
+ * død knapp). Skjules siden før fristen, åpnet Maps — da ingen nettleser.
  *
- * Flyttet hit fra PosisjonsKart.tsx (#732-uttrekk) — TimeplanRad trenger den
- * like mye som markeringsdetaljen, og navnet er endret fra `navigerTil` til
- * `aapneVeibeskrivelse` for å ikke kollidere med navigering i
+ * Heter ikke `navigerTil` for å ikke kollidere med navigeringen i
  * components/ServiceWorkerRegistrering.tsx.
  */
 export function aapneVeibeskrivelse(maal: Reisemaal) {

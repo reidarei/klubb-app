@@ -1,8 +1,6 @@
-// Full historikk — alle arrangementer/meldinger/polls i fortid, paginert med
-// opaque cursor. Overlapper bevisst med agenda-vinduet på forsiden. De tre
-// typene pagineres uavhengig med keyset og merges sortert synkende på
-// (sortIso, id). Issue #176. Kan filtreres på innholdstype (møte/tur/
-// melding/poll) via ?type=… — se lib/tidligere-filter.ts. Issue #487.
+// Full historikk, paginert med opaque cursor (#176). Overlapper bevisst med
+// agenda-vinduet på forsiden. De tre typene pagineres uavhengig med keyset og
+// merges synkende på (sortIso, id). Filter via ?type=… (#487).
 
 import { ensureInnlogget } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
@@ -31,8 +29,7 @@ export const dynamic = 'force-dynamic'
 export default async function TidligereSide({
   searchParams,
 }: {
-  // `r` er en ren cache-buster fra «Prøv igjen»-lenka (se lib/tidligere-feil.ts)
-  // og leses aldri her — den finnes kun for å tvinge en fersk server-render.
+  // `r` er en cache-buster fra «Prøv igjen»-lenka og leses aldri her.
   searchParams: Promise<{ cursor?: string; type?: string; r?: string }>
 }) {
   const { user } = await ensureInnlogget()
@@ -41,22 +38,19 @@ export default async function TidligereSide({
   const cursor = dekodeCursor(cursorStr)
   const filter = parseFilter(typeStr)
 
-  // Innlogget brukers rolle — styrer om av-arkiver-knappen vises på andres
-  // innlegg (admin kan av-arkivere alle, ellers kun egne). (#312)
+  // Rollen styrer om av-arkiver-knappen vises på andres innlegg (#312).
   const { data: minProfil, error: minProfilFeil } = await supabase
     .from('profiles')
     .select('rolle')
     .eq('id', user.id)
     .maybeSingle()
-  // Feiler oppslaget, faller vi tilbake til «ikke admin» (fail closed) — det
-  // skjuler kun av-arkiver-knappen for andres innlegg, ikke sensitivt nok til
-  // å ta ned hele historikk-siden. Logges likevel så feilen ikke drukner.
+  // Feil → «ikke admin» (fail closed): skjuler bare en knapp, ikke verdt å ta ned siden.
   if (minProfilFeil) {
     await logg.feil('tidligere.minProfil.oppslag.feilet', minProfilFeil, { ctx: { profil_id: user.id } })
   }
   const erAdmin = kanAdministrere(minProfil?.rolle ?? null)
 
-  const grense = TIDLIGERE_SIDESTOERRELSE + 1 // hent én ekstra for å sjekke om det er mer
+  const grense = TIDLIGERE_SIDESTOERRELSE + 1 // én ekstra avslører om det finnes mer
 
   // === Arrangementer ===
   // Pågående tur hører til «Kommende» på forsiden (#766). Speiler erPaagaaende()
@@ -78,7 +72,6 @@ export default async function TidligereSide({
   }
 
   if (cursor.a) {
-    // Keyset: vis kun rader eldre enn cursoren (synkende på start_tidspunkt, id)
     arrQuery = arrQuery.or(
       `start_tidspunkt.lt.${cursor.a[0]},and(start_tidspunkt.eq.${cursor.a[0]},id.lt.${cursor.a[1]})`,
     )
@@ -99,21 +92,16 @@ export default async function TidligereSide({
     .limit(grense)
 
   if (cursor.m) {
-    // Keyset mot sorterings_tidspunkt (mig. 120) — samme kolonne som .order()
-    // over og visningens sortIso under. Før #491 leste dette mot sist_aktivitet
-    // mens visningen sorterte på arkivert_tidspunkt ?? sist_aktivitet: to
-    // uttrykk for «samme» regel som kunne divergere, og keyset-filteret kunne
-    // dermed hoppe over arkiverte rader.
+    // Keyset, .order() og sortIso MÅ bruke samme kolonne (sorterings_tidspunkt,
+    // mig. 120), ellers kan keyset hoppe over arkiverte rader (#491).
     meldQuery = meldQuery.or(
       `sorterings_tidspunkt.lt.${cursor.m[0]},and(sorterings_tidspunkt.eq.${cursor.m[0]},id.lt.${cursor.m[1]})`,
     )
   }
 
   // === Polls ===
-  // kaaring_mal_id må med for å skille kåringspoller (hvor RLS skjuler andres
-  // stemmer) fra vanlige polls — samme mønster som forsiden bruker. Uten dette
-  // blir antallStemmer/stemmerPerValg feil på kåringspoller for vanlige
-  // medlemmer fordi `poll_stemme`-rader er filtrert av RLS (mig. 076).
+  // kaaring_mal_id skiller ut kåringspoller, der RLS skjuler andres stemmer
+  // (mig. 076) og totalene må hentes via RPC, som på forsiden.
   let pollQuery = supabase
     .from('poll')
     .select(
@@ -125,28 +113,21 @@ export default async function TidligereSide({
     .limit(grense)
 
   if (cursor.p) {
-    // Keyset: vis kun polls med eldre svarfrist enn cursoren
     pollQuery = pollQuery.or(
       `svarfrist.lt.${cursor.p[0]},and(svarfrist.eq.${cursor.p[0]},id.lt.${cursor.p[1]})`,
     )
   }
 
-  // Kun spørringene det aktive filteret faktisk trenger kjøres — skippede
-  // typer resolver til null med samme Promise.all (parallellitet bevart,
-  // ytelseskritisk for type=alle som fortsatt kjører alle tre samtidig).
-  //
-  // Vi beholder HELE svaret (ikke bare .data) — se #492. `r.data` alene kan
-  // ikke skille «filteret slo av kilden» fra «spørringen feilet»: begge gir
-  // null. Med det fulle svaret leser vi `.error` eksplisitt under i stedet.
+  // Kun spørringene filteret trenger; resten resolver til null i samme
+  // Promise.all (parallellitet bevart). HELE svaret beholdes, ikke bare .data,
+  // ellers kan «filtrert bort» ikke skilles fra «feilet» (#492).
   const [arrSvar, meldSvar, pollSvar] = await Promise.all([
     skalHente(filter, 'arrangement') ? arrQuery : Promise.resolve(null),
     skalHente(filter, 'melding') ? meldQuery : Promise.resolve(null),
     skalHente(filter, 'poll') ? pollQuery : Promise.resolve(null),
   ])
 
-  // Tri-state: `null`-svar betyr «filteret slo av kilden» (skalHente var
-  // false), `svar.error` betyr «spørringen kjørte men feilet». `arrRaad` har
-  // samme type og betydning som før denne endringen.
+  // `null`-svar = filtrert bort; `svar.error` = kjørte, men feilet.
   const arrFeilet = arrSvar?.error != null
   const meldFeilet = meldSvar?.error != null
   const pollFeilet = pollSvar?.error != null
@@ -154,9 +135,7 @@ export default async function TidligereSide({
   const meldRaad = meldSvar?.data ?? null
   const pollRaad = pollSvar?.data ?? null
 
-  // Bygget med flatMap over (kilde, svar)-par i stedet for tre non-null-
-  // assertions: `svar?.error != null` narrower både svaret og feltet, så
-  // TypeScript beviser at `svar.error` finnes i stedet for at vi lover det.
+  // flatMap i stedet for non-null-assertions: `svar?.error != null` lar TS bevise at feltet finnes.
   const feilendeKilder: { kilde: TidligereKilde; error: NonNullable<typeof arrSvar>['error'] }[] = (
     [
       ['arrangement', arrSvar],
@@ -165,11 +144,8 @@ export default async function TidligereSide({
     ] as const
   ).flatMap(([kilde, svar]) => (svar?.error != null ? [{ kilde, error: svar.error }] : []))
 
-  // Alltid await — logg.feil() må aldri blokkere responsen usett eller kastes
-  // i taushet (presedens: lib/actions/arrangementer.ts:115). `.catch` er
-  // ufravikelig: Sentry-kallet inne i logg.feil er ubeskyttet (se #496), og
-  // en kastende logger ville gjort en delvis degradering til en 500 — stikk
-  // motsatt av det hele denne siden bygger.
+  // `.catch` er ufravikelig: Sentry-kallet i logg.feil er ubeskyttet (#496), og
+  // en kastende logger ville gjort en delvis degradering til en 500.
   await Promise.all(
     feilendeKilder.map(({ kilde, error }) =>
       logg
@@ -182,17 +158,14 @@ export default async function TidligereSide({
   )
   const harFeil = feilendeKilder.length > 0
 
-  // Sjekk om det finnes mer (vi hentet grense = 30+1 rader)
   const harMerArr = (arrRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
   const harMerMeld = (meldRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
   const harMerPoll = (pollRaad?.length ?? 0) > TIDLIGERE_SIDESTOERRELSE
 
-  // Klipp til TIDLIGERE_SIDESTOERRELSE (fjern den ekstra raden)
   const arrSide = (arrRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
   const meldSide = (meldRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
   const pollSide = (pollRaad ?? []).slice(0, TIDLIGERE_SIDESTOERRELSE)
 
-  // Bygg TidligereItem-lister fra rådataene
   type CoverObj = { bilde_url: string; thumb_url: string | null }
   type RawAlbumEmbed = {
     id: string
@@ -216,7 +189,6 @@ export default async function TidligereSide({
     album: RawAlbumEmbed | RawAlbumEmbed[]
   }
 
-  // Bygg items for arrangmenter
   const arrItems: TidligereItem[] = arrSide.map(a => ({
     kind: 'arrangement' as const,
     sortIso: a.start_tidspunkt,
@@ -232,14 +204,10 @@ export default async function TidligereSide({
     ),
   }))
 
-  // Bygg items for meldinger — alle i «tidligere»-stil (dempet visning).
-  // sortIso kommer fra sorterings_tidspunkt (mig. 120, #491) — DB-en eier nå
-  // nøkkelen «arkivert_tidspunkt hvis satt, ellers sist_aktivitet», så denne
-  // verdien er alltid identisk med .order()/keyset-filteret over.
-  // Rå-rad → MeldingRaad → TidligereItem skjer i ÉN map: to parallelle lister
-  // koblet på indeks er en stille bug i vente hvis en av dem senere filtreres.
+  // sortIso = sorterings_tidspunkt, samme nøkkel som .order()/keyset over (#491).
+  // Rå-rad → MeldingRaad → TidligereItem i ÉN map: parallelle lister koblet på
+  // indeks blir en stille bug hvis en av dem senere filtreres.
   const meldItems: TidligereItem[] = meldSide.map((m: RawMelding) => {
-    // Alle bilder er nå i melding_bilder — bilde_url-kolonnen er droppet (#174)
     const raad: MeldingRaad = {
       id: m.id,
       innhold: m.innhold,
@@ -256,7 +224,7 @@ export default async function TidligereSide({
         bilde_url: m.profiles?.bilde_url ?? null,
         rolle: m.profiles?.rolle ?? null,
       },
-      reaksjoner: [], // reaksjoner hentes ikke på /tidligere for å holde siden rask
+      reaksjoner: [], // hentes ikke her, for å holde siden rask
       antallKommentarer: (m.melding_chat?.[0] as { count: number } | undefined)?.count ?? 0,
       albumKort: tilAlbumKort(m.album),
       aktuell_dato: m.aktuell_dato,
@@ -268,7 +236,6 @@ export default async function TidligereSide({
     }
   })
 
-  // Bygg items for polls
   type RawPoll = {
     id: string
     spoersmaal: string
@@ -279,11 +246,8 @@ export default async function TidligereSide({
     poll_valg: { id: string; tekst: string; rekkefoelge: number }[] | null
     poll_stemme: { profil_id: string; valg_id: string }[] | null
   }
-  // Kåringspoller på denne siden er alltid avsluttede (svarfrist < nå), så i
-  // praksis er stemmene i ferd med å åpnes — men RLS-policyen (mig. 076)
-  // skiller ikke på avsluttet-status, den filtrerer alltid bort andres
-  // stemmer for vanlige medlemmer. Vi bruker derfor RPC-aggregat (samme som
-  // forsiden) for å få totaler.
+  // RLS (mig. 076) skjuler andres stemmer også på avsluttede kåringspoller,
+  // så totalene hentes via RPC-aggregat.
   const kaaringspollIder = (pollSide as RawPoll[])
     .filter(p => p.kaaring_mal_id !== null)
     .map(p => p.id)
@@ -300,9 +264,7 @@ export default async function TidligereSide({
     let antallStemmer = 0
 
     if (erKaaring) {
-      // Aggregat fra RPC — totalen er sannheten siden RLS skjuler andres
-      // stemmer. harStemt utledes fortsatt fra poll_stemme: egne stemmer
-      // er synlige for kalleren.
+      // harStemt utledes fortsatt fra poll_stemme — egne stemmer er synlige.
       const agg = kaaringAggregater.get(p.id) ?? new Map<string, number>()
       for (const [valgId, antall] of agg) {
         stemmerPerValg[valgId] = antall
@@ -334,22 +296,17 @@ export default async function TidligereSide({
     }
   })
 
-  // Merge og sorter alle items synkende på (sortIso, id).
-  // Vi bruker id som tiebreaker for deterministisk rekkefølge.
+  // id som tiebreaker for deterministisk rekkefølge.
   const alleItems: TidligereItem[] = [...arrItems, ...meldItems, ...pollItems].sort((a, b) => {
     const isoDiff = b.sortIso.localeCompare(a.sortIso)
     if (isoDiff !== 0) return isoDiff
     return b.data.id.localeCompare(a.data.id)
   })
 
-  // Klipp til sidestørrelse etter merge (kan ha fått inntil 3*30 = 90 items)
   const side = alleItems.slice(0, TIDLIGERE_SIDESTOERRELSE)
 
-  // Bygg neste cursor. To uavhengige spørsmål per type (se #488 — de var
-  // slått sammen tidligere, som fikk «Last mer» til å vises på siste side):
-  //   1. Hvor skal neste side starte for denne typen? → nestePosisjon()
-  //   2. Finnes det i det hele tatt en neste side for denne typen? → harMerFraKilde()
-  // Se lib/tidligere-cursor.ts for selve reglene og hvorfor de er riktige.
+  // Neste cursor: «hvor starter neste side» og «finnes det en neste side» er
+  // to uavhengige spørsmål per type (#488) — reglene bor i lib/tidligere-cursor.ts.
   const emittertArr = side.filter(i => i.kind === 'arrangement')
   const emittertMeld = side.filter(i => i.kind === 'melding')
   const emittertPoll = side.filter(i => i.kind === 'poll')
@@ -357,10 +314,8 @@ export default async function TidligereSide({
   const sisteMeld = emittertMeld.at(-1)
   const sistePoll = emittertPoll.at(-1)
 
-  // antallISidevindu MÅ leses fra *Side-listene (klippet til sidestørrelse),
-  // ikke fra *Raad (som har sidestørrelse+1 rader). Sender man rå-lengden blir
-  // antallEmittert < antallISidevindu permanent true, og «Last mer» henger
-  // igjen på siste side igjen — akkurat bugen #488 fikset.
+  // antallISidevindu MÅ leses fra *Side (klippet), ikke *Raad (+1 rad) — ellers
+  // henger «Last mer» igjen på siste side (#488).
   const arrTilstand: KildeTilstand = {
     inn: cursor.a,
     antallISidevindu: arrSide.length,
@@ -386,16 +341,12 @@ export default async function TidligereSide({
     feilet: pollFeilet,
   }
 
-  // nesteCursor og harFeil er gjensidig utelukkende ved konstruksjon
-  // (byggNesteCursor returnerer null når noen aktiv kilde har feilet, se
-  // lib/tidligere-cursor.ts) — «Last mer» og «Prøv igjen» kan derfor aldri
-  // vises samtidig.
+  // Null når en aktiv kilde har feilet — «Last mer» og «Prøv igjen» utelukker hverandre.
   const nesteCursor = byggNesteCursor({ a: arrTilstand, m: meldTilstand, p: pollTilstand })
   const feilTekstVerdi = feilTekst(feilendeKilder.map(f => f.kilde), filter)
   const retryHref = harFeil ? proevIgjenHref(filter, cursorStr, naa()) : null
 
-  // De to UI-invariantene bor i lib/tidligere-feil.ts og er enhetstestet der —
-  // ikke inline betingelsene igjen her, da mister de mutasjonsdekningen.
+  // UI-invariantene er enhetstestet i lib/tidligere-feil.ts — ikke inline dem her.
   const visTom = visTomTekst(side.length, harFeil)
   const bunn = bunnSlot(nesteCursor, retryHref)
 
@@ -421,15 +372,13 @@ export default async function TidligereSide({
       <TidligereTypeFilter aktiv={filter} />
 
       {feilTekstVerdi && (
-        // role="status" (polite) — banneret dukker opp etter navigasjon, så en
-        // skjermleser skal nevne det uten å avbryte det brukeren holder på med.
+        // role="status" (polite): skjermleser nevner banneret uten å avbryte.
         <div role="status" style={{ marginBottom: 20 }}>
           <TidligereFeilBanner tekst={feilTekstVerdi} />
         </div>
       )}
 
-      {/* visTomTekst() eier regelen «tom side, men ikke fordi noe feilet» —
-          se lib/tidligere-feil.ts og __tests__/tidligere-feil.test.ts. */}
+      {/* Regelen bor i visTomTekst() (lib/tidligere-feil.ts, enhetstestet). */}
       {visTom ? (
         <p
           data-testid="tidligere-tom"
@@ -442,12 +391,9 @@ export default async function TidligereSide({
             textAlign: 'center',
           }}
         >
-          {/* Har brukeren paginert hit (cursorStr satt), er lista ikke tom — han står
-              bare på en tom siste side. Da lyver «Ingen X i historikken»; «Her stopper
-              løypa» er riktig for begge. «Last mer» på en reelt tom side skal ikke
-              lenger skje (fikset i #488), men grenen beholdes: en bokmerket/foreldet
-              cursor kan fortsatt lande på en tom side her.
-              e2e/tidligere.spec.ts dekker grenen via en foreldet cursor. */}
+          {/* Med cursor står han på en tom siste side, ikke en tom historikk — da
+              lyver «Ingen X». Grenen trengs fortsatt for foreldede/bokmerkede
+              cursorer (dekket av e2e/tidligere.spec.ts). */}
           {filter === 'alle' || cursorStr ? (
             'Her stopper løypa, gutta.'
           ) : (
@@ -461,14 +407,10 @@ export default async function TidligereSide({
         </p>
       ) : (
         <section>
-          {/* Ingen seksjonsetikett over en tom liste: når alle kilder feilet er
-              side.length 0, og en ensom «Tidligere»-overskrift over ingenting
-              ser ut som en bug i seg selv. */}
+          {/* Ingen etikett over en tom liste (alle kilder feilet). */}
           {side.length > 0 && <SectionLabel>Tidligere</SectionLabel>}
-          {/* Hvert kort under (ArrangementKort/PollKort/MeldingKort) rendrer ett
-              <a> på toppnivå. e2e/tidligere.spec.ts teller kort via
-              `:scope > a` på denne diven — ikke wrap et kort i en ekstra div,
-              det bryter den tellingen. Se #489. */}
+          {/* e2e/tidligere.spec.ts teller kort via `:scope > a` — ikke wrap et
+              kort i en ekstra div (#489). */}
           <div data-testid="tidligere-liste" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {side.map(t => {
               if (t.kind === 'arrangement')
@@ -486,18 +428,11 @@ export default async function TidligereSide({
             })}
           </div>
 
-          {/* bunnSlot() eier valget mellom «Last mer» og «Prøv igjen» (se
-              lib/tidligere-feil.ts) — de deler denne slotten og er gjensidig
-              utelukkende ved konstruksjon. Retry-pillen bruker samme href som
-              banneret over, slik at en bruker som har scrollet til bunnen
-              opplever at knappen byttet ord, ikke at den forsvant.
-              `&& nesteCursor` / `&& retryHref` under er kun TypeScript-
-              narrowing til string — avgjørelsen ligger i `bunn`. */}
+          {/* Avgjørelsen ligger i `bunn`; `&& nesteCursor` / `&& retryHref` er
+              kun TypeScript-narrowing. */}
           {bunn === 'last-mer' && nesteCursor ? (
-            // Vanlig <a>, ikke next/link — samme grunn som FilterChip (#659):
-            // hover-prefetch mot samme rute med ny searchParam etterlater en
-            // abortert cache-entry som klikket henger på for alltid. En
-            // cursor-lenke er dessuten alltid engangsbruk.
+            // Vanlig <a>, ikke next/link: prefetch mot samme rute med ny
+            // searchParam etterlater en abortert cache-entry klikket henger på (#659).
             <a
               data-testid="tidligere-last-mer"
               href={`/tidligere?${new URLSearchParams({
@@ -509,7 +444,7 @@ export default async function TidligereSide({
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginTop: 20,
-                minHeight: 44, // WCAG 2.5.8 / iOS touch-target-minimum — samme mål som «Prøv igjen» under
+                minHeight: 44, // touch-target-minimum
                 padding: '0 14px',
                 textAlign: 'center',
                 fontFamily: 'var(--font-mono)',
@@ -527,22 +462,16 @@ export default async function TidligereSide({
             </a>
           ) : bunn === 'proev-igjen' && retryHref ? (
             <div style={{ marginTop: 20, textAlign: 'center' }}>
-              {/* Vanlig <a>, ikke next/link (#659) — samme grunn som FilterChip
-                  og «Last mer». retryHref peker på /tidligere med ny
-                  searchParam, altså samme rute, og der henger navigasjonen på
-                  en abortert hover-prefetch. Kritisk her: denne lenka vises kun
-                  når en spørring HAR feilet, og er eneste vei ut av
-                  feiltilstanden — henger den, står brukeren fast. */}
+              {/* Vanlig <a> (#659), som «Last mer» — kritisk her: eneste vei ut
+                  av feiltilstanden. */}
               <a
                 data-testid="tidligere-proev-igjen"
                 href={retryHref}
-                // Lenketeksten er «Prøv igjen» uten kontekst når en skjermleser
-                // lister lenkene på siden — aria-label sier hva som prøves.
                 aria-label="Prøv å hente historikken på nytt"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  minHeight: 44, // WCAG 2.5.8 touch-target-minimum
+                  minHeight: 44, // touch-target-minimum
                   padding: '0 14px',
                   borderRadius: 999,
                   border: '0.5px solid var(--danger-border)',

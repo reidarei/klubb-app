@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagFromMock, lagChain } from './helpers/supabase-mock'
 import { BASE_URL } from '@/lib/config'
 
-// Mock Supabase admin-klient
 const mockFrom = vi.fn()
 const mockSupabase = { from: mockFrom }
 
@@ -10,7 +9,6 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
-// Mock push og epost
 const mockSendPush = vi.fn().mockResolvedValue(undefined)
 const mockSendEpost = vi.fn().mockResolvedValue(undefined)
 const mockSendEpostBatch = vi.fn().mockResolvedValue(undefined)
@@ -20,11 +18,8 @@ vi.mock('@/lib/push', () => ({
   sendPush: (...args: unknown[]) => mockSendPush(...args),
 }))
 
-// Logg mockes så vi kan asserte på advarselen for ikke-normaliserbare URL-er
-// uten at den ekte loggeren prøver å skrive til feil_logg/Sentry.
-// ÉN vi.mock per modul: to kall for samme modul hoistes begge, og den siste
-// vinner stille — spionen i den første blir da aldri kalt. (#503-rebase)
-// logg.feil awaites i lib/varsler.ts, så mocken må returnere en Promise. (#503)
+// ÉN vi.mock per modul: to kall hoistes begge, og den siste vinner stille (#503).
+// logg.feil awaites i lib/varsler.ts, så mocken må returnere en Promise.
 const mockLoggWarn = vi.fn()
 const mockLoggFeil = vi.fn().mockResolvedValue(undefined)
 
@@ -79,8 +74,7 @@ describe('sendVarsel – kanalvalg', () => {
       type: 'test',
     })
 
-    // sendEpostBatch kalles ubetinget (early-return håndterer tom liste internt),
-    // så vi asserter på innholdet i batchen fremfor bare at mocken ble kalt.
+    // sendEpostBatch kalles ubetinget, så vi asserter på innholdet, ikke kallet.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
     expect(mockSendPush).not.toHaveBeenCalled()
   })
@@ -106,9 +100,7 @@ describe('sendVarsel – kanalvalg', () => {
   })
 
   it('skriver varsel_logg-rad med kanal: kun_app for bruker uten noen kanal aktiv (#504)', async () => {
-    // Navnet lyver ikke lenger: raden skal skrives (kanal: 'kun_app'), ikke
-    // «skippes» — varsel_logg ER innboksen på /profil, og ingen mottaker skal
-    // være usynlig for alle tre kanaler bare fordi push og epost er avslått.
+    // Raden skrives likevel (kanal: 'kun_app') — varsel_logg ER innboksen (#504).
     const insertSpy = vi.fn().mockReturnValue({
       select: () => ({
         single: () => Promise.resolve({ data: { id: 'ny-rad' }, error: null }),
@@ -136,8 +128,7 @@ describe('sendVarsel – kanalvalg', () => {
     })
 
     expect(mockSendPush).not.toHaveBeenCalled()
-    // sendEpostBatch kalles ubetinget, men skal ha fått en tom liste her —
-    // se kommentaren i testen over for hvorfor vi asserter på innhold, ikke kall-status.
+    // Kalles ubetinget, men med tom liste.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([])
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({ profil_id: 'user1', kanal: 'kun_app' }),
@@ -147,10 +138,9 @@ describe('sendVarsel – kanalvalg', () => {
 })
 
 describe('sendVarsel – nivåvalg (#614)', () => {
-  // Gaten er «viktig vs. alt»-skillet fra #612 (teller_ulest) kombinert med
-  // mottakerens varsel_nivaa — IKKE en egen typeliste. Testene dekker de fire
-  // kombinasjonene pluss manglende preferanse-rad og at valget er per mottaker,
-  // ikke globalt for hele sendingen.
+  // Gaten er tellerUlest (#612) × varsel_nivaa, ikke en egen typeliste
+  // (CLAUDE.md § Policy: Varsler). Dekker de fire kombinasjonene, manglende
+  // preferanse-rad og at valget er per mottaker.
 
   it('tellerUlest: false + nivå "viktige" ⇒ ingen push/epost, men in-app-rad med kanal kun_app', async () => {
     const insertSpy = vi.fn().mockReturnValue({
@@ -284,9 +274,8 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       tillatDuplikat: true,
     })
 
-    // user1 (viktige): ingen push, in-app kun_app. user2 (alle): push som normalt.
-    // Antallet alene ville også passert om gaten dempet FEIL mann, så vi
-    // pinner endepunktet — det er retningen, ikke bare mengden, som er kravet.
+    // user1 (viktige): ingen push. user2 (alle): push. Endepunktet pinnes —
+    // antallet alene ville passert om gaten dempet feil mann.
     expect(mockSendPush).toHaveBeenCalledTimes(1)
     expect(mockSendPush).toHaveBeenCalledWith(
       expect.objectContaining({ endpoint: 'https://push.example.com/2' }),
@@ -319,8 +308,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       tillatDuplikat: true,
     })
 
-    // Manglende rad ⇒ epostAktiv defaulter til true (eksisterende oppførsel)
-    // og nivå defaulter til 'alle' ⇒ e-posten skal ut.
+    // Manglende rad ⇒ epostAktiv true og nivå 'alle' ⇒ e-posten skal ut.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
   })
 })
@@ -387,9 +375,7 @@ describe('wrapper-funksjoner', () => {
       startTidspunkt: '2026-06-15T16:00:00Z',
     })
 
-    // Batchen skal inneholde nøyaktig ett element til Ola med emnet fra wrapperen.
-    // Ingen guard: mocken er satt opp med epost_aktiv, så en tom batch her ville
-    // vært en reell regresjon vi vil at testen skal fange.
+    // Ingen guard: mocken har epost_aktiv, så en tom batch er en reell regresjon.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([
       expect.objectContaining({ til: 'ola@test.no', emne: 'Nytt arrangement' }),
     ])
@@ -443,8 +429,7 @@ describe('wrapper-funksjoner', () => {
       aar: 2026,
     })
 
-    // Batchen skal inneholde nøyaktig ett element til den ansvarlige med
-    // purre-emnet — ingen guard, jf. kommentaren i nytt-arrangement-testen over.
+    // Ingen guard, jf. nytt-arrangement-testen over.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([
       expect.objectContaining({ til: 'kari@test.no', emne: 'Husk arrangøransvaret ditt!' }),
     ])
@@ -484,8 +469,7 @@ describe('formaterHilsenMelding', () => {
   })
 
   it('returnerer fallback når hilsen kun er whitespace uten fraNavn', () => {
-    // Whitespace-only hilsen skal trimmes bort, så fraNavn-kravet
-    // gjelder ikke — fallback returneres uten å kaste.
+    // Whitespace-only hilsen trimmes bort, så fraNavn-kravet gjelder ikke.
     const melding = formaterHilsenMelding({
       hilsen: '   ',
       verb: 'purrer deg på',
@@ -535,8 +519,7 @@ describe('formaterHilsenMelding', () => {
 })
 
 describe('byggPaaminne7Melding', () => {
-  // Alle asserts pinner EKSAKT streng (godkjent ordlyd, #591) — en
-  // omformulering skal feile testen, ikke bare et innholdssjekk.
+  // EKSAKT streng (godkjent ordlyd, #591) — en omformulering skal feile testen.
   const BASIS = {
     tittel: 'Vårfest',
     startTidspunkt: '2026-06-15T16:00:00Z',
@@ -587,8 +570,7 @@ describe('byggPaaminne7Melding', () => {
   })
 
   it('den som har meldt avbud får verken oppmøtested eller påmeldingstall', () => {
-    // Ikke bare en tekstvariant: hele detalj-blokken utelates for 'nei'. Testen
-    // står her for å fange at noen senere «harmoniserer» de fire variantene.
+    // Hele detalj-blokken utelates for 'nei' — fanger en «harmonisering» av variantene.
     const melding = byggPaaminne7Melding({ ...BASIS, rsvp: 'nei' })
     expect(melding).toBe('Det er syv dager til Vårfest, 15. juni. Du har meldt avbud.')
     expect(melding).not.toContain('Klubbhuset')
@@ -604,10 +586,9 @@ describe('byggPaaminne7Melding', () => {
 })
 
 describe('sendPaaminneVarsler – riktig tekst per type', () => {
-  // Begge grenene av type-ternæren i sendPaaminneVarsler pinnes e2e mot
-  // arrangementEpostHtml. Kun 1-dagers-testen fantes før: snudde man ternæren
-  // feil vei, fanget suiten det asymmetrisk, og byggPaaminne7Melding kunne
-  // være aldri koblet til utsendingen uten at noen test merket det.
+  // Begge grenene av type-ternæren i sendPaaminneVarsler pinnes mot
+  // arrangementEpostHtml, så en snudd ternær eller en frakoblet
+  // byggPaaminne7Melding fanges.
   const KANAL_EPOST = {
     varsel_logg: [],
     varsel_innstillinger: { aktiv: true, beskrivelse: null },
@@ -666,8 +647,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
   })
 
   it('paaminne_1 går som ÉN broadcast, ikke gruppert', async () => {
-    // Vokter at 1-dagers ikke ble dratt med i personaliseringen: én sending,
-    // og uten mottakerliste (broadcast) slik den alltid har vært.
+    // 1-dagers er ikke personalisert: én broadcast-sending uten mottakerliste.
     setupMock(KANAL_EPOST)
 
     await sendPaaminneVarsler({
@@ -727,8 +707,7 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
     setupFireProfiler()
     await send()
 
-    // E-postene kommer i samme rekkefølge som PROFILER (Promise.all over
-    // profil-lista), så vi kan knytte tekst til mottaker via epostBatch.
+    // Samme rekkefølge som PROFILER (Promise.all over profil-lista).
     const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
     const tekster = mockArrangementEpostHtml.mock.calls.map(([arg]) => (arg as { tekst: string }).tekst)
     const perMottaker = new Map(batch.map((e, i) => [e.til, tekster[i]]))
@@ -742,11 +721,9 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
   })
 
   it('går som ÉN sending, ikke fire grupperte kall', async () => {
-    // Vokter valget dokumentert på melding-parameteren i sendVarsel: fire kall
-    // ville gitt fire bryter-oppslag, fire Resend-batcher (rate limit-en fra
-    // #478) og — verst — 'dedup' på kall 2–4 fordi dedup-sjekken på
-    // (type, arrangement_id) er global. Én batch med fire ulike tekster er
-    // beviset på at personaliseringen skjer inne i sendingen.
+    // Én batch med fire tekster beviser at personaliseringen skjer inne i én
+    // sending — fire kall ville gitt 'dedup' på kall 2–4 (se CLAUDE.md §
+    // Policy: Varsler, `melding`-parameteren).
     setupFireProfiler()
     await send()
 
@@ -755,8 +732,8 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
   })
 
   it('lagrer den personlige teksten i innboksen, ikke en felles', async () => {
-    // varsel_logg ER innboksen på /profil. Fanger at melding-funksjonen
-    // resolves før inserten, ikke bare på vei til push/e-post.
+    // Melding-funksjonen må resolves før varsel_logg-inserten (innboksen),
+    // ikke bare for push/e-post.
     const insertSpy = vi.fn().mockReturnValue({
       select: () => ({ single: () => Promise.resolve({ data: { id: 'ny-rad' }, error: null }) }),
     })
@@ -843,8 +820,8 @@ describe('byggPaaminne1Melding', () => {
     ).toBe('I morgen er det Vårfest. Oppmøte Klubbhuset kl. 18:00. 1 kommer. Vel møtt!')
   })
 
-  // Datoen skal IKKE stå i teksten — «I morgen» gir den allerede. Pinnes fordi
-  // en fremtidig refaktor lett kan gjenbruke formaterDatoKlokke ved et uhell.
+  // Datoen skal IKKE stå i teksten — «I morgen» gir den. En refaktor kan lett
+  // gjenbruke formaterDatoKlokke ved et uhell.
   it('utelater datoen', () => {
     const melding = byggPaaminne1Melding({
       tittel: 'Vårfest',
@@ -857,25 +834,18 @@ describe('byggPaaminne1Melding', () => {
 })
 
 describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
-  // Kontrakten gutta faktisk merker: enhver chat-melding varsler alle aktive
-  // minus avsender, og den som nevnes med @Navn får i tillegg (og FØRST) et
-  // eget mention-varsel. Fire av de fem testene under endret forventet
-  // resultat da broadcasten ble lagt til (#612) — det ER atferdsendringen,
-  // ikke en regresjon. Flere, mer detaljerte scenarier (type per mottaker,
-  // avskrudde brytere, VarselUtfall-semantikken) ligger i
-  // __tests__/chat-varsler.test.ts.
+  // Enhver chat-melding varsler alle aktive minus avsender; den som nevnes med
+  // @Navn får i tillegg (og FØRST) et mention-varsel (#612). Detaljerte
+  // scenarier ligger i __tests__/chat-varsler.test.ts.
   const ALLE_PROFILER = [
     { id: 'avsender1', navn: 'Nils Nordmann', visningsnavn: 'Nils', epost: 'nils@test.no' },
     { id: 'user1', navn: 'Ola Nordmann', visningsnavn: 'Ola', epost: 'ola@test.no' },
     { id: 'user2', navn: 'Per Hansen', visningsnavn: 'Per', epost: 'per@test.no' },
   ]
 
-  // Egen profiles-chain fordi lagChain ignorerer filtrene: profiles spørres TO
-  // ganger her — først av sendChatVarsler (alle aktive, for å matche
-  // @-navnet OG for broadcast-lista), så av sendVarsel med .in('id', mottakere)
-  // per sending. Respekterer ikke den andre .in(), får alle e-post, og testen
-  // kan ikke skille «Ola ble varslet» fra «alle ble varslet» — altså nøyaktig
-  // det den skal måle.
+  // Egen profiles-chain fordi lagChain ignorerer filtrene: sendVarsel sin
+  // .in('id', mottakere) må respekteres, ellers kan testen ikke skille «Ola ble
+  // varslet» fra «alle ble varslet».
   function profilChain() {
     let idFilter: string[] | null = null
     const chain: Record<string, unknown> = {}
@@ -919,8 +889,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
     await sendChatVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1', false)
 
     expect(mockSendPush).toHaveBeenCalled()
-    // Mention-benet (Ola) sendes FØR broadcast-benet (Per) — to separate
-    // sendEpostBatch-kall, ett per sendVarsel-sending.
+    // Mention (Ola) FØR broadcast (Per) — ett sendEpostBatch-kall per sending.
     expect(mockSendEpostBatch).toHaveBeenNthCalledWith(1, [
       expect.objectContaining({ til: 'ola@test.no' }),
     ])
@@ -934,8 +903,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
 
     await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1', false)
 
-    // Push-argumentene bærer teksten mottakeren ser på låseskjermen — mention-
-    // benet (Ola) sendes først, så dette er hans push.
+    // Første push er mention-benet (Ola).
     const push = mockSendPush.mock.calls[0]
     expect(JSON.stringify(push)).toContain('Nils: Hei @Ola')
   })
@@ -945,8 +913,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
 
     await sendChatVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1', false)
 
-    // Ingen mention-treff (Nils er avsenderen selv) — men broadcasten går
-    // uansett til Ola og Per. Før #612 var dette «sender ingenting».
+    // Ingen mention-treff (Nils er avsender), men broadcasten går til Ola og Per.
     expect(mockSendPush).toHaveBeenCalledTimes(2)
     const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
     expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
@@ -957,8 +924,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
 
     await sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false)
 
-    // @alle dekker alle andre allerede — broadcast-benet har ingen igjen å
-    // sende til (rest.length === 0) og skal derfor ALDRI kalles.
+    // @alle dekker alle andre — broadcast-benet har ingen igjen og skal ALDRI kalles.
     expect(mockSendEpostBatch).toHaveBeenCalledTimes(1)
     const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
     expect(batch.map(e => e.til).sort()).toEqual(['ola@test.no', 'per@test.no'])
@@ -969,7 +935,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
 
     await sendChatVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1', false)
 
-    // Før #612 sendte dette ingenting. Nå: broadcast til alle andre.
+    // Broadcast til alle andre (#612).
     expect(mockSendPush).toHaveBeenCalled()
     expect(mockSendEpostBatch).toHaveBeenCalledTimes(1)
     const batch = mockSendEpostBatch.mock.calls[0][0] as { til: string }[]
@@ -995,8 +961,7 @@ describe('sendVarsel – URL-normalisering', () => {
       url: '/chat',
     })
 
-    // E-postklienter har ingen base-URL å resolve relative lenker mot —
-    // uten normalisering blir href-en ubrukelig i innboksen.
+    // E-postklienter har ingen base-URL å resolve relative lenker mot (#507).
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
       expect.objectContaining({ url: `${BASE_URL}/chat` }),
     )
@@ -1069,13 +1034,12 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
       url: '/chat',
     })
 
-    // Push resolver mot SW-ens egen origin uansett vert BASE_URL peker på
-    // (#687) — en absolutt URL ville blitt avvist som kryss-origin der.
+    // Push er relativ: SW-en avviser en absolutt URL fra annen vert som kryss-origin (#687).
     expect(mockSendPush).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ url: '/chat' }),
     )
-    // E-post har ingen base-URL å resolve mot (#507) — uendret oppførsel.
+    // E-post er absolutt (#507).
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
       expect.objectContaining({ url: `${BASE_URL}/chat` }),
     )
@@ -1133,17 +1097,14 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
       'varsel.url.fremmed',
       expect.objectContaining({ sample: 'test', url_utfall: 'fremmed' }),
     )
-    // En URL som legitimt peker ut av appen skal ikke omskrives til en lokal
-    // sti for e-post — kun push fail-closer til «/».
+    // En ekstern URL omskrives ikke for e-post — kun push fail-closer til «/».
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://evil.example/x' }),
     )
   })
 
-  // Review-funn #687: fallbacken skal treffe på ALLE ikke-ok-utfall, ikke bare
-  // når `url` er helt utelatt. En fremmed/ugyldig URL med en varsel_logg-rad
-  // bak seg skal sende medlemmet til varselet, ikke til agendaen — samme
-  // symptom som issuet handler om, i et smalere tilfelle.
+  // Fallbacken til varsel-raden gjelder ALLE ikke-ok-utfall, ikke bare utelatt
+  // `url`: en fremmed URL skal sende medlemmet til varselet, ikke agendaen (#687).
   it.each([
     ['fremmed origin', 'https://evil.example/x', 'fremmed'],
     ['malformert url', 'http://[', 'ugyldig'],
@@ -1224,8 +1185,7 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
       expect.anything(),
       expect.objectContaining({ url: '/varsler/logg-rad-1' }),
     )
-    // varsel_logg.url skrives FØR loggRad-id-en finnes, og forblir null når
-    // ingen url ble oppgitt — uendret oppførsel (se lib/varsler.ts).
+    // varsel_logg.url skrives før rad-id-en finnes, og forblir null uten url.
     expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ url: null }))
   })
 })
@@ -1240,8 +1200,7 @@ describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
       push_subscriptions: [],
     })
 
-    // Ingen av de tre nøklene er oppgitt, og tillatDuplikat er default false
-    // (ikke oppgitt) — dedup-sjekkene lenger ned har ingenting å kjøre på.
+    // Ingen dedup-nøkkel og tillatDuplikat default false — dedup er en no-op (#518).
     await sendVarsel({
       mottakere: ['user1'],
       tittel: 'Test',
@@ -1347,17 +1306,15 @@ describe('sendVarsel – testmodus', () => {
       type: 'test',
     })
 
-    // I testmodus skal kun bruker med test@test.no motta varsel — batchen skal
-    // ha nøyaktig ett element, med nøyaktig testadressen.
+    // Testmodus: kun test@test.no i batchen.
     const batch = mockSendEpostBatch.mock.calls[0]?.[0] ?? []
     expect(batch.length).toBe(1)
     expect(batch[0].til).toBe('test@test.no')
   })
 })
 
-// #503: styrende regel er «feil skal aldri føre til at noen får noe de ikke
-// skulle hatt». Oppslag som beskytter mot uønsket utsending feiler LUKKET
-// (kaster), mens dedup — som i verste fall bare gir et duplikat — feiler ÅPENT.
+// Feilkontrakten (#503): vern mot uønsket utsending feiler LUKKET, dedup feiler
+// ÅPENT. Se CLAUDE.md § Policy: Varsler.
 describe('sendVarsel – feilhåndtering', () => {
   it('kaster og sender ingenting når mottaker-oppslaget feiler', async () => {
     mockFrom.mockImplementation(
@@ -1391,10 +1348,8 @@ describe('sendVarsel – feilhåndtering', () => {
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
   })
 
-  // Denne er selve overskriften i #503: et nytt-arrangement-varsel til hele
-  // klubben som stille gikk til null personer fordi en feilet profiles-spørring
-  // ga tomt array. Broadcast-stien (uten mottakerliste) går via hentProfiler og
-  // var ikke pinnet av noen test. (#503-review)
+  // Kjernen i #503: en feilet profiles-spørring i broadcast-stien ga tomt array,
+  // og varselet gikk stille til null personer.
   it('kaster på broadcast uten mottakerliste når profiles-oppslaget feiler', async () => {
     mockFrom.mockImplementation(
       lagFromMock(
@@ -1417,9 +1372,8 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 
   it('kaster når test_modus-oppslaget feiler, selv om varseltype-oppslaget lykkes', async () => {
-    // Begge oppslagene går mot varsel_innstillinger, så en tabell-bred feil ville
-    // stoppet allerede i erVarselAktiv og maskert denne throw-en. Vi skiller på
-    // nøkkelen i .eq() slik at kun test_modus-formen feiler. (#503-review)
+    // Begge oppslagene går mot varsel_innstillinger; en tabell-bred feil ville
+    // stoppet i erVarselAktiv og maskert denne. Kun test_modus-nøkkelen feiler.
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_innstillinger') {
         let noekkel = ''
@@ -1451,10 +1405,8 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 
   it('kaster når varseltype-oppslaget feiler, selv om test_modus-oppslaget lykkes', async () => {
-    // Speilvendt av testen over: uten denne maskerer de to varsel_innstillinger-
-    // oppslagene hverandre begge veier — fjerner man throw-en i erVarselAktiv
-    // faller kallet bare videre til test_modus-throw-en og testene ser grønt ut.
-    // Mutasjonstestet: begge throw-ene er nå pinnet hver for seg. (#503-review)
+    // Speilvendt av testen over: uten begge maskerer de to oppslagene hverandre,
+    // og en fjernet throw i erVarselAktiv ville sett grønt ut.
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_innstillinger') {
         let noekkel = ''
@@ -1486,8 +1438,8 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 
   it('kaster når fortids-sperren ikke kan leses (arrangementer-oppslaget feiler)', async () => {
-    // En sperre vi ikke klarer å lese skal ikke tolkes som «ikke passert» — da
-    // ville en transient DB-feil kunne pinge hele klubben om en gammel tur.
+    // Ulesbar sperre ≠ «ikke passert» — ellers pinger en transient DB-feil hele
+    // klubben om en gammel tur.
     mockFrom.mockImplementation(
       lagFromMock(
         {
@@ -1516,9 +1468,7 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 
   it('sendChatVarsler kaster når profil-oppslaget feiler', async () => {
-    // Samme klasse som mottaker-oppslaget i sendVarsel: en feilet spørring
-    // skal ikke tolkes som «ingen å varsle» — verken for mention eller
-    // broadcast (#612).
+    // Feilet spørring ≠ «ingen å varsle», for både mention og broadcast (#612).
     mockFrom.mockImplementation(lagFromMock({}, { profiles: new Error('DB nede') }))
 
     await expect(
@@ -1594,8 +1544,7 @@ describe('sendVarsel – feilhåndtering', () => {
     })
 
     expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
-    // Fail-open er et valg om leveranse, ikke om synlighet: feilobjektet skal
-    // være med (2. argument), ikke bare et event-navn. (#503-review)
+    // Fail-open gjelder leveranse, ikke synlighet: feilobjektet skal med.
     expect(mockLoggFeil).toHaveBeenCalledWith(
       'varsel.dedup.feilet',
       expect.any(Error),
@@ -1604,9 +1553,8 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 
   it('sender likevel når varsel_logg-insert feiler, og logg.feil kalles', async () => {
-    // Håndrullet mock: select (dedup-sjekk) må lykkes mens insert (logging av
-    // utsendingen) feiler — samme teknikk som testen for paaminnelse-nøkler over,
-    // siden lagFromMock/lagChain ikke skiller mellom metoder på samme tabell.
+    // Håndrullet: select må lykkes mens insert feiler, og lagChain skiller ikke
+    // mellom metoder på samme tabell.
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_logg') {
         const chain = lagChain([])
@@ -1663,10 +1611,8 @@ describe('sendVarsel – feilhåndtering', () => {
 
     expect(mockSendPush).not.toHaveBeenCalled()
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
-    // #504: en broadcast som ikke treffer noen er den mest mistenkelige
-    // ikke-feil-tilstanden i hele varslingskjernen (RLS-/grant-glipp mot
-    // profiles) — logg.warn går ALDRI til Sentry, så den eskaleres til
-    // logg.feil. ctx (ikke toppnivå sample) — se #517.
+    // En broadcast uten treff tyder på RLS-/grant-glipp, og logg.warn går aldri
+    // til Sentry — derfor logg.feil (#504). ctx, ikke toppnivå sample (#517).
     expect(mockLoggWarn).not.toHaveBeenCalledWith('varsel.mottakere.tomme', expect.anything())
     expect(mockLoggFeil).toHaveBeenCalledWith(
       'varsel.mottakere.tomme',
@@ -1677,9 +1623,8 @@ describe('sendVarsel – feilhåndtering', () => {
   })
 })
 
-// #504: VarselUtfall er kontrakten kallere bygger CAS-stempling på — hver
-// tidlig-retur MÅ ha riktig diskriminant. blokkert_lokal er dekket separat
-// i __tests__/varsler-blokkert.test.ts via vi.stubEnv() (#765).
+// VarselUtfall er kontrakten CAS-stemplingen bygger på — hver tidlig-retur MÅ ha
+// riktig diskriminant (#504). blokkert_lokal: __tests__/varsler-blokkert.test.ts.
 describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () => {
   it('type_deaktivert når varsel_innstillinger.aktiv er false', async () => {
     setupMock({
@@ -1813,8 +1758,7 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
       dedupNoekkel: 'bursdag-chat:barn1:2026:admin1',
     })
 
-    // user1 traff 23505 (allerede kvittert) — hoppes stille over. user2 får
-    // epost som normalt. Ingen throw ut av funksjonen uansett.
+    // user1 traff 23505 og hoppes over; user2 får epost. Ingen throw.
     expect(mockSendEpostBatch).toHaveBeenCalledWith([
       expect.objectContaining({ til: 'kari@test.no' }),
     ])
@@ -1828,28 +1772,22 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
 })
 
 // ─── ÉN PORT, IKKE TO (#547) ────────────────────────────────────────────────
-// Bryter-oppslaget skal skje NØYAKTIG ett sted: i sendVarsel. Fram til #547
-// gjorde fem wrapper-funksjoner samme oppslag selv, rett før de kalte
-// sendVarsel som slo opp på nytt. To DB-spørringer der én holder — og verre:
-// forsøket på å lage et unntak fra bryteren (ignorerAktivBryter) hoppet kun
-// over den ytre sjekken, mens porten stoppet varselet likevel. Stille, med
-// grønn kvittering til admin.
+// Bryter-oppslaget skjer NØYAKTIG ett sted: i sendVarsel. Et ytre oppslag i en
+// wrapper kan ikke lage unntak fra porten — varselet stoppes likevel, stille,
+// med grønn kvittering til admin (#547).
 describe('bryter-oppslaget skjer kun i porten (#547)', () => {
   /** Teller oppslag mot varsel_innstillinger og returnerer `aktiv` per nøkkel. */
   function mockMedTeller(aktivPerNoekkel: Record<string, boolean>) {
     const spurteNoekler: string[] = []
     mockFrom.mockImplementation((tabell: string) => {
-      // sendPurringVarsler (kanskje-raden under) beregner mottakere FØR sendVarsel
-      // kalles, så den trenger en ekte kanskje-svarer for i det hele tatt å nå
-      // porten som teller opp mot varsel_innstillinger. De andre wrapperne i
-      // denne testen bryr seg ikke om profiles/paameldinger — de blokkeres av
-      // sin egen (aktiv=false) nøkkel inne i sendVarsel før noen mottakere
-      // hentes, så disse fallback-radene er harmløse for dem.
+      // Kanskje-purringen beregner mottakere før sendVarsel, så den trenger en
+      // ekte kanskje-svarer for å nå porten. Harmløst for de andre wrapperne,
+      // som blokkeres av egen nøkkel før mottakere hentes.
       if (tabell === 'paameldinger') return lagChain([{ profil_id: 'p1', status: 'kanskje' }])
       if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
       if (tabell !== 'varsel_innstillinger') return lagChain([])
-      // Nøkkelen er ikke kjent når chainen lages — .eq('noekkel', x) kommer
-      // etterpå — så maybeSingle leser den fra en lukket variabel.
+      // .eq('noekkel', x) kommer etter at chainen lages, så maybeSingle leser
+      // nøkkelen fra en lukket variabel.
       let noekkel = ''
       const chain = lagChain({ aktiv: true, beskrivelse: null }) as Record<string, unknown>
       chain.eq = vi.fn((col: string, val: string) => {
@@ -1882,18 +1820,14 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
   ])('%s slår opp %s nøyaktig én gang', async (_navn, forventetNoekkel, kall) => {
     const spurte = mockMedTeller({ [forventetNoekkel]: false })
     await kall()
-    // Eksakt liste, ikke bare «forventetNoekkel forekommer én gang»: vakten skal
-    // også fange at wrapperen slår opp en ANNEN bryter enn sin egen — det var
-    // nøyaktig feilmodusen i #547. 'test_modus' filtreres bort fordi det ikke er
-    // en bryter for noen varseltype, men en uavhengig sperre hentTestModus()
-    // slår opp for alle typer på vei til mottakerlista (kun de wrapperne som
-    // kommer forbi sin egen aktiv-sjekk rekker dit).
+    // Eksakt liste: fanger også at wrapperen slår opp en ANNEN bryter enn sin
+    // egen (#547). 'test_modus' filtreres bort — det er en uavhengig sperre,
+    // ikke en varseltype-bryter.
     expect(spurte.filter(n => n !== 'test_modus')).toEqual([forventetNoekkel])
   })
 
   it('manuell purring går ut selv når den automatiske purringen er skrudd av', async () => {
-    // Selve bugen i #547: admin skrur av cron-purringen, trykker «Purre disse»,
-    // får grønn kvittering — og ingen får noe.
+    // Cron-purringen AV skal ikke stoppe manuell «Purre disse» (#547).
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_innstillinger') {
         let noekkel = ''
@@ -1903,7 +1837,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
           return chain
         })
         chain.maybeSingle = vi.fn(async () => ({
-          // Den automatiske purringen er AV, den manuelle er PÅ.
+          // Automatisk AV, manuell PÅ.
           data: { aktiv: noekkel !== 'purring_aktiv', beskrivelse: null },
           error: null,
         }))
@@ -1932,9 +1866,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
   })
 
   it('kanskje-purring går ut selv når purring_aktiv og purring_manuell er AV (speiler #547)', async () => {
-    // Samme feilmodus som testen over, men for den tredje varianten: en
-    // regresjon som lot kanskje-purring lese purring_aktiv- eller
-    // purring_manuell-bryteren ville stanset «Bestem dere» stille.
+    // Kanskje-purring skal kun lese sin egen bryter, ellers stanses «Bestem dere» stille.
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_innstillinger') {
         let noekkel = ''
@@ -1971,8 +1903,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
   })
 
   it('automatisk purring stoppes fortsatt av sin egen bryter', async () => {
-    // Speilvendt av testen over — uten denne kunne fiksen ha vært «skru av
-    // sjekken for purring» i stedet for «gi manuell purring sin egen bryter».
+    // Speilvendt: manuell purring har egen bryter, den er ikke bare usjekket.
     mockFrom.mockImplementation((tabell: string) => {
       if (tabell === 'varsel_innstillinger') {
         let noekkel = ''
@@ -2006,19 +1937,12 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
 })
 
 describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () => {
-  // Delt fixture for begge tester under: p1 svarte ja, p2 kanskje, p3 nei,
-  // p4 har ikke svart i det hele tatt, p5 svarte kanskje men er ikke en aktiv
-  // profil (se paameldinger-fixturen). Kanskje-varianten skal treffe KUN p2.
-  // Manuell (uten svar) skal treffe KUN p4 — speilvendt, og verifiserer at
-  // utvidelsen av select til 'profil_id, status' ikke har endret uten_svar-
-  // grenen, som fortsatt kun ser på HVEM som har svart, ikke MED HVA.
+  // Fixture: p1 ja, p2 kanskje, p3 nei, p4 ikke svart, p5 kanskje men inaktiv.
+  // Kanskje-varianten skal treffe KUN p2, manuell (uten svar) KUN p4 — sistnevnte
+  // ser på HVEM som har svart, ikke MED HVA.
   //
-  // Mocken (lagChain) filtrerer ikke faktisk på .in()/.eq() — den returnerer
-  // hele tabellen uansett filter, i motsetning til ekte PostgREST. Derfor kan
-  // vi ikke lese av sendEpostBatch-mottakerne direkte (de ville inkludert
-  // alle fire uansett). Testen spionerer i stedet på .in('id', …)-kallet
-  // sendVarsel gjør mot 'profiles' med den mottakerlisten sendPurringVarsler
-  // regnet ut — det er nøyaktig linjen der filtreringslogikken lever.
+  // lagChain filtrerer ikke på .in()/.eq(), så testen spionerer på
+  // .in('id', …)-kallet mot profiles i stedet for å lese batch-mottakerne.
   function mockMedInSpion() {
     const idKall: string[][] = []
     mockFrom.mockImplementation((tabell: string) => {
@@ -2027,11 +1951,8 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
           { profil_id: 'p1', status: 'ja' },
           { profil_id: 'p2', status: 'kanskje' },
           { profil_id: 'p3', status: 'nei' },
-          // p5 svarte kanskje, men finnes IKKE i profiles-fixturen under — han
-          // står for en som siden er deaktivert (eller filtrert bort av
-          // testmodus). Uten denne raden er snittet med hentProfiler en no-op,
-          // og en regresjon som purret rått over påmeldingsradene ville
-          // passert testen.
+          // p5 finnes ikke i profiles (deaktivert). Uten ham er snittet med
+          // hentProfiler en no-op, og purring rett over påmeldingsradene ville passert.
           { profil_id: 'p5', status: 'kanskje' },
         ])
       }

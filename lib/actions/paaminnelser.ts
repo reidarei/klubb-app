@@ -19,30 +19,15 @@ import type { Database } from '@/lib/supabase/database.types'
 
 type Admin = SupabaseClient<Database>
 
-// Fail closed (#504): en svelget feil her ga tidligere `[]`, bit-identisk med
-// «ingen arrangementer denne dagen» — cronen ville stille hoppet over en hel
-// dags påminnelser i stedet for å synliggjøre en DB-feil.
-// paameldinger (profil_id, status) hentes i samme spørring som arrangementet
-// (#591) — for å telle «N påmeldt» i påminnelsestekstene uten en egen spørring
-// per arrangement (N+1) og uten en ny feilsti: tellingen arver fail-closed-vakten
-// under. profil_id kom til da 7-dagers-varselet ble personlig: det trenger å vite
-// HVEM som har svart hva, ikke bare hvor mange.
-// Både 7- og 1-dagers bruker embeddet; kun 3-dagers-purringen drar det med ubrukt,
-// og den gjør uansett sitt eget påmeldings-oppslag for å finne hvem som ikke har svart.
+// Fail closed: tomt resultat er bit-identisk med «ingen arrangementer i dag» (#504).
+// paameldinger embeddes for å unngå N+1 og arve samme feilvakt (#591);
+// profil_id trengs fordi 7-dagers-teksten er personlig. 3-dagers-purringen
+// drar det med ubrukt og gjør sitt eget oppslag.
 //
-// `dag` er dagoffset fra i dag (0 = i dag), ikke en dato-streng — vinduet
-// bygges av osloDagStartIso(), som gir UTC-instantet for NORSK midnatt. Før
-// #675 filtrerte spørringen på en bar tidsstempel-literal («2026-09-18T00:00:00»
-// uten sone), som Postgres tolker i SESJONENS tidssone (UTC hos Supabase) — et
-// arrangement kl. 00:30 norsk tid ble da hentet på UTC-dagen FØR. Samme
-// feilklasse ett lag lenger ned enn dagStreng()-buggen selv.
-//
-// `anker` er norsk «i dag» samplet ÉN gang for hele kjøringen (se
-// kjorPaaminnelser). Uten den ville de to grensene under kalt iDagOslo() hver
-// for seg, og en kjøring som krysset norsk midnatt mellom dem ville fått nedre
-// grense på én kalenderdag og øvre på den neste — et vindu over to døgn i
-// stedet for ett. Ekstremt sjeldent, men det er samme form som feilen #675
-// handler om: riktighet som hviler på NÅR koden tilfeldigvis kjører.
+// `dag` er dagoffset; vinduet bygges av osloDagStartIso() (norsk midnatt som
+// UTC-instant), aldri en bar tidsstempel-literal uten sone (#675).
+// `anker` er norsk «i dag» samplet én gang per kjøring, så de to grensene
+// ikke kan havne på hver sin side av midnatt.
 async function hentForDag(admin: Admin, dag: number, anker: string) {
   const { data, error } = await admin
     .from('arrangementer')
@@ -71,14 +56,10 @@ async function hentArrangorPurringer(admin: Admin, dag: string) {
 }
 
 export async function kjorPaaminnelser(admin: Admin) {
-  // Ett anker for hele kjøringen: hver dato cronet regner på utledes av SAMME
-  // norske kalenderdag, ikke av et nytt «nå» per kallsted. Ellers kan en
-  // kjøring som krysser norsk midnatt blande to døgn — se hentForDag.
+  // Ett anker for hele kjøringen — se hentForDag.
   const anker = iDagOslo()
 
-  // hentArrangorPurringer sammenligner mot `purredato`, en ren `date`-kolonne
-  // uten klokkeslett — osloDagPluss(0) (norsk «i dag» som streng) er riktig
-  // nøkkel der, ingen instant-grense involvert.
+  // `purredato` er en ren date-kolonne, så dagstrengen er riktig nøkkel.
   const idagStr = osloDagPluss(0, anker)
 
   const [arr_7, arr_1, arr_3, arrangorPurringer] = await Promise.all([
@@ -135,17 +116,14 @@ export async function kjorPaaminnelser(admin: Admin) {
     .map(r => r.value)
   let feil = 0
 
-  // Aggreger feil per fingerprint — én Sentry-event per feil-klasse, ikke per
-  // arrangement. Map<fingerprint, {count, sample}> slik at vi rapporterer
-  // «paaminne feilet 3 ganger» i stedet for tre identiske Sentry-issues.
+  // Én Sentry-event per feilklasse, ikke per arrangement.
   const feilMap = new Map<string, { count: number; sample: unknown }>()
   for (const r of utfall) {
     if (r.status !== 'rejected') continue
     feil++
     const err = r.reason
     const code = (err && typeof err === 'object' && 'code' in err) ? String((err as Record<string, unknown>).code) : undefined
-    // Fingerprint: feil-kode hvis kjent (grupperer alle «23505»-feil),
-    // ellers en kort hash av meldingsteksten (8 hex-tegn er nok for bucketing).
+    // Feilkode hvis kjent, ellers kort hash av meldingen (8 hex holder for bucketing).
     const fingerprint =
       code ??
       createHash('sha1')
@@ -160,20 +138,14 @@ export async function kjorPaaminnelser(admin: Admin) {
     }
   }
 
-  // Rapporter én logg-event per fingerprint (ikke per arrangement).
   for (const [fingerprint, { count, sample }] of feilMap) {
     await logg.feil('cron.paaminne.feilet', sample, { fingerprint, ctx: { count } })
   }
 
   // ─── Kåringspoll: lukk de som har passert frist, og retry uvarslede ───────
-  // RPC-en avslutt_kaaringspoll er idempotent, så å kjøre den hver dag på
-  // samme poll er trygt — den returnerer var_ny=false andre gang.
-  //
-  // behandleKaaringspoller kan i dag kaste (fail-closed på de to spørringene
-  // og relevanteProfiler-oppslaget) — uten denne try/catch-en ville en throw
-  // her propagert ut av route handleren i app/api/cron/paaminne/route.ts og
-  // vi ville mistet JSON-body-en med tellerne som allerede er samlet opp
-  // over (behandlet, feil for påminnelser/purringer). (#504)
+  // avslutt_kaaringspoll er idempotent (var_ny=false andre gang).
+  // try/catch fordi behandleKaaringspoller kaster fail-closed — ellers mister
+  // route handleren JSON-svaret med tellerne samlet over (#504).
   let lukketKaaringer = 0
   let sendteVarsler = 0
   try {
@@ -194,30 +166,16 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
   let sendteVarsler = 0
   let kaaringFeil = 0
 
-  // Retry-vinduet: hvor langt tilbake vi leter etter avsluttede-men-uvarslede
-  // poller. Uten et vindu ville en permanent uvarslebar poll (f.eks. en som
-  // alltid får relevanteProfiler-feil) retryes for alltid — vinduet lar den
-  // falle ut av køen av seg selv, jf. CLAUDE.md § Policy: Varsler.
-  // Samme anker som resten av kjøringen (se kjorPaaminnelser) — én grense her,
-  // så ingen skjevhet å få, men kjøringen skal ha én kilde til «hvilken dag».
+  // Tidsavgrenset retry, så en permanent uvarslebar poll faller ut av køen
+  // av seg selv (jf. CLAUDE.md § Policy: Varsler).
   const vinduStart = osloDagStartIso(-KAARING_VARSEL_RETRY_DAGER, anker)
 
-  // To SEPARATE spørringer i stedet for én `.or()` (#495/#504): testmocken
-  // (__tests__/helpers/supabase-mock.ts) lister metodene eksplisitt og har
-  // ikke `or`.
-  //  - Fersk: pollen har ikke lukket ennå (partial-indexen poll_kaaring_aapne
-  //    dekker dette filteret presist).
-  //  - Retry: pollen ER lukket, men mangler stempelet for SITT utfall.
-  //    Dette ER #495-fiksen — cronen slutter å bruke var_ny (RPC-ens «lukket
-  //    jeg den akkurat nå?») som varslings-gate, og spør i stedet direkte
-  //    etter uvarslede avsluttede poller. Ingen ny index her — håndfull rader.
-  //
-  //    Retry-spørringen filtrerer bevisst IKKE på vinner_varslet_paa/
-  //    tiebreak_varslet_paa i selve SELECT-en (samme .or()-begrensning som
-  //    over) — filtreringen på HVILKET stempel som mangler for HVILKET
-  //    utfall gjøres i JS rett under (#521). Uten det ville en poll som
-  //    fortsatt venter på tiebreak, men der tiebreak-varselet ALT er sendt,
-  //    blitt filtrert bort på feil kolonne og purret på nytt hver morgen.
+  // To spørringer, ikke én `.or()` — testmocken (__tests__/helpers/supabase-mock.ts)
+  // har ikke `or`.
+  //  - Fersk: ikke lukket ennå (partial-indexen poll_kaaring_aapne dekker filteret).
+  //  - Retry: lukket, men mangler stempelet for sitt utfall. var_ny er ikke
+  //    lenger varslings-gate (#495). Hvilket stempel som mangler avgjøres i JS
+  //    under, ikke i SELECT-en (#521).
   const [{ data: fersk, error: ferskFeil }, { data: retryRader, error: retryFeil }] =
     await Promise.all([
       admin
@@ -235,8 +193,7 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
         .gte('avsluttet_paa', vinduStart),
     ])
 
-  // Fail closed: en feilet spørring skal ikke tolkes som «ingen kåringer å
-  // behandle» — det ville stille droppet vinnervarselet for dagens poller.
+  // Fail closed: feil ≠ «ingen kåringer å behandle».
   if (ferskFeil) {
     await logg.feil('cron.paaminne.kaaring.fersk.feilet', ferskFeil)
     throw new Error(`Kunne ikke hente åpne kåringspoller: ${ferskFeil.message}`)
@@ -246,27 +203,16 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
     throw new Error(`Kunne ikke hente uvarslede kåringspoller: ${retryFeil.message}`)
   }
 
-  // #521: en poll som ENNÅ venter på tiebreak (tiebreak_status =
-  // 'venter_paa_tiebreak') skal purres på TIEBREAK-varselet hvis DET mangler
-  // — ikke behandles som om den venter på vinner-varsel, for det gjør den
-  // ikke ennå. Alle andre lukkede poller (avgjort eller ingen_stemmer)
-  // filtreres på vinner_varslet_paa som før.
-  //
-  // `== null` (ikke `=== null`) fordi PostgREST alltid gir eksplisitt `null`
-  // for en selektert kolonne uten verdi — men holder filteret trygt selv om
-  // en fremtidig kallested/mock utelater feltet i stedet for å sette null.
+  // Venter pollen på tiebreak, er det tiebreak-stempelet som teller; ellers
+  // vinner-stempelet (#521). `== null` tåler også et utelatt felt (mock).
   const retry = (retryRader ?? []).filter(p =>
     p.tiebreak_status === 'venter_paa_tiebreak'
       ? p.tiebreak_varslet_paa == null
       : p.vinner_varslet_paa == null,
   )
 
-  // De to spørringene er gjensidig utelukkende (avsluttet_paa er enten null
-  // eller ikke), så en enkel sammenslåing gir ingen duplikater — men den må
-  // BEVARE PROVENIENSEN (#504-review). Slås radene sammen flatt, er `var_ny`
-  // eneste diskriminator i løkka under, og en fersk poll der RPC-en svarer
-  // var_ny=false ville falt til utledKaaringStatus(null) → 'ingen_stemmer'
-  // på en poll som fortsatt er åpen: feil varsel OG permanent stempling.
+  // Gjensidig utelukkende, men opphavet (erRetry) må bevares: flatt ville en
+  // fersk poll med var_ny=false fått 'ingen_stemmer' og blitt stemplet (#504).
   const koe = [
     ...(fersk ?? []).map(poll => ({ poll, erRetry: false })),
     ...retry.map(poll => ({ poll, erRetry: true })),
@@ -275,12 +221,8 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
     return { lukketKaaringer, sendteVarsler, kaaringFeil }
   }
 
-  // To ulike mottaker-grupper:
-  //  - Tiebreak-varsel: kun de som faktisk skal løse den (generalsekretær).
-  //    Det er han som har siste ord ved likt antall stemmer — admin-flokken
-  //    skal ikke pinges på et valg de ikke kan ta.
-  //  - Ingen-stemmer-varsel: går til alle med admin-rettigheter, fordi
-  //    dette er ren info om at en kåring ble avlyst og bør følges opp.
+  // Tiebreak går kun til den som kan løse den (generalsekretær); ingen-stemmer
+  // er oppfølgingsinfo til alle med admin-rettigheter.
   const tiebreakRoller = rollerMed('loeserTiebreak')
   const adminRoller = rollerMed('kanAdministrere')
   const trengteRoller = Array.from(new Set([...tiebreakRoller, ...adminRoller]))
@@ -289,11 +231,8 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
     .select('id, rolle')
     .in('rolle', trengteRoller)
     .eq('aktiv', true)
-  // Fail closed — DEN UFRAVIKELIGE (#504): sender vi vinnervarselet med tomme
-  // tiebreak-/admin-lister (fordi dette oppslaget stille ga []) ville vi
-  // likevel gått videre og stemplet vinner_varslet_paa — kvitteringsbokens
-  // verste feilmodus, en poll som ser varslet ut, men der ingen faktisk fikk
-  // beskjed, og som aldri prøves på nytt fordi markøren nå er satt.
+  // Fail closed, ufravikelig (#504): tomme lister ville blitt stemplet som
+  // varslet uten at noen fikk beskjed — og aldri prøvd igjen.
   if (profilerFeil) {
     await logg.feil('cron.paaminne.kaaring.profiler.feilet', profilerFeil)
     throw new Error(`Kunne ikke hente relevante profiler for kåringsvarsel: ${profilerFeil.message}`)
@@ -310,11 +249,8 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
       // Statusen bestemmes av HVILKEN spørring raden kom fra, ikke av var_ny.
       let status: KaaringUtfall
       if (erRetry) {
-        // Retry-raden er per definisjon allerede lukket (spørringen filtrerer
-        // på avsluttet_paa not null), så RPC-en ville bare svart
-        // «allerede_avsluttet». Statusen leses fra den durable
-        // tiebreak_status-kolonnen — dette ER #495-fiksen: var_ny er ikke
-        // lenger varslings-gate, vinner_varslet_paa er det.
+        // Allerede lukket — RPC-en ville bare svart «allerede_avsluttet».
+        // Status leses fra den durable kolonnen (#495).
         status = utledKaaringStatus(poll.tiebreak_status)
       } else {
         const { data: rpcRes, error: rpcErr } = await admin.rpc(
@@ -328,8 +264,7 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
         }
         const rad = Array.isArray(rpcRes) ? rpcRes[0] : rpcRes
         if (!rad) {
-          // Uten logg her ser menneskene som får rød GitHub Actions bare
-          // {"kaaringFeil": 1} og har ingen sti videre. (#504-review)
+          // Logges, ellers er {"kaaringFeil": 1} i Actions et blindspor.
           kaaringFeil += 1
           await logg.feil(
             'cron.paaminne.kaaring.tom_rpc',
@@ -339,22 +274,15 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
           continue
         }
         if (!rad.var_ny) {
-          // Fersk poll som RPC-en likevel IKKE lukket: enten 'ikke_moden'
-          // (klokkeskew mot svarfrist) eller 'allerede_avsluttet' (noen
-          // vant kappløpet mellom vårt SELECT og dette kallet). Da er
-          // poll.tiebreak_status fra select-tidspunktet stale, og vi kan
-          // hverken bruke rad.status eller utlede fra kolonnen. Hopp over
-          // UTEN å stemple — retry-spørringen plukker den opp i morgen med
-          // konsistent tilstand, og systemet selvheler. Å stemple her ville
-          // gjenskapt #495 nøyaktig. (#504-review)
+          // 'ikke_moden' (klokkeskew) eller 'allerede_avsluttet' (tapt
+          // kappløp): tilstanden er stale. Hopp over UTEN å stemple —
+          // retry-spørringen tar den i morgen. Stempling her = #495 igjen.
           logg.warn('cron.paaminne.kaaring.fersk_ikke_lukket', { status: String(rad.status) })
           continue
         }
         if (!erKaaringUtfall(rad.status)) {
-          // Ukjent status fra RPC-en: vi vet ikke hvilket varsel som skal ut,
-          // og et gjett ville stemplet feil kolonne og filtrert pollen
-          // permanent bort fra retry. Hopp over — i morgen er tilstanden
-          // konsistent og vi prøver igjen. (#521-review)
+          // Ukjent status: et gjett ville stemplet feil kolonne og fjernet
+          // pollen permanent fra retry (#521). Prøv igjen i morgen.
           kaaringFeil += 1
           await logg.feil(
             'cron.paaminne.kaaring.ukjent_status',
@@ -375,15 +303,9 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
         adminIder,
       })
       if (sendt) sendteVarsler += 1
-      // Stemple på AT LINJEN OVER RETURNERTE, ikke på sendt=true: doktrinen
-      // er «returnerer = terminalt avgjort». {sendt:false} (f.eks. ingen
-      // generalsekretær å varsle) er like terminalt som sendt=true — uten
-      // stempling der får vi en poison pill som retryes hver morgen i
-      // KAARING_VARSEL_RETRY_DAGER dager. (#495/#504)
-      //
-      // Dispatcheren velger riktig kolonne ut fra STATUS, ikke fra erRetry —
-      // en fersk poll som ble tiebreak stemples på tiebreak_varslet_paa
-      // nøyaktig som en retry-poll med samme status ville blitt. (#521)
+      // Stemples fordi linjen over RETURNERTE, ikke fordi sendt=true —
+      // returnerer = terminalt avgjort (#495/#504). Kolonnen velges ut fra
+      // status, ikke erRetry (#521).
       await stempleKaaringspollVarslet(admin, poll.id, status)
     } catch {
       kaaringFeil += 1

@@ -1,56 +1,31 @@
 // ─── Caching ────────────────────────────────────────────────────────────────
-// CACHE_VERSION speiler app-versjonen fra lib/versjon.json og oppdateres
-// automatisk av scripts/stamp-versjon.mjs ved hver deploy.
-//
-// STATIC_CACHE er bevisst UTEN versjon: Next.js innholds-hasher alle
-// /_next/static/-filer, så URL-en garanterer innhold. Filer som ikke har
-// endret seg mellom builds har samme hash og kan trygt gjenbrukes — det
-// sparer brukeren fra å re-laste 80-90% av JS-bundlen ved hver deploy.
-// Se #180.
-//
-// PAGE_CACHE er versjonert fordi HTML ikke er innholdshashet — nye builds
-// kan ha samme URL men forskjellig output.
+// CACHE_VERSION skrives av scripts/stamp-versjon.mjs.
+// STATIC_CACHE er uversjonert: /_next/static/ er innholdshashet, så uendrede
+// filer gjenbrukes på tvers av deploys (#180). PAGE_CACHE er versjonert
+// fordi HTML ikke er innholdshashet.
 const CACHE_VERSION = 'V3.2.26'
 const STATIC_CACHE = 'klubb-static'
 const PAGE_CACHE = `klubb-pages-${CACHE_VERSION}`
 
-// NAV_CACHE bærer push-klikk-URL-en over et SW-versjonsbytte (#626). Bevisst
-// UTEN CACHE_VERSION i navnet — motsatt av PAGE_CACHE: install kaller
-// skipWaiting() og activate kaller clients.claim(), så en cold-start fra en
-// push kan trigge en SW-oppdatering FØR klienten rekker å lese overleveringen.
-// En variabel i SW-minnet (tidligere `pendingNav`) forsvinner med den gamle
-// instansen; et uversjonert cache-navn overlever fordi Cache Storage ikke er
-// del av noen spesifikk SW-instans sin heap. Se også keep-listen i activate
-// under — den er den andre halvparten av denne fiksen.
-//
-// Navnet er bevisst klubbnøytralt (ikke prefikset med klubbnavn som de to
-// over): Cache Storage er per origin, så et prefiks kjøper ingenting — og
-// navnet speiles i klient-koden og i test, som begge deles med nedstrøms-repo.
+// NAV_CACHE bærer push-klikk-URL-en over et SW-versjonsbytte, derfor
+// UVERSJONERT: skipWaiting() + clients.claim() kan bytte instans før klienten
+// har lest overleveringen (#626). Må stå i keep-listen i activate.
+// Klubbnøytralt navn: speiles i klient-kode og test som deles med klubb-app.
+// Se CLAUDE.md § Policy: Navigasjon.
 const NAV_CACHE = 'pwa-nav'
-// Syntetisk nøkkel på et RFC 2606-reservert .invalid-hostnavn — IKKE en ekte
-// path som '/__pending-nav', og ikke «rydd» den til å bli pen igjen. Grunnen:
-// fetch-handleren under bruker caches.match(request) UTEN cacheName, og den
-// formen søker på tvers av ALLE cacher — også denne. Med en same-origin path
-// som nøkkel ville en navigasjon til den pathen kunne få overleverings-JSON-en
-// servert tilbake som sidens innhold. Et .invalid-vertsnavn kan per definisjon
-// aldri resolve, så ingen request.url kan noensinne matche nøkkelen. Cache API
-// tillater cross-origin nøkler når vi selv konstruerer Responsen.
+// .invalid-vert med vilje, IKKE en same-origin path: fetch-handleren bruker
+// caches.match(request) på tvers av alle cacher, og en ekte path kunne fått
+// overleverings-JSON-en servert som side. .invalid kan aldri matche en request.
 const NAV_NOKKEL = 'https://pwa-nav.invalid/pending'
 
-// Maks tid vi lar cache-skrivingen i notificationclick ta før vi går videre til
-// broadcast/focus/openWindow. En *avvist* caches.open/put fanges av try/catch,
-// men en som aldri resolver ville hengt hele handleren — og da gjør trykket på
-// varselet ingenting i det hele tatt. Fail-open: heller miste overleveringen
-// enn å miste både den og vinduet.
+// Tak på cache-skrivingen i notificationclick: en caches.put som aldri
+// resolver ville hengt handleren, og trykket på varselet gjorde ingenting.
+// Fail-open: heller miste overleveringen enn vinduet.
 const NAV_SKRIV_TIMEOUT_MS = 1000
 
-// Begrens hvor mange HTML-sider som caches — Cache API har ingen LRU,
-// så vi rydder eksplisitt fra eldste når vi går over grensen.
+// Cache API har ingen LRU — trimCache() rydder eldste over grensen.
 const MAX_PAGE_CACHE_ENTRIES = 30
 
-// App-shell assets som forhåndslagres ved installasjon. Disse er også
-// "whitelist" for cache-first av bilder — vi cacher kun ikoner som vi
-// kjenner og som ligger på faste paths, ikke vilkårlige png/jpg-treff.
 const PRECACHE_ASSETS = [
   '/icon-192.png',
   '/icon-512.png',
@@ -60,8 +35,7 @@ const PRECACHE_ASSETS = [
   '/favicon-32.png',
 ]
 
-// Cache-first gjelder kun ikoner/favicon — andre png/jpg/webp kan komme
-// fra dynamiske ruter, ikke trygt å cache blankt.
+// Kun ikoner/favicon — andre bilder kan komme fra dynamiske ruter.
 function erIkonAsset(pathname) {
   return pathname.startsWith('/icon-') || pathname.startsWith('/favicon')
 }
@@ -70,7 +44,6 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_ASSETS))
   )
-  // Aktiver ny SW umiddelbart — ikke vent på at alle faner lukkes
   self.skipWaiting()
 })
 
@@ -81,10 +54,8 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            // NAV_CACHE må ALDRI rydda her — se kommentaren ved definisjonen.
-            // Sletter vi den, gjeninnfører vi #626: en ny SW-instans river
-            // bort overleveringen den selv skal svare på, rett før klienten
-            // rekker å lese den.
+            // NAV_CACHE må ALDRI ryddes her — da river ny SW bort
+            // overleveringen før klienten har lest den (#626).
             .filter((key) => key !== STATIC_CACHE && key !== PAGE_CACHE && key !== NAV_CACHE)
             .map((key) => caches.delete(key))
         )
@@ -93,7 +64,7 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// Trim cache til MAX entries — sletter eldste (FIFO via keys()-rekkefølge).
+// FIFO via keys()-rekkefølgen.
 async function trimCache(cacheName, maxEntries) {
   const cache = await caches.open(cacheName)
   const keys = await cache.keys()
@@ -106,17 +77,14 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Kun GET-forespørsler
   if (request.method !== 'GET') return
 
-  // Kun same-origin (ikke Supabase-storage, CDN, osv.)
   if (url.origin !== self.location.origin) return
 
-  // API-ruter og auth-sider caches aldri — de er alltid ferske
   if (url.pathname.startsWith('/api/')) return
   if (url.pathname === '/login' || url.pathname === '/oppdater-passord') return
 
-  // Cache-first: Next.js statiske assets er innholds-hashet og uforanderlige
+  // Cache-first: innholdshashet, uforanderlig
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then((cached) => {
@@ -124,7 +92,6 @@ self.addEventListener('fetch', (event) => {
         return fetch(request).then((response) => {
           if (response.ok) {
             const clone = response.clone()
-            // Bruk event.waitUntil så SW lever til caching er ferdig
             event.waitUntil(
               caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone))
             )
@@ -136,9 +103,6 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Cache-first: kjente ikoner og favicon. Andre bilde-extensions hopper
-  // forbi for å unngå at dynamiske ruter (f.eks. /api/avatar/x.png) caches
-  // ved et uhell.
   if (erIkonAsset(url.pathname)) {
     event.respondWith(
       caches.match(request).then((cached) => {
@@ -157,18 +121,8 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Network-first: HTML-sider hentes alltid fra nett først. HTML inneholder
-  // datorelativt innhold («i dag», «om 2 dager», påmeldingsfrister) som blir
-  // feil hvis en cachet versjon vises. Network-first koster én tur-retur ved
-  // cold load, men garanterer korrekt innhold. Se #319.
-  //
-  // Vi reverserer trade-offen fra #180 (stale-while-revalidate) for navigate-
-  // requests: cold-start-forsinkelsen var akseptabel for statisk innhold, men
-  // ikke for side-HTML med relativt tidsinnhold.
-  //
-  // Fallback til cache hvis fetch feiler (offline) eller returnerer !ok.
-  // Hvis heller ikke cache finnes ved nettverksfeil, returnerer vi
-  // Response.error() (tydeligere nettverksfeil-semantikk enn undefined).
+  // Network-first for HTML: datorelativt innhold («i dag», frister) blir feil
+  // fra cache (#319). Cache kun som fallback ved feil/offline.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -183,16 +137,12 @@ self.addEventListener('fetch', (event) => {
             )
             return response
           }
-          // Ikke-ok respons (4xx/5xx) — prøv cache som fallback. Cache er
-          // offline-fallback generelt, ikke 5xx-spesifikk: om brukeren har en
-          // gyldig cachet side er den bedre enn en feilmelding. Hvis cache
-          // mangler returnerer vi originalresponsen heller enn å skjule
-          // feilen bak en generisk Response.error().
+          // 4xx/5xx: cachet side er bedre enn feilmelding; uten cache vises
+          // originalresponsen, ikke en generisk Response.error().
           return caches.match(request).then((cached) => cached || response)
         })
         .catch(async () =>
-          // Offline eller nettverksfeil — prøv cache, ellers en
-          // network-error-response så respondWith aldri får undefined.
+          // respondWith må aldri få undefined.
           (await caches.match(request)) ?? Response.error()
         )
     )
@@ -207,19 +157,9 @@ self.addEventListener('push', (event) => {
   const { tittel, melding, url, tag } = data
 
   event.waitUntil(
-    // SW kan ikke importere TS-moduler; serveren setter alltid tittel i praksis.
-    // tag + renotify: false (#612): uten tag ble hver melding i en chat-burst
-    // sin egen rad på låseskjermen (20 meldinger = 20 rader). Med samme tag
-    // (utledet server-side i sendVarsel, f.eks. «chat:klubb») erstatter siste
-    // melding forrige i stedet — én rad per tråd.
-    //
-    // Feltene SPREDES kun når tag er en ikke-tom streng, i stedet for å sende
-    // `tag: undefined`. Per WebIDL er en undefined dictionary-member det samme
-    // som fraværende, så de to er ekvivalente i en spec-tro nettleser — men vi
-    // sender ikke feltet i det hele tatt til de varseltypene som ikke skal
-    // kollapse (påminnelser, mention), så oppførselen deres ikke avhenger av at
-    // hver nettleser tolker undefined riktig. Gjelder også eldre payloads
-    // rullet ut før #612.
+    // Samme tag + renotify: false kollapser en chat-burst til én rad på
+    // låseskjermen (#612). Spres kun ved ikke-tom tag, så varsler uten gruppe
+    // ikke avhenger av at nettleseren tolker `tag: undefined` som fravær.
     self.registration.showNotification(tittel ?? 'Varsel', {
       body: melding,
       icon: '/icon-192.png',
@@ -230,26 +170,17 @@ self.addEventListener('push', (event) => {
   )
 })
 
-// Observability for push-klikk (#676). Vi teller KLIKK her og NAVIGASJON i
-// klienten; differansen er tapet. Uten begge tallene er en mislykket
-// overlevering helt usynlig — seks runder med fikser (#233, #262, #264, #626)
-// er alle gjort uten å vite hvor ofte det faktisk ryker.
-//
-// navigator.sendBeacon finnes ikke i en Service Worker, så vi bruker fetch.
-// Fire-and-forget med catch: loggingen skal ALDRI kunne forsinke eller felle
-// notificationclick — da ville vi byttet en tapt navigasjon mot ingen
-// navigasjon i det hele tatt.
-// feil_logg.url forblir null for push.klikk-rader (ruta setter kolonnen kun
-// fra kontekst.url, som denne funksjonen aldri sender — en service worker har
-// ingen side-URL å rapportere). Sett ALDRI url = navigasjonsmålet her: det
-// ville gitt kolonnen to betydninger («siden feilen skjedde på» og «dit
-// push-en pekte») avhengig av event-typen på raden.
+// Teller KLIKK her og NAVIGASJON i klienten; differansen er tapet (#676).
+// fetch (sendBeacon finnes ikke i SW), fire-and-forget: loggingen skal aldri
+// kunne forsinke eller felle notificationclick.
+// Send ALDRI `url` = navigasjonsmålet: feil_logg.url betyr «siden feilen
+// skjedde på», og skal ikke få to betydninger.
 function loggPushKlikk(kontekst) {
   try {
     fetch('/api/logg-feil', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      // keepalive: requesten skal overleve at SW-en termineres rett etterpå.
+      // Overlever at SW-en termineres rett etterpå.
       keepalive: true,
       body: JSON.stringify({
         event: 'push.klikk',
@@ -258,57 +189,34 @@ function loggPushKlikk(kontekst) {
       }),
     }).catch(() => {})
   } catch {
-    // Ingen fetch tilgjengelig — loggingen er aldri verdt å kaste for.
+    // Loggingen er aldri verdt å kaste for.
   }
 }
 
-// Skriver overleveringen. Egen funksjon fordi kallstedet racer den mot en
-// timeout og da blir uttrykket for langt til å lese.
 async function skrivPendingNav(url, klikkId) {
   const cache = await caches.open(NAV_CACHE)
   await cache.put(NAV_NOKKEL, new Response(JSON.stringify({ url, ts: Date.now(), klikk_id: klikkId })))
 }
 
-// Genererer en korrelasjons-ID for ETT klikk (#688) — ikke for notifikasjonen
-// (flere klikk kan dele notifikasjon når `tag` har kollapset dem, men skal
-// ALDRI dele klikk_id). Genereres her i notificationclick, ikke båret i push-
-// payloaden: payloaden lages på serveren lenge før noen trykker, og en ID
-// generert der ville identifisert SENDINGEN, ikke selve trykket.
+// Korrelasjons-ID per KLIKK, ikke per notifikasjon eller sending — derfor
+// generert her og ikke i push-payloaden. Kollapsede varsler (`tag`) kan gi
+// flere klikk på samme notifikasjon (#688).
 function lagKlikkId() {
   try {
     return crypto.randomUUID()
   } catch {
-    // crypto.randomUUID() kan mangle i eldre/uvanlige SW-miljøer — fallback
-    // er ikke kryptografisk, men trenger bare være unik nok til korrelasjon.
+    // randomUUID kan mangle i eldre SW-miljøer; korrelasjon krever ikke krypto.
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
   }
 }
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  // Genereres ØVERST, én gang per klikk (#688) — identifiserer KLIKKET, ikke
-  // notifikasjonen. To trykk på samme (kollapsede) notifikasjon skal aldri
-  // dele klikk_id, selv når `tag` har slått dem sammen til én rad i UI-et.
   const klikkId = lagKlikkId()
-  // Begrenser til same-origin så en ugyldig eller ekstern URL i payload aldri
-  // kan åpne ekstern side eller krasje handleren. target forblir null kun for
-  // malformerte eller kryss-origin URL-er — push-handleren over setter alltid
-  // `data.url` (til '/' når varselet ikke har noen lenke), så et varsel som
-  // legitimt peker på agenda kommer hit som en gyldig '/'-URL, ikke som null.
-  //
-  // maalGrunn (#687) skiller de ulike årsakene til at target kan bli null
-  // — før dette dekket hadde_maal: false alle sammen, og en ekte kryss-origin-
-  // regresjon (#687 selv) var umulig å skille fra en tom payload i loggen.
-  // 'mangler' er i praksis uoppnåelig i dag: push-handleren defaulter alltid
-  // til '/' når varselet ikke har noen lenke. Verdien er likevel med — den
-  // gjør fraværet skillbart fra 'ugyldig' hvis den defaulten noensinne endres,
-  // i stedet for at de to stille faller sammen igjen.
-  //
-  // 'mangler' betyr FRAVÆRENDE (undefined/null/tom streng); en verdi av feil
-  // type (objekt, tall) er 'ugyldig' (review-funn #687). Skillet er hele
-  // poenget med feltet: fravær er en tom payload, feil type er en bug hos
-  // avsenderen — slår vi dem sammen, bærer maal_grunn mindre informasjon enn
-  // den ble innført for.
+  // Kun same-origin: en ekstern/ugyldig URL i payload skal aldri åpnes.
+  // maalGrunn skiller hvorfor target ble null (#687): 'mangler' = fraværende
+  // (i praksis uoppnåelig, push-handleren defaulter til '/'), 'ugyldig' = feil
+  // type eller malformert (bug hos avsender), 'kryss_origin'. Ikke slå sammen.
   let target = null
   let maalGrunn = 'mangler'
   try {
@@ -327,22 +235,15 @@ self.addEventListener('notificationclick', (event) => {
       }
     }
   } catch {
-    // new URL() kastet — malformert URL.
     maalGrunn = 'ugyldig'
   }
 
   event.waitUntil((async () => {
-    // Skriv overleveringen til Cache Storage FØR broadcast/focus/openWindow
-    // under — rekkefølgen er ikke pynt, entryen må finnes før klientens
-    // første poll. Kun når target finnes: en manglende/ugyldig URL skal
-    // aldri skrive en tom entry. Cache Storage overlever et SW-versjons-
-    // bytte i motsetning til en variabel i SW-minnet (#626) — se
-    // NAV_CACHE-kommentaren lenger opp.
+    // Overleveringen skrives FØR broadcast/focus/openWindow — den må finnes
+    // før klientens første poll. Aldri en tom entry (#626).
     if (target) {
       try {
-        // Bounded (#626-review): et hengende Cache Storage-lag skal koste maks
-        // NAV_SKRIV_TIMEOUT_MS, ikke hele notificationclick. Timeren ryddes så
-        // snart skrivingen er ferdig, så normaltilfellet ikke etterlater den.
+        // Tidsbegrenset, se NAV_SKRIV_TIMEOUT_MS.
         let timer
         await Promise.race([
           skrivPendingNav(target, klikkId).finally(() => clearTimeout(timer)),
@@ -351,8 +252,7 @@ self.addEventListener('notificationclick', (event) => {
           }),
         ])
       } catch {
-        // Fail-open: verste utfall er dagens oppførsel via broadcast/focus/
-        // openWindow under, eller at klienten lander på '/' ved neste poll.
+        // Fail-open: broadcast/focus/openWindow under virker fortsatt.
       }
     }
 
@@ -360,29 +260,17 @@ self.addEventListener('notificationclick', (event) => {
     const klienter = await clients.matchAll({ type: 'window', includeUncontrolled: true })
     const sameOrigin = klienter.filter(k => k.url.startsWith(self.location.origin))
 
-    // Broadcast til ALLE same-origin-klienter — ikke bare den vi fokuserer.
-    // Dekker tilfeller der flere vinduer finnes, og er "best effort" mot
-    // iOS-drop. Cache-lesingen i klienten er den robuste fallback'en.
+    // Best effort til alle vinduer; cache-lesingen i klienten er hovedsporet.
     for (const klient of sameOrigin) {
       klient.postMessage({ type: 'navigate', url: navigasjonsmaal })
     }
 
-    // Loggen skrives FØR focus/openWindow: begge kan i praksis avslutte
-    // handleren, og et klikk vi ikke rakk å telle er nøyaktig blindsonen
-    // dette skal lukke.
-    //
-    // `synlig_klient` er hypotesen #676 peker på (merket som hypotese, ikke
-    // konklusjon): står appen allerede åpen og SYNLIG, fyres ingen
-    // visibilitychange av focus(), og klienten har da ingen trigger til å
-    // lese overleveringen. Feltet er med for å kunne bekrefte eller avkrefte
-    // det på ekte tall i stedet for resonnement.
-    //
-    // Feltnavnene under matcher KONTEKST_WHITELIST i lib/logg-sanitering.ts
-    // (klient-lista, den som gjelder rader som kommer inn via
-    // /api/logg-feil) — de strippet stille før #681, og feltet
-    // heter `handling` (ikke `sti`): `sti` er alt tatt i SERVER-whitelisten
-    // med en annen betydning (R2-objektsti, #641), og feil_logg tar imot
-    // rader fra begge sider av samme whitelist.
+    // Logges FØR focus/openWindow, som kan avslutte handleren.
+    // `synlig_klient` tester en hypotese: en allerede synlig app får ingen
+    // visibilitychange av focus() og leser derfor ikke overleveringen (#676).
+    // Feltnavnene MÅ stå i KONTEKST_WHITELIST i lib/logg-sanitering.ts, ellers
+    // strippes de stille (#681). `handling`, ikke `sti` — `sti` betyr R2-sti
+    // på serversiden (#641).
     loggPushKlikk({
       klikk_id: klikkId,
       maal: navigasjonsmaal,
@@ -398,28 +286,16 @@ self.addEventListener('notificationclick', (event) => {
       if ('focus' in forste) await forste.focus()
       return
     }
-    // Ingen åpen klient — åpne nytt vindu (PWA cold-start).
+    // Cold-start
     if (clients.openWindow) await clients.openWindow(navigasjonsmaal)
   })())
 })
 
-// Fallback-protokoll for en enhet med ny SW men gammel cachet klient-bundle
-// (#264): klienten spør her når den ikke selv kan lese Cache Storage direkte
-// (se ServiceWorkerRegistrering.tsx). 30 s-vinduet hindrer at et gammelt
-// klikk re-trigger ved en senere app-åpning — speiler PUSH_KLIKK_VINDU_MS i
-// lib/konstanter.ts (denne fila er statisk og kan ikke importere TS).
-//
-// Bevisst URØRT av #688 (forsøksteller, utsatt konsumering): en klient som
-// havner her har PER DEFINISJON ingen Cache Storage-tilgang, så det finnes
-// ingenting å bevare for et senere forsøk uansett. Denne grenen er legacy for
-// en gammel cachet bundle, ikke hovedstien, men nås likevel med dagens kode
-// (3 av 88 focus-klikk i telemetrien, #626) — ny logikk hører hjemme i
-// lesPendingNav()/skrivPendingNav() i lib/pending-nav.ts. `klikk_id`, `forsok`
-// og `navigert` SENDES derimot videre (#626) — KUN til telemetrien: uten dem
-// mister klienten korrelasjonen til det opprinnelige push.klikk-klikket, og en
-// landing via denne veien logges som en ny navigasjon i stedet for som landet.
-// Klienten lar dem bevisst ikke styre loop-/ferskhetslogikken (se
-// sjekkViaMessageChannel i ServiceWorkerRegistrering.tsx).
+// Fallback for klient som ikke kan lese Cache Storage selv, f.eks. gammel
+// cachet bundle (#264). Nås fortsatt i praksis. Ny logikk hører hjemme i
+// lib/pending-nav.ts, ikke her. 30 s speiler PUSH_KLIKK_VINDU_MS (statisk
+// fil, kan ikke importere TS). Konsumerer ved lesing — bevisst ikke #688
+// sin utsatte konsumering. klikk_id/forsok/navigert sendes kun for telemetri.
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'check-pending-nav') return
   const port = event.ports[0]
@@ -428,11 +304,8 @@ self.addEventListener('message', (event) => {
       const cache = await caches.open(NAV_CACHE)
       const cached = await cache.match(NAV_NOKKEL)
       if (!cached) return
-      // Les og parse bodyen FØR delete (#626-review): en implementasjon står
-      // fritt til å frigjøre lagringen ved delete, og da kaster .json() på en
-      // ulest stream. Slettingen ligger i finally fordi lesingen er
-      // konsumerende uansett utfall — en malformert entry skal ikke bli
-      // liggende og bli lest på nytt ved hver runde.
+      // Parse FØR delete (delete kan frigjøre streamen). finally så en
+      // malformert entry ikke blir liggende (#626).
       let data
       try {
         data = await cached.json()
@@ -441,9 +314,7 @@ self.addEventListener('message', (event) => {
       }
       const { url, ts, klikk_id: klikkId, forsok, navigert } = data ?? {}
       if (typeof url === 'string' && Date.now() - ts < 30_000) {
-        // Foretrekk MessageChannel-port (fungerer selv når klienten ikke er
-        // kontrollert av SW, f.eks. ved cold-start). Fallback til
-        // event.source for nettlesere som ikke sender port med.
+        // Port virker også når klienten ikke er SW-kontrollert (cold-start).
         const svar = { type: 'navigate', url, klikk_id: klikkId, forsok, navigert }
         if (port) {
           port.postMessage(svar)
@@ -452,13 +323,10 @@ self.addEventListener('message', (event) => {
         }
       }
     } catch {
-      // Cache-oppslag feilet — ingen svar. Klienten faller uansett tilbake
-      // til sin egen ferskhetslogikk.
+      // Ingen svar; klienten har egen ferskhetslogikk.
     }
   })()
-  // Valgfritt kall (#626-review): waitUntil finnes på ExtendableMessageEvent,
-  // men et kast her ville ligget utenfor try/catch-en over og tatt ned hele
-  // fallback-protokollen. jobb kaster aldri selv, så en manglende waitUntil
-  // koster kun livstidsgarantien.
+  // Optional chaining: et kast her ligger utenfor try/catch-en. Manglende
+  // waitUntil koster kun livstidsgarantien (#626).
   event.waitUntil?.(jobb)
 })

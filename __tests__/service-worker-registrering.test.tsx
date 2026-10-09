@@ -1,28 +1,16 @@
 // @vitest-environment jsdom
-// Pinner klient-halvparten av #626-fiksen: sjekkPendingNav() skal lese
-// push-klikk-URL-en direkte fra Cache Storage FØR den i det hele tatt rører
-// navigator.serviceWorker.ready. Det er nøyaktig det som gjør stien uavhengig
-// av om SW-instansen som skrev overleveringen fortsatt lever, er byttet ut
-// ved en versjonsoppdatering, eller aldri kontrollerer siden.
-//
-// «reg.active === null / ready som aldri resolver» er den kritiske testen:
-// mot koden FØR denne fiksen ville sjekkPendingNav() hengt for alltid på
-// `await navigator.serviceWorker.ready`, og navigasjonen ville aldri skjedd.
-//
-// #688 flyttet konsumeringen fra LESING til NAVIGASJON LYKTES: entryen
-// slettes ikke lenger idet den navigerer bort, den skrives tilbake med en
-// oppdatert forsøksteller og `navigert: true`. Den gamle testen under
-// («naviger til url … og sletter entryen») pinnet nettopp den feilen #688
-// beskriver — leser og sletter FØR auth får omdirigert, og målet er borte
-// for godt — og er derfor skrevet om.
+// Klient-halvparten av push-klikk-overleveringen (#626): sjekkPendingNav() leser
+// Cache Storage FØR den rører navigator.serviceWorker.ready, så stien virker
+// selv om SW-instansen er død, byttet ut eller ikke kontrollerer siden.
+// Konsumering skjer når navigasjonen har LYKTES, ikke ved lesing (#688).
+// Se CLAUDE.md § Policy: Navigasjon.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import ServiceWorkerRegistrering from '@/components/ServiceWorkerRegistrering'
 import { PUSH_KLIKK_VINDU_MS, PUSH_KLIKK_MAKS_FORSOK } from '@/lib/konstanter'
 
-// feilNavn beholdes ekte (importActual) — den er en ren klassifiserer, og en
-// stubbet variant ville gjort assertion på `name` verdiløs.
+// feilNavn beholdes ekte — en stubbet variant ville gjort assertion på `name` verdiløs.
 vi.mock('@/lib/klient-logg', async (importActual) => ({
   ...(await importActual<typeof import('@/lib/klient-logg')>()),
   sendFeilBeacon: vi.fn(),
@@ -31,10 +19,8 @@ vi.mock('@/lib/klient-logg', async (importActual) => ({
 
 import { sendFeilBeacon, meldKlientfeil } from '@/lib/klient-logg'
 
-// Speiler navnene i lib/pending-nav.ts — duplisert bevisst (samme mønster som
-// i sw.js/den vm-baserte testen). Drifter denne fra den faktiske verdien,
-// feiler testene under av seg selv: cache-mocken svarer kun på nøkkelen den
-// kjenner.
+// Bevisst duplisert fra lib/pending-nav.ts: drifter den, feiler testene av seg
+// selv fordi cache-mocken kun svarer på denne nøkkelen.
 const NAV_NOKKEL = 'https://pwa-nav.invalid/pending'
 
 type LagretEntry = {
@@ -52,16 +38,10 @@ class FakeResponse {
   }
 }
 
-// put() persisterer nå faktisk (#688) — komponenten skriver tilbake en
-// oppdatert entry før den navigerer, og flere av testene under må kunne lese
-// HVA som ble skrevet (forsok/klikk_id/navigert), ikke bare AT put ble kalt.
-// Komponenten skriver et ekte `Response`-objekt (fra lib/pending-nav.ts) —
-// mocken lagrer det uendret; ekte Response har samme async .json()-form som
-// FakeResponse, så begge kan leses tilbake likt.
-// `treghetMs` gjør hver cache-operasjon målbart treg (via fake timers).
-// Uten den er alle promisene her løst umiddelbart, og da rekker kilde nr. 1
-// alltid å bli helt ferdig før nr. 2 i det hele tatt starter — altså kan
-// race-testene under ikke reprodusere racet de skal pinne (review av PR #690).
+// put() persisterer, så testene kan lese HVA som ble skrevet (forsok/klikk_id/
+// navigert), ikke bare AT put ble kalt.
+// `treghetMs` gjør cache-operasjonene trege (fake timers); uten den blir kilde
+// nr. 1 alltid ferdig før nr. 2 starter, og race-testene reproduserer ingenting.
 function lagFakeCache(entry?: LagretEntry, treghetMs = 0) {
   let lagret: { json(): Promise<unknown> } | undefined = entry
     ? new FakeResponse(JSON.stringify(entry))
@@ -80,10 +60,8 @@ function lagFakeCache(entry?: LagretEntry, treghetMs = 0) {
     }),
     put: vi.fn(async (key: string, val: { json(): Promise<unknown> }) => {
       if (key !== NAV_NOKKEL) return
-      // Ekte Cache Storage gir en FERSK Response ved hvert match(); en lagret
-      // Response-INSTANS kan bare leses én gang («Body is unusable»).
-      // Materialiser bodyen her, ellers ville race-testene under målt en
-      // fixture-begrensning i stedet for produktkoden.
+      // Ekte Cache Storage gir en fersk Response per match(); en lagret
+      // instans kan bare leses én gang («Body is unusable»). Materialiser her.
       const data = await val.json()
       lagret = new FakeResponse(JSON.stringify(data))
     }),
@@ -118,9 +96,7 @@ function lagSwMock(opts: { onCheckPendingNav?: (port2: MessagePort) => void } = 
   }
 }
 
-// Fanger 'message'-lytteren komponenten registrerer, slik at broadcast-stien
-// (SW postMessage -> handterMelding) kan trigges direkte i test. Den stien har
-// ingen entryHint og må derfor lese NAV-raden selv — se testen nederst.
+// Fanger 'message'-lytteren, så broadcast-stien (uten entryHint) kan trigges direkte.
 function lagSwMockMedLytter() {
   const lyttere: Record<string, ((e: MessageEvent) => void)[]> = {}
   return {
@@ -138,25 +114,19 @@ function lagSwMockMedLytter() {
   }
 }
 
-// Flusher mikrotasks UTEN å kjøre noen faketimer. Poenget er å isolere
-// broadcast-stien: advanceTimersByTime ville i tillegg fyrt cache-pollen
-// (t=0), som ville konsumert den samme entryen og gjort assertion-en
-// tvetydig — nettopp fordi de to stiene deler én singel-nøkkel.
+// Flusher mikrotasks UTEN faketimere: isolerer broadcast-stien, siden
+// advanceTimersByTime også ville fyrt cache-pollen mot samme nøkkel.
 async function flushMikrotasks(runder = 30) {
   for (let i = 0; i < runder; i++) await Promise.resolve()
 }
 
-// Event-navnene sendFeilBeacon faktisk ble kalt med. Negative assertions går
-// via denne, ikke via en argument-for-argument-matcher med expect.anything():
-// expect.anything() matcher IKKE undefined, og beacon-kallene sender undefined
-// som 3. (og av og til 4.) argument — en slik negativ assertion ville derfor
-// passert uansett, altså vært død kode (review av #688).
+// Negative assertions går via denne: expect.anything() matcher ikke undefined,
+// som beacon-kallene sender som 3./4. argument — en slik not-assert passerer alltid.
 function loggedeEventer(): string[] {
   return vi.mocked(sendFeilBeacon).mock.calls.map(kall => kall[0])
 }
 
-// Aldri-resolverende ready — simulerer at reg.active er utilgjengelig eller
-// at kallet henger. Cache-stien skal navigere UANSETT.
+// Aldri-resolverende ready: reg.active utilgjengelig. Cache-stien skal navigere uansett.
 function lagHengendeSwMock() {
   return {
     register: vi.fn(async () => ({})),
@@ -168,8 +138,8 @@ function lagHengendeSwMock() {
 
 const OPPRINNELIG_LOCATION = window.location
 
-// jsdom sin window.location.assign er ikke konfigurerbar — vi.spyOn feiler
-// med «Cannot redefine property». Erstatter hele location-objektet i stedet.
+// jsdom sin location.assign er ikke konfigurerbar (vi.spyOn: «Cannot redefine
+// property»), så hele location-objektet erstattes.
 function stubLocation(impl?: () => void) {
   const assign = impl ? vi.fn(impl) : vi.fn()
   Object.defineProperty(window, 'location', {
@@ -208,18 +178,12 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     vi.stubGlobal('navigator', { ...window.navigator, serviceWorker: lagHengendeSwMock() })
 
     render(<ServiceWorkerRegistrering />)
-    // KUN første poll (t=0): i en ekte nettleser river window.location.assign()
-    // ned siden med det samme, så de senere polltimerne (200/800/2000ms)
-    // rekker aldri å kjøre. assign() er her en vi.fn()-stub som IKKE faktisk
-    // navigerer jsdom bort — advanserer vi klokken videre, ville komponenten
-    // (fortsatt montert på samme "side") lese den samme entryen om igjen og
-    // telle forsok videre, noe en ekte navigasjon aldri ville gitt rom for.
+    // KUN første poll (t=0): en ekte assign() river ned siden, men stubben gjør
+    // det ikke — senere polls ville lest entryen igjen og talt forsok videre.
     await vi.advanceTimersByTimeAsync(0)
 
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/chat`)
-    // Kjernen i #688: entryen skal IKKE slettes idet den navigerer bort —
-    // leser og sletter FØR auth kan omdirigere til /login er nøyaktig
-    // bugen dette lukker.
+    // Kjernen i #688: ikke slett før auth kan ha omdirigert til /login.
     expect(cache.delete).not.toHaveBeenCalled()
     const lagret = await sistLagret(cache)
     expect(lagret).toMatchObject({
@@ -228,9 +192,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
       forsok: 1,
       navigert: true,
     })
-    // Eksplisitt kontroll av HELE kontekst-objektet (#681/#688) — nøkkelnavnene
-    // må matche KONTEKST_WHITELIST i lib/logg-sanitering.ts, ellers strippes
-    // de stille som #676-feltene.
+    // Hele kontekst-objektet: nøklene må matche KONTEKST_WHITELIST i
+    // lib/logg-sanitering.ts, ellers strippes de stille (#676, #681).
     expect(sendFeilBeacon).toHaveBeenCalledWith(
       'push.klikk.navigert',
       'push-klikk levert via cache',
@@ -245,11 +208,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
       },
       'warn',
     )
-    // #626: `maal` er stien vi navigerer TIL (/chat) — IKKE avreisesiden
-    // (window.location.href, som på denne siden er /). Den forrige
-    // kommentaren i loggPushNavigasjon ble lest som om `url`-feltet på raden
-    // (satt av den ekte sendFeilBeacon til window.location.href) var målet;
-    // dette er nøyaktig forvekslingen som ga feiltolket telemetri.
+    // `maal` er stien vi navigerer TIL, ikke avreisesiden — radens `url`-felt
+    // er avreisesiden, og forvekslingen ga feiltolket telemetri (#626).
     const [, , , kontekst] = vi.mocked(sendFeilBeacon).mock.calls[0]
     expect(kontekst).toMatchObject({ maal: '/chat' })
     expect((kontekst as { maal?: string })?.maal).not.toBe(window.location.pathname)
@@ -259,8 +219,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     const assign = stubLocation()
     const cache = lagFakeCache({ url: `${window.location.origin}/samtaler/1`, ts: Date.now() })
     vi.stubGlobal('caches', lagCachesMock(cache))
-    // ready resolver ALDRI — mot koden før #626-fiksen ville dette hengt
-    // sjekkPendingNav() for alltid, og assign ville aldri blitt kalt.
+    // ready resolver aldri — cache-stien må ikke vente på den.
     vi.stubGlobal('navigator', { ...window.navigator, serviceWorker: lagHengendeSwMock() })
 
     render(<ServiceWorkerRegistrering />)
@@ -290,8 +249,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Landing (item 5 i #688-planen): vi står allerede på målet — typisk etter
-  // at en TIDLIGERE sidevisning navigerte oss hit. Entryen konsumeres nå.
+  // Landing: vi står allerede på målet (en tidligere sidevisning navigerte hit).
+  // Entryen konsumeres nå.
   it('landing: vi står allerede på målet — entry konsumert, navigert logget (entry.navigert var ikke satt)', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({ url: window.location.href, ts: Date.now(), klikk_id: 'klikk-xyz' })
@@ -319,11 +278,9 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // navigert: true betyr at raden alt ble logget som push.klikk.navigert fra
-  // den FORRIGE sidens navigerTil() rett før assign — denne landingen skal nå
-  // logges som sin EGEN hendelse (push.klikk.landet, #626) i stedet for en ny
-  // push.klikk.navigert, som ville kollidert med varsel_logg sin dedup-indeks
-  // og dobbelttalt samme klikk.
+  // navigert: true = forrige side logget alt push.klikk.navigert. Landingen er
+  // egen hendelse (push.klikk.landet, #626); en ny navigert-rad ville
+  // dobbelttalt klikket.
   it('landing: navigert:true på entryen gir ÉN push.klikk.landet med riktig klikk_id/maal, og INGEN ny push.klikk.navigert', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
@@ -352,8 +309,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Loop-bryter (item 6): et mål forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten
-  // landing skal forkastes i stedet for å bli prøvd i det uendelige.
+  // Loop-bryter: et mål forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten landing forkastes.
   it(`forsok >= PUSH_KLIKK_MAKS_FORSOK (${PUSH_KLIKK_MAKS_FORSOK}): ingen navigasjon, entry slettet, klient.pushklikk.oppgitt logget`, async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
@@ -392,11 +348,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(cache.delete).toHaveBeenCalledWith(NAV_NOKKEL)
   })
 
-  // Broadcast-grenen var HELT utestet, og det er derfor bugen slapp gjennom
-  // (review av #688): navigerTil slettet entryen FØR den leste den, og siden
-  // broadcast/kanal ikke sender entryHint ble lesningen alltid null —
-  // klikk_id og forsok forsvant fra raden, og oppføringen ble revet bort
-  // under føttene på cache-pollen som faktisk hadde dem.
+  // Broadcast/kanal sender ingen entryHint, så entryen må leses FØR sletting —
+  // ellers forsvinner klikk_id/forsok, og cache-pollen mister oppføringen (#688).
   it('landing via BROADCAST (ingen entryHint): leser entryen FØR sletting, så klikk_id/forsok følger med', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
@@ -431,10 +384,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Samme sti, men entryen er alt logget som navigert fra forrige side.
-  // Dobbel-logging-guarden må fortsatt gjelde når kilden er broadcast — mot
-  // den gamle koden var den død kode her (entry var alltid null). Landingen
-  // logges nå som push.klikk.landet (#626) i stedet for ingenting.
+  // Dobbel-logging-guarden må også gjelde når kilden er broadcast.
   it('landing via BROADCAST med navigert:true: push.klikk.landet logget, ingen ny push.klikk.navigert', async () => {
     stubLocation()
     const cache = lagFakeCache({
@@ -463,9 +413,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Ferskhetssjekken skal IKKE komme før identitetssjekken (review av #688):
-  // en innlogging som tar lengre tid enn vinduet lander riktig, og å logge
-  // «foreldet» for den ville invertert signalet på selve flyten issuet innfører.
+  // Ferskhetssjekken kommer ETTER identitetssjekken: en treg innlogging lander
+  // riktig og skal ikke logges som «foreldet» (#688).
   it('vi står på målet med en entry eldre enn vinduet: logges som navigert, IKKE som foreldet', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
@@ -498,12 +447,9 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(loggedeEventer()).not.toContain('klient.pushklikk.foreldet')
   })
 
-  // Race-guarden (review av PR #690). SW-en skriver cache-entryen og
-  // broadcaster rett etterpå, så cache-pollen på t=0 og 'message'-lytteren
-  // kommer normalt inn samtidig — ikke som et kanttilfelle. Uten
-  // serialisering leste begge samme `forsok`, regnet seg begge fram til 1,
-  // og kalte begge assign + loggPushNavigasjon: ett klikk ga to navigasjoner
-  // og to telemetri-rader.
+  // Race-guarden (PR #690): SW-en skriver cachen og broadcaster rett etter, så
+  // cache-poll og 'message' kommer normalt samtidig. Uten serialisering ga ett
+  // klikk to navigasjoner og to telemetri-rader.
   it('RACE: cache-poll og broadcast samtidig gir ÉN navigasjon og ÉN push.klikk.navigert', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache({
@@ -516,8 +462,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     vi.stubGlobal('navigator', { ...window.navigator, serviceWorker: sw })
 
     render(<ServiceWorkerRegistrering />)
-    // Begge kildene slippes løs før noen av dem har rukket å fullføre sin
-    // lese/øke/skrive-runde — det er nøyaktig vinduet bugen levde i.
+    // Begge slippes løs før noen har fullført lese/øke/skrive-runden.
     send({ type: 'navigate', url: `${window.location.origin}/chat` })
     await vi.advanceTimersByTimeAsync(0)
     await flushMikrotasks()
@@ -525,19 +470,15 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(assign).toHaveBeenCalledTimes(1)
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/chat`)
     expect(loggedeEventer().filter(e => e === 'push.klikk.navigert')).toHaveLength(1)
-    // Forsøkstelleren skal stå på 1, ikke 2: den andre kilden skal ikke ha
-    // rukket å telle sitt eget forsøk på samme klikk.
+    // 1, ikke 2: den andre kilden skal ikke telle et eget forsøk på samme klikk.
     expect(await sistLagret(cache)).toMatchObject({ klikk_id: 'klikk-race', forsok: 1 })
   })
 
-  // Samme race på landings-grenen: der konsumeres entryen, så kall nr. 2 kan
-  // sitte på en entryHint lest FØR nr. 1 slettet raden — og ville logget
-  // landingen en gang til.
+  // Samme race på landings-grenen: kall nr. 2 kan sitte på en entryHint lest
+  // før nr. 1 slettet raden.
   it('RACE: cache-poll og broadcast lander samtidig — kun ÉN push.klikk.navigert', async () => {
     stubLocation()
-    // Treg cache: broadcasten står og venter på sin lesning mens cache-pollen
-    // starter sin egen. Begge leser altså entryen FØR noen av dem har rukket
-    // å slette den — det er kun i det vinduet dobbel-loggingen oppstår.
+    // Treg cache, så begge leser entryen før noen har slettet den.
     const cache = lagFakeCache(
       { url: window.location.href, ts: Date.now(), klikk_id: 'klikk-race-landing' },
       5,
@@ -556,9 +497,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(loggedeEventer().filter(e => e === 'push.klikk.navigert')).toHaveLength(1)
   })
 
-  // Samme race som over, men med navigert:true på entryen — landingLogget skal
-  // fortsatt gi maks ÉN rad uansett hvilken av de to nye grenene (landet vs.
-  // navigert) som rammes (#626).
+  // Samme race med navigert:true: maks ÉN rad uansett gren (#626).
   it('RACE: cache-poll og broadcast lander samtidig på en navigert:true-entry — kun ÉN push.klikk.landet', async () => {
     stubLocation()
     const cache = lagFakeCache(
@@ -599,10 +538,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/samtaler/1`)
   })
 
-  // sw.js sender nå klikk_id med på MessageChannel-svaret (#626) — den grenen
-  // har PER DEFINISJON ingen Cache Storage å lese klikk_id fra selv (cachen er
-  // tom), så uten denne hinten var raden alltid klikk_id-løs. Navigasjonen
-  // selv (assign-målet) skal være uendret av dette.
+  // MessageChannel-grenen har per definisjon tom cache, så klikk_id må komme
+  // med i SW-svaret (#626).
   it('MessageChannel-svar med klikk_id: navigasjonen er uendret, men klikk_id følger med i telemetrien', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache(undefined)
@@ -640,8 +577,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Review av #626: kanal-svaret mistet navigert/forsok, så en landing via
-  // MessageChannel på målsiden ble logget som en ny push.klikk.navigert.
+  // Kanal-svaret må bære navigert/forsok, ellers logges landingen som ny
+  // push.klikk.navigert (#626).
   it('MessageChannel-svar med navigert:true på målsiden logger push.klikk.landet med bevart forsok', async () => {
     const assign = stubLocation()
     const cache = lagFakeCache(undefined)
@@ -680,9 +617,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     )
   })
 
-  // Navigasjonen skal være uendret fra før #626: kanal-svarets forsok/ts får
-  // IKKE styre loop-brytelsen. Cachen skrives som før (forsok 1, ferskt ts);
-  // kun telemetrien bærer det faktiske forsøksnummeret.
+  // Kanal-svarets forsok styrer IKKE loop-bryteren: cachen skrives med
+  // forsok 1 og ferskt ts; kun telemetrien bærer det faktiske nummeret.
   it('MessageChannel-svar med eksisterende forsok utenfor målet: cache-skrivingen er uendret, telemetrien teller videre', async () => {
     vi.setSystemTime(new Date('2026-10-02T10:00:00Z'))
     const assign = stubLocation()
@@ -709,7 +645,7 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/samtaler/1`)
     const lagret = await sistLagret(cache)
     expect(lagret).toMatchObject({ forsok: 1, navigert: true, klikk_id: 'klikk-kanal' })
-    // ts er satt ved skrivingen (ikke arvet fra SW-svaret, som ikke sender den).
+    // ts settes ved skrivingen; SW-svaret sender den ikke.
     expect(lagret?.ts).toBeGreaterThanOrEqual(new Date('2026-10-02T10:00:00Z').getTime())
     expect(sendFeilBeacon).toHaveBeenCalledWith(
       'push.klikk.navigert',
@@ -721,10 +657,8 @@ describe('ServiceWorkerRegistrering — push-klikk-navigasjon (#626, utsatt kons
   })
 })
 
-// Feilstiene i denne komponenten er stumme av natur: en avvist promise i en
-// event-handler eller et setTimeout gir ingen synlig effekt i UI-et. Blir de
-// svelget, svikter push-overleveringen uten spor — nøyaktig blindsonen #626
-// handler om. Testene under pinner at begge går til klientfeil-loggen.
+// Feilstiene er stumme av natur (avvist promise i handler/setTimeout) — blir
+// de svelget, svikter push-overleveringen uten spor. Pinner at de logges.
 describe('ServiceWorkerRegistrering — observability på feilstiene (#626-review)', () => {
   it('feilet SW-registrering meldes til klientfeil-loggen (ikke console.error)', async () => {
     stubLocation()
@@ -746,10 +680,8 @@ describe('ServiceWorkerRegistrering — observability på feilstiene (#626-revie
     expect(meldKlientfeil).toHaveBeenCalledWith('klient.sw.registrering.feilet', feil)
   })
 
-  // Den interne try/catch-en i navigerTil gjorde .catch()-ene på kallstedene
-  // til død kode: promiset kunne aldri avvises, så en uventet feil forsvant
-  // sporløst (review av PR #690). Feilen bobler nå til kallstedet, som
-  // logger den.
+  // navigerTil skal ikke svelge feil internt — da blir kallstedenes .catch()
+  // død kode og feilen forsvinner (PR #690).
   it('uventet feil i navigerTil bobler til kallstedet og logges som klient.sw.pendingnav.feilet', async () => {
     stubLocation(() => {
       throw new Error('assign eksploderte')
@@ -775,9 +707,8 @@ describe('ServiceWorkerRegistrering — observability på feilstiene (#626-revie
     stubLocation()
     vi.stubGlobal('caches', lagCachesMock(lagFakeCache(undefined)))
     const avvistReady = Promise.reject(new Error('ready avvist'))
-    // Fixture-side no-op-catch: uten den flagger Node selve mock-promisen som
-    // unhandled i tiden før komponenten rekker å awaite den. Komponenten får
-    // rejection-en uansett — dette skjuler ikke det testen måler.
+    // Ellers flagger Node mock-promisen som unhandled før komponenten awaiter
+    // den. Komponenten får rejection-en uansett.
     avvistReady.catch(() => {})
     vi.stubGlobal('navigator', {
       ...window.navigator,
@@ -785,10 +716,8 @@ describe('ServiceWorkerRegistrering — observability på feilstiene (#626-revie
         register: vi.fn(async () => ({})),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
-        // Cachen er tom, så sjekkPendingNav faller til MessageChannel-stien —
-        // og DEN awaiter ready. Den interne try/catch i lib/pending-nav.ts
-        // dekker kun cache-lesingen, så uten wrapperen bobler denne ut som en
-        // unhandledrejection.
+        // Tom cache → MessageChannel-stien, som awaiter ready. try/catch i
+        // lib/pending-nav.ts dekker kun cache-lesingen.
         ready: avvistReady,
       },
     })

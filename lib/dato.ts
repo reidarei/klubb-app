@@ -1,109 +1,82 @@
+// All tidshåndtering går gjennom denne fila — se CLAUDE.md § Policy: Tidshåndtering.
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { nb } from 'date-fns/locale'
 
 export const TIDSSONE = 'Europe/Oslo'
 
-// Felles format-strenger brukt flere steder i appen.
 export const FORMAT_DATO_KLOKKE = "d. MMMM 'kl.' HH:mm"
-// Kun klokkeslett — brukes der datoen allerede er gitt av konteksten, f.eks.
-// 1-dagers-påminnelsen som innledes med «I morgen».
+// Der datoen allerede er gitt av konteksten («I morgen kl. 18:00»).
 export const FORMAT_KLOKKE = "'kl.' HH:mm"
-// Kun dato — brukes der klokkeslettet står i en egen setning, f.eks.
-// påminnelsenes «Oppmøte {sted} kl. {tid}».
+// Der klokkeslettet står i en egen setning («Oppmøte {sted} kl. {tid}»).
 export const FORMAT_DATO_KORT = 'd. MMMM'
-// Dato med årstall — brukes der visningen lever over årsskifter og «5. mai»
-// alene ville vært tvetydig, f.eks. endringsloggen på /om-appen (#595).
+// Der visningen lever over årsskifter og «5. mai» alene er tvetydig (#595).
 export const FORMAT_DATO_AAR = 'd. MMMM yyyy'
 
 /**
- * Formater en ISO-dato i norsk tidssone (Europe/Oslo).
- * Håndterer sommer/vintertid automatisk.
- * Bruk denne overalt i stedet for date-fns format() — viktig fordi
- * serveren kjører i UTC (Dublin), og klienter kan være i andre tidssoner.
+ * Formater en ISO-dato i Europe/Oslo. Bruk denne i stedet for date-fns
+ * format() — serveren kjører i UTC.
  */
 export function formaterDato(iso: string, formatStr: string): string {
   return formatInTimeZone(new Date(iso), TIDSSONE, formatStr, { locale: nb })
 }
 
 /**
- * Nå-tidsstempel som ISO-streng (UTC). Bruk denne i stedet for
- * `new Date().toISOString()` direkte i kolonner som `oppdatert`,
- * `besluttet_paa` o.l. — gjør det åpenbart at vi mener "nå" og holder
- * en åpning hvis vi senere vil mocke tid i tester.
+ * «Nå» som ISO-streng (UTC) for timestamp-kolonner (`oppdatert`,
+ * `besluttet_paa` o.l.). Ett sted å mocke tid i tester.
  */
 export function naa(): string {
   return new Date().toISOString()
 }
 
 /**
- * Returner "nå" som Date i norsk tidssone-kontekst.
- * Nyttig for sammenligninger som "er dette i dag?" der
- * "i dag" skal bety norsk dato, ikke UTC.
+ * Dagens Oslo-kalenderdag som LOKAL Date (lokal midnatt). Riktig for lokale
+ * gettere og date-fns-kalenderaritmetikk — aldri send den gjennom
+ * toISOString() (#675).
  */
 export function norskDatoNaa(): Date {
-  // Lag en dato-streng i norsk tidssone og parse den tilbake
   const norskNaa = formatInTimeZone(new Date(), TIDSSONE, 'yyyy-MM-dd', { locale: nb })
   const [y, m, d] = norskNaa.split('-').map(Number)
   return new Date(y, m - 1, d)
 }
 
 /**
- * Dagens dato (norsk tidssone) som "YYYY-MM-DD"-streng. Bruk denne i stedet for
- * `new Date().toISOString().slice(0, 10)` — sistnevnte gir UTC-dato og kan bomme
- * med én dag rundt midnatt norsk tid. Nyttig for min/max på <input type="date">
- * og andre steder «hvilken kalenderdag er det i Norge» skal uttrykkes som streng.
+ * Dagens dato i Oslo som "YYYY-MM-DD". `new Date().toISOString().slice(0, 10)`
+ * gir UTC-dato og bommer rundt norsk midnatt.
  */
 export function iDagOslo(): string {
   return formatInTimeZone(new Date(), TIDSSONE, 'yyyy-MM-dd')
 }
 
 /**
- * Norsk kalenderdag i dag ± `dager`, som "YYYY-MM-DD"-streng. Bygges av ren
- * UTC-aritmetikk på iDagOslo()-strengen (samme knep som iMorgenOslo/
- * osloUkestart) — ingen lokal Date involvert, derfor tidssone-uavhengig og
- * DST-trygt. Erstatter mønsteret `dagStreng(addDays(norskDatoNaa(), n))`
- * som var tredje gang samme feilklasse slo til (#675): addDays() på en
- * norskDatoNaa()-Date + toISOString() regner riktig kun når PROSESSEN står
- * i UTC.
+ * Oslo-kalenderdag i dag ± `dager` som "YYYY-MM-DD". Ren UTC-aritmetikk på
+ * datostrengen, så TZ-uavhengig og DST-trygt. Erstatter
+ * `dagStreng(addDays(norskDatoNaa(), n))`, som kun var riktig i en UTC-prosess (#675).
  *
- * `anker` er dagen aritmetikken går ut fra ("YYYY-MM-DD", default iDagOslo()).
- * Oppgi den eksplisitt når FLERE grenser må hvile på SAMME kalenderdag — to
- * uavhengige kall sampler hver sin `iDagOslo()`, og en kjøring som krysser
- * norsk midnatt mellom dem får to ulike dager. Se review av #755.
+ * Oppgi `anker` når FLERE grenser må hvile på samme dag — to separate
+ * iDagOslo()-kall kan havne på hver sin side av midnatt (#755).
  */
 export function osloDagPluss(dager: number, anker: string = iDagOslo()): string {
   const [y, m, d] = anker.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d + dager)).toISOString().slice(0, 10)
 }
 
-/**
- * Morgendagens dato (norsk tidssone) som "YYYY-MM-DD"-streng — søsteren til
- * iDagOslo(). Brukt av bursdagsbilde-cronet (#641), som genererer bildet
- * dagen FØR bursdagen.
- */
+/** Morgendagens dato i Oslo som "YYYY-MM-DD". */
 export function iMorgenOslo(): string {
   return osloDagPluss(1)
 }
 
 /**
- * UTC-instantet for NORSK MIDNATT på dagen i dag ± `dager`, som ISO-streng.
- * Brukt der en spørring trenger en tidsgrense (f.eks. .gte('start_tidspunkt',
- * ...)) — ikke en dagstreng, det er osloDagPluss() sin jobb. fromZonedTime
- * tolker "YYYY-MM-DDT00:00:00" som veggklokke-tid i TIDSSONE og håndterer
- * sommer-/vintertid selv. Se #675.
- *
- * `anker` videreføres til osloDagPluss() — bruk den når de to endene av et
- * halvåpent døgnvindu skal forankres til samme dag (se review av #755).
+ * UTC-instantet for norsk midnatt i dag ± `dager`, som ISO-streng — for
+ * spørringsgrenser mot timestamptz (#675). `anker` som i osloDagPluss().
  */
 export function osloDagStartIso(dager = 0, anker: string = iDagOslo()): string {
   return fromZonedTime(`${osloDagPluss(dager, anker)}T00:00:00`, TIDSSONE).toISOString()
 }
 
 /**
- * Dag-nøkkel ("YYYY-MM-DD") fra en Dates *lokale* gettere. KUN riktig for en
- * Date som allerede ER en Oslo-kalenderdag (fra norskDatoNaa()/norskDag()) —
- * gir feil svar på et instant (en Date bygget av `new Date(iso)`). Bruk
- * norskDatoNokkel() for et instant. Se #675.
+ * "YYYY-MM-DD" fra en Dates LOKALE gettere. KUN riktig for en Date som
+ * allerede er en Oslo-kalenderdag (norskDatoNaa()/norskDag()); bruk
+ * norskDatoNokkel() for et instant (#675).
  */
 export function osloDagNokkel(dag: Date): string {
   const y = dag.getFullYear()
@@ -113,28 +86,21 @@ export function osloDagNokkel(dag: Date): string {
 }
 
 /**
- * Mandagen i inneværende ISO-uke (norsk tidssone), som "YYYY-MM-DD"-streng.
- * Må matche Postgres' `date_trunc('week', ...)`, som også er mandag-basert.
- * Regner på Oslo-kalenderdato-strengen (via iDagOslo) og gjør deretter ren
- * UTC-dato-aritmetikk med getUTCDay/setUTCDate — DST-trygt fordi vi aldri
- * blander ms-differanser med lokal tidssone (samme knep som formaterDatoSkille).
- * Brukt av AktivitetTeller (#484) for å bucket-slå anonym ukentlig aktivitet.
+ * Mandagen i inneværende ISO-uke (Oslo) som "YYYY-MM-DD". Må matche Postgres'
+ * `date_trunc('week', …)`. Ren UTC-aritmetikk på datostrengen, så DST-trygt (#484).
  */
 export function osloUkestart(): string {
   const [y, m, d] = iDagOslo().split('-').map(Number)
   const utcDato = new Date(Date.UTC(y, m - 1, d))
-  // getUTCDay() gir 0 (søndag)..6 (lørdag). date-fns' getISODay() bruker internt
-  // getDay() (lokaltid) og ville drifte på en runtime med negativ UTC-offset —
-  // relevant fordi dette er delt template-kode som synkes til selvhostede
-  // klubb-app-instanser. Map søndag (0) → 7 så mandag blir 1, som ISO.
+  // Ikke date-fns' getISODay(): den bruker lokal getDay() og ville driftet på
+  // en klubb-app-instans med negativ UTC-offset. Søndag (0) → 7 som i ISO.
   const isoDag = utcDato.getUTCDay() === 0 ? 7 : utcDato.getUTCDay() // 1 (mandag)..7 (søndag)
   utcDato.setUTCDate(utcDato.getUTCDate() - (isoDag - 1))
   return utcDato.toISOString().slice(0, 10)
 }
 
 /**
- * Parse en ISO-dato til norsk dato (bare dag, uten klokkeslett).
- * Viktig for "er dette arrangement i dag?"-sjekker.
+ * Oslo-kalenderdagen for et ISO-instant, som LOKAL Date (se norskDatoNaa()).
  */
 export function norskDag(iso: string): Date {
   const norskStr = formatInTimeZone(new Date(iso), TIDSSONE, 'yyyy-MM-dd', { locale: nb })
@@ -143,19 +109,15 @@ export function norskDag(iso: string): Date {
 }
 
 /**
- * Gjeldende år i norsk tidssone.
- * Viktig for server-side kode som kjører i UTC — på nyttårsaften
- * er det allerede nytt år i Oslo mens serveren fortsatt er i gammelt år.
+ * Gjeldende år i Oslo — på nyttårsaften er det nytt år her før det er det i UTC.
  */
 export function norskAar(): number {
   return parseInt(formatInTimeZone(new Date(), TIDSSONE, 'yyyy'))
 }
 
 /**
- * Returnerer årstallet (norsk tid) for en ISO-dato hvis det avviker fra
- * inneværende år, ellers tom streng. Brukes på agenda-kort så vi slipper å
- * vise «5. MAI» for et arrangement som faktisk er i 2027 — men beholder
- * kompakt format for hele inneværende år.
+ * Årstallet (Oslo) for en ISO-dato hvis det avviker fra inneværende år, ellers
+ * tom streng — så agenda-kort viser år kun når det trengs.
  */
 export function aarHvisAvvik(iso: string): string {
   const aar = formatInTimeZone(new Date(iso), TIDSSONE, 'yyyy')
@@ -163,9 +125,8 @@ export function aarHvisAvvik(iso: string): string {
 }
 
 /**
- * Lesbar agenda-dato i norsk tid: «Fre 12. des», med årstall bare når det
- * ikke er inneværende år («Fre 12. des 2027»). Brukes på agenda-kortene.
- * Date-fns' nb-locale gir «fr.» for EEE, så ukedagen tas fra hele navnet.
+ * Agenda-dato i Oslo-tid: «Fre 12. des», med år kun utenom inneværende år.
+ * nb-locale gir «fr.» for EEE, så ukedagen kappes fra hele navnet.
  */
 export function agendaDato(iso: string): string {
   const ukedag = formaterDato(iso, 'EEEE').slice(0, 3)
@@ -177,61 +138,43 @@ export function agendaDato(iso: string): string {
 }
 
 /**
- * Dag-nøkkel i norsk tidssone — «yyyy-MM-dd»-streng for en ISO-dato.
- * Et arrangement kl 00:30 norsk tid skal telle på riktig dag, ikke UTC-dagen
- * før. Brukes av MiniKalender og erSammeNorskeDag. Se #429.
+ * Oslo-dag-nøkkel ("yyyy-MM-dd") for et ISO-instant — 00:30 norsk tid teller
+ * på riktig dag, ikke UTC-dagen før (#429).
  */
 export function norskDatoNokkel(iso: string): string {
   return formatInTimeZone(new Date(iso), TIDSSONE, 'yyyy-MM-dd')
 }
 
 /**
- * UTC-instantet for et gitt norsk klokkeslett DAGEN ETTER `iso`s norske
- * kalenderdag, som ISO-streng. Brukt av møtemodus (#780): et møte som starter
- * 00:30 skal fortsatt vare til kl. 06:00 dagen ETTER (ikke samme dag) —
- * `osloDagPluss(1, …)` løser akkurat den forskyvningen, forankret til `iso`s
- * EGEN dag (ikke dagens dato) slik at et bakoverskuende oppslag regner riktig
- * uansett når det kjøres. DST-trygt og TZ-uavhengig, samme knep som
- * osloDagStartIso(): fromZonedTime tolker strengen som veggklokke-tid i
- * TIDSSONE — ingen lokal Date, ingen toISOString() på en Oslo-kalenderdag
- * (jf. hk/dato-tidssone-uavhengig).
+ * UTC-instantet for norsk klokkeslett `klokke` DAGEN ETTER `iso`s Oslo-dag.
+ * Forankret til `iso`s egen dag (ikke i dag), så et bakoverskuende oppslag
+ * regner riktig. Brukt av møtemodus (#780).
  */
 export function osloKlokkeslettDagenEtter(iso: string, klokke: string): string {
   return fromZonedTime(`${osloDagPluss(1, norskDatoNokkel(iso))}T${klokke}:00`, TIDSSONE).toISOString()
 }
 
-/**
- * Sammenligner om to ISO-tidspunkter faller på samme norske kalenderdag.
- * Viktig: bruker Oslo-tidssone så en melding sendt 01:30 norsk tid teller
- * som "i dag", ikke "i går" basert på UTC.
- */
+/** Om to ISO-instanter faller på samme Oslo-kalenderdag. */
 export function erSammeNorskeDag(isoA: string, isoB: string): boolean {
-  // Delegerer til norskDatoNokkel — unngår duplisert formatInTimeZone-kall.
   return norskDatoNokkel(isoA) === norskDatoNokkel(isoB)
 }
 
 /**
- * Sammenligner et ISO-instant mot en Oslo-kalenderdag (fra norskDatoNaa()/
- * norskDag()). Flyttet hit fra lib/agenda-sortering.ts (#675), som hadde sin
- * egen `erSammeNorskeDag(iso, referanse: Date)` — samme navn som funksjonen
- * over men annen signatur og betydning, en felle for neste leser. Erstatter
- * et rått Intl.DateTimeFormat-kall.
+ * Om et ISO-instant faller på en Oslo-kalenderdag (fra norskDatoNaa()/
+ * norskDag()). Bevisst annet navn enn erSammeNorskeDag(), som tar to
+ * instanter (#675).
  */
 export function erPaaOsloDag(iso: string, osloDag: Date): boolean {
   return norskDatoNokkel(iso) === osloDagNokkel(osloDag)
 }
 
 /**
- * Returnerer en kontekst-følsom dato-etikett for chat-dato-skiller:
- * "I DAG", "I GÅR", ukedag ("FREDAG") for siste 7 dager, ellers "15. MARS"
- * eller "15. MARS 2024" hvis annet år. Etiketten kommer UPPERCASE allerede
- * — kallstedet trenger ikke text-transform.
+ * Etikett for chat-dato-skiller: «I DAG», «I GÅR», ukedag siste 7 dager,
+ * ellers «15. MARS» (med år hvis annet år). Kommer ferdig i versaler.
  */
 export function formaterDatoSkille(iso: string): string {
-  // Diff må regnes i UTC for å være DST-trygg — norskDatoNaa/norskDag returnerer
-  // Date-objekter konstruert i prosessens *lokale* tidssone, så ms-aritmetikk
-  // på dem kan svikte med ±1 time over DST-overganger. Vi henter Oslo-kalenderen
-  // som "yyyy-MM-dd"-streng og konstruerer rene UTC-Date for diff istedet.
+  // Diffen regnes på rene UTC-Dates fra Oslo-datostrenger: ms-aritmetikk på
+  // lokale Dates kan bomme ±1 t over DST-overganger.
   const dagStr = (d: Date) => formatInTimeZone(d, TIDSSONE, 'yyyy-MM-dd')
   const tilUtc = (s: string) => {
     const [y, m, d] = s.split('-').map(Number)
@@ -250,12 +193,9 @@ export function formaterDatoSkille(iso: string): string {
 }
 
 /**
- * Valider at en streng er en lovlig kalender-dato på formen YYYY-MM-DD.
- * Tre lag: (1) regexen forkaster feil format, (2) Date.parse === NaN forkaster
- * grovt ugyldige verdier (2026-13-45), (3) round-trip-sjekken forkaster
- * roll-over-datoer som Date godtar men ruller videre — f.eks. 2026-02-30
- * → 3. mars. new Date(s) tolker YYYY-MM-DD som UTC-midnatt, så slice(0,10)
- * skal matche input eksakt for en reell dato.
+ * Om strengen er en lovlig YYYY-MM-DD-dato. Round-trip-sjekken fanger
+ * roll-over som Date godtar (2026-02-30 → 3. mars); new Date(s) tolker formen
+ * som UTC-midnatt, så slice(0, 10) skal matche eksakt.
  */
 export function erGyldigKalenderdato(s: string): boolean {
   return (
@@ -265,31 +205,20 @@ export function erGyldigKalenderdato(s: string): boolean {
   )
 }
 
-/**
- * Konverter ISO-dato til datetime-local verdi i norsk tidssone.
- * Brukes for å pre-fylle <input type="datetime-local"> med riktig tid.
- */
+/** ISO-dato til verdi for <input type="datetime-local"> i Oslo-tid. */
 export function isoTilDatetimeLocal(iso: string | null): string {
   if (!iso) return ''
   return formatInTimeZone(new Date(iso), TIDSSONE, "yyyy-MM-dd'T'HH:mm")
 }
 
 /**
- * Konverter datetime-local verdi til ISO (UTC).
- * datetime-local gir "2025-06-15T14:30" uten tidssone —
- * vi tolker det som norsk tid og konverterer til UTC.
+ * datetime-local-verdi («2025-06-15T14:30», uten sone) tolket som Oslo-tid,
+ * til ISO (UTC).
  */
 export function datetimeLocalTilIso(localStr: string): string {
   if (!localStr) return ''
-  // fromZonedTime tolker "2026-09-13T11:00" som veggklokke-tid i TIDSSONE og
-  // gir UTC-ekvivalenten. Håndterer sommer-/vintertid selv.
-  //
-  // Den håndskrevne varianten som sto her (#674) regnet ut offseten via
-  // `new Date(dato.toLocaleString('en-US', { timeZone }))`. Den parsingen
-  // tolker strengen i MASKINENS lokale sone, ikke i Oslo — så offseten ble
-  // riktig kun der maskinen allerede stod i UTC. Alle fire kallstedene er
-  // 'use client': koden kjører i medlemmets nettleser, som står i norsk tid,
-  // og der ble offseten 0. Resultat: hvert tidspunkt lagret to timer for sent
-  // om sommeren, én om vinteren. Ikke bytt tilbake til en egen offset-regning.
+  // Ikke bytt til en håndregnet offset via toLocaleString: den tolkes i
+  // maskinens sone, og i medlemmets nettleser ga det tider lagret 1–2 t for
+  // sent (#674). fromZonedTime håndterer sommer-/vintertid selv.
   return fromZonedTime(localStr, TIDSSONE).toISOString()
 }

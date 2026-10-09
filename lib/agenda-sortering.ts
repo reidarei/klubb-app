@@ -1,57 +1,29 @@
-// Agenda-sortering — all logikk for hvordan forsiden grupperer og sorterer
-// elementene. page.tsx skal kun hente rådata og rendre resultatet; ingen
-// kategorisering eller mapping i selve ruten.
+// Agenda-sortering — all logikk for hvordan forsiden grupperer og sorterer.
+// page.tsx henter kun rådata og rendrer resultatet.
 //
-// === De fire element-typene brukeren kan opprette ====================
-// Disse er valgene i NyFAB-menyen og styrer hvilke kort-komponenter som
-// brukes på agenda. I tillegg har agendaen avledede typer (utkast, bursdag,
-// klubbjubileum) som beregnes fra annen data.
+// Typer brukeren kan opprette (NyFAB): møte og tur (arrangement.type), poll og
+// melding (#90). Utkast, bursdag og klubbjubileum er avledet fra annen data.
 //
-//   1. Møte        — arrangement.type = 'moete'    → ArrangementKort/HighlightKort
-//   2. Tur         — arrangement.type = 'tur'      → ArrangementKort/HighlightKort
-//   3. Poll        — egen tabell `poll`            → PollKort
-//   4. Melding     — egen tabell `meldinger`       → MeldingKort  (ny — #90)
+// Seksjoner, i prioritert rekkefølge:
+//   bursdagerIDag — bursdager på samme Oslo-dag som naa, løftet over alt annet,
+//                   også «Ikke svart ennå» (#640). Ekskludert fra idag.
+//   ubesvarte     — kommende arrangementer uten påmeldingsrad for meg (#271).
+//                   Ekskludert fra idag/kommende.
+//   meldinger     — levende/festede meldinger, se erMeldingLevende()/erFestet().
+//   idag          — sortIso på samme Oslo-dag som naa.
+//   kommende      — resten, stigende; utkast uten purredato til slutt.
+//   tidligere     — passerte arrangementer/polls + meldinger som har falt ned,
+//                   synkende. En tur MED sluttid blir i kommende til sluttiden
+//                   passerer (erPaagaaende(), #766); møter har aldri sluttid.
 //
-// === Seksjons-regler (i prioritert rekkefølge) =======================
-//   0. «bursdagerIDag» = bursdager hvis sortIso faller på samme norske dag
-//                     som naa. Løftet HELT til topps på agenda — over
-//                     «Ikke svart ennå» også — fordi det store bursdagskortet
-//                     (#640) skal være dagens hovedsak uansett hvor mange
-//                     ubesvarte arrangementer et medlem har. Ekskludert fra
-//                     «I dag» under for å unngå duplikatvisning; page.tsx
-//                     rendrer denne lista øverst.
-//   0.5 «Meldinger» = levende meldinger (se MELDING_LEVENDE_DAGER
-//                     under). Plassert øverst på
-//                     agenda, sortert etter sist_aktivitet (nyeste først).
-//   1. «I kveld»    = items hvis sortIso faller på samme norske dag som naa
-//                     (bursdager unntatt — se punkt 0)
-//   2. «Kommende»   = alt annet som ikke er tidligere (sortert stigende
-//                     på sortIso, utkast uten purredato faller til enden)
-//   3. «Tidligere»  = arrangementer/polls som har passert + meldinger som
-//                     har «falt ned» (sortert synkende — nyeste øverst).
-//                     Unntak: en tur MED slutt_tidspunkt som ennå ikke er
-//                     over (start passert, slutt ikke) blir stående i
-//                     «Kommende» helt til slutt_tidspunkt passerer — se
-//                     erPaagaaende() under. En tur UTEN slutt_tidspunkt, og
-//                     alle møter (som aldri har slutt_tidspunkt, håndhevet av
-//                     DB-constrainten tur_felt_kun_for_tur), faller til
-//                     Tidligere som før, rett etter start_tidspunkt.
-//
-// === sortIso-bygging per type ========================================
-//   - arrangement : start_tidspunkt (UTC ISO fra DB)
-//   - bursdag     : {dato}T12:00:00.000Z (midt på dagen UTC for å unngå
-//                   tidssone-drift mellom Oslo og UTC)
-//   - utkast      : purredato + T12:00:00Z. Passerte purredato havner
-//                   naturlig øverst i «Kommende» pga stigende sortering —
-//                   det er bevisst, glemte utkast skal være synlige. Hvis
-//                   purredato mangler → null (enden av lista).
-//   - poll        : svarfrist
-//   - melding     : sist_aktivitet (driver både live-sortering og
-//                   tidligere-sortering)
-//
-// «Samme norske dag»-sjekk gjøres via erPaaOsloDag() (lib/dato.ts) med
-// Europe/Oslo for å håndtere at et arrangement klokka 00:30 UTC fortsatt
-// tilhører «i kveld» norsk tid hvis det er samme dato etter konvertering.
+// sortIso per type:
+//   arrangement — start_tidspunkt
+//   bursdag     — {dato}T12:00Z: midt på dagen, så Oslo/UTC-forskyvning
+//                 aldri flytter den til nabodagen
+//   utkast      — purredato + T12:00Z, ellers null. Passert purredato havner
+//                 øverst i kommende med vilje: glemte utkast skal synes.
+//   poll        — svarfrist
+//   melding     — sist_aktivitet
 
 import type { HighlightKortData } from '@/components/agenda/HighlightKort'
 import type { ArrangementKortData, AvreiseData } from '@/components/agenda/ArrangementKort'
@@ -66,14 +38,11 @@ import { AVREISE_VINDU_DAGER } from '@/lib/konstanter'
 import { norskDag, erPaaOsloDag, osloDagNokkel } from '@/lib/dato'
 import { differenceInCalendarDays } from 'date-fns'
 
-// Standard stiftelsesdato fra klubb-config (env-styrt). Agendaen sender inn
-// datoen admin har satt i kontrollpanelet; denne er fallbacken.
+// Fallback når agendaen ikke får stiftelsesdatoen admin har satt.
 export const STIFTET_DATO = KLUBB_STIFTET
 
-// Levetidsregler for meldinger på agenda. En melding er «levende» (vises
-// øverst) så lenge det er mindre enn MELDING_LEVENDE_DAGER siden siste
-// aktivitet. sist_aktivitet starter ved opprettelse og bumpes av nye
-// kommentarer (ikke reaksjoner — de er for lette).
+// En melding er «levende» (øverst) så lenge siste aktivitet er nyere enn dette.
+// sist_aktivitet bumpes av kommentarer, ikke av reaksjoner — de er for lette.
 export const MELDING_LEVENDE_DAGER = 3.5
 
 // === Rådata-typer (speiler Supabase-queryene i forsiden) ==========
@@ -93,10 +62,8 @@ export type ArrangementRaad = {
   type: string
   tittel: string
   start_tidspunkt: string
-  // PÅKREVD med vilje, ikke valgfri (#766): en glemt select av kolonnen skal
-  // være en byggefeil, ikke en tur som stille faller til Tidligere ved
-  // start_tidspunkt — samme begrunnelse som bursdagsbilde på
-  // ProfilMedBursdag over.
+  // PÅKREVD med vilje (#766): en glemt select skal være byggefeil, ikke en tur
+  // som stille faller til Tidligere ved start_tidspunkt.
   slutt_tidspunkt: string | null
   oppmoetested: string | null
   bilde_url: string | null
@@ -117,23 +84,17 @@ export type ProfilMedBursdag = {
   fodselsdato: string | null
   bilde_url?: string | null
   rolle?: string | null
-  // Bursdagsbilde-embedet (#641) — allerede filtrert til dagens feiringsdato
-  // og status='ferdig' i selve spørringen (lib/queries/agenda.ts), så alt
-  // som kommer med her ER et bilde som skal vises. PostgREST returnerer et
-  // embed som array selv når relasjonen er 1:1-lik i praksis (én rad per
-  // profil per dag), derfor arrayet i stedet for et enkeltobjekt.
+  // Bursdagsbilde-embedet (#641), allerede filtrert til dagens feiringsdato og
+  // status='ferdig' i lib/queries/agenda.ts. Array fordi PostgREST returnerer
+  // embeds slik.
   //
-  // PÅKREVD med vilje, ikke valgfri: PostgREST-typene gjør en feilstavet
-  // embed-alias til en EKSTRA `SelectQueryError`-nøkkel på raden, ikke til
-  // en manglende. Var feltet valgfritt, ville en typo i aliaset passert
-  // kompilering og først vist seg som et borte bursdagsbilde i prod. Å kreve
-  // nøkkelen er det eneste som gjør typoen til en byggefeil.
+  // PÅKREVD med vilje: en feilstavet embed-alias blir en EKSTRA
+  // SelectQueryError-nøkkel, ikke en manglende — var feltet valgfritt, ville
+  // typoen passert kompilering og bare vist seg som et borte bilde i prod.
   bursdagsbilde: { bilde_url: string | null }[] | null
 }
 
-// Rådata fra poll-tabellen + aggregater hentet av forsiden. Forsiden gjør
-// én query mot poll med join til poll_valg (for count) og poll_stemme
-// (for unike stemmere og min-stemt-sjekk). Dette er én spørring — ingen N+1.
+// Poll + aggregater, hentet i én spørring med join (ingen N+1).
 export type PollRaad = {
   id: string
   spoersmaal: string
@@ -142,27 +103,20 @@ export type PollRaad = {
   opprettet_av: string
   antallStemmer: number
   harStemt: boolean
-  // Alternativer + egne stemmer følger med så kortet kan rendre inline-
-  // stemming når valg.length er lavt nok. Tomme felter er ok for eldre
-  // callsites (f.eks. tester som ikke bruker poll).
+  // For inline-stemming og -resultat på kortet.
   valg: { id: string; tekst: string }[]
   mineStemmer: string[]
-  // Antall stemmer per valg-id — brukes til å vise resultat inline etter
-  // at man har stemt.
   stemmerPerValg: Record<string, number>
 }
 
-// Rådata for meldinger (#90). Inneholder forfatter-info + aggregerte
-// reaksjoner og kommentar-antall slik at MeldingKort ikke trenger ekstra
-// queries. sist_aktivitet vedlikeholdes av DB-trigger ved INSERT på
-// melding_chat eller melding_reaksjon.
+// Meldinger (#90) med forfatter og aggregater, så MeldingKort slipper ekstra
+// queries. sist_aktivitet vedlikeholdes av DB-trigger.
 export type MeldingRaad = {
   id: string
   innhold: string | null
   opprettet: string
   sist_aktivitet: string
-  // Flat liste over bilde-URL-er, sortert stigende på rekkefoelge fra DB.
-  // Erstatter bilde_url + tilleggsbilder etter migrasjonen i #174.
+  // Sortert stigende på rekkefoelge (#174).
   bilder: string[]
   fraFacebook: boolean
   forfatter: {
@@ -173,24 +127,18 @@ export type MeldingRaad = {
   }
   reaksjoner: { emoji: string; profilIder: string[] }[]
   antallKommentarer: number
-  // Albumkort: hvis satt, er innlegget en lenke til et album og albumets
-  // omslagsbilde erstatter ev. egne bilder. Se #214, forenklet i #463.
+  // Satt = innlegget lenker til et album, og omslaget erstatter egne bilder (#214, #463).
   albumKort: AlbumKort | null
-  // Satt av forfatter/admin for å flytte innlegget til Tidligere umiddelbart.
-  // Null = ikke arkivert. Mig. 099.
+  // Satt av forfatter/admin for å flytte innlegget til Tidligere umiddelbart (mig. 099).
   arkivert_tidspunkt: string | null
-  // Valgfritt festedato-felt; null = ikke festet. >= dagens dato = festet øverst,
-  // uavhengig av MELDING_LEVENDE_DAGER. Mig. 109 / #419.
+  // Festedato; >= i dag = festet øverst uavhengig av levetid (mig. 109, #419).
   aktuell_dato: string | null
 }
 
 // === Resultat-typer ===============================================
 
-// Et item på agendaen. Hver variant har egen UI-data + felles sortIso.
-// Tag-feltet `kind` lar forsiden velge riktig kort-komponent uten å gjette.
-// Merk: arr-items i «I kveld» rendres som HighlightKort; i «Kommende» som
-// ArrangementKort. Vi tagger dem forskjellig så forsiden ikke må duplisere
-// beslutningen.
+// `kind` lar forsiden velge kort-komponent. Arrangementer i dag tagges som
+// 'highlight', ellers 'arrangement', så forsiden ikke dupliserer beslutningen.
 export type AgendaItem =
   | { kind: 'highlight'; sortIso: string; data: HighlightKortData }
   | { kind: 'arrangement'; sortIso: string; data: ArrangementKortData }
@@ -200,36 +148,23 @@ export type AgendaItem =
   | { kind: 'poll'; sortIso: string; data: PollKortData }
   | { kind: 'melding'; sortIso: string; data: MeldingKortData }
 
-// Tidligere-seksjonen viser avsluttede arrangementer, avsluttede polls
-// (sistnevnte i 30 dager etter svarfrist) og meldinger som ikke lenger
-// er levende. Tagget union slik at render-koden kan velge kort-komponent.
 export type TidligereItem =
   | { kind: 'arrangement'; sortIso: string; data: ArrangementKortData }
   | { kind: 'poll'; sortIso: string; data: PollKortData }
   | { kind: 'melding'; sortIso: string; data: MeldingKortData }
 
 export type Agenda = {
-  // Ubesvarte fremtidige arrangementer — øverst, over «I kveld» (#271).
-  // Et arrangement er ubesvart når innlogget bruker ikke har status i paameldinger.
-  // Disse ekskluderes fra idag/kommende for å unngå duplikat.
   ubesvarte: AgendaItem[]
-  // Levende meldinger — øverst på agenda, sortert etter sist_aktivitet
   meldinger: AgendaItem[]
-  // Bursdager i dag — løftet ut av «idag» og rendret som eget stort kort
-  // helt øverst på agendaen, over «Ikke svart ennå» (#640).
   bursdagerIDag: AgendaItem[]
   idag: AgendaItem[]
   kommende: AgendaItem[]
   tidligere: TidligereItem[]
 }
 
-// Polls med svarfrist passert vises alltid i «tidligere» på forsiden
-// (innenfor det generelle AGENDA_VINDU_MND-vinduet fra spørringen i page.tsx).
-
 // === Helpers (eksportert for test og gjenbruk) ====================
 
-// Mapper et ArrangementRaad til HighlightKortData — brukes for «I kveld»-
-// seksjonen som viser stor hero-stil med forhåndsvisning av ja-deltakere.
+// Hero-kortet for i dag, med forhåndsvisning av opptil tre ja-deltakere.
 export function tilHighlight(arr: ArrangementRaad, meg: string): HighlightKortData {
   const jaListe = arr.paameldinger.filter(p => p.status === 'ja')
   const min = arr.paameldinger.find(p => p.profil_id === meg)
@@ -253,9 +188,7 @@ export function tilHighlight(arr: ArrangementRaad, meg: string): HighlightKortDa
   }
 }
 
-// Mapper et MeldingRaad til MeldingKortData. Identitetsmapping —
-// `tidligere`-feltet (boolean) styrer visuell dempning og skjuler
-// reaksjoner og kommentarfelt på kortet.
+// `tidligere` demper kortet og skjuler reaksjoner og kommentarfelt.
 export function tilMeldingKort(m: MeldingRaad, tidligere: boolean): MeldingKortData {
   return {
     id: m.id,
@@ -272,27 +205,19 @@ export function tilMeldingKort(m: MeldingRaad, tidligere: boolean): MeldingKortD
   }
 }
 
-// Avgjør om en melding fortsatt skal vises som «levende» øverst på agenda.
-// Levende = mindre enn MELDING_LEVENDE_DAGER siden siste kommentar (eller
-// opprettelse, hvis ingen kommentarer). Reaksjoner teller ikke. Eksportert
-// for test.
 export function erMeldingLevende(m: MeldingRaad, naa: Date): boolean {
   const dag = 24 * 60 * 60 * 1000
   const aktivitetAlder = naa.getTime() - new Date(m.sist_aktivitet).getTime()
   return aktivitetAlder <= MELDING_LEVENDE_DAGER * dag
 }
 
-// Returnerer true når innlegget er «festet» øverst på agenda: aktuell_dato er
-// satt, er >= dagens dato, og innlegget er ikke arkivert. Sammenligning som
-// streng er korrekt for ISO-datoformat (YYYY-MM-DD sorterer leksikografisk).
-// Mig. 109 / #419.
+// Festet = aktuell_dato >= i dag og ikke arkivert (#419). Strengsammenligning
+// holder fordi YYYY-MM-DD sorterer leksikografisk.
 export function erFestet(m: MeldingRaad, naa: Date): boolean {
   if (!m.aktuell_dato || m.arkivert_tidspunkt) return false
   return m.aktuell_dato >= osloDagNokkel(naa)
 }
 
-// Mapper et PollRaad til PollKortData. `avsluttet` styrer visningen —
-// aktive polls viser "Du har stemt"/frist, avsluttede viser bare antall.
 export function tilPollKort(p: PollRaad, avsluttet: boolean): PollKortData {
   return {
     id: p.id,
@@ -308,22 +233,15 @@ export function tilPollKort(p: PollRaad, avsluttet: boolean): PollKortData {
   }
 }
 
-// Tur med sluttid som ikke er passert (#766). Uten sluttid: ingen pågår-status.
-// tur_felt_kun_for_tur (mig. 002) gjør slutt_tidspunkt null for møter.
+// Tur med sluttid som ikke er passert (#766). Møter har alltid null sluttid
+// (constraint tur_felt_kun_for_tur, mig. 002).
 export function erPaagaaende(arr: ArrangementRaad, naaIso: string): boolean {
   return arr.slutt_tidspunkt !== null && arr.slutt_tidspunkt >= naaIso
 }
 
-// Mapper et ArrangementRaad til ArrangementKortData — kompakt kort brukt i
-// «Kommende» og «Tidligere». Ingen deltaker-forhåndsvisning, bare antall ja.
-// Bygger avreise-blokka for et tur-kort (#669), eller null når kortet ikke
-// skal ha den. Egen funksjon fordi vilkårene er tre og hvert av dem har en
-// grunn: kun turer (et møte har ingen reise), kun framover (etter avreise
-// er «5 dager igjen» en løgn, og /tidligere skal ikke ha blokka), og kun
-// innenfor vinduet.
-//
-// `naa` sendes inn i stedet for å leses fra klokka — samme grep som
-// beregnBursdager(), slik at testene kan stå på en fast dato.
+// Avreise-blokka på tur-kortet (#669), eller null. Kun turer (møter har ingen
+// reise), kun framover («5 dager igjen» etter avreise er feil, og /tidligere
+// skal ikke ha den), og kun innenfor vinduet. `naa` sendes inn for testbarhet.
 function byggAvreise(
   arr: ArrangementRaad,
   jaListe: PaameldingRaad[],
@@ -331,17 +249,14 @@ function byggAvreise(
 ): AvreiseData | null {
   if (arr.type !== 'tur') return null
 
-  // Begge sider er lokale Date-er på midnatt for sin norske kalenderdag:
-  // norskDag() bygger en slik, og `naa` kommer fra norskDatoNaa() som gjør
-  // nøyaktig det samme. Å kjøre `naa` gjennom norskDag() igjen ville vært en
-  // dobbeltkonvertering — samme antagelse som erPaaOsloDag() bygger på.
+  // Begge sider er allerede lokale Oslo-kalenderdag-Dates (`naa` fra
+  // norskDatoNaa()). Ikke send `naa` gjennom norskDag() — det er dobbelt.
   const dagerIgjen = differenceInCalendarDays(norskDag(arr.start_tidspunkt), naa)
   if (dagerIgjen < 0 || dagerIgjen > AVREISE_VINDU_DAGER) return null
 
   return {
     dagerIgjen,
-    // Navnløse rader droppes: Avatar ville vist «?» og fortalt ingenting om
-    // hvem som blir med, som er hele poenget med blokka.
+    // Navnløse rader droppes: «?»-avatarer sier ingenting om hvem som blir med.
     deltakere: jaListe
       .map(p => ({
         navn: p.profiles?.visningsnavn ?? '',
@@ -352,9 +267,8 @@ function byggAvreise(
   }
 }
 
-// `naa` er valgfri: uten den bygges ingen avreise-blokk. /tidligere kaller
-// uten, og slipper dermed både beregningen og deltaker-objektene i
-// RSC-payloaden for 30 kort som uansett ligger i fortida.
+// Kompakt kort for kommende og tidligere. Uten `naa` bygges ingen avreise-blokk
+// — /tidligere kaller uten og sparer RSC-payload for kort i fortida.
 export function tilKort(arr: ArrangementRaad, meg: string, naa?: Date): ArrangementKortData {
   const jaListe = arr.paameldinger.filter(p => p.status === 'ja')
   const min = arr.paameldinger.find(p => p.profil_id === meg)
@@ -373,10 +287,8 @@ export function tilKort(arr: ArrangementRaad, meg: string, naa?: Date): Arrangem
   }
 }
 
-// Beregner kommende bursdager i et vindu fra `naa` til `naa + dagerFremover`.
-// Går gjennom inneværende og neste kalenderår — dekker nyttårsovergang der
-// en bursdag i januar skal dukke opp når vi står i desember.
-// Profiler uten fødselsdato eller visningsnavn droppes.
+// Bursdager fra `naa` til `naa + dagerFremover`. Sjekker også neste år, så en
+// januar-bursdag dukker opp i desember. Profiler uten dato eller navn droppes.
 export function beregnBursdager(
   profiler: ProfilMedBursdag[],
   naa: Date,
@@ -398,13 +310,9 @@ export function beregnBursdager(
           alder: aar - fodselsaar,
           bildeUrl: p.bilde_url ?? null,
           rolle: p.rolle ?? null,
-          // Koblingen skjer på profilId FRA EMBEDET, aldri på en
-          // datosammenligning mot `dato` over — se avviks-notatet i
-          // #641-planen: `dato` her bygges av literale MM-DD, mens
-          // spørringen filtrerer embedet på faktisk feiringsdato
-          // (iDagOslo(), med skuddårsregelen fra lib/bursdag.ts). For en
-          // 29.-februar-mann i et ikke-skuddår ville de to divergert.
-          // profilId er upåvirket av det.
+          // Koblet via embedet på profilen, aldri via `dato` over: `dato` er
+          // literal MM-DD, mens embedet er filtrert på faktisk feiringsdato
+          // (skuddårsregelen i lib/bursdag.ts). For 29. februar divergerer de (#641).
           generertBildeUrl: p.bursdagsbilde?.[0]?.bilde_url ?? null,
         })
       }
@@ -413,9 +321,7 @@ export function beregnBursdager(
   return items
 }
 
-// Beregner neste klubbjubileum (stiftelsesdag) innenfor et vindu fra `naa`.
-// Returnerer null hvis stiftelsesdagen faller utenfor vinduet. Sjekker både
-// inneværende og neste kalenderår så nyttårsovergang håndteres riktig.
+// Neste stiftelsesdag innenfor vinduet, eller null. Sjekker også neste år.
 export function beregnKlubbJubileum(
   naa: Date,
   dagerFremover: number,
@@ -435,9 +341,8 @@ export function beregnKlubbJubileum(
   return null
 }
 
-// Grupperer arrangoransvar-rader (uten arrangement_id) til utkast per
-// `arrangement_navn`. Alle ansvarlige for arrangementet vises på utkastet
-// i samme rekkefølge som de ligger i databasen.
+// Grupperer arrangoransvar-rader uten arrangement til ett utkast per
+// arrangement_navn, med alle ansvarlige i DB-rekkefølge.
 function bygUtkast(
   ansvar: UtkastRaad[],
   aar: number,
@@ -474,9 +379,8 @@ function bygUtkast(
 
 // === Hovedfunksjon ================================================
 
-// Bygger den komplette agendaen fra rådata. All kategorisering og sortering
-// skjer her; forsiden rendrer kun resultatet. `naa` passes inn slik at
-// «i dag»-bestemmelsen kan styres eksplisitt (og testes).
+// `naa` er en Oslo-kalenderdag som lokal Date (norskDatoNaa()), sendt inn så
+// «i dag» kan styres i tester.
 export function byggAgenda(input: {
   arrangementer: ArrangementRaad[]
   ansvar: UtkastRaad[]
@@ -496,15 +400,9 @@ export function byggAgenda(input: {
   const bursdagsvinduDager = input.bursdagsvinduDager ?? 365
   const nowIso = new Date().toISOString()
 
-  // === Type 4: Meldinger ============================================
-  // Splittes i levende (øverst) og tidligere. Levende sorteres på
-  // sist_aktivitet desc — nye kommentarer dytter den opp (reaksjoner teller
-  // ikke, se mig. 060).
-  //
-  // En melding er levende KUN hvis den IKKE er arkivert OG (er festet ELLER
-  // er innenfor tidsvinduet). Festede innlegg (#419) holder seg øverst selv om
-  // MELDING_LEVENDE_DAGER er passert. Arkiverte meldinger havner i Tidligere
-  // uansett alder. (#312)
+  // === Meldinger ====================================================
+  // Levende = ikke arkivert OG (festet ELLER innenfor levetiden). Arkiverte
+  // går til Tidligere uansett alder (#312, #419).
   const levendeRaad = meldingerRaad.filter(
     m => !m.arkivert_tidspunkt && (erFestet(m, naa) || erMeldingLevende(m, naa)),
   )
@@ -512,8 +410,7 @@ export function byggAgenda(input: {
     m => !!m.arkivert_tidspunkt || (!erFestet(m, naa) && !erMeldingLevende(m, naa)),
   )
 
-  // Festede innlegg (aktuell_dato >= i dag) sorteres øverst: stigende på aktuell_dato
-  // (utløper soonest = øverst), sekundært sist_aktivitet desc ved lik dato.
+  // Festede øverst, den som utløper først først; likt → nyeste aktivitet.
   const festede = levendeRaad
     .filter(m => erFestet(m, naa))
     .sort((a, b) => {
@@ -522,12 +419,10 @@ export function byggAgenda(input: {
       return b.sist_aktivitet.localeCompare(a.sist_aktivitet)
     })
 
-  // Øvrige levende innlegg sorteres på sist_aktivitet desc (som i dag)
   const oevrige = levendeRaad
     .filter(m => !erFestet(m, naa))
     .sort((a, b) => b.sist_aktivitet.localeCompare(a.sist_aktivitet))
 
-  // Festede øverst, deretter øvrige. sortIso = sist_aktivitet (uendret).
   const meldinger: AgendaItem[] = [...festede, ...oevrige].map(m => ({
     kind: 'melding' as const,
     sortIso: m.sist_aktivitet,
@@ -536,23 +431,16 @@ export function byggAgenda(input: {
 
   const tidligereMelding: TidligereItem[] = ikkeLevendeRaad.map(m => ({
     kind: 'melding' as const,
-    // Arkiverte meldinger sorteres på arkiveringstidspunkt — de legger seg
-    // øverst i Tidligere rett etter at brukeren trykker Arkiver. Ikke-
-    // arkiverte bruker sist_aktivitet som før.
-    //
-    // Samme uttrykk som den genererte kolonnen sorterings_tidspunkt (mig. 120).
-    // Forsiden leser bevisst IKKE kolonnen: den har ingen keyset-paginering —
-    // hele agenda-vinduet hentes med .gte('sist_aktivitet', …) og sorteres i
-    // JS — så lese- og visningsnøkkel kan ikke divergere slik de gjorde på
-    // /tidligere (#491). Endres regelen må BEGGE steder oppdateres.
+    // Arkiverte sorteres på arkiveringstidspunktet, så de legger seg øverst
+    // rett etter Arkiver. Samme uttrykk som den genererte kolonnen
+    // sorterings_tidspunkt (mig. 120) — endres regelen, må BEGGE oppdateres.
+    // Forsiden leser ikke kolonnen fordi den ikke keyset-paginerer (#491).
     sortIso: m.arkivert_tidspunkt ?? m.sist_aktivitet,
     data: tilMeldingKort(m, true),
   }))
 
-  // Regel 3: Tidligere = ekte arrangementer som både ligger før nå i UTC
-  // *og* ikke faller på samme norske dag som naa. Den andre betingelsen
-  // hindrer at et arrangement klokka 17:00 norsk tid havner under «Tidligere»
-  // senere samme kveld.
+  // Tidligere = startet før nå OG ikke på samme Oslo-dag (ellers forsvinner
+  // kveldens arrangement fra «i dag» samme kveld) OG ikke pågående.
   const tidligereArr: TidligereItem[] = arrangementer
     .filter(
       a =>
@@ -567,9 +455,7 @@ export function byggAgenda(input: {
       data: tilKort(a, meg),
     }))
 
-  // Avsluttede polls (svarfrist passert) vises i tidligere-seksjonen.
-  // Nedre grense styres nå av AGENDA_VINDU_MND-filteret i page.tsx —
-  // ingen lokal 30-dagers grense her lenger (se issue #176).
+  // Nedre grense styres av AGENDA_VINDU_MND i spørringen (#176).
   const tidligerePoll: TidligereItem[] = poller
     .filter(p => p.svarfrist < nowIso)
     .map(p => ({
@@ -584,30 +470,19 @@ export function byggAgenda(input: {
     ...tidligereMelding,
   ].sort((a, b) => b.sortIso.localeCompare(a.sortIso))
 
-  // Bursdager innen standardvinduet (default 365 dager fremover).
   const bursdager = beregnBursdager(profilerMedBursdag, naa, bursdagsvinduDager)
 
-  // Utkast fra arrangoransvar. Disse har eget id-format `utkast-{aar}-{tittel}`
-  // slik at React-keyene ikke kolliderer med arrangement-ids.
+  // Id-formatet `utkast-{aar}-{tittel}` hindrer React-key-kollisjon med arrangement-ids.
   const utkast = bygUtkast(ansvar, aar)
 
-  // Samlet kandidat-liste for «I kveld» + «Kommende». Arrangementer tas kun
-  // med hvis de enten er i fremtiden eller samme norske dag (dekker kveld
-  // som begynner før midnatt UTC men går over i neste UTC-dag).
-  //
-  // Ubesvarte fremtidige arrangementer (#271): arrangement der innlogget bruker
-  // (meg) ikke har noen rad i paameldinger. Disse plasseres i en egen seksjon
-  // øverst og ekskluderes fra idag/kommende for å unngå duplikat.
-  // «I kveld»-arrangementer som er ubesvart, vises likevel i ubesvart-seksjonen
-  // (ikke som highlight) — brukeren skal svare, ikke «glede seg» til kvelden.
+  // Ubesvart = ingen rad i paameldinger for meg (#271). Sjekker rad-eksistens,
+  // ikke status: status er NOT NULL, så !min.status ville bare maskert
+  // ugyldige rader. Også dagens ubesvarte havner her, ikke som highlight —
+  // brukeren skal svare, ikke glede seg.
   const ubesvarte: AgendaItem[] = arrangementer
     .filter(a => {
-      // Kun arrangementer som ennå ikke har startet — etter start_tidspunkt
-      // er det for sent å si Ja, så da forsvinner det fra «Ikke svart».
+      // Etter start er det for sent å si ja.
       if (a.start_tidspunkt < nowIso) return false
-      // Ubesvart = ingen rad i paameldinger for meg. DB-kolonnen status er
-      // NOT NULL, så !min.status ville maskert evt. ugyldige rader heller enn
-      // å rapportere dem — vi sjekker kun rad-eksistens her.
       const min = a.paameldinger.find(p => p.profil_id === meg)
       return !min
     })
@@ -618,12 +493,11 @@ export function byggAgenda(input: {
       data: tilKort(a, meg, naa),
     }))
 
-  // Sett med id-er som allerede er i ubesvart — ekskluderes fra idag/kommende
   const ubesvarteIds = new Set(ubesvarte.map(i => i.data.id))
 
   const arrItems: AgendaItem[] = arrangementer
     .filter(a => {
-      if (ubesvarteIds.has(a.id)) return false // allerede i ubesvart
+      if (ubesvarteIds.has(a.id)) return false
       return (
         a.start_tidspunkt >= nowIso ||
         erPaaOsloDag(a.start_tidspunkt, naa) ||
@@ -632,30 +506,22 @@ export function byggAgenda(input: {
     })
     .map(a => {
       const erIdag = erPaaOsloDag(a.start_tidspunkt, naa)
-      // I kveld → highlight-variant, ellers kompakt kort
       return erIdag
         ? { kind: 'highlight', sortIso: a.start_tidspunkt, data: tilHighlight(a, meg) }
         : { kind: 'arrangement', sortIso: a.start_tidspunkt, data: tilKort(a, meg, naa) }
     })
 
-  // Bursdager: sortIso = midt på dagen UTC. Dette plasserer dem tryggt
-  // på riktig kalenderdag uansett hvordan localeCompare tolker sonene.
   const bursdagItems: AgendaItem[] = bursdager.map(b => ({
     kind: 'bursdag',
     sortIso: `${b.dato}T12:00:00.000Z`,
     data: b,
   }))
 
-  // Klubbjubileum: samme sortIso-mønster som bursdager. Maks én per agenda.
   const jubileum = beregnKlubbJubileum(naa, bursdagsvinduDager, input.stiftet)
   const jubileumItems: AgendaItem[] = jubileum
     ? [{ kind: 'klubbjubileum', sortIso: `${jubileum.dato}T12:00:00.000Z`, data: jubileum }]
     : []
 
-  // Utkast: purredato styrer plassering direkte. Passerte purredato havner
-  // naturlig øverst i «Kommende» pga stigende sortering — det er bevisst,
-  // slik at glemte utkast holder seg synlige. Mangler purredato → null →
-  // faller til enden via null-dytt-regelen.
   const utkastItems: AgendaItem[] = utkast.map(u => {
     const sortIso = u.purredato ? `${u.purredato}T12:00:00.000Z` : null
     return {
@@ -672,8 +538,6 @@ export function byggAgenda(input: {
     }
   })
 
-  // Aktive polls (svarfrist i fremtid eller samme norske dag) vises i
-  // «i kveld»/«kommende». sortIso = svarfrist.
   const pollItems: AgendaItem[] = poller
     .filter(p => p.svarfrist >= nowIso || erPaaOsloDag(p.svarfrist, naa))
     .map(p => ({
@@ -690,16 +554,12 @@ export function byggAgenda(input: {
     ...pollItems,
   ]
 
-  // Regel 1: I kveld = items med sortIso som ligger på samme norske dag.
   const idagAlle = alleItems.filter(i => i.sortIso && erPaaOsloDag(i.sortIso, naa))
 
-  // Regel 0: bursdager i dag løftes ut av «I dag» og rendres separat, helt
-  // øverst på agendaen (#640) — se seksjons-regel-kommentaren i filhodet.
   const bursdagerIDag = idagAlle.filter(i => i.kind === 'bursdag')
   const idag = idagAlle.filter(i => i.kind !== 'bursdag')
 
-  // Regel 2: Kommende = resten, sortert stigende. Items uten sortIso (utkast
-  // uten gyldig purredato) sorteres til enden via null-dytt-regelen.
+  // Items uten sortIso (utkast uten purredato) dyttes til slutten.
   const kommende = alleItems
     .filter(i => !(i.sortIso && erPaaOsloDag(i.sortIso, naa)))
     .sort((a, b) => {

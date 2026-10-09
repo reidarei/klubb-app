@@ -14,6 +14,10 @@ vi.mock('@/lib/supabase/admin', () => ({
 import { logg, DbFeil } from '@/lib/logg'
 import { LOGG_NOEKLER_MAKS_ANTALL, LOGG_NOEKKEL_MAKS_TEGN } from '@/lib/konstanter'
 import { IkkeInnloggetFeil } from '@/lib/auth'
+import type { LoggHendelse } from '@/lib/logg-hendelser'
+
+// Bevisst uregistrert navn, så testene ikke låner betydning fra et ekte event.
+const TEST_EVENT = 'test.event' as LoggHendelse
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -29,7 +33,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
     mockFrom.mockImplementation(lagFromMock({}, { feil_logg: { code: '08006', message: 'connection refused' } }))
 
     await expect(
-      logg.feil('test.event', new Error('noe gikk galt')),
+      logg.feil(TEST_EVENT, new Error('noe gikk galt')),
     ).resolves.toBeUndefined()
   })
 
@@ -39,7 +43,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
     })
 
     await expect(
-      logg.feil('test.event', new Error('noe gikk galt')),
+      logg.feil(TEST_EVENT, new Error('noe gikk galt')),
     ).resolves.toBeUndefined()
   })
 
@@ -59,7 +63,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
       return chain
     })
 
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"\nKey (epost)=(x@y.no) already exists'), {
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"\nKey (epost)=(x@y.no) already exists'), {
       ctx: { profil_id: 'user-1', arrangement_id: 'arr-1', count: 3 },
     })
 
@@ -90,7 +94,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
       return chain
     })
 
-    await logg.feil('test.event', pgFeil('23505', 'Key (epost)=(hemmelig@test.no) already exists'))
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'Key (epost)=(hemmelig@test.no) already exists'))
 
     const rad = insertSpion.mock.calls[0][0] as Record<string, unknown>
     expect(JSON.stringify(rad)).not.toContain('hemmelig@test.no')
@@ -115,7 +119,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
       return chain
     })
 
-    await logg.feil('test.event', new Error('noe gikk galt'))
+    await logg.feil(TEST_EVENT, new Error('noe gikk galt'))
 
     expect(signaler).toHaveLength(1)
     expect(signaler[0]).toBeInstanceOf(AbortSignal)
@@ -127,7 +131,7 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
   it('persisterer ikke warn-nivå til feil_logg', async () => {
     // RLS-avvisning (violates row-level security policy) klassifiseres warn
     // og skal returnere før persisterFeilLogg() i det hele tatt kalles.
-    await logg.feil('test.event', pgFeil('42501', 'new row violates row-level security policy for table "chat"'))
+    await logg.feil(TEST_EVENT, pgFeil('42501', 'new row violates row-level security policy for table "chat"'))
 
     expect(mockFrom).not.toHaveBeenCalled()
   })
@@ -141,7 +145,7 @@ describe('logg.feil() – PGRST301 er død sesjon, ikke tilgangsfeil (#498-revie
   it('«JWT expired» med PGRST301 → warn, ingen feil_logg-rad, ingen alarm', async () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', pgFeil('PGRST301', 'JWT expired'))
+    await logg.feil(TEST_EVENT, pgFeil('PGRST301', 'JWT expired'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer).toHaveLength(1)
@@ -153,7 +157,7 @@ describe('logg.feil() – PGRST301 er død sesjon, ikke tilgangsfeil (#498-revie
   it('PGRST301 er warn uansett meldingstekst — koden alene holder', async () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', pgFeil('PGRST301', 'noe helt annet'))
+    await logg.feil(TEST_EVENT, pgFeil('PGRST301', 'noe helt annet'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer.every(l => l.nivaa === 'warn')).toBe(true)
@@ -164,7 +168,7 @@ describe('logg.feil() – PGRST301 er død sesjon, ikke tilgangsfeil (#498-revie
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     for (const melding of ['JWT expired', 'JWT invalid', 'JWSError JWSInvalidSignature']) {
-      await logg.feil('test.event', new Error(melding))
+      await logg.feil(TEST_EVENT, new Error(melding))
     }
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
@@ -176,7 +180,7 @@ describe('logg.feil() – PGRST301 er død sesjon, ikke tilgangsfeil (#498-revie
   it('42501 påvirkes ikke — tripwiren for GRANT-klippen 30.10.2026 står', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', pgFeil('42501', 'permission denied for table "profiles"'))
+    await logg.feil(TEST_EVENT, pgFeil('42501', 'permission denied for table "profiles"'))
 
     expect(mockFrom).toHaveBeenCalledWith('feil_logg')
   })
@@ -227,7 +231,7 @@ describe('logg.feil() – feilklassens navn persisteres (tom kontekst-fella)', (
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', new TypeError('x is not a function'))
+    await logg.feil(TEST_EVENT, new TypeError('x is not a function'))
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect((rad.kontekst as Record<string, unknown>).navn).toBe('TypeError')
@@ -239,7 +243,7 @@ describe('logg.feil() – feilklassens navn persisteres (tom kontekst-fella)', (
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', new Error('Key (epost)=(hemmelig@test.no) already exists'))
+    await logg.feil(TEST_EVENT, new Error('Key (epost)=(hemmelig@test.no) already exists'))
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(JSON.stringify(rad)).not.toContain('hemmelig@test.no')
@@ -292,7 +296,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
     fangInsert()
 
-    await logg.feil('test.event', { message: 'Gateway Time-out', status: 504 })
+    await logg.feil(TEST_EVENT, { message: 'Gateway Time-out', status: 504 })
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     const feilLinje = linjer.find(l => l.nivaa === 'error')
@@ -304,7 +308,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
     fangInsert()
 
-    await logg.feil('test.event', new TypeError('fetch failed'))
+    await logg.feil(TEST_EVENT, new TypeError('fetch failed'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     const feilLinje = linjer.find(l => l.nivaa === 'error')
@@ -315,7 +319,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', {})
+    await logg.feil(TEST_EVENT, {})
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(rad.kontekst).not.toEqual({})
@@ -331,7 +335,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', verdi)
+    await logg.feil(TEST_EVENT, verdi)
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(rad.kontekst).not.toEqual({})
@@ -354,7 +358,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', {
+    await logg.feil(TEST_EVENT, {
       'ola@example.com': 1,
       'https://example.com/side?token=hemmelig': 2,
       melding: 'fetch failed',
@@ -373,7 +377,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const spion = fangInsert()
 
-    await logg.feil('test.event', {
+    await logg.feil(TEST_EVENT, {
       'ola@example.com': 1,
       'fornavn etternavn': 2,
     })
@@ -394,7 +398,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     const mange: Record<string, unknown> = {}
     for (let i = 0; i < 40; i++) mange[`felt_${String(i).padStart(2, '0')}`] = i
 
-    await logg.feil('test.event', mange)
+    await logg.feil(TEST_EVENT, mange)
 
     const deler = (kontekstFra(spion).noekler as string).split(',')
     expect(deler).toHaveLength(LOGG_NOEKLER_MAKS_ANTALL + 1)
@@ -408,7 +412,7 @@ describe('logg.feil() – kontekst er aldri {} (#711)', () => {
     // Identifikator-formet, men 5000 tegn: en feilstruktur skal ikke kunne
     // blåse opp feil_logg-raden via et nøkkelNAVN.
     const langt = 'a'.repeat(5000)
-    await logg.feil('test.event', { [langt]: 1, kort: 2 })
+    await logg.feil(TEST_EVENT, { [langt]: 1, kort: 2 })
 
     const noekler = kontekstFra(spion).noekler as string
     expect(noekler).toBe('kort,+1_ukjent_form')
@@ -424,7 +428,7 @@ describe('logg.feil() – 42501-klassifisering (#497)', () => {
   it('«permission denied for table» → alltid error, aldri overstyrbar', async () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', pgFeil('42501', 'permission denied for table "profiles"'))
+    await logg.feil(TEST_EVENT, pgFeil('42501', 'permission denied for table "profiles"'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer.some(l => l.nivaa === 'error')).toBe(true)
@@ -438,7 +442,7 @@ describe('logg.feil() – 42501-klassifisering (#497)', () => {
 
     // Bruker 42501 her (ikke PGRST301) — PGRST301 er nå warn på koden alene,
     // så den ville ikke lenger testet RLS-grenen. (#498-review)
-    await logg.feil('test.event', pgFeil('42501', 'new row violates row-level security policy for table "meldinger"'))
+    await logg.feil(TEST_EVENT, pgFeil('42501', 'new row violates row-level security policy for table "meldinger"'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer).toHaveLength(1)
@@ -449,7 +453,7 @@ describe('logg.feil() – 42501-klassifisering (#497)', () => {
   it('annet 42501-innhold → error (defaulten snudd, se #497)', async () => {
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', pgFeil('42501', 'noe uventet med samme SQLSTATE'))
+    await logg.feil(TEST_EVENT, pgFeil('42501', 'noe uventet med samme SQLSTATE'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer.some(l => l.nivaa === 'error')).toBe(true)
@@ -480,7 +484,7 @@ describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
 
   it('en vanlig Error taper koden — dette er tilstanden vi rettet bort fra', async () => {
     const spion = fangInsert()
-    await logg.feil('test.event', new Error('marker_chat_sett feilet: noe gikk galt'))
+    await logg.feil(TEST_EVENT, new Error('marker_chat_sett feilet: noe gikk galt'))
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(rad.kontekst).toEqual({ code: undefined, tabell: undefined, navn: 'Error' })
@@ -489,7 +493,7 @@ describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
   it('DbFeil bærer koden helt fram til raden', async () => {
     const spion = fangInsert()
     await logg.feil(
-      'test.event',
+      TEST_EVENT,
       new DbFeil('marker_chat_sett feilet: permission denied', '42501'),
     )
 
@@ -500,7 +504,7 @@ describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
 
   it('persisterer fortsatt ikke meldingen, som kan bære radverdier', async () => {
     const spion = fangInsert()
-    await logg.feil('test.event', new DbFeil('Key (epost)=(hemmelig@test.no) finnes', '23505'))
+    await logg.feil(TEST_EVENT, new DbFeil('Key (epost)=(hemmelig@test.no) finnes', '23505'))
 
     expect(JSON.stringify(spion.mock.calls[0][0])).not.toContain('hemmelig@test.no')
   })
@@ -510,7 +514,7 @@ describe('DbFeil – bevarer PostgREST-koden gjennom innpakking', () => {
     // koden er nå synlig, og PGRST301 må fortsatt ende som warn uten rad.
     const consoleSpion = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await logg.feil('test.event', new DbFeil('JWT expired', 'PGRST301'))
+    await logg.feil(TEST_EVENT, new DbFeil('JWT expired', 'PGRST301'))
 
     const linjer = consoleSpion.mock.calls.map(c => JSON.parse(c[0] as string))
     expect(linjer.every(l => l.nivaa === 'warn')).toBe(true)
@@ -544,7 +548,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   it('status 0 (transport) bevares — ingen truthy-sjekk', async () => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
       ctx: { status: 0 },
     })
 
@@ -553,13 +557,13 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
 
   it('500 og 504 tas med fra ctx.status', async () => {
     const spion500 = fangInsert()
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
       ctx: { status: 500 },
     })
     expect(kontekstFra(spion500).status).toBe(500)
 
     const spion504 = fangInsert()
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
       ctx: { status: 504 },
     })
     expect(kontekstFra(spion504).status).toBe(504)
@@ -568,7 +572,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   it('DbFeil bærer status helt fram til raden når rad.kontekst.status er satt', async () => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', new DbFeil('marker_chat_sett feilet: nettverksfeil', undefined, 502))
+    await logg.feil(TEST_EVENT, new DbFeil('marker_chat_sett feilet: nettverksfeil', undefined, 502))
 
     expect(kontekstFra(spion).status).toBe(502)
   })
@@ -583,7 +587,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   ])('ugyldig status (%s) droppes — feltet er fraværende, ikke null', async (_label, ugyldigStatus) => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'), {
       ctx: { status: ugyldigStatus },
     })
 
@@ -600,7 +604,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   it('fravær av status gir ingen status-nøkkel', async () => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'))
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'duplicate key value violates unique constraint "profiles_epost_key"'))
 
     const kontekst = kontekstFra(spion)
     expect(kontekst.status).toBeUndefined()
@@ -610,7 +614,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   it('ctx.status vinner over feilobjektets egen status', async () => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', new DbFeil('feilet', undefined, 502), { ctx: { status: 404 } })
+    await logg.feil(TEST_EVENT, new DbFeil('feilet', undefined, 502), { ctx: { status: 404 } })
 
     expect(kontekstFra(spion).status).toBe(404)
   })
@@ -618,7 +622,7 @@ describe('logg.feil() – status fra DB-svaret (#711, runde 2)', () => {
   it('radformen er fortsatt uendret: event, kontekst, nivaa, profil_id', async () => {
     const spion = fangInsert()
 
-    await logg.feil('test.event', new DbFeil('feilet', 'PGRST100', 500))
+    await logg.feil(TEST_EVENT, new DbFeil('feilet', 'PGRST100', 500))
 
     const rad = spion.mock.calls[0][0] as Record<string, unknown>
     expect(Object.keys(rad).sort()).toEqual(['event', 'kontekst', 'nivaa', 'profil_id'])

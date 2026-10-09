@@ -5,63 +5,30 @@ import { type Page, test } from '@playwright/test'
  * FØR testen går videre til en UI-assertion (#800). Beviser ikke at
  * mutasjonen lyktes — se nederst.
  *
- * Hvorfor en UI-assertion alene ikke holder: Next sin server-action-reducer
- * kaller `resolve(actionResult)` på transition-en FØR det nye RSC-treet er
- * committet til DOM-en. Et panel som lukker seg eller en rad som forsvinner
- * beviser derfor bare at React har begynt å behandle svaret — ikke at selve
- * handlingen (databasemutasjonen) faktisk gikk gjennom.
+ * En UI-assertion alene holder ikke: Next resolver action-transition-en FØR
+ * det nye RSC-treet er committet, så et panel som lukker seg beviser ikke at
+ * mutasjonen gikk gjennom.
  *
- * Bruk: pakk INN selve klikket som trigger server actionen. UI-assertionen
- * som faktisk beviser at skjermen oppdaterte seg, kommer ETTER kallet:
+ * Bruk: pakk inn klikket; UI-assertionen kommer etter:
  *
  *   await ventPaaServerAction(page, () => knapp.click())
  *   await expect(rad).toHaveCount(0, { timeout: 15_000 })
  *
- * Ingen eksplisitt timeout settes på ventingen på responsen — testens egen
- * timeout er grensen, ikke et nytt magisk tall her.
+ * Ingen egen timeout — testens timeout er grensen.
  *
- * AVVIK FRA DEN OPPRINNELIGE PLANEN (#800, dokumentert her fordi det er en
- * reell implementasjonsoppdagelse, ikke en stilvalg): planen ba om å awaite
- * `respons.finished()` — ventet til HELE RSC-strømmen er mottatt, ikke bare
- * at responsen har startet. I praksis hang `.finished()` konsekvent i denne
- * stacken (bekreftet med `--repeat-each=3`: 17 av 82 kjøringer tømte
- * Playwrights test-timeout på nøyaktig denne linjen, uavhengig av om
- * actionen redirectet eller ikke). Et forsøk med `respons.body()` i stedet
- * ga samme symptom, men med en annen feil: «Protocol error
- * (Network.getResponseBody): No data found for resource with given
- * identifier» — CDP hadde allerede sluppet responsdataen før vi spurte etter
- * den. Service workeren (public/sw.js) er UTELUKKET som årsak: den
- * returnerer tidlig på `request.method !== 'GET'` og rører aldri POST-et som
- * bærer server actionen.
+ * Venter bevisst IKKE på `respons.finished()`/`respons.body()`: begge hang
+ * eller feilet i CDP (17 av 82 kjøringer). Service workeren er utelukket (den
+ * rører ikke POST). Årsaken er uavklart: (a) en CDP-detalj ved chunket RSC-
+ * strøm, eller (b) at strømmen faktisk ikke lukkes — samme feilklasse som
+ * #800. Én CI-trace (PR #802) peker mot (b). Ikke anta (a).
  *
- * ÅRSAKEN ER UAVKLART. To forklaringer passer symptomet, og vi har ikke
- * skilt dem: (a) en CDP/Chromium-detalj ved observasjon av en chunket
- * RSC-strøm — ufarlig for appen; eller (b) at RSC-strømmen faktisk ikke
- * lukkes, som da kan være SAMME feilklasse som den manglende UI-committen
- * #800 handler om. Ikke bygg videre på (a) som om den var bevist.
- *
- * Én CI-trace (PR #802, kart-markering «symbolet velges…») peker mot (b):
- * action-POST-en fikk 200 + `x-action-revalidated` på 88 ms, skjemaet lukket
- * seg (actionresultatet `{ ok: true }` nådde klienten), men responskroppen
- * ble aldri ferdig — Chromium meldte den `net::ERR_ABORTED` før test-
- * teardown — og den revaliderte siden ble aldri committet: markeringen fantes
- * verken på kartet eller i lista etter 15 s. Ett tilfelle, ikke bevis.
- *
- * Hva statuskoden beviser — og hva den IKKE beviser: Next sin action-handler
- * kjører og avventer actionen (inkludert en eventuell `redirect()`) FØR den
- * skriver responsens status/headere — se `res.statusCode = ...` i
- * node_modules/next/dist/server/app-render/action-handler.js. Status via
- * `waitForResponse()` betyr derfor at action-kallet er AVGJORT server-side:
- * det kastet ikke (→ 500) og redirectet eventuelt (→ 303). Det betyr IKKE at
- * domenemutasjonen lyktes — en action kan returnere `{ ok: false }` med 200
- * (f.eks. kart-actions). Det beviser heller ikke at React har committet det
- * nye treet. En UI- eller DB-assertion etterpå må fortsatt bevise utfallet,
- * med romslig timeout.
+ * Statuskoden skrives først etter at actionen (inkl. `redirect()`) er avventet
+ * (action-handler.js i next), så den beviser at kallet er AVGJORT og ikke
+ * kastet. Den beviser IKKE at mutasjonen lyktes (`{ ok: false }` kommer med
+ * 200) eller at React har committet — det må en assertion etterpå bevise.
  */
 export async function ventPaaServerAction(page: Page, utloeser: () => Promise<void>): Promise<void> {
-  // Må registreres FØR utløseren kjører — ellers kan responsen komme og gå
-  // før lytteren er på plass, og ventingen hadde håndtert "for sent" ved å
-  // henge til testens egen timeout i stedet for å si noe fornuftig.
+  // Registreres FØR utløseren, ellers kan responsen passere før lytteren finnes.
   const responsPromise = page.waitForResponse(
     r => r.request().method() === 'POST' && r.request().headers()['next-action'] !== undefined,
     { timeout: 0 },
@@ -72,11 +39,7 @@ export async function ventPaaServerAction(page: Page, utloeser: () => Promise<vo
 
   const respons = await responsPromise
 
-  // 200 = normal retur. 303 (See Other) = actionen kalte selv redirect() —
-  // se RedirectStatusCode.SeeOther i
-  // node_modules/next/dist/server/app-render/action-handler.js. Begge betyr
-  // «kallet kastet ikke» — IKKE at mutasjonen lyktes (`{ ok: false }` kommer
-  // også med 200). Alt annet (f.eks. 500 fra en kastet feil) er et reelt avvik.
+  // 200 = normal retur, 303 = actionen kalte redirect(). Alt annet (f.eks. 500) er et reelt avvik.
   const status = respons.status()
   if (status !== 200 && status !== 303) {
     throw new Error(

@@ -5,25 +5,15 @@ import { adminKlient } from './helpers/admin-klient'
 /**
  * Posisjonskartet (#693) — at prikkene faktisk TEGNES, ikke bare at siden laster.
  *
- * Bakgrunn: første versjon hadde et tomt kart med en full liste under, ved
- * fersh sidelast. Leaflet lastes asynkront, og markør-effekten kjørte før
- * `lagRef` var satt; siden punktene ikke endret seg etterpå, kjørte den aldri
- * igjen. Bugen passerte lint, typecheck, build OG e2e — fordi vakten i
- * `sider-laster.spec.ts` kun sjekker at ruta svarer og at overskriften står der.
+ * En «siden laster»-vakt kan ikke se at et asynkront tegnet Leaflet-lag er tomt.
+ * Derfor asserter denne på selve markøren og på at kart og liste er ENIGE — det
+ * er uenigheten som er feilklassen; et tomt kart fordi ingen deler er riktig.
  *
- * Lærdommen generaliserer utover kartet: en «siden laster»-vakt kan per
- * definisjon ikke se at et asynkront tegnet lag er tomt. Derfor asserter denne
- * på SELVE MARKØREN, og — viktigere — på at kart og liste er ENIGE. Det er den
- * uenigheten som er feilklassen; et kart som er tomt fordi ingen deler er helt
- * riktig oppførsel og skal ikke feile her.
- *
- * Specen seeder sin egen posisjonsrad og rydder etter seg. Den kan ikke ligge i
- * seed.sql: `deler_til` er et tidsvindu, og en fast rad ville falt ut av det
- * timer etter forrige `db reset` — samme forfallsmodus som #616 og #669.
+ * Seeder sin egen posisjonsrad: `deler_til` er et tidsvindu, og en fast rad i
+ * seed.sql ville falt ut av det timer etter `db reset` (jf. #616, #669).
  */
 
-// Oslo sentrum. Vilkårlig, men innenfor et utsnitt som gir mening om noen
-// åpner skjermbildet fra en feilet kjøring.
+// Oslo sentrum — vilkårlig, men gir mening i et skjermbilde fra en feilet kjøring.
 const LAT = 59.9139
 const LNG = 10.7522
 
@@ -36,9 +26,8 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
     const admin = adminKlient('kart-markorer')
     if (!admin) return
 
-    // Den innloggede testbrukeren selv: da dekker testen også «DEG»-merket og
-    // aksentringen på egen markør, som er den ene grenen i markoerHtml() som
-    // skiller seg ut.
+    // Den innloggede testbrukeren selv, så «DEG»-merket og aksentringen
+    // (egen gren i markoerHtml()) også dekkes.
     const { data: profil, error: profilFeil } = await admin
       .from('profiles')
       .select('id')
@@ -61,9 +50,8 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
 
     if (delingFeil) throw new Error(`Kunne ikke seede deling: ${delingFeil.message}`)
 
-    // Ett punkt, ikke flere: sporet krever et PÅGÅENDE arrangement for å tegnes,
-    // og denne specen skal teste markøren uten å være avhengig av at det finnes
-    // et slikt arrangement i seed. Sportegning har sin egen spec.
+    // Ett punkt: sporet krever et pågående arrangement, og denne specen skal ikke
+    // avhenge av det. Sportegning har egen spec.
     const { error: punktFeil } = await admin.from('posisjon_punkt').insert({
       profil_id: profil.id,
       lat: LAT,
@@ -84,27 +72,21 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
   })
 
   test('markøren tegnes på kartet ved fersh sidelast', async ({ page }) => {
-    // Fersh last er hele poenget: i økta der du nettopp trykket «Del» endrer
-    // punktene seg, og effekten kjører på nytt uansett. Bugen viste seg kun her.
+    // Fersk last er poenget: markør-effekten kjørte før Leaflet-laget fantes og
+    // ble aldri kjørt igjen når punktene var uendret. Bugen viste seg kun her.
     await page.goto('/kart')
 
-    // Sidetittelen ble fjernet da kartet ble fullskjerm (#704) — kartflaten er
-    // nå det som beviser at siden rendret.
+    // Kartet er fullskjerm uten sidetittel (#704) — kartflaten beviser rendring.
     await expect(page.getByTestId('kart-flate')).toBeVisible()
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
-    // Leaflet laster asynkront — vent på markøren i stedet for å anta at den er
-    // der med en gang.
     const markoer = page.locator('.kart-markoer')
     await expect(markoer).toHaveCount(1, { timeout: 15_000 })
     await expect(markoer.first()).toBeVisible()
 
-    // Egen markør skal ha aksentringen. Uten dette kunne markoerHtml() slutte å
-    // skille meg fra de andre uten at noen test merket det.
     await expect(page.locator('.kart-markoer-meg')).toHaveCount(1)
 
-    // Flisene skal faktisk ha lastet. En markør på et grått felt er ikke et
-    // kart, og tile-laget feiler stille (Leaflet logger ikke).
+    // Tile-laget feiler stille (Leaflet logger ikke) — en markør på grått er ikke et kart.
     await expect(page.locator('.leaflet-tile-pane img').first()).toBeVisible({ timeout: 15_000 })
   })
 
@@ -112,14 +94,12 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
     await page.goto('/kart')
     await expect(page.getByTestId('posisjonskart')).toBeVisible()
 
-    // Lista bor i sidepanelet etter #704, og det er minimert som default.
+    // Lista bor i sidepanelet, som er minimert som default (#704).
     await page.getByTestId('panel-handtak').click()
     const iListen = page.getByTestId('kart-rad').filter({ hasText: 'DEG' })
     await expect(iListen).toHaveCount(1)
 
-    // DEN sentrale assertionen: like mange prikker som rader. Bugen ga 0 mot 1,
-    // og nettopp den uenigheten er feilklassen — ikke at kartet er tomt (som er
-    // riktig når ingen deler).
+    // Den sentrale assertionen: like mange prikker som rader.
     await expect(page.locator('.kart-markoer')).toHaveCount(1, { timeout: 15_000 })
   })
 })
