@@ -59,13 +59,21 @@ Repoet er en template: hver vennegjeng setter opp sin egen instans (én klubb pe
 
 Fra en kjørende instans, med en fiktiv gjeng. Flere bilder og en omvisning på [resolini.no/klubb-app](https://resolini.no/klubb-app/).
 
-| Agenda | Arrangement | Hvem kommer | Påmeldte og prat | Klubbchat |
-|---|---|---|---|---|
-| <img src="docs/skjermbilder/agenda-kommende.jpg" alt="Agenda" width="160"> | <img src="docs/skjermbilder/arrangement.jpg" alt="Arrangement" width="160"> | <img src="docs/skjermbilder/paameldte.jpg" alt="Hvem kommer" width="160"> | <img src="docs/skjermbilder/arrangement-detaljer.jpg" alt="Påmeldte og prat" width="160"> | <img src="docs/skjermbilder/chat.jpg" alt="Klubbchat" width="160"> |
+<p>
+  <img src="docs/skjermbilder/agenda-kommende.jpg" alt="Agenda" title="Agenda" width="160">
+  <img src="docs/skjermbilder/arrangement.jpg" alt="Arrangement" title="Arrangement" width="160">
+  <img src="docs/skjermbilder/paameldte.jpg" alt="Hvem kommer" title="Hvem kommer" width="160">
+  <img src="docs/skjermbilder/arrangement-detaljer.jpg" alt="Påmeldte og prat" title="Påmeldte og prat" width="160">
+  <img src="docs/skjermbilder/chat.jpg" alt="Klubbchat" title="Klubbchat" width="160">
+</p>
 
-| Reisemodus | Medlemmer | Bilder | Stedene | Kåringer |
-|---|---|---|---|---|
-| <img src="docs/skjermbilder/reisemodus.jpg" alt="Reisemodus" width="160"> | <img src="docs/skjermbilder/medlemmer.jpg" alt="Medlemmer" width="160"> | <img src="docs/skjermbilder/album-lightbox.jpg" alt="Bilder" width="160"> | <img src="docs/skjermbilder/stedene.jpg" alt="Stedene" width="160"> | <img src="docs/skjermbilder/kaaringer.jpg" alt="Kåringer" width="160"> |
+<p>
+  <img src="docs/skjermbilder/reisemodus.jpg" alt="Reisemodus" title="Reisemodus" width="160">
+  <img src="docs/skjermbilder/medlemmer.jpg" alt="Medlemmer" title="Medlemmer" width="160">
+  <img src="docs/skjermbilder/album-lightbox.jpg" alt="Bilder" title="Bilder" width="160">
+  <img src="docs/skjermbilder/stedene.jpg" alt="Stedene" title="Stedene" width="160">
+  <img src="docs/skjermbilder/kaaringer.jpg" alt="Kåringer" title="Kåringer" width="160">
+</p>
 
 ---
 
