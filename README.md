@@ -57,15 +57,15 @@ Repoet er en template: hver vennegjeng setter opp sin egen instans (én klubb pe
 
 ## Skjermbilder
 
-Fra en kjørende instans. Navn er fiktive og bilder blurret av personvernhensyn.
+Fra en kjørende instans, med en fiktiv gjeng. Flere bilder og en omvisning på [resolini.no/klubb-app](https://resolini.no/klubb-app/).
 
-| Agenda | Arrangement | Medlemmer |
-|---|---|---|
-| ![Agenda](docs/skjermbilder/agenda.png) | ![Arrangement](docs/skjermbilder/arrangement.png) | ![Medlemmer](docs/skjermbilder/medlemmer.png) |
+| Agenda | Arrangement | Hvem kommer | Påmeldte og prat | Klubbchat |
+|---|---|---|---|---|
+| ![Agenda](docs/skjermbilder/agenda-kommende.jpg) | ![Arrangement](docs/skjermbilder/arrangement.jpg) | ![Hvem kommer](docs/skjermbilder/paameldte.jpg) | ![Påmeldte og prat](docs/skjermbilder/arrangement-detaljer.jpg) | ![Klubbchat](docs/skjermbilder/chat.jpg) |
 
-| Klubbinfo | Kåringer | Profil |
-|---|---|---|
-| ![Klubbinfo](docs/skjermbilder/klubbinfo.png) | ![Kåringer](docs/skjermbilder/kaaringer.png) | ![Profil](docs/skjermbilder/profil.png) |
+| Reisemodus | Medlemmer | Bilder | Stedene | Kåringer |
+|---|---|---|---|---|
+| ![Reisemodus](docs/skjermbilder/reisemodus.jpg) | ![Medlemmer](docs/skjermbilder/medlemmer.jpg) | ![Bilder](docs/skjermbilder/album-lightbox.jpg) | ![Stedene](docs/skjermbilder/stedene.jpg) | ![Kåringer](docs/skjermbilder/kaaringer.jpg) |
 
 ---
 
