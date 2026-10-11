@@ -61,11 +61,11 @@ Fra en kjørende instans, med en fiktiv gjeng. Flere bilder og en omvisning på 
 
 | Agenda | Arrangement | Hvem kommer | Påmeldte og prat | Klubbchat |
 |---|---|---|---|---|
-| ![Agenda](docs/skjermbilder/agenda-kommende.jpg) | ![Arrangement](docs/skjermbilder/arrangement.jpg) | ![Hvem kommer](docs/skjermbilder/paameldte.jpg) | ![Påmeldte og prat](docs/skjermbilder/arrangement-detaljer.jpg) | ![Klubbchat](docs/skjermbilder/chat.jpg) |
+| <img src="docs/skjermbilder/agenda-kommende.jpg" alt="Agenda" width="160"> | <img src="docs/skjermbilder/arrangement.jpg" alt="Arrangement" width="160"> | <img src="docs/skjermbilder/paameldte.jpg" alt="Hvem kommer" width="160"> | <img src="docs/skjermbilder/arrangement-detaljer.jpg" alt="Påmeldte og prat" width="160"> | <img src="docs/skjermbilder/chat.jpg" alt="Klubbchat" width="160"> |
 
 | Reisemodus | Medlemmer | Bilder | Stedene | Kåringer |
 |---|---|---|---|---|
-| ![Reisemodus](docs/skjermbilder/reisemodus.jpg) | ![Medlemmer](docs/skjermbilder/medlemmer.jpg) | ![Bilder](docs/skjermbilder/album-lightbox.jpg) | ![Stedene](docs/skjermbilder/stedene.jpg) | ![Kåringer](docs/skjermbilder/kaaringer.jpg) |
+| <img src="docs/skjermbilder/reisemodus.jpg" alt="Reisemodus" width="160"> | <img src="docs/skjermbilder/medlemmer.jpg" alt="Medlemmer" width="160"> | <img src="docs/skjermbilder/album-lightbox.jpg" alt="Bilder" width="160"> | <img src="docs/skjermbilder/stedene.jpg" alt="Stedene" width="160"> | <img src="docs/skjermbilder/kaaringer.jpg" alt="Kåringer" width="160"> |
 
 ---
 
