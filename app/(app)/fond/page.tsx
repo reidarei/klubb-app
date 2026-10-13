@@ -97,7 +97,7 @@ export default async function FondSide() {
           observert: kontant.renter_observert_dato,
         }
       : null
-  // Dagen kontoen sist ble gjennomgått — står i rente-notisen. Faller tilbake
+  // Dagen kontoen sist ble gjennomgått — står i rentelinja under «På konto». Faller tilbake
   // til avlesningsdagen for renta når et eldre oppgjør mangler feltet.
   const kontrollert = kontant?.kontrollert_dato ?? null
 
@@ -248,31 +248,6 @@ export default async function FondSide() {
 
       </div>
 
-      {/* Rente-notis: påløpt, ikke bokført — derfor en notis og ikke et tall i
-          totalen eller fordelt per innskyter. Vises ikke uten avlesning. */}
-      {renter && (
-        <div
-          style={{
-            marginTop: -8,
-            marginBottom: 22,
-            padding: '12px 16px',
-            borderRadius: 16,
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-            Renter hittil i år: {kr(renter.brutto)}
-          </p>
-          <p style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: 'var(--text-secondary)' }}>
-            Påløpt, legges til kontoen 31.12. Etter {renter.skattPst} % skatt fordeles ca. {kr(renter.netto)}.{' '}
-            {kontrollert
-              ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
-              : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
-          </p>
-        </div>
-      )}
-
       {/* Eiendommer */}
       <FondBoks tittel="Eiendommer" antall={eiendomListe.length}>
           {eiendomListe.length === 0 ? (
@@ -422,13 +397,11 @@ export default async function FondSide() {
       <FondBoks tittel="Kontanter">
           <div
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
               padding: '14px 16px',
               borderBottom: innskuddListe.length > 0 ? '0.5px solid var(--border-subtle)' : 'none',
             }}
           >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
               På konto
             </span>
@@ -443,6 +416,28 @@ export default async function FondSide() {
             >
               {kr(kontantSaldo)}
             </span>
+          </div>
+
+          {/* Påløpte renter i mindre skrift under saldoen — påløpt, ikke
+              bokført, så de står utenfor beløpet over og fordeles ikke per
+              innskyter. Vises ikke uten avlesning. */}
+          {renter && (
+            <p
+              style={{
+                marginTop: 4,
+                fontFamily: 'var(--font-body)',
+                fontSize: 12,
+                lineHeight: 1.4,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              Renter hittil i år: <span style={{ fontVariantNumeric: 'tabular-nums' }}>{kr(renter.brutto)}</span>.
+              Påløpt, legges til kontoen 31.12. Etter {renter.skattPst} % skatt fordeles ca. {kr(renter.netto)}.{' '}
+              {kontrollert
+                ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
+                : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
+            </p>
+          )}
           </div>
 
           {/* Innskyter-blokk — kun synlig når innskudd finnes */}
