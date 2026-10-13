@@ -54,7 +54,7 @@ export default async function FondSide() {
       .order('dato', { ascending: false }),
     supabase
       .from('fond_kontant')
-      .select('saldo, oppdatert, renter_brutto, renter_netto_anslag, renter_skattesats, renter_observert_dato, kontrollert_dato')
+      .select('saldo, oppdatert, renter_brutto')
       .eq('id', 1)
       .maybeSingle(),
     // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: 15–20 personer
@@ -83,23 +83,10 @@ export default async function FondSide() {
   const innskuddListe = innskudd ?? []
   const kontantSaldo = kontant?.saldo ?? 0
   // Påløpte renter står utenfor saldoen og andelene til de bokføres 31.12.
-  // null = ingen avlesning — da vises ingenting, ikke «0 kr». Check-en i
-  // migrasjon 158 garanterer alle fire eller ingen, så én sjekk holder.
+  // null = ingen avlesning — da vises ingenting, ikke «0 kr». Netto, sats og
+  // datoene lagres (mig. 158), men siden viser bare brutto, som mobilbanken.
   // Number(): PostgREST kan gi numeric som string.
-  const renter =
-    kontant && kontant.renter_brutto !== null && kontant.renter_netto_anslag !== null &&
-    kontant.renter_skattesats !== null && kontant.renter_observert_dato !== null
-      ? {
-          brutto: Number(kontant.renter_brutto),
-          netto: Number(kontant.renter_netto_anslag),
-          // Satsen kommer fra kontrakten — aldri hardkodet 22 % (har vært 47,4 %).
-          skattPst: (Number(kontant.renter_skattesats) * 100).toLocaleString('nb', { maximumFractionDigits: 1 }),
-          observert: kontant.renter_observert_dato,
-        }
-      : null
-  // Dagen kontoen sist ble gjennomgått — står i rentelinja under «På konto». Faller tilbake
-  // til avlesningsdagen for renta når et eldre oppgjør mangler feltet.
-  const kontrollert = kontant?.kontrollert_dato ?? null
+  const renterBrutto = kontant?.renter_brutto != null ? Number(kontant.renter_brutto) : null
 
   // Bevegelser gruppert per profil, i datorekkefølge (spørringen sorterer).
   // Number() fordi PostgREST kan serialisere numeric som string.
@@ -418,10 +405,10 @@ export default async function FondSide() {
             </span>
           </div>
 
-          {/* Påløpte renter i mindre skrift under saldoen — påløpt, ikke
+          {/* Påløpte renter under saldoen — påløpt, ikke
               bokført, så de står utenfor beløpet over og fordeles ikke per
               innskyter. Vises ikke uten avlesning. */}
-          {renter && (
+          {renterBrutto !== null && (
             <>
               {/* Grønn pille + etikett, slik mobilbanken viser «Renter hittil i år» */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -437,26 +424,12 @@ export default async function FondSide() {
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  +{kr(renter.brutto)}
+                  +{kr(renterBrutto)}
                 </span>
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-tertiary)' }}>
                   (Renter hittil i år)
                 </span>
               </div>
-              <p
-                style={{
-                  marginTop: 6,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 11,
-                  lineHeight: 1.4,
-                  color: 'var(--text-tertiary)',
-                }}
-              >
-                Legges til 31.12. Ca. {kr(renter.netto)} fordeles etter {renter.skattPst} % skatt.{' '}
-                {kontrollert
-                  ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
-                  : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
-              </p>
             </>
           )}
           </div>
