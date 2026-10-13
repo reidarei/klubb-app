@@ -422,21 +422,42 @@ export default async function FondSide() {
               bokført, så de står utenfor beløpet over og fordeles ikke per
               innskyter. Vises ikke uten avlesning. */}
           {renter && (
-            <p
-              style={{
-                marginTop: 4,
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                lineHeight: 1.4,
-                color: 'var(--text-secondary)',
-              }}
-            >
-              Renter hittil i år: <span style={{ fontVariantNumeric: 'tabular-nums' }}>{kr(renter.brutto)}</span>.
-              Påløpt, legges til kontoen 31.12. Etter {renter.skattPst} % skatt fordeles ca. {kr(renter.netto)}.{' '}
-              {kontrollert
-                ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
-                : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
-            </p>
+            <>
+              {/* Grønn pille + etikett, slik mobilbanken viser «Renter hittil i år» */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <span
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 8,
+                    background: 'var(--success-soft)',
+                    color: 'var(--success)',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  +{kr(renter.brutto)}
+                </span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-tertiary)' }}>
+                  (Renter hittil i år)
+                </span>
+              </div>
+              <p
+                style={{
+                  marginTop: 6,
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 11,
+                  lineHeight: 1.4,
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                Legges til 31.12. Ca. {kr(renter.netto)} fordeles etter {renter.skattPst} % skatt.{' '}
+                {kontrollert
+                  ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
+                  : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
+              </p>
+            </>
           )}
           </div>
 
