@@ -94,7 +94,8 @@ export default function HentOppgjor() {
       {diff && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Oppgjør per {diff.snapshot_dato}, generert {formaterDato(diff.generert, 'd. MMM yyyy HH:mm')}
+            Oppgjør per {diff.snapshot_dato}
+            {diff.kontrollert_dato && `, kontrollert ${diff.kontrollert_dato}`}, generert {formaterDato(diff.generert, 'd. MMM yyyy HH:mm')}
           </div>
 
           {/* Navn som mangler kobling — blokkerer skriving til de er avklart.
@@ -160,6 +161,14 @@ export default function HentOppgjor() {
               </tbody>
             </table>
           </Card>
+
+          {/* Påløpte renter — utenfor saldo og andeler, derfor ikke i tabellen */}
+          {diff.renter_hittil && (
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              Renter hittil i år: {kr(diff.renter_hittil.brutto)} (netto ca. {kr(diff.renter_hittil.netto_anslag)}),
+              avlest {diff.renter_hittil.observert_dato}. Ikke med i saldoen.
+            </div>
+          )}
 
           {/* Trinn 3: Skriv-knapp */}
           <Button

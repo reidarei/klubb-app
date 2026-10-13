@@ -673,17 +673,32 @@ export type Database = {
       fond_kontant: {
         Row: {
           id: number
+          kontrollert_dato: string | null
           oppdatert: string
+          renter_brutto: number | null
+          renter_netto_anslag: number | null
+          renter_observert_dato: string | null
+          renter_skattesats: number | null
           saldo: number
         }
         Insert: {
           id?: number
+          kontrollert_dato?: string | null
           oppdatert?: string
+          renter_brutto?: number | null
+          renter_netto_anslag?: number | null
+          renter_observert_dato?: string | null
+          renter_skattesats?: number | null
           saldo?: number
         }
         Update: {
           id?: number
+          kontrollert_dato?: string | null
           oppdatert?: string
+          renter_brutto?: number | null
+          renter_netto_anslag?: number | null
+          renter_observert_dato?: string | null
+          renter_skattesats?: number | null
           saldo?: number
         }
         Relationships: []

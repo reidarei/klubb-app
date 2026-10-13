@@ -29,9 +29,31 @@ export type Andel = {
 export type Oppgjor = {
   versjon: 1
   generert: string        // ISO 8601 tidsstempel, f.eks. "2026-07-14T18:05:00Z"
-  snapshot_dato: string   // YYYY-MM-DD — dato beløpene gjelder
+  snapshot_dato: string   // YYYY-MM-DD — siste BOKFØRTE bevegelse; står stille i rolige perioder
+  // YYYY-MM-DD — dagen kontoen sist ble gjennomgått. Skiller «ingenting har
+  // skjedd» fra «ingen har sett etter». Valgfri (eldre oppgjør), aldri før
+  // snapshot_dato, ingen øvre grense (publisering i Oslo-tid, tjener i UTC).
+  kontrollert_dato?: string
   saldo: number           // total kontantbeholdning
   andeler: Andel[]
+  renter_hittil?: RenterHittil
+}
+
+// Påløpte renter i snapshot-året, slik banken viser dem («Renter hittil i år»).
+// Lagt til ADDITIVT i versjon 1, samme resonnement som detaljfeltene over.
+//
+// Står HELT UTENFOR oppgjøret: ikke med i `saldo` og ikke i noen `andel.belop`
+// før banken bokfører renta 31.12. Ingen invariant kobler dem til resten — ikke
+// prøv å få tallene til å summere. Året etter dukker de opp igjen som
+// `renteandel_i_fjor` per innskyter.
+//
+// Feltet MANGLER før første avlesning i året og etter at renta er bokført.
+// Mangler ≠ 0: da vises ingenting, ikke «0 kr».
+export type RenterHittil = {
+  brutto: number          // bankens tall, påløpt
+  netto_anslag: number    // brutto − skatt; det som faktisk fordeles
+  skattesats: number      // 0 ≤ sats < 1 — fra kontrakten, aldri hardkodet (har vært 0,474)
+  observert_dato: string  // YYYY-MM-DD — avlesningsdagen, kan være eldre enn snapshot_dato
 }
 
 // Sant når andelen har hele detaljpakken. Brukes etter validering, der pakke-
@@ -107,6 +129,17 @@ export function validerOppgjor(u: unknown): Oppgjor {
   if (isNaN(d.getTime()) || tilbake !== o.snapshot_dato)
     throw new Error(`«snapshot_dato» er ikke en gyldig dato: ${o.snapshot_dato}`)
 
+  if (o.kontrollert_dato !== undefined) {
+    if (typeof o.kontrollert_dato !== 'string' || !DATO_REGEX.test(o.kontrollert_dato))
+      throw new Error('«kontrollert_dato» må være på formatet YYYY-MM-DD')
+    const k = new Date(o.kontrollert_dato + 'T00:00:00Z')
+    if (isNaN(k.getTime()) || k.toISOString().slice(0, 10) !== o.kontrollert_dato)
+      throw new Error(`«kontrollert_dato» er ikke en gyldig dato: ${o.kontrollert_dato}`)
+    // Strengsammenligning er trygg for YYYY-MM-DD.
+    if (o.kontrollert_dato < o.snapshot_dato)
+      throw new Error(`«kontrollert_dato» (${o.kontrollert_dato}) er før «snapshot_dato» (${o.snapshot_dato})`)
+  }
+
   validerTall(o.saldo, 'Saldo')
 
   if (!Array.isArray(o.andeler) || o.andeler.length === 0)
@@ -137,7 +170,51 @@ export function validerOppgjor(u: unknown): Oppgjor {
     validerDetaljer(andel, trimmet, snapshotAar)
   }
 
+  if (o.renter_hittil !== undefined)
+    validerRenterHittil(o.renter_hittil, snapshotAar, o.kontrollert_dato)
+
   return o as unknown as Oppgjor
+}
+
+/**
+ * Validerer renter_hittil. Muterer ikke.
+ *
+ * Fond-API-et avviser selv et brutto/netto-par som ikke stemmer med satsen,
+ * men vi sjekker likevel: appen viser begge tallene side om side, og et par som
+ * motsier satsen under seg leser som en regnefeil hos oss.
+ */
+function validerRenterHittil(u: unknown, snapshotAar: number, kontrollertDato: unknown): void {
+  if (typeof u !== 'object' || u === null || Array.isArray(u))
+    throw new Error('«renter_hittil» må være et objekt')
+  const r = u as Record<string, unknown>
+
+  const brutto = validerTall(r.brutto, 'Renter hittil (brutto)')
+  const netto = validerTall(r.netto_anslag, 'Renter hittil (netto anslag)')
+
+  if (typeof r.skattesats !== 'number' || !Number.isFinite(r.skattesats) || r.skattesats < 0 || r.skattesats >= 1)
+    throw new Error('«skattesats» i renter_hittil må være et tall fra og med 0 til (ikke med) 1')
+
+  // Én øre slingring: kilden kan runde skatten før den trekkes fra.
+  const forventetNetto = Math.round(brutto * (1 - r.skattesats) * 100)
+  if (Math.abs(iOere(netto) - forventetNetto) > 1)
+    throw new Error(
+      `Renter hittil stemmer ikke med skattesatsen: ${brutto.toFixed(2)} × (1 − ${r.skattesats}) ` +
+        `≠ ${netto.toFixed(2)}`,
+    )
+
+  if (typeof r.observert_dato !== 'string' || !DATO_REGEX.test(r.observert_dato))
+    throw new Error('«observert_dato» i renter_hittil må være på formatet YYYY-MM-DD')
+  // Samme «folder ugyldige datoer»-problem som snapshot_dato.
+  const d = new Date(r.observert_dato + 'T00:00:00Z')
+  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== r.observert_dato)
+    throw new Error(`«observert_dato» i renter_hittil er ikke en gyldig dato: ${r.observert_dato}`)
+  // Avlesningen kan være ELDRE enn snapshot_dato (skjermbildet viser ikke alltid
+  // rentelinja), men aldri fra et annet år — da er det fjorårets renter.
+  if (Number(r.observert_dato.slice(0, 4)) !== snapshotAar)
+    throw new Error(`Renter hittil er avlest ${r.observert_dato}, utenfor snapshot-året ${snapshotAar}`)
+  // kontrollert_dato er valgfri; er den med, er den allerede validert over.
+  if (typeof kontrollertDato === 'string' && r.observert_dato > kontrollertDato)
+    throw new Error(`Renter hittil er avlest ${r.observert_dato}, etter kontrollert_dato ${kontrollertDato}`)
 }
 
 /**

@@ -52,7 +52,11 @@ export default async function FondSide() {
       .from('fond_innskudd')
       .select('*, profiles(navn, visningsnavn, bilde_url, rolle)')
       .order('dato', { ascending: false }),
-    supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
+    supabase
+      .from('fond_kontant')
+      .select('saldo, oppdatert, renter_brutto, renter_netto_anslag, renter_skattesats, renter_observert_dato, kontrollert_dato')
+      .eq('id', 1)
+      .maybeSingle(),
     // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: 15–20 personer
     // × ~12 bevegelser er neglisjerbart i payload, og alternativet ville lagt en
     // nettverksrunde inn i en interaksjon som skal føles umiddelbar.
@@ -78,6 +82,24 @@ export default async function FondSide() {
   const vpListe = verdipapirer ?? []
   const innskuddListe = innskudd ?? []
   const kontantSaldo = kontant?.saldo ?? 0
+  // Påløpte renter står utenfor saldoen og andelene til de bokføres 31.12.
+  // null = ingen avlesning — da vises ingenting, ikke «0 kr». Check-en i
+  // migrasjon 158 garanterer alle fire eller ingen, så én sjekk holder.
+  // Number(): PostgREST kan gi numeric som string.
+  const renter =
+    kontant && kontant.renter_brutto !== null && kontant.renter_netto_anslag !== null &&
+    kontant.renter_skattesats !== null && kontant.renter_observert_dato !== null
+      ? {
+          brutto: Number(kontant.renter_brutto),
+          netto: Number(kontant.renter_netto_anslag),
+          // Satsen kommer fra kontrakten — aldri hardkodet 22 % (har vært 47,4 %).
+          skattPst: (Number(kontant.renter_skattesats) * 100).toLocaleString('nb', { maximumFractionDigits: 1 }),
+          observert: kontant.renter_observert_dato,
+        }
+      : null
+  // Dagen kontoen sist ble gjennomgått — står i rente-notisen. Faller tilbake
+  // til avlesningsdagen for renta når et eldre oppgjør mangler feltet.
+  const kontrollert = kontant?.kontrollert_dato ?? null
 
   // Bevegelser gruppert per profil, i datorekkefølge (spørringen sorterer).
   // Number() fordi PostgREST kan serialisere numeric som string.
@@ -225,6 +247,31 @@ export default async function FondSide() {
         </div>
 
       </div>
+
+      {/* Rente-notis: påløpt, ikke bokført — derfor en notis og ikke et tall i
+          totalen eller fordelt per innskyter. Vises ikke uten avlesning. */}
+      {renter && (
+        <div
+          style={{
+            marginTop: -8,
+            marginBottom: 22,
+            padding: '12px 16px',
+            borderRadius: 16,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+            Renter hittil i år: {kr(renter.brutto)}
+          </p>
+          <p style={{ marginTop: 2, fontSize: 12, lineHeight: 1.4, color: 'var(--text-secondary)' }}>
+            Påløpt, legges til kontoen 31.12. Etter {renter.skattPst} % skatt fordeles ca. {kr(renter.netto)}.{' '}
+            {kontrollert
+              ? `Kontrollert ${formaterDato(kontrollert, 'd. MMMM')}.`
+              : `Avlest ${formaterDato(renter.observert, 'd. MMMM')}.`}
+          </p>
+        </div>
+      )}
 
       {/* Eiendommer */}
       <FondBoks tittel="Eiendommer" antall={eiendomListe.length}>

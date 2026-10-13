@@ -11,8 +11,10 @@ import type { OppgjorDiff } from '@/lib/actions/fond'
 const DIFF: OppgjorDiff = {
   snapshot_dato: '2026-07-26',
   generert: '2026-07-30T08:00:00Z',
+  kontrollert_dato: '2026-07-28',
   uavklarteNavn: [],
   saldo: { app: 0, hentet: 12997.21 },
+  renter_hittil: { brutto: 618.31, netto_anslag: 482.28, skattesats: 0.22, observert_dato: '2026-07-20' },
   rader: [
     {
       profil_id: 'p1',
@@ -96,5 +98,22 @@ describe('byggOppgjorPayload', () => {
     }
     expect(() => validerOppgjor(uten)).not.toThrow()
     expect('bevegelser' in uten.andeler[0]).toBe(false)
+  })
+
+  it('bærer renter_hittil videre fra DTO-en til payloaden', () => {
+    const p = byggOppgjorPayload(DIFF)
+    expect(p.renter_hittil).toEqual(DIFF.renter_hittil)
+    expect(validerOppgjor(p).renter_hittil?.netto_anslag).toBe(482.28)
+  })
+
+  it('utelater renter_hittil når feltet manglet — null er ikke gyldig i kontrakten', () => {
+    const p = byggOppgjorPayload({ ...DIFF, renter_hittil: null })
+    expect('renter_hittil' in p).toBe(false)
+    expect(() => validerOppgjor(p)).not.toThrow()
+  })
+
+  it('bærer kontrollert_dato videre, og utelater den når den manglet', () => {
+    expect(validerOppgjor(byggOppgjorPayload(DIFF)).kontrollert_dato).toBe('2026-07-28')
+    expect('kontrollert_dato' in byggOppgjorPayload({ ...DIFF, kontrollert_dato: null })).toBe(false)
   })
 })

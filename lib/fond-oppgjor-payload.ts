@@ -8,7 +8,7 @@
 //
 // Som egen funksjon kan gjennomgangen pinnes i test (fond-oppgjor-dto.test.ts).
 // Legger du til et felt i oppgjørs-kontrakten, må det inn på TRE steder:
-// validerOppgjor, OppgjorDiff, og her.
+// validerOppgjor, OppgjorDiff, og her. (Siste eksempler: renter_hittil, kontrollert_dato.)
 //
 // Ren modul uten I/O og uten config-import — trygg å importere fra klient-kode,
 // i motsetning til lib/fond-oppgjor.ts som er server-only.
@@ -19,6 +19,7 @@ export type OppgjorPayload = {
   versjon: 1
   generert: string
   snapshot_dato: string
+  kontrollert_dato?: string
   saldo: number
   andeler: {
     visningsnavn: string
@@ -27,6 +28,12 @@ export type OppgjorPayload = {
     renteandel_i_fjor?: number
     bevegelser?: { dato: string; belop: number }[]
   }[]
+  renter_hittil?: {
+    brutto: number
+    netto_anslag: number
+    skattesats: number
+    observert_dato: string
+  }
 }
 
 export function byggOppgjorPayload(diff: OppgjorDiff): OppgjorPayload {
@@ -34,6 +41,7 @@ export function byggOppgjorPayload(diff: OppgjorDiff): OppgjorPayload {
     versjon: 1,
     generert: diff.generert,
     snapshot_dato: diff.snapshot_dato,
+    ...(diff.kontrollert_dato ? { kontrollert_dato: diff.kontrollert_dato } : {}),
     saldo: diff.saldo.hentet,
     andeler: diff.rader.map(r => ({
       visningsnavn: r.visningsnavn,
@@ -43,5 +51,7 @@ export function byggOppgjorPayload(diff: OppgjorDiff): OppgjorPayload {
       // passere uendret gjennom (pakke-regelen tillater «ingen av tre»).
       ...(r.detaljer ?? {}),
     })),
+    // Utelates når feltet manglet — null er ikke en gyldig verdi i kontrakten.
+    ...(diff.renter_hittil ? { renter_hittil: diff.renter_hittil } : {}),
   }
 }

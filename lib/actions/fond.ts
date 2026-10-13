@@ -4,6 +4,7 @@ import { ensureAdmin } from '@/lib/auth'
 import { naa } from '@/lib/dato'
 import { revalidatePath } from 'next/cache'
 import { logg } from '@/lib/logg'
+import type { RenterHittil } from '@/lib/fond-oppgjor'
 
 function revalider() {
   revalidatePath('/fond')
@@ -291,7 +292,11 @@ export async function slettInnskudd(id: string) {
 export type OppgjorDiff = {
   snapshot_dato: string
   generert: string
+  kontrollert_dato: string | null   // null = eldre oppgjør uten feltet
   saldo: { app: number; hentet: number }
+  // null = feltet manglet i kilden (før første avlesning, eller etter at renta
+  // er bokført). Ligger utenfor saldo og andeler — se RenterHittil.
+  renter_hittil: RenterHittil | null
   // Ukjente eller tvetydige navn. Blokkerer skriving til admin har koblet
   // dem (#571).
   uavklarteNavn: string[]
@@ -451,10 +456,12 @@ export async function hentPublisertOppgjor(): Promise<
       diff: {
         snapshot_dato: oppgjor.snapshot_dato,
         generert: oppgjor.generert,
+        kontrollert_dato: oppgjor.kontrollert_dato ?? null,
         saldo: {
           app: Number(kontant?.saldo ?? 0),
           hentet: oppgjor.saldo,
         },
+        renter_hittil: oppgjor.renter_hittil ?? null,
         uavklarteNavn,
         rader,
       },
@@ -615,9 +622,27 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       throw new Error(`Kunne ikke lese gjeldende saldo for historikk: ${gammelKontantFeil.message}`)
     }
 
+    // Renter hittil skrives sammen med saldoen. Mangler feltet, nulles
+    // kolonnene BEVISST: fraværet betyr «ingen avlesning ennå» eller «bokført
+    // og fordelt», og et gammelt tall ville da blitt stående som om det gjaldt.
+    const r = oppgjor.renter_hittil
     const { error: kontantFeil } = await supabase
       .from('fond_kontant')
-      .upsert({ id: 1, saldo: oppgjor.saldo, oppdatert: naa() }, { onConflict: 'id' })
+      .upsert(
+        {
+          id: 1,
+          saldo: oppgjor.saldo,
+          oppdatert: naa(),
+          renter_brutto: r?.brutto ?? null,
+          renter_netto_anslag: r?.netto_anslag ?? null,
+          renter_skattesats: r?.skattesats ?? null,
+          renter_observert_dato: r?.observert_dato ?? null,
+          // Samme logikk: et eldre oppgjør uten feltet skal ikke la en gammel
+          // kontrolldato stå igjen som om den var fersk.
+          kontrollert_dato: oppgjor.kontrollert_dato ?? null,
+        },
+        { onConflict: 'id' },
+      )
     if (kontantFeil)
       throw new Error(
         `Feil ved oppdatering av saldo: ${kontantFeil.message}. Operasjonen er idempotent — hent og skriv på nytt.`,
