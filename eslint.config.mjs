@@ -865,6 +865,8 @@ const config = [
       'playwright-report/**',
       'test-results/**',
       'lib/supabase/database.types.ts',
+      // Nøstet lokal klone av template-repoet (eget git-repo, gitignored)
+      'klubb-app/**',
     ],
   },
   ...compat.extends('next/core-web-vitals'),
