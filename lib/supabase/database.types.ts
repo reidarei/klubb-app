@@ -847,7 +847,6 @@ export type Database = {
       }
       fond_kontant: {
         Row: {
-          id: number
           klubb_id: string
           kontrollert_dato: string | null
           oppdatert: string
@@ -858,7 +857,6 @@ export type Database = {
           saldo: number
         }
         Insert: {
-          id?: number
           klubb_id?: string
           kontrollert_dato?: string | null
           oppdatert?: string
@@ -869,7 +867,6 @@ export type Database = {
           saldo?: number
         }
         Update: {
-          id?: number
           klubb_id?: string
           kontrollert_dato?: string | null
           oppdatert?: string
@@ -883,7 +880,7 @@ export type Database = {
           {
             foreignKeyName: "fond_kontant_klubb_id_fkey"
             columns: ["klubb_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
@@ -1347,7 +1344,6 @@ export type Database = {
       }
       klubb_info: {
         Row: {
-          id: boolean
           klubb_id: string
           om_tekst: string | null
           oppdatert: string
@@ -1355,7 +1351,6 @@ export type Database = {
           stiftet: string | null
         }
         Insert: {
-          id?: boolean
           klubb_id?: string
           om_tekst?: string | null
           oppdatert?: string
@@ -1363,7 +1358,6 @@ export type Database = {
           stiftet?: string | null
         }
         Update: {
-          id?: boolean
           klubb_id?: string
           om_tekst?: string | null
           oppdatert?: string
@@ -1374,7 +1368,7 @@ export type Database = {
           {
             foreignKeyName: "klubb_info_klubb_id_fkey"
             columns: ["klubb_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "klubb"
             referencedColumns: ["id"]
           },

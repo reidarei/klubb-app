@@ -170,7 +170,7 @@ export type BursdagsbildeUtfall =
 
 /**
  * Generer (eller regenerer) bursdagsbildet for én mann på én feiringsdato.
- * Nøkkelen (profil_id, feiringsdato) er allerede utledet av kalleren via
+ * Nøkkelen (klubb_id, profil_id, feiringsdato) er allerede utledet av kalleren via
  * nesteFeiringsdato() i lib/bursdagsbilde.ts — eneste stedet datodelen
  * utledes, felles for cron og admin-flaten.
  */

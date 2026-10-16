@@ -40,7 +40,7 @@ export async function lagreKartSymbol(
   // KJENTE_FLAGG i lib/app-innstillinger.ts). RLS (er_admin()) er vakten.
   const { error } = await supabase
     .from('kart_symbol_tilpasning')
-    .upsert({ symbol, etikett: rentNavn, emoji: renEmoji, oppdatert: naa() }, { onConflict: 'symbol' })
+    .upsert({ symbol, etikett: rentNavn, emoji: renEmoji, oppdatert: naa() }, { onConflict: 'klubb_id,symbol' })
   if (error) return { ok: false, feil: `Kunne ikke lagre: ${error.message}` }
 
   revalidatePath('/kart')

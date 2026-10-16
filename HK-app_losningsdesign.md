@@ -271,9 +271,27 @@ klubb_id uuid not null default public.standard_klubb_id()
 
 **Indekser:** 10 rot-indekser med `klubb_id` først (`arrangementer`, `meldinger`, `klubb_chat`, `album`, `poll`, `feil_logg`, `vitals_logg`, `kaaring_vinnere`, `arrangoransvar`, `kart_markering`). Barne-indekser kommer i 2.1b, 2.3 og 6.2.
 
-**Nøkler:** uendret. Primær- og unike nøkler, inkl. én-rad-tabellene `klubb_info` og `fond_kontant`, flyttes i 1.4.
+**Nøkler:** flyttet i 1.4, se § 2.11.
 
 **Array-insert:** postgrest-js sender `null` for manglende nøkler i en array-insert der minst én rad har `klubb_id`, som gir 23502. Alle rader må ha nøkkelen, eller kallet bruker `{ defaultToNull: false }` (pinnet i `e2e/rls/klubb-id.spec.ts`).
+
+### 2.11 Unike nøkler per klubb
+
+Multi-tenant steg 1.4. Migrasjon 162.
+
+**Regelen:** hver primærnøkkel og unike nøkkel på en klubbeid tabell har `klubb_id` som første kolonne. Tre godkjente former, vaktet av psql-steget «Verifiser unike nøkler per klubb» i `pr-check.yml`:
+
+- (a) `klubb_id` er første nøkkelkolonne (`INCLUDE`-kolonner telles ikke).
+- (b) Surrogatnøkkel: én kolonne som heter `id`.
+- (c) En enkeltkolonne i nøkkelen er FK til en klubbeid forelder (`paameldinger (arrangement_id, profil_id)`). Klubben følger forelderen; å legge til `klubb_id` ville gjort nøkkelen romsligere, ikke strengere. Krysskobling stoppes av sammensatte FK-er i 2.1b.
+
+Ingen unntaksliste: en nøkkel som ikke passer a–c er rød. `chat_reaksjoner` har en polymorf `melding_id` uten FK, så klubben kan ikke følge en forelder — derfor fikk begge nøklene `klubb_id` først som alle andre.
+
+**De 21 nøklene som ble endret** (samme navn beholdt): PK på `aktivitet_dag`, `aktivitet_uke`, `app_innstillinger`, `bursdagsbilde`, `fond_navn_alias`, `innspill_kobling`, `kart_symbol_tilpasning`; unik på `arrangoransvar`, `samtale`, `varsel_innstillinger`, `vedtekter` (`vedtekter_versjoner` refererer `vedtekter(id)`, ikke slug); PK og «én emoji per bruker» på `chat_reaksjoner`; unike indekser på `feil_logg` (to), `klubb_chat`, `melding_chat`, `meldinger` og `varsel_logg` (dedup); og PK `(klubb_id)` på én-rad-tabellene `klubb_info` og `fond_kontant`, som mistet `id`-kolonnen. `on conflict`-målet må ha nøyaktig samme kolonnesett som nøkkelen, så `tell_aktivitet()`, `krev_bursdagsbilde()` og alle `onConflict` i koden ble byttet samtidig.
+
+**Seeds** skrives per klubb fra nå (`insert … select k.id, … from public.klubb k on conflict (klubb_id, …) do nothing`). Klubb nr. 2 trenger egne standarddata når den kommer.
+
+**Dedup-doktrinen** i CLAUDE.md § Policy: Varsler gjelder uendret innenfor én klubb: indeksen er `(klubb_id, dedup_noekkel, profil_id)`, så navnerom-prefikset skal ikke bære klubben.
 
 ---
 

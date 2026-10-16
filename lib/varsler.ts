@@ -1143,7 +1143,7 @@ export async function sendChatVarsler(
   avsenderId: string,
   harBilde: boolean,
   // dedupNoekkel: kun automatiske kallere (bursdag, #642). Samme nøkkel på
-  // begge benene — indeksen (dedup_noekkel, profil_id) gir maks én rad per
+  // begge benene — indeksen (klubb_id, dedup_noekkel, profil_id) gir maks én rad per
   // mottaker, så retry fra et senere slot er trygt.
   //
   // nevnte: eksplisitte profil-id-er i stedet for navnematching (fornavn kan

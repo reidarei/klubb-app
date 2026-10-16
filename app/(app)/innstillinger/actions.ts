@@ -31,7 +31,7 @@ export async function oppdaterVarselInnstilling(noekkel: string, aktiv: boolean)
   // Nullingen lib/app-innstillinger.ts advarer mot gjelder kun BULK-upsert.
   const { error } = await supabase
     .from('varsel_innstillinger')
-    .upsert({ noekkel, aktiv, oppdatert: naa() }, { onConflict: 'noekkel' })
+    .upsert({ noekkel, aktiv, oppdatert: naa() }, { onConflict: 'klubb_id,noekkel' })
   if (error) throw new Error(`Kunne ikke lagre varsel-innstilling «${noekkel}»: ${error.message}`)
 
   revalidatePath('/innstillinger', 'layout')
@@ -95,7 +95,7 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
     .from('app_innstillinger')
     .upsert(
       { noekkel, aktiv, beskrivelse: KJENTE_FLAGG[noekkel].beskrivelse, oppdatert: naa() },
-      { onConflict: 'noekkel' },
+      { onConflict: 'klubb_id,noekkel' },
     )
   if (error) throw error
 

@@ -83,7 +83,7 @@ async function hentGrunnlag(supabase: Awaited<ReturnType<typeof ensureAdmin>>['s
       .from('fond_innskudd')
       .select('profil_id, dato, belop, oppspart_akkumulert, renteandel_i_fjor, profiles(navn, visningsnavn)'),
     supabase.from('fond_bevegelse').select('profil_id, dato, belop'),
-    supabase.from('fond_kontant').select('saldo, oppdatert').eq('id', 1).maybeSingle(),
+    supabase.from('fond_kontant').select('saldo, oppdatert').maybeSingle(),
     // Kandidater til «forrige rapport»: nyeste 20 innlegg som INNEHOLDER en
     // fondsrapport-header — filteret er en grov forhåndssiling (ikke en
     // parse), parseFondsrapport (via lesFondsrapport) avgjør hva som faktisk

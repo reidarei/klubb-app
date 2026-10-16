@@ -33,10 +33,10 @@ export async function lagreKlubbInfo(input: {
   if (!omTekst) return { ok: false, feil: 'Teksten om klubben kan ikke være tom.' }
   if (omTekst.length > KLUBB_OM_MAKS) return { ok: false, feil: `Teksten kan være maks ${KLUBB_OM_MAKS} tegn.` }
 
-  // Én rad (id = true). RLS (er_admin()) er vakten.
+  // Én rad per klubb (PK klubb_id, #867). RLS (er_admin()) er vakten.
   const { error } = await supabase
     .from('klubb_info')
-    .upsert({ id: true, stiftet: input.stiftet, sted, om_tekst: omTekst, oppdatert: naa() }, { onConflict: 'id' })
+    .upsert({ stiftet: input.stiftet, sted, om_tekst: omTekst, oppdatert: naa() }, { onConflict: 'klubb_id' })
   if (error) return { ok: false, feil: `Kunne ikke lagre: ${error.message}` }
 
   // Klubb-siden viser alt, agendaen jubileet og minikalenderen stiftelsesdagen.

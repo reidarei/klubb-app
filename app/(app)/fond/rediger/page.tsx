@@ -26,7 +26,7 @@ export default async function FondRediger() {
     supabase.from('fond_eiendom').select('*').order('navn'),
     supabase.from('fond_verdipapir').select('*').order('navn'),
     supabase.from('fond_innskudd').select('*').order('dato', { ascending: false }),
-    supabase.from('fond_kontant').select('saldo').eq('id', 1).maybeSingle(),
+    supabase.from('fond_kontant').select('saldo').maybeSingle(),
     // Kun aktive profiler kan velges som innskytere
     supabase.from('profiles').select('id, navn').eq('aktiv', true).order('navn'),
   ])

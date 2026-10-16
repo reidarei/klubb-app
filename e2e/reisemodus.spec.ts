@@ -55,7 +55,7 @@ test.describe('reisemodus (#723)', () => {
       .from('app_innstillinger')
       .upsert(
         { noekkel: 'reisemodus', aktiv: true, beskrivelse: 'Vis reisemodus (fullskjerm kart) mens en tur med sluttid pågår' },
-        { onConflict: 'noekkel' },
+        { onConflict: 'klubb_id,noekkel' },
       )
     if (flaggFeil) throw new Error(`Kunne ikke skru på reisemodus-flagget: ${flaggFeil.message}`)
   })

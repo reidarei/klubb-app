@@ -7,7 +7,7 @@ import { logg } from '@/lib/logg'
 
 /**
  * Finn eller opprett samtalen mellom innlogget bruker og motpart.
- * Idempotent — bruker unique-constraint på (profil_a, profil_b) der
+ * Idempotent — bruker unique-constraint på (klubb_id, profil_a, profil_b) der
  * a < b. Returnerer samtaleId eller redirecter til samtalesiden.
  */
 export async function aapneSamtale(motpartId: string) {
@@ -20,7 +20,7 @@ export async function aapneSamtale(motpartId: string) {
   const [a, b] = user.id < motpartId ? [user.id, motpartId] : [motpartId, user.id]
 
   // Forsøk å hente eksisterende
-  // eslint-disable-next-line hk/supabase-feil-maa-hentes -- bevisst fail-open: unique-constraint samtale_par_unik (profil_a, profil_b) i migrasjon 055 fanger den tapte grenen — feiler oppslaget, faller vi gjennom til insert under, som gir 23505 hvis raden alt fantes, og 23505-grenen der henter raden på nytt og redirecter (#503-review)
+  // eslint-disable-next-line hk/supabase-feil-maa-hentes -- bevisst fail-open: unique-constraint samtale_par_unik (klubb_id, profil_a, profil_b) i migrasjon 055 fanger den tapte grenen — feiler oppslaget, faller vi gjennom til insert under, som gir 23505 hvis raden alt fantes, og 23505-grenen der henter raden på nytt og redirecter (#503-review)
   const { data: eksisterende } = await supabase
     .from('samtale')
     .select('id')

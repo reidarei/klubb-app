@@ -20,7 +20,7 @@ function feiringsdatoIAar(mm: string, dd: string, aar: number): string {
  * Neste feiringsdato ("YYYY-MM-DD") fra og med `referansedato` — «i dag»
  * teller, så generering på selve dagen treffer raden agendakortet leser.
  *
- * ENESTE sted datodelen av (profil_id, feiringsdato)-nøkkelen utledes, for
+ * ENESTE sted datodelen av (profil_id, feiringsdato)-nøkkelen (per klubb, PK klubb_id først, #867) utledes, for
  * både cron og admin-flaten. To utledninger ville gjort at admin ikke fant
  * cron-raden for en 29.02-mann, og dermed ikke kunne slette bildet.
  */

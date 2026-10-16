@@ -143,7 +143,10 @@ export function byggSkjema(filer: MigrasjonsFil[]): Skjema {
       } else if ((m = R_ADD_NOKKEL.exec(s))) {
         tabellFor(m[1], m[2])?.klubbIdIndekser.add('(nokkel)')
       } else if ((m = R_CREATE_INDEX.exec(s))) {
-        tabellFor(m[2], m[3])?.klubbIdIndekser.add(m[1])
+        // En partiell indeks (`where …`) dekker ikke FK-sjekken ved `delete from klubb`:
+        // raden utenfor predikatet er usynlig for den. Den teller derfor ikke som
+        // støtteindeks (#867: varsel_logg og melding_chat har bare partielle).
+        if (!/ where /.test(s)) tabellFor(m[2], m[3])?.klubbIdIndekser.add(m[1])
       } else if ((m = R_DROP_INDEX.exec(s))) {
         for (const t of tabeller.values()) t.klubbIdIndekser.delete(m[1])
       } else if ((m = R_CREATE_POLICY.exec(s))) {

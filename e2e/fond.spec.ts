@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import fs from 'node:fs'
 import { harTestCreds } from './helpers/auth'
 import { adminKlient } from './helpers/admin-klient'
+import { FOERSTE_KLUBB_ID } from './helpers/klubb'
 
 // Fond-fane skjermbilde-spec (#443).
 // Kjøres mot test-instansen (playwright.config.ts peker aldri mot prod).
@@ -46,10 +47,10 @@ test.describe('Fond-fane', () => {
     // rendres, og tilbakestill i finally — workers: 1, så ingen annen spec ser den.
     const admin = adminKlient('fond.andel-ring')
     test.skip(!admin, 'E2E_SUPABASE_* mangler')
-    const { data: foer, error: lesFeil } = await admin!.from('fond_kontant').select('saldo').eq('id', 1).single()
+    const { data: foer, error: lesFeil } = await admin!.from('fond_kontant').select('saldo').eq('klubb_id', FOERSTE_KLUBB_ID).single()
     if (lesFeil) throw new Error(`Kunne ikke lese kontantsaldo: ${lesFeil.message}`)
     try {
-      const { error: settFeil } = await admin!.from('fond_kontant').update({ saldo: 15950 }).eq('id', 1)
+      const { error: settFeil } = await admin!.from('fond_kontant').update({ saldo: 15950 }).eq('klubb_id', FOERSTE_KLUBB_ID)
       if (settFeil) throw new Error(`Kunne ikke sette kontantsaldo: ${settFeil.message}`)
 
       await page.setViewportSize({ width: 390, height: 844 })
@@ -60,7 +61,7 @@ test.describe('Fond-fane', () => {
       await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
       await page.screenshot({ path: `${UT_DIR}/fond-andel-390.png`, clip: { x: 0, y: 0, width: 390, height: 300 } })
     } finally {
-      const { error: tilbakeFeil } = await admin!.from('fond_kontant').update({ saldo: foer.saldo }).eq('id', 1)
+      const { error: tilbakeFeil } = await admin!.from('fond_kontant').update({ saldo: foer.saldo }).eq('klubb_id', FOERSTE_KLUBB_ID)
       if (tilbakeFeil) throw new Error(`Kunne ikke tilbakestille kontantsaldo: ${tilbakeFeil.message}`)
     }
   })

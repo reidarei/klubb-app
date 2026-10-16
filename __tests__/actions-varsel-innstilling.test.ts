@@ -76,7 +76,7 @@ describe('oppdaterVarselInnstilling', () => {
     expect(mockUpsert).toHaveBeenCalledTimes(1)
     const { rad, opts } = upsertKall()
     expect(rad).toMatchObject({ noekkel: symbolType, aktiv: false })
-    expect(opts).toEqual({ onConflict: 'noekkel' })
+    expect(opts).toEqual({ onConflict: 'klubb_id,noekkel' })
     expect(revalidatePath).toHaveBeenCalledWith('/innstillinger', 'layout')
   })
 

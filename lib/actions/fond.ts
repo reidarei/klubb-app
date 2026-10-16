@@ -426,7 +426,6 @@ export async function hentPublisertOppgjor(): Promise<
     const { data: kontant, error: kontantFeil } = await supabase
       .from('fond_kontant')
       .select('saldo')
-      .eq('id', 1)
       .maybeSingle()
     if (kontantFeil) {
       await logg.feil('fond.oppgjor.saldo.feilet', kontantFeil)
@@ -615,7 +614,6 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
     const { data: gammelKontant, error: gammelKontantFeil } = await supabase
       .from('fond_kontant')
       .select('saldo')
-      .eq('id', 1)
       .maybeSingle()
     if (gammelKontantFeil) {
       await logg.feil('fond.kontant.oppslag.feilet', gammelKontantFeil)
@@ -630,7 +628,6 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
       .from('fond_kontant')
       .upsert(
         {
-          id: 1,
           saldo: oppgjor.saldo,
           oppdatert: naa(),
           renter_brutto: r?.brutto ?? null,
@@ -641,7 +638,7 @@ export async function skrivPublisertOppgjor(oppgjorPayload: unknown): Promise<
           // kontrolldato stå igjen som om den var fersk.
           kontrollert_dato: oppgjor.kontrollert_dato ?? null,
         },
-        { onConflict: 'id' },
+        { onConflict: 'klubb_id' },
       )
     if (kontantFeil)
       throw new Error(
@@ -675,7 +672,6 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
   const { data: gammel, error: gammelFeil } = await supabase
     .from('fond_kontant')
     .select('saldo')
-    .eq('id', 1)
     .maybeSingle()
   if (gammelFeil) {
     await logg.feil('fond.kontant.oppslag.feilet', gammelFeil)
@@ -684,7 +680,7 @@ export async function oppdaterKontantSaldo(nySaldo: number) {
 
   const { error } = await supabase
     .from('fond_kontant')
-    .upsert({ id: 1, saldo: nySaldo, oppdatert: naa() }, { onConflict: 'id' })
+    .upsert({ saldo: nySaldo, oppdatert: naa() }, { onConflict: 'klubb_id' })
   if (error) throw new Error(error.message)
 
   await skrivHistorikk(supabase, user.id, 'kontant', null, gammel?.saldo ?? 0, nySaldo)
@@ -713,7 +709,7 @@ export async function koblNavnTilMedlem(apiNavn: string, profilId: string) {
     .from('fond_navn_alias')
     .upsert(
       { api_navn: navn, profil_id: profilId, opprettet_av: user.id },
-      { onConflict: 'api_navn' },
+      { onConflict: 'klubb_id,api_navn' },
     )
   if (error) throw new Error(`Kunne ikke lagre navnekoblingen: ${error.message}`)
 

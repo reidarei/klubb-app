@@ -60,7 +60,7 @@ test.describe('Bursdagsbilde på det store kortet (#641)', () => {
       .from('bursdagsbilde')
       .upsert(
         { profil_id: OLA_ID, feiringsdato: iDag, status: 'ferdig', bilde_url: BILDE_URL, forsok: 1 },
-        { onConflict: 'profil_id,feiringsdato' },
+        { onConflict: 'klubb_id,profil_id,feiringsdato' },
       )
     if (bildeFeil) throw bildeFeil
   })

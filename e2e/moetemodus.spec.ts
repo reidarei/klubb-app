@@ -50,7 +50,7 @@ test.describe('møtemodus (#780)', () => {
       .from('app_innstillinger')
       .upsert(
         { noekkel: 'moetemodus', aktiv: true, beskrivelse: 'Vis møtemodus (fullskjerm kart) fra møtestart til kl. 06 dagen etter' },
-        { onConflict: 'noekkel' },
+        { onConflict: 'klubb_id,noekkel' },
       )
     if (flaggFeil) throw new Error(`Kunne ikke skru på møtemodus-flagget: ${flaggFeil.message}`)
   })

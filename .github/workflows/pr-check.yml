@@ -659,6 +659,74 @@ jobs:
             exit 1
           fi
 
+      # Multi-tenant 1.4 (#867): katalogvakt for unike nøkler. Migrasjonene er
+      # ikke parsbare for dette (nøkler kan lages i do $$), så vakten leser
+      # pg_index. Hver unik indeks (PK, unique, unique index) på en tabell med
+      # klubb_id må enten (a) ha klubb_id som FØRSTE nøkkelkolonne, (b) være
+      # surrogat (én kolonne som heter id), eller (c) ha en enkeltkolonne som er
+      # FK til en klubbeid forelder (klubben følger forelderen). Ingen
+      # unntaksliste. klubb_id lenger ut i nøkkelen eller som INCLUDE-kolonne er
+      # rødt: kun nøkkelkolonnene (indkey[0 .. indnkeyatts-1]) telles.
+      - name: Verifiser unike nøkler per klubb
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          declare
+            r record;
+            avvik text[] := '{}';
+            n_endres int := 0;
+            n_forelder int := 0;
+            n_surrogat int := 0;
+          begin
+            for r in
+              select
+                c.relname::text as tabell,
+                ic.relname::text as indeks,
+                i.indrelid,
+                -- Kun nøkkelkolonner: INCLUDE-kolonner ligger etter indnkeyatts.
+                -- int2vector er 0-basert, int2[] fra string_to_array 1-basert.
+                (string_to_array(i.indkey::text, ' ')::int2[])[1:i.indnkeyatts] as kolonner,
+                (select attnum from pg_attribute where attrelid = i.indrelid and attname = 'klubb_id') as klubb_attnum
+              from pg_index i
+              join pg_class c on c.oid = i.indrelid
+              join pg_class ic on ic.oid = i.indexrelid
+              join pg_namespace ns on ns.oid = c.relnamespace
+              where ns.nspname = 'public' and i.indisunique and c.relkind = 'r'
+                and exists (select 1 from pg_attribute where attrelid = i.indrelid and attname = 'klubb_id' and not attisdropped)
+              order by c.relname, ic.relname
+            loop
+              if r.kolonner[1] = r.klubb_attnum then
+                n_endres := n_endres + 1;
+              elsif r.klubb_attnum = any (r.kolonner) then
+                avvik := avvik || (r.tabell || '.' || r.indeks || ': klubb_id er med i nøkkelen, men ikke først');
+              elsif (cardinality(r.kolonner) = 1 and exists (select 1 from pg_attribute where attrelid = r.indrelid and attnum = r.kolonner[1] and attname = 'id')) then
+                n_surrogat := n_surrogat + 1;
+              elsif exists (
+                select 1 from unnest(r.kolonner) as k(attnum)
+                join pg_constraint fk on fk.contype = 'f' and fk.conrelid = r.indrelid and fk.conkey = array[k.attnum]
+                join pg_attribute fa on fa.attrelid = fk.confrelid and fa.attname = 'klubb_id' and not fa.attisdropped
+                where k.attnum > 0
+              ) then
+                n_forelder := n_forelder + 1;
+              else
+                avvik := avvik || (r.tabell || '.' || r.indeks || ': unik nøkkel uten klubb_id først, ikke surrogat og ikke via klubbeid forelder');
+              end if;
+            end loop;
+
+            if cardinality(avvik) > 0 then
+              raise exception 'nøkkel-avvik: %', array_to_string(avvik, E'\n  ');
+            end if;
+            raise notice 'unike nøkler: % med klubb_id først, % via forelder, % surrogat', n_endres, n_forelder, n_surrogat;
+          end
+          $$;
+          SQL
+          then
+            echo "::error::Verifiseringen av unike nøkler feilet — se psql-utskriften over."
+            exit 1
+          fi
+
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av

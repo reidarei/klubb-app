@@ -55,7 +55,6 @@ export default async function FondSide() {
     supabase
       .from('fond_kontant')
       .select('saldo, oppdatert, renter_brutto')
-      .eq('id', 1)
       .maybeSingle(),
     // Bevegelsene hentes med sidelasten, ikke ved trykk på en rad: 15–20 personer
     // × ~12 bevegelser er neglisjerbart i payload, og alternativet ville lagt en
