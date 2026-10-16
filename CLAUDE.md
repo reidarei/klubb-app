@@ -482,6 +482,8 @@ grant select, insert, update, delete  on public.<tabell> to service_role;
 create policy "..." on public.<tabell> ...;
 ```
 
+**Ny tabell → `klubb_id`:** utvid `create table` med `klubb_id uuid not null default public.standard_klubb_id() references public.klubb(id) on update cascade on delete restrict`. Skjemavakten `__tests__/skjemavakt-klubb.test.ts` (kjerneporten) leser migrasjonene og blir rød hvis en tabell mangler kolonnen. Er tabellen faktisk global, klassifiser den i `KLUBB_ID_UNNTAK` (`__tests__/helpers/klubb-tabeller.ts`) med klasse og begrunnelse. `KLUBB_UTEN_KLUBB_POLICY` kan bare krympe — multi-tenant steg 2.3 tømmer den, nye tabeller får aldri legges der, og en tabell som noen gang har hatt en klubb-policy kan ikke føres tilbake. Nullable `klubb_id` kun via `KLUBB_ID_NULLABLE`. Skriv tabeller som vanlig `create table public.<navn> (…)` på toppnivå: `create table` i `do $`/`execute`, `as select`, `partition of` o.l. gjør vakten rød. Vakten ser ikke policyer laget i `do $`/`execute`. Se løsningsdesign § 2.10.
+
 **Justér scope per tabell — minste privilegium:** Gi `authenticated` kun de kommandoene tabellens RLS-policyer faktisk tillater (én grant per policy-kommando). `anon` skal normalt ikke ha noe (ingen offentlige flater). `service_role` bypasser RLS uansett, men trenger fortsatt grants for å se tabellen via PostgREST.
 
 **Sekvenser:** Hvis tabellen har en `serial`/`identity`-kolonne brukt fra klient, husk `grant usage, select on sequence public.<tabell>_<kol>_seq to authenticated;`.

@@ -3,6 +3,7 @@
 // synk-skriptet dekker __tests__ men ikke resten av supabase/.
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { byggSkjema, lesMigrasjoner } from './migrasjon-skjema'
 
 export type UnntaksKlasse = 'rot' | 'global' | 'venter_2_1'
 
@@ -31,7 +32,104 @@ export function tabellerFraTyper(): string[] {
   return [...blokk.matchAll(/^ {6}([a-zæøå_]+): \{$/gmu)].map(m => m[1])
 }
 
+// Kilde er migrasjonene (sannheten); typene er kun kryssjekk i skjemavakt-klubb.test.ts,
+// fordi de regenereres først etter merge.
 export function klubbeideTabeller(): string[] {
   const unntak = new Set<string>(KLUBB_ID_UNNTAK.map(u => u.tabell))
-  return tabellerFraTyper().filter(t => !unntak.has(t))
+  return [...byggSkjema(lesMigrasjoner()).tabeller.keys()].filter(t => !unntak.has(t))
 }
+
+// Klubbeide tabeller med bevisst nullable klubb_id. feil_logg registreres her i 2.4b (#896).
+export const KLUBB_ID_NULLABLE: readonly { tabell: string; begrunnelse: string; issue: number }[] = []
+
+// Klubbeide tabeller som ennå ikke har en RLS-policy som refererer klubb_id.
+// 2.3 (#870) tømmer lista. Nye tabeller får aldri legges hit.
+export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = [
+  'aktivitet_dag',
+  'aktivitet_uke',
+  'album',
+  'album_bilde',
+  'album_bilde_chat',
+  'album_bilde_reaksjon',
+  'app_innstillinger',
+  'arrangement_chat',
+  'arrangementer',
+  'arrangementmaler',
+  'arrangoransvar',
+  'bursdagsbilde',
+  'chat_reaksjoner',
+  'feil_logg',
+  'fond_bevegelse',
+  'fond_eiendom',
+  'fond_innskudd',
+  'fond_kontant',
+  'fond_navn_alias',
+  'fond_verdi_historikk',
+  'fond_verdipapir',
+  'innspill_kobling',
+  'kaaring_vinnere',
+  'kaaringmaler',
+  'kart_markering',
+  'kart_symbol_tilpasning',
+  'klubb_chat',
+  'klubb_info',
+  'melding_bilder',
+  'melding_chat',
+  'melding_reaksjon',
+  'meldinger',
+  'paameldinger',
+  'pass_tilgang_forespørsel',
+  'poll',
+  'poll_chat',
+  'poll_stemme',
+  'poll_valg',
+  'samtale',
+  'samtale_chat',
+  'timeplan_post',
+  'varsel_innstillinger',
+  'varsel_logg',
+  'vedtekter',
+  'vedtekter_versjoner',
+  'vitals_logg',
+]
+
+// FK mot klubb uten indeks med klubb_id først. Barne-indekser kommer i 2.1b (#895),
+// 2.3 og 6.2 (#886). Nye tabeller FÅR legges hit (synlig, kjent liste).
+export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
+  'aktivitet_dag',
+  'aktivitet_uke',
+  'album_bilde',
+  'album_bilde_chat',
+  'album_bilde_reaksjon',
+  'app_innstillinger',
+  'arrangement_chat',
+  'arrangementmaler',
+  'bursdagsbilde',
+  'chat_reaksjoner',
+  'fond_bevegelse',
+  'fond_eiendom',
+  'fond_innskudd',
+  'fond_kontant',
+  'fond_navn_alias',
+  'fond_verdi_historikk',
+  'fond_verdipapir',
+  'innspill_kobling',
+  'kaaringmaler',
+  'kart_symbol_tilpasning',
+  'klubb_info',
+  'melding_bilder',
+  'melding_chat',
+  'melding_reaksjon',
+  'paameldinger',
+  'pass_tilgang_forespørsel',
+  'poll_chat',
+  'poll_stemme',
+  'poll_valg',
+  'samtale',
+  'samtale_chat',
+  'timeplan_post',
+  'varsel_innstillinger',
+  'varsel_logg',
+  'vedtekter',
+  'vedtekter_versjoner',
+]

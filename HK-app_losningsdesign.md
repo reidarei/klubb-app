@@ -229,6 +229,54 @@ create table varsel_innstillinger (
 
 ---
 
+### 2.9 klubb
+
+Multi-tenant steg 1.1: én rad per klubb appen betjener. Migrasjon 160.
+
+```sql
+create table klubb (
+  id        uuid primary key default gen_random_uuid(),
+  slug      text not null unique,   -- små bokstaver/tall/bindestrek, 2-40 tegn; blir subdomene i 5.1
+  navn      text not null,          -- 1-60 tegn
+  opprettet timestamptz not null default now()
+);
+```
+
+**Første rad** har fast id `00000000-0000-4000-a000-000000000001` og er klubben som eier instansen. Migrasjonen setter nøytralt navn («Klubben», slug `klubb`); navn og slug settes med et engangssteg etter migrering (docs/drift.md § 4). Hvordan id-en brukes som default for `klubb_id`: se § 2.10.
+
+**RLS:** alle innloggede kan lese; ingen skrivepolicy for authenticated (klubber opprettes først i 5.3). Innstrammes til egen klubb i 2.3.
+
+### 2.10 klubb_id på klubbeide tabeller
+
+Multi-tenant steg 1.2. Migrasjon 161.
+
+**Klassifisering av de 53 tabellene i `public`:** 46 er klubbeide og får `klubb_id`; 7 står på en eksplisitt unntaksliste.
+
+- *Rot:* `klubb`.
+- *Globale:* `profiles` (personen er global; `rolle` og `faar_*` flyttes til medlemskap i 2.1), `push_subscriptions` (per enhet — samme telefon skal få varsler fra alle klubbene), `pass_info` (passet tilhører personen; klubbkonteksten bor i `pass_tilgang_forespørsel`).
+- *Venter på 2.1:* `varsel_preferanser` og `posisjon_deling` (tilhører medlemskapet, PK byttes i 2.1), `posisjon_punkt` (nullable `arrangement_id`, ingen sann klubb før medlemskap finnes).
+
+Klassifiseringen ligger som data i `__tests__/helpers/klubb-tabeller.ts` og vaktes av `__tests__/migrasjon-klubb-id.test.ts`.
+
+**Løpende vakt (1.3):** `__tests__/skjemavakt-klubb.test.ts` leser alle migrasjonene og krever at hver tabell har `klubb_id` eller står i unntakslista; `migrasjon-klubb-id.test.ts` vokter kun migrasjon 161 slik den ble skrevet. Tabellopprettelse den ikke gjenkjenner (`create table` inni `do $$`/`execute`, `as select`, `partition of`) gjør den rød i stedet for å slippe tabellen gjennom. To pinnede lister kan bare krympe: `KLUBB_UTEN_KLUBB_POLICY` (tømmes av 2.3; en tabell som noen gang har hatt en klubb-policy kan ikke føres tilbake) og `KLUBB_FK_UTEN_STOETTEINDEKS` (tømmes av 2.1b, 2.3 og 6.2).
+
+**Kolonnen:**
+
+```sql
+klubb_id uuid not null default public.standard_klubb_id()
+  references public.klubb(id) on update cascade on delete restrict
+```
+
+`standard_klubb_id()` er eneste sted den første klubbens uuid står i skjemaet. Funksjonen er `stable`, ikke `security definer`; `authenticated` og `service_role` har `execute` (en default evalueres med rollen som setter inn), `anon` har ikke. Innmaten byttes til JWT-claim uten fallback (med `raise`) i 2.4b, og `feil_logg` får `drop not null` samtidig.
+
+**Indekser:** 10 rot-indekser med `klubb_id` først (`arrangementer`, `meldinger`, `klubb_chat`, `album`, `poll`, `feil_logg`, `vitals_logg`, `kaaring_vinnere`, `arrangoransvar`, `kart_markering`). Barne-indekser kommer i 2.1b, 2.3 og 6.2.
+
+**Nøkler:** uendret. Primær- og unike nøkler, inkl. én-rad-tabellene `klubb_info` og `fond_kontant`, flyttes i 1.4.
+
+**Array-insert:** postgrest-js sender `null` for manglende nøkler i en array-insert der minst én rad har `klubb_id`, som gir 23502. Alle rader må ha nøkkelen, eller kallet bruker `{ defaultToNull: false }` (pinnet i `e2e/rls/klubb-id.spec.ts`).
+
+---
+
 ## 3. RLS-policyer
 
 Alle tabeller har RLS aktivert. Policyer bruker `auth.uid()` og en hjelpefunksjon for rollesjekk:
