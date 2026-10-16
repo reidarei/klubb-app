@@ -96,7 +96,23 @@ LIMIT 50;
 
 ---
 
-## 5. Migrasjoner ved oppgradering
+## 5. Klubb-tabell — engangssteg etter migrasjon 160
+
+Migrasjon 160 introduserer `public.klubb`-tabellen, som oppbevarer informasjon om klubben selv (navn, slug for subdomener, o.l.). Tabellen opprettes med én standardrad med nøytralt navn.
+
+**Etter du har kjørt migrasjonen første gang, må du sette klubbens riktige navn i Supabase SQL-editor:**
+
+```sql
+update public.klubb
+set navn = '<klubbens navn>', slug = '<slug>'
+where id = '00000000-0000-4000-a000-000000000001';
+```
+
+**Slug-en** (små bokstaver, tall og bindestrek, 2–40 tegn) velges en gang og blir senere klubbens subdomene, så velg den med omhu.
+
+---
+
+## 6. Migrasjoner ved oppgradering
 
 Når du oppdaterer kodebasen fra repoet, sjekk alltid om det er nye migrasjoner:
 
@@ -117,7 +133,7 @@ Se [docs/oppsett.md](oppsett.md) for full referanse til oppsett-kommandoene.
 
 ---
 
-## 6. Backup
+## 7. Backup
 
 > **Viktig:** Supabase **free tier har ingen automatiske backups** — det er en
 > Pro-plan-funksjon. Uten egen rutine finnes klubbens data kun i prod-databasen.
@@ -137,7 +153,7 @@ Backup av bilder (Cloudflare R2) er ikke automatisk — R2 har ingen innebygd sn
 
 ---
 
-## 7. Sikkerhet
+## 8. Sikkerhet
 
 En fullstendig gjennomgang av sikkerhetsmodellen er dokumentert i [docs/sikkerhetsgjennomgang-2026-06.md](sikkerhetsgjennomgang-2026-06.md). Viktigste punkter for løpende drift:
 
