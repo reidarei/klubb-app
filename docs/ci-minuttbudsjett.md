@@ -46,6 +46,19 @@ If you fork this template to run on a **private repository**, the watcher will a
 
 3. **If e2e is skipped,** check the PR's workflow run details. The `CI-minuttbudsjett` step in the job summary explains why. It's not a failure — core CI still ran. Note: e2e skipping includes security tests in `e2e/rls/` (Row Level Security coverage).
 
+## Self-hosted runner (optional)
+
+If your repository is private and the quota keeps cutting e2e, the cheapest fix is a [self-hosted runner](https://docs.github.com/en/actions/hosting-your-own-runners) — minutes on your own machine are free and unlimited. The workflow is ready for it:
+
+- `sjekk` (build + Playwright) runs on `${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}`. Set the repository variable `SJEKK_RUNNER` to `self-hosted` (`gh variable set SJEKK_RUNNER --body self-hosted`) once your runner is online; delete it to fall back to GitHub-hosted. `kjerne` (lint, typecheck, vitest) stays on GitHub — it is cheap and runs in parallel.
+- On a self-hosted runner the budget guard still runs and prints its table, but its cut is ignored (`SELVHOSTET` in the "Avgjør e2e-omfang" step) — there is no quota to protect. The risk-based skip (#663) still applies; it saves time, not minutes.
+- The job gives its throwaway Supabase stack a separate `project_id` (`hk-ci`) and ports `553xx`, so it can share a Docker host with a long-lived local Supabase on the default `543xx` ports, and stops it afterwards (also after a red run).
+- Jobs whose labels include `self-hosted` are not counted by the guard (`erFakturert()`), so they never push the month over budget.
+- The machine needs Docker, `postgresql-client` (the migration check uses `psql`) and Playwright's Chromium libraries (`npx playwright install-deps chromium`). Run the runner as a dedicated user in the `docker` group; `sudo` is only needed for the optional `dmesg` OOM diagnostic.
+- Verify the setup without touching app code: `gh workflow run pr-check.yml --ref main -f e2e=true` forces the full suite regardless of risk and budget.
+
+GitHub advises against self-hosted runners on repositories where strangers can open pull requests — the job runs their code on your machine. For a private club repository with no outside contributors this is fine.
+
 ## Two run scopes: `pull_request` vs `push`
 
 `pr-check.yml` runs on **both** pull requests and pushes to `main`, with different scopes:

@@ -3,6 +3,7 @@ import {
   jobbMinutter,
   unikeJobber,
   kjoringMinutter,
+  erFakturert,
   tomCache,
   tolkCache,
   skalKjoreE2e,
@@ -95,6 +96,20 @@ describe('kjoringMinutter', () => {
       jobb({ id: 2, name: 'kjerne', completed_at: t('10:03:30') }), // 4
     ]
     expect(kjoringMinutter({ run_attempt: 1 }, jobber)).toEqual({ min: 12, tidligereMin: 0 })
+  })
+
+  // #891: `sjekk` på egen runner koster ingen kvoteminutter. Etiketten
+  // `self-hosted` er den GitHub alltid setter; andre etiketter (ubuntu-latest,
+  // vår egen `resolinihub`) endrer ikke vurderingen.
+  it('jobber på egen runner (label self-hosted) telles ikke; manglende labels telles', () => {
+    const jobber = [
+      jobb({ name: 'sjekk', completed_at: t('10:30:00'), labels: ['self-hosted', 'Linux', 'X64', 'resolinihub'] }),
+      jobb({ id: 2, name: 'kjerne', completed_at: t('10:03:30'), labels: ['ubuntu-latest'] }), // 4
+      jobb({ id: 3, name: 'uten-labels', completed_at: t('10:01:00') }), // 1
+    ]
+    expect(kjoringMinutter({ run_attempt: 1 }, jobber)).toEqual({ min: 5, tidligereMin: 0 })
+    expect(erFakturert({ labels: ['self-hosted'] })).toBe(false)
+    expect(erFakturert({})).toBe(true)
   })
 })
 

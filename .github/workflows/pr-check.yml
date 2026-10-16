@@ -23,6 +23,11 @@
 # samme job som bygget (`sjekk`), som e2e serverer. Merge-loopen i agentic
 # venter på BÅDE `kjerne` og `sjekk` — se .claude/commands/agentic.md steg 10.
 #
+# `sjekk` kjører på EGEN RUNNER (hjemmeserveren) når repo-variabelen
+# SJEKK_RUNNER er satt (#891). Da er budsjett-grunnen over borte: minuttene
+# teller ikke mot kvoten, og e2e kjører på hver PR med risiko. `kjerne` er
+# billig og blir på GitHub, så de to jobbene fortsatt går parallelt.
+#
 # Build-steget bruker dummy-env (eller lokal Supabase sine faste dev-verdier
 # når e2e kjører) slik at ingen ekte secrets trengs. E2e-instansen
 # startes fra bunn i selve jobben (fersk `supabase start`) — se e2e/README.md
@@ -55,7 +60,16 @@ on:
   # triggeren finnes for — får den fortsatt. Se «Avgjør omfang» under.
   push:
     branches: [main]
+  # Manuell kjøring. `e2e: true` tvinger full suite uavhengig av risiko og
+  # budsjett — til å verifisere egen runner (#891) etter omstart, oppgradering
+  # eller endring i oppsettet, uten å måtte lage en PR som rører app-kode:
+  #   gh workflow run pr-check.yml --ref main -f e2e=true
   workflow_dispatch:
+    inputs:
+      e2e:
+        description: 'Kjør full e2e-suite uansett risiko og budsjett'
+        type: boolean
+        default: false
 
 # actions:read kreves av budsjettvakten (leser egne workflow-runs for å måle
 # forbrukte CI-minutter denne måneden), samme mønster som db-restore-drill.yml.
@@ -131,21 +145,28 @@ jobs:
         run: npm test
 
   sjekk:
-    runs-on: ubuntu-latest
+    # Egen runner på hjemmeserveren (#891): repo-variabelen SJEKK_RUNNER settes
+    # til `self-hosted` når runneren er oppe, og minuttene teller da ikke mot
+    # GitHub-kvoten — e2e kjører på hver PR. Tom/slettet variabel ⇒ GitHub-
+    # hosted igjen, uten PR. Fallback-veien når maskinen hjemme er nede:
+    #   gh variable delete SJEKK_RUNNER
+    # Se docs/ci-minuttbudsjett.md § Egen runner.
+    runs-on: ${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}
     # Bygg + e2e (lint/typesjekk/vitest ligger i `kjerne` over). Målt før
     # splitten: e2e ~4,8 min, bygg ~1,8 min, Supabase-oppstart 1–2 min (delvis
-    # parallelt med Chromium). 25 gir slingring uten å maskere en jobb som
+    # parallelt med Chromium). Hjemmeserveren (4 kjerner, 7,6 GB) er tregere
+    # enn ubuntu-latest; 35 gir slingring der uten å maskere en jobb som
     # faktisk henger.
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       # kaaring-varsel-retry.spec.ts (linje ~34) skipper hele specen uten denne —
       # den kjører den ekte /api/cron/paaminne-cronen og krever CRON_SECRET-auth.
       # Verdien er en dummy: cronen kjører kun mot den ferske, isolerte
       # test-instansen i denne jobben (se e2e/README.md § Sikkerhetsmodellen).
       CRON_SECRET: ci-dummy-hemmelighet
-      # Lokal Supabase sine faste verdier — se kommentaren over «Bygg».
-      LOKAL_SUPABASE_URL: http://127.0.0.1:54321
-      LOKAL_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
+      # LOKAL_SUPABASE_URL / LOKAL_SUPABASE_PUBLISHABLE_KEY / LOKAL_DB_PORT
+      # settes av steget «Lokale Supabase-verdier» under — de avhenger av
+      # hvilken runner jobben havnet på.
 
     steps:
       - uses: actions/checkout@v4
@@ -261,8 +282,17 @@ jobs:
           HENDELSE: ${{ github.event_name }}
           RISIKO: ${{ steps.risiko.outputs.risiko }}
           BUDSJETT_OK: ${{ steps.budsjett.outputs.kjor_e2e }}
+          # På egen runner koster jobben ingen kvoteminutter, så budsjettvakten
+          # har ingenting å verne — den kjører fortsatt (skriver tabellen), men
+          # kuttet hennes ignoreres her (#891).
+          SELVHOSTET: ${{ runner.environment == 'self-hosted' }}
+          TVING_E2E: ${{ github.event_name == 'workflow_dispatch' && inputs.e2e }}
         run: |
-          if [ "$HENDELSE" != "pull_request" ]; then
+          if [ "$TVING_E2E" = "true" ]; then
+            echo "::notice::Manuell kjøring med e2e=true — full suite uansett risiko og budsjett."
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "aarsak=manuelt" >> "$GITHUB_OUTPUT"
+          elif [ "$HENDELSE" != "pull_request" ]; then
             echo "::notice::$HENDELSE mot main — kjerneporten kjøres, e2e hoppes over (kjørte allerede på PR-en)."
             echo "e2e=false" >> "$GITHUB_OUTPUT"
             echo "aarsak=hendelse" >> "$GITHUB_OUTPUT"
@@ -275,11 +305,14 @@ jobs:
             echo "::notice::Ingen endret fil kan påvirke en kjørende flyt — e2e hoppes over (#663)."
             echo "e2e=false" >> "$GITHUB_OUTPUT"
             echo "aarsak=lav_risiko" >> "$GITHUB_OUTPUT"
-          elif [ "$BUDSJETT_OK" != "true" ]; then
+          elif [ "$BUDSJETT_OK" != "true" ] && [ "$SELVHOSTET" != "true" ]; then
             echo "::notice::Budsjettvakten kuttet e2e — se docs/ci-minuttbudsjett.md."
             echo "e2e=false" >> "$GITHUB_OUTPUT"
             echo "aarsak=budsjett" >> "$GITHUB_OUTPUT"
           else
+            if [ "$SELVHOSTET" = "true" ]; then
+              echo "::notice::Egen runner — kvoten er ikke i spill, e2e kjører uansett budsjett (#891)."
+            fi
             echo "e2e=true" >> "$GITHUB_OUTPUT"
             echo "aarsak=kjorer" >> "$GITHUB_OUTPUT"
           fi
@@ -303,6 +336,30 @@ jobs:
       - name: Installer avhengigheter
         if: steps.portet.outputs.hopp != 'true'
         run: npm ci
+
+      # Lokal Supabase har FASTE verdier (CLI-ens innebygde dev-nøkkel og
+      # portene i supabase/config.toml), og bygget under bruker dem uten å
+      # vente på oppstarten — se kommentaren over «Bygg». På EGEN RUNNER (#891)
+      # kjører den selvhostede test-instansen (docs/test-instans.md) allerede
+      # på samme maskin med nøyaktig disse portene og container-navnene
+      # (project_id fra supabase/config.toml). CI-instansen får derfor eget project_id og
+      # portene flyttet 543xx → 553xx i jobbens kopi av config.toml, så de to
+      # lever side om side; «Vent på Supabase» verifiserer fortsatt at
+      # instansen som startet matcher det bygget pekte på.
+      - name: Lokale Supabase-verdier
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          if [ "${{ runner.environment }}" = "self-hosted" ]; then
+            sed -i -E 's/^project_id = .*/project_id = "hk-ci"/; s/^(port|shadow_port|smtp_port|pop3_port) = 543([0-9]{2})$/\1 = 553\2/' supabase/config.toml
+            echo "Egen runner: CI-instansen isolert fra test-instansen (project_id hk-ci, porter 553xx)."
+            grep -nE '^(project_id|port|shadow_port) = ' supabase/config.toml
+            echo "LOKAL_SUPABASE_URL=http://127.0.0.1:55321" >> "$GITHUB_ENV"
+            echo "LOKAL_DB_PORT=55322" >> "$GITHUB_ENV"
+          else
+            echo "LOKAL_SUPABASE_URL=http://127.0.0.1:54321" >> "$GITHUB_ENV"
+            echo "LOKAL_DB_PORT=54322" >> "$GITHUB_ENV"
+          fi
+          echo "LOKAL_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH" >> "$GITHUB_ENV"
 
       # Bakgrunnsstart: supabase start tar 1-2 min (docker-pull + containere).
       # Startes her, FØR de raske stegene (lint/typecheck/vitest/build), slik at
@@ -343,7 +400,9 @@ jobs:
       # apt-get hver gang og ga topper på 6–7 min (snitt ~1 min). --only-shell
       # henter bare headless-shellet, som er det headless-kjøringene bruker.
       # Mangler et bibliotek etter et image-bytte, feiler e2e høylytt — da er
-      # svaret å legge --with-deps tilbake, ikke å skippe.
+      # svaret å legge --with-deps tilbake, ikke å skippe. På egen runner er
+      # bibliotekene installert én gang av oppsettskriptet (#891), og
+      # ~/.cache/ms-playwright overlever mellom kjøringer.
       - name: Installer Chromium
         if: steps.omfang.outputs.e2e == 'true'
         run: npx playwright install --only-shell chromium
@@ -493,12 +552,12 @@ jobs:
       # Fanger «grønn på tom luft»: en migrasjon som feiler stille (eller aldri
       # ble lagt til supabase/migrations/) skal gjøre jobben rød, ikke la
       # e2e kjøre mot et ufullstendig skjema. psql er forhåndsinstallert på
-      # ubuntu-latest.
+      # ubuntu-latest; på egen runner installert av oppsettskriptet (#891).
       - name: Verifiser at alle migrasjoner kjørte
         if: steps.omfang.outputs.e2e == 'true'
         run: |
           export PGPASSWORD=postgres
-          kjort=$(psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -tAc \
+          kjort=$(psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -tAc \
             "select count(*) from supabase_migrations.schema_migrations")
           kjort=$(echo "$kjort" | tr -d '[:space:]')
           # Tom output med exit 0 fra psql ville sluppet gjennom stille:
@@ -548,6 +607,14 @@ jobs:
 
           echo "### Docker-containere som har avsluttet (exited)"
           docker ps -a --filter status=exited || true
+
+      # GitHub-hosted runnere kastes etter jobben; egen runner gjør det ikke.
+      # Uten dette steget ble hk-ci-containerne stående og tok minne fra neste
+      # kjøring (og fra test-instansen). --no-backup: instansen er engangsbruk.
+      # always(): skal rydde også etter rød e2e og etter timeout.
+      - name: Stopp CI-instansen (egen runner)
+        if: always() && runner.environment == 'self-hosted' && steps.omfang.outputs.e2e == 'true'
+        run: npx supabase stop --no-backup || true
 
       # #800: `if: failure()` ga aldri noe artefakt for en FLAKY test — retry
       # i config.ts gjorde jobben grønn, og skjermbildet + error-context.md

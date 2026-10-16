@@ -109,10 +109,19 @@ export function jobbMinutter(jobber, { naa } = {}) {
   return { minutter, utelatt }
 }
 
+// En jobb på egen runner (#891) koster ingen kvoteminutter — GitHub fakturerer
+// bare sine egne maskiner. Jobs-API-et gir `labels` = runs-on-etikettene, og
+// `self-hosted` står alltid der for en egen runner, uansett hvilke andre
+// etiketter vi la til. Manglende `labels` (eldre fixture, uventet form) telles
+// som fakturert: å overtelle er trygg retning for en vakt som kutter.
+export function erFakturert(jobb) {
+  return !(jobb.labels ?? []).includes('self-hosted')
+}
+
 // Fakturerte minutter for ÉN kjøring, alle forsøk. `tidligereMin` = forsøk før
 // run.run_attempt, det run-objektet selv aldri viser (#668) — kun til rapport.
 export function kjoringMinutter(run, jobber, naa = new Date()) {
-  const unike = unikeJobber(jobber)
+  const unike = unikeJobber(jobber).filter(erFakturert)
   const sisteForsok = run.run_attempt ?? 1
   const { minutter: min } = jobbMinutter(unike, { naa })
   const { minutter: tidligereMin } = jobbMinutter(
