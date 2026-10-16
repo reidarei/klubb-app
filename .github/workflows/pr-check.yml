@@ -574,6 +574,91 @@ jobs:
             exit 1
           fi
 
+      # Verifiserer migrasjon 161 mot den seedede databasen: klassifiseringen
+      # (klubbeid / unntak) er lik __tests__/helpers/klubb-tabeller.ts, og alle
+      # rader tilhører standardklubben. Unntakslista her vaktes av
+      # __tests__/migrasjon-klubb-id.test.ts.
+      - name: Verifiser klubb_id på klubbeide tabeller
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          declare
+            unntak constant text[] := array['klubb','profiles','push_subscriptions','pass_info','varsel_preferanser','posisjon_deling','posisjon_punkt'];
+            t text;
+            avvik text[] := '{}';
+            antall int := 0;
+            ukjent bigint;
+            attnum_klubb_id smallint;
+          begin
+            for t in
+              select table_name::text from information_schema.tables
+              where table_schema = 'public' and table_type = 'BASE TABLE'
+                and table_name <> all (unntak)
+              order by table_name
+            loop
+              antall := antall + 1;
+              if not exists (
+                select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = t and column_name = 'klubb_id'
+                  and data_type = 'uuid' and is_nullable = 'NO'
+                  and column_default ~ 'standard_klubb_id\(\)'
+              ) then
+                avvik := avvik || (t || ': klubb_id mangler, er nullable eller mangler default');
+                continue;
+              end if;
+              select attnum into attnum_klubb_id from pg_attribute
+                where attrelid = format('public.%I', t)::regclass and attname = 'klubb_id';
+              if not exists (
+                select 1 from pg_constraint
+                where contype = 'f'
+                  and conrelid = format('public.%I', t)::regclass
+                  and confrelid = 'public.klubb'::regclass
+                  and conkey = array[attnum_klubb_id]
+                  and confupdtype = 'c' and confdeltype = 'r'
+              ) then
+                avvik := avvik || (t || ': fremmednøkkel til klubb mangler eller har feil on update/delete');
+              end if;
+              execute format('select count(*) from public.%I where klubb_id is distinct from public.standard_klubb_id()', t) into ukjent;
+              if ukjent <> 0 then
+                avvik := avvik || (t || ': ' || ukjent || ' rader med annen klubb_id enn standardklubben');
+              end if;
+            end loop;
+
+            foreach t in array unntak loop
+              if not exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = t) then
+                avvik := avvik || (t || ': unntakstabell finnes ikke');
+              elsif exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = t and column_name = 'klubb_id') then
+                avvik := avvik || (t || ': unntakstabell har klubb_id');
+              end if;
+            end loop;
+
+            if antall = 0 then
+              avvik := avvik || 'ingen klubbeide tabeller funnet';
+            end if;
+            if has_function_privilege('anon', 'public.standard_klubb_id()', 'execute') then
+              avvik := avvik || 'anon har execute på standard_klubb_id()';
+            end if;
+            if not has_function_privilege('authenticated', 'public.standard_klubb_id()', 'execute') then
+              avvik := avvik || 'authenticated mangler execute på standard_klubb_id()';
+            end if;
+            if not has_function_privilege('service_role', 'public.standard_klubb_id()', 'execute') then
+              avvik := avvik || 'service_role mangler execute på standard_klubb_id()';
+            end if;
+
+            if cardinality(avvik) > 0 then
+              raise exception 'klubb_id-avvik: %', array_to_string(avvik, E'\n  ');
+            end if;
+            raise notice 'klubb_id verifisert på % klubbeide tabeller', antall;
+          end
+          $$;
+          SQL
+          then
+            echo "::error::klubb_id-verifiseringen feilet — se psql-utskriften over."
+            exit 1
+          fi
+
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av

@@ -131,6 +131,33 @@ Migrasjoner kjøres sekvensielt og er idempotente — det er trygt å kjøre `db
 
 Se [docs/oppsett.md](oppsett.md) for full referanse til oppsett-kommandoene.
 
+### Migrasjon 161: klubb_id på klubbeide tabeller
+
+Denne migrasjonen legger til `klubb_id` (fremmednøkkel til `public.klubb`) på 46 tabeller for å forberede multi-tenant-arkitektur. Den tar korte låser på hver tabell. Gjør dette i rekkefølge:
+
+1. **Backup først.** Kjør `db-backup.yml` (eller `pg_dump`) og bekreft at dumpen er lesbar.
+2. **Tidspunkt.** Velg et tidspunkt med lite trafikk, utenfor cron- og backupvinduer.
+3. **Dry-run, så ekte kjøring.** `npx supabase db push --dry-run`, deretter ekte kjøring. Migrasjonen setter `lock_timeout` til 3 s — treffer den en lås, rulles hele fila tilbake. Vent noen minutter og kjør på nytt. Vær forberedt på `WARNING 25P01` «SET LOCAL can only be used in transaction blocks» — det er forventet (gjelder likevel for resten av migrasjonen).
+4. **Verifiser** i SQL-editoren:
+
+   ```sql
+   -- Tabeller uten klubb_id: skal gi nøyaktig 7 rader
+   select t.table_name from information_schema.tables t
+   where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
+     and not exists (select 1 from information_schema.columns c
+       where c.table_schema = 'public' and c.table_name = t.table_name and c.column_name = 'klubb_id')
+   order by 1;
+
+   -- Fremmednøkler til klubb på klubb_id: skal være 46
+   select count(*) from pg_constraint
+   where contype = 'f' and confrelid = 'public.klubb'::regclass and conname like '%klubb_id_fkey';
+
+   -- Skal være false
+   select has_function_privilege('anon', 'public.standard_klubb_id()', 'execute');
+   ```
+
+5. **Rollback** (kun hvis migrasjonen feilet): `alter table public.<t> drop column klubb_id;` for alle tabeller som fikk den, så `drop function public.standard_klubb_id();`, så `delete from supabase_migrations.schema_migrations where version = '161';`. Revert deretter migrasjonsfila og typene i repoet.
+
 ---
 
 ## 7. Backup

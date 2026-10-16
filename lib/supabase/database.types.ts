@@ -17,41 +17,64 @@ export type Database = {
       aktivitet_dag: {
         Row: {
           dag: string
+          klubb_id: string
           treff: number
           unike: number
         }
         Insert: {
           dag: string
+          klubb_id?: string
           treff?: number
           unike?: number
         }
         Update: {
           dag?: string
+          klubb_id?: string
           treff?: number
           unike?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "aktivitet_dag_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       aktivitet_uke: {
         Row: {
+          klubb_id: string
           uke_start: string
           unike: number
         }
         Insert: {
+          klubb_id?: string
           uke_start: string
           unike?: number
         }
         Update: {
+          klubb_id?: string
           uke_start?: string
           unike?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "aktivitet_uke_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       album: {
         Row: {
           arrangement_id: string | null
           cover_bilde_id: string | null
           id: string
+          klubb_id: string
           oppdatert: string
           opprettet: string
           opprettet_av: string
@@ -61,6 +84,7 @@ export type Database = {
           arrangement_id?: string | null
           cover_bilde_id?: string | null
           id?: string
+          klubb_id?: string
           oppdatert?: string
           opprettet?: string
           opprettet_av: string
@@ -70,6 +94,7 @@ export type Database = {
           arrangement_id?: string | null
           cover_bilde_id?: string | null
           id?: string
+          klubb_id?: string
           oppdatert?: string
           opprettet?: string
           opprettet_av?: string
@@ -91,6 +116,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "album_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "album_opprettet_av_fkey"
             columns: ["opprettet_av"]
             isOneToOne: false
@@ -106,6 +138,7 @@ export type Database = {
           bredde: number | null
           hoyde: number | null
           id: string
+          klubb_id: string
           lastet_opp_av: string
           opprettet: string
           rekkefolge: number
@@ -117,6 +150,7 @@ export type Database = {
           bredde?: number | null
           hoyde?: number | null
           id?: string
+          klubb_id?: string
           lastet_opp_av: string
           opprettet?: string
           rekkefolge?: number
@@ -128,6 +162,7 @@ export type Database = {
           bredde?: number | null
           hoyde?: number | null
           id?: string
+          klubb_id?: string
           lastet_opp_av?: string
           opprettet?: string
           rekkefolge?: number
@@ -139,6 +174,13 @@ export type Database = {
             columns: ["album_id"]
             isOneToOne: false
             referencedRelation: "album"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -156,6 +198,7 @@ export type Database = {
           bilde_url: string | null
           id: string
           innhold: string
+          klubb_id: string
           opprettet: string
           profil_id: string
           video_url: string | null
@@ -165,6 +208,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold: string
+          klubb_id?: string
           opprettet?: string
           profil_id: string
           video_url?: string | null
@@ -174,6 +218,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
           video_url?: string | null
@@ -184,6 +229,13 @@ export type Database = {
             columns: ["album_bilde_id"]
             isOneToOne: false
             referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -199,18 +251,21 @@ export type Database = {
         Row: {
           bilde_id: string
           emoji: string
+          klubb_id: string
           opprettet: string
           profil_id: string
         }
         Insert: {
           bilde_id: string
           emoji: string
+          klubb_id?: string
           opprettet?: string
           profil_id: string
         }
         Update: {
           bilde_id?: string
           emoji?: string
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
         }
@@ -220,6 +275,13 @@ export type Database = {
             columns: ["bilde_id"]
             isOneToOne: false
             referencedRelation: "album_bilde"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_reaksjon_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -235,22 +297,33 @@ export type Database = {
         Row: {
           aktiv: boolean
           beskrivelse: string | null
+          klubb_id: string
           noekkel: string
           oppdatert: string
         }
         Insert: {
           aktiv?: boolean
           beskrivelse?: string | null
+          klubb_id?: string
           noekkel: string
           oppdatert?: string
         }
         Update: {
           aktiv?: boolean
           beskrivelse?: string | null
+          klubb_id?: string
           noekkel?: string
           oppdatert?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "app_innstillinger_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       arrangement_chat: {
         Row: {
@@ -258,6 +331,7 @@ export type Database = {
           bilde_url: string | null
           id: string
           innhold: string | null
+          klubb_id: string
           opprettet: string
           profil_id: string
           video_url: string | null
@@ -267,6 +341,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id: string
           video_url?: string | null
@@ -276,6 +351,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
           video_url?: string | null
@@ -286,6 +362,13 @@ export type Database = {
             columns: ["arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrangement_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -304,6 +387,7 @@ export type Database = {
           destinasjon: string | null
           fra_facebook: boolean
           id: string
+          klubb_id: string
           lat: number | null
           lng: number | null
           oppdatert: string
@@ -323,6 +407,7 @@ export type Database = {
           destinasjon?: string | null
           fra_facebook?: boolean
           id?: string
+          klubb_id?: string
           lat?: number | null
           lng?: number | null
           oppdatert?: string
@@ -342,6 +427,7 @@ export type Database = {
           destinasjon?: string | null
           fra_facebook?: boolean
           id?: string
+          klubb_id?: string
           lat?: number | null
           lng?: number | null
           oppdatert?: string
@@ -357,6 +443,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "arrangementer_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "arrangementer_opprettet_av_fkey"
             columns: ["opprettet_av"]
             isOneToOne: false
@@ -368,6 +461,7 @@ export type Database = {
       arrangementmaler: {
         Row: {
           id: string
+          klubb_id: string
           navn: string
           opprettet: string | null
           purredato: string | null
@@ -376,6 +470,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          klubb_id?: string
           navn: string
           opprettet?: string | null
           purredato?: string | null
@@ -384,13 +479,22 @@ export type Database = {
         }
         Update: {
           id?: string
+          klubb_id?: string
           navn?: string
           opprettet?: string | null
           purredato?: string | null
           rekkefølge?: number
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "arrangementmaler_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       arrangoransvar: {
         Row: {
@@ -399,6 +503,7 @@ export type Database = {
           arrangement_id: string | null
           arrangement_navn: string
           id: string
+          klubb_id: string
           oppdatert: string
           opprettet: string
           purredato: string | null
@@ -409,6 +514,7 @@ export type Database = {
           arrangement_id?: string | null
           arrangement_navn: string
           id?: string
+          klubb_id?: string
           oppdatert?: string
           opprettet?: string
           purredato?: string | null
@@ -419,6 +525,7 @@ export type Database = {
           arrangement_id?: string | null
           arrangement_navn?: string
           id?: string
+          klubb_id?: string
           oppdatert?: string
           opprettet?: string
           purredato?: string | null
@@ -438,6 +545,13 @@ export type Database = {
             referencedRelation: "arrangementer"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "arrangoransvar_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bursdagsbilde: {
@@ -446,6 +560,7 @@ export type Database = {
           bilde_url: string | null
           feiringsdato: string
           forsok: number
+          klubb_id: string
           modell: string | null
           paabegynt: string | null
           profil_id: string
@@ -460,6 +575,7 @@ export type Database = {
           bilde_url?: string | null
           feiringsdato: string
           forsok?: number
+          klubb_id?: string
           modell?: string | null
           paabegynt?: string | null
           profil_id: string
@@ -474,6 +590,7 @@ export type Database = {
           bilde_url?: string | null
           feiringsdato?: string
           forsok?: number
+          klubb_id?: string
           modell?: string | null
           paabegynt?: string | null
           profil_id?: string
@@ -484,6 +601,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bursdagsbilde_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bursdagsbilde_profil_id_fkey"
             columns: ["profil_id"]
@@ -503,23 +627,33 @@ export type Database = {
       chat_reaksjoner: {
         Row: {
           emoji: string
+          klubb_id: string
           melding_id: string
           opprettet: string
           profil_id: string
         }
         Insert: {
           emoji: string
+          klubb_id?: string
           melding_id: string
           opprettet?: string
           profil_id: string
         }
         Update: {
           emoji?: string
+          klubb_id?: string
           melding_id?: string
           opprettet?: string
           profil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_reaksjoner_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_reaksjoner_profil_id_fkey"
             columns: ["profil_id"]
@@ -533,6 +667,7 @@ export type Database = {
         Row: {
           event: string
           id: number
+          klubb_id: string
           kontekst: Json | null
           nivaa: string
           opprettet: string
@@ -543,6 +678,7 @@ export type Database = {
         Insert: {
           event: string
           id?: number
+          klubb_id?: string
           kontekst?: Json | null
           nivaa: string
           opprettet?: string
@@ -553,6 +689,7 @@ export type Database = {
         Update: {
           event?: string
           id?: number
+          klubb_id?: string
           kontekst?: Json | null
           nivaa?: string
           opprettet?: string
@@ -561,6 +698,13 @@ export type Database = {
           user_agent?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "feil_logg_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "feil_logg_profil_id_fkey"
             columns: ["profil_id"]
@@ -575,6 +719,7 @@ export type Database = {
           belop: number
           dato: string
           id: string
+          klubb_id: string
           opprettet: string
           profil_id: string
         }
@@ -582,6 +727,7 @@ export type Database = {
           belop: number
           dato: string
           id?: string
+          klubb_id?: string
           opprettet?: string
           profil_id: string
         }
@@ -589,10 +735,18 @@ export type Database = {
           belop?: number
           dato?: string
           id?: string
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fond_bevegelse_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fond_bevegelse_profil_id_fkey"
             columns: ["profil_id"]
@@ -608,6 +762,7 @@ export type Database = {
           driftskostnader_i_aar: number
           husleie_i_aar: number
           id: string
+          klubb_id: string
           markedsverdi: number
           navn: string
           oppdatert: string
@@ -617,6 +772,7 @@ export type Database = {
           driftskostnader_i_aar?: number
           husleie_i_aar?: number
           id?: string
+          klubb_id?: string
           markedsverdi: number
           navn: string
           oppdatert?: string
@@ -626,17 +782,27 @@ export type Database = {
           driftskostnader_i_aar?: number
           husleie_i_aar?: number
           id?: string
+          klubb_id?: string
           markedsverdi?: number
           navn?: string
           oppdatert?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fond_eiendom_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fond_innskudd: {
         Row: {
           belop: number
           dato: string
           id: string
+          klubb_id: string
           opprettet: string
           oppspart_akkumulert: number
           profil_id: string
@@ -646,6 +812,7 @@ export type Database = {
           belop: number
           dato: string
           id?: string
+          klubb_id?: string
           opprettet?: string
           oppspart_akkumulert?: number
           profil_id: string
@@ -655,12 +822,20 @@ export type Database = {
           belop?: number
           dato?: string
           id?: string
+          klubb_id?: string
           opprettet?: string
           oppspart_akkumulert?: number
           profil_id?: string
           renteandel_i_fjor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "fond_innskudd_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fond_innskudd_profil_id_fkey"
             columns: ["profil_id"]
@@ -673,6 +848,7 @@ export type Database = {
       fond_kontant: {
         Row: {
           id: number
+          klubb_id: string
           kontrollert_dato: string | null
           oppdatert: string
           renter_brutto: number | null
@@ -683,6 +859,7 @@ export type Database = {
         }
         Insert: {
           id?: number
+          klubb_id?: string
           kontrollert_dato?: string | null
           oppdatert?: string
           renter_brutto?: number | null
@@ -693,6 +870,7 @@ export type Database = {
         }
         Update: {
           id?: number
+          klubb_id?: string
           kontrollert_dato?: string | null
           oppdatert?: string
           renter_brutto?: number | null
@@ -701,28 +879,46 @@ export type Database = {
           renter_skattesats?: number | null
           saldo?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fond_kontant_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fond_navn_alias: {
         Row: {
           api_navn: string
+          klubb_id: string
           opprettet: string
           opprettet_av: string
           profil_id: string
         }
         Insert: {
           api_navn: string
+          klubb_id?: string
           opprettet?: string
           opprettet_av: string
           profil_id: string
         }
         Update: {
           api_navn?: string
+          klubb_id?: string
           opprettet?: string
           opprettet_av?: string
           profil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fond_navn_alias_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fond_navn_alias_opprettet_av_fkey"
             columns: ["opprettet_av"]
@@ -746,6 +942,7 @@ export type Database = {
           id: number
           kilde: string
           kilde_id: string | null
+          klubb_id: string
           ny_verdi: number
           tidspunkt: string
         }
@@ -755,6 +952,7 @@ export type Database = {
           id?: number
           kilde: string
           kilde_id?: string | null
+          klubb_id?: string
           ny_verdi: number
           tidspunkt?: string
         }
@@ -764,6 +962,7 @@ export type Database = {
           id?: number
           kilde?: string
           kilde_id?: string | null
+          klubb_id?: string
           ny_verdi?: number
           tidspunkt?: string
         }
@@ -775,12 +974,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fond_verdi_historikk_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
         ]
       }
       fond_verdipapir: {
         Row: {
           anskaffelsesverdi: number
           id: string
+          klubb_id: string
           navn: string
           oppdatert: string
           type: string
@@ -790,6 +997,7 @@ export type Database = {
         Insert: {
           anskaffelsesverdi: number
           id?: string
+          klubb_id?: string
           navn: string
           oppdatert?: string
           type: string
@@ -799,31 +1007,50 @@ export type Database = {
         Update: {
           anskaffelsesverdi?: number
           id?: string
+          klubb_id?: string
           navn?: string
           oppdatert?: string
           type?: string
           utbytte_i_aar?: number
           verdi?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fond_verdipapir_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       innspill_kobling: {
         Row: {
           issue_nummer: number
+          klubb_id: string
           opprettet: string
           profil_id: string
         }
         Insert: {
           issue_nummer: number
+          klubb_id?: string
           opprettet?: string
           profil_id: string
         }
         Update: {
           issue_nummer?: number
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "innspill_kobling_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "innspill_kobling_profil_id_fkey"
             columns: ["profil_id"]
@@ -839,6 +1066,7 @@ export type Database = {
           arrangement_id: string | null
           begrunnelse: string | null
           id: string
+          klubb_id: string
           mal_id: string | null
           oppdatert: string
           opprettet: string
@@ -851,6 +1079,7 @@ export type Database = {
           arrangement_id?: string | null
           begrunnelse?: string | null
           id?: string
+          klubb_id?: string
           mal_id?: string | null
           oppdatert?: string
           opprettet?: string
@@ -863,6 +1092,7 @@ export type Database = {
           arrangement_id?: string | null
           begrunnelse?: string | null
           id?: string
+          klubb_id?: string
           mal_id?: string | null
           oppdatert?: string
           opprettet?: string
@@ -876,6 +1106,13 @@ export type Database = {
             columns: ["arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -912,6 +1149,7 @@ export type Database = {
         Row: {
           id: string
           kandidat_kilde: string
+          klubb_id: string
           navn: string
           opprettet: string
           rekkefolge: number
@@ -919,6 +1157,7 @@ export type Database = {
         Insert: {
           id?: string
           kandidat_kilde?: string
+          klubb_id?: string
           navn: string
           opprettet?: string
           rekkefolge?: number
@@ -926,16 +1165,26 @@ export type Database = {
         Update: {
           id?: string
           kandidat_kilde?: string
+          klubb_id?: string
           navn?: string
           opprettet?: string
           rekkefolge?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kaaringmaler_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kart_markering: {
         Row: {
           arrangement_id: string | null
           id: string
+          klubb_id: string
           lat: number
           lng: number
           opprettet: string
@@ -947,6 +1196,7 @@ export type Database = {
         Insert: {
           arrangement_id?: string | null
           id?: string
+          klubb_id?: string
           lat: number
           lng: number
           opprettet?: string
@@ -958,6 +1208,7 @@ export type Database = {
         Update: {
           arrangement_id?: string | null
           id?: string
+          klubb_id?: string
           lat?: number
           lng?: number
           opprettet?: string
@@ -975,6 +1226,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "kart_markering_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "kart_markering_opprettet_av_fkey"
             columns: ["opprettet_av"]
             isOneToOne: false
@@ -987,22 +1245,33 @@ export type Database = {
         Row: {
           emoji: string
           etikett: string
+          klubb_id: string
           oppdatert: string
           symbol: string
         }
         Insert: {
           emoji: string
           etikett: string
+          klubb_id?: string
           oppdatert?: string
           symbol: string
         }
         Update: {
           emoji?: string
           etikett?: string
+          klubb_id?: string
           oppdatert?: string
           symbol?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kart_symbol_tilpasning_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       klubb: {
         Row: {
@@ -1032,6 +1301,7 @@ export type Database = {
           id: string
           innhold: string | null
           kilde_ekstern_id: string | null
+          klubb_id: string
           opprettet: string
           profil_id: string
           video_url: string | null
@@ -1042,6 +1312,7 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id: string
           video_url?: string | null
@@ -1052,11 +1323,19 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "klubb_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "klubb_chat_profil_id_fkey"
             columns: ["profil_id"]
@@ -1069,6 +1348,7 @@ export type Database = {
       klubb_info: {
         Row: {
           id: boolean
+          klubb_id: string
           om_tekst: string | null
           oppdatert: string
           sted: string | null
@@ -1076,6 +1356,7 @@ export type Database = {
         }
         Insert: {
           id?: boolean
+          klubb_id?: string
           om_tekst?: string | null
           oppdatert?: string
           sted?: string | null
@@ -1083,17 +1364,27 @@ export type Database = {
         }
         Update: {
           id?: boolean
+          klubb_id?: string
           om_tekst?: string | null
           oppdatert?: string
           sted?: string | null
           stiftet?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "klubb_info_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       melding_bilder: {
         Row: {
           bilde_url: string
           id: string
+          klubb_id: string
           melding_id: string
           opprettet: string
           rekkefoelge: number
@@ -1101,6 +1392,7 @@ export type Database = {
         Insert: {
           bilde_url: string
           id?: string
+          klubb_id?: string
           melding_id: string
           opprettet?: string
           rekkefoelge?: number
@@ -1108,11 +1400,19 @@ export type Database = {
         Update: {
           bilde_url?: string
           id?: string
+          klubb_id?: string
           melding_id?: string
           opprettet?: string
           rekkefoelge?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "melding_bilder_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "melding_bilder_melding_id_fkey"
             columns: ["melding_id"]
@@ -1129,6 +1429,7 @@ export type Database = {
           id: string
           innhold: string | null
           kilde_ekstern_id: string | null
+          klubb_id: string
           melding_id: string
           opprettet: string
           profil_id: string
@@ -1140,6 +1441,7 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           melding_id: string
           opprettet?: string
           profil_id: string
@@ -1151,12 +1453,20 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           melding_id?: string
           opprettet?: string
           profil_id?: string
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "melding_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "melding_chat_melding_id_fkey"
             columns: ["melding_id"]
@@ -1176,23 +1486,33 @@ export type Database = {
       melding_reaksjon: {
         Row: {
           emoji: string
+          klubb_id: string
           melding_id: string
           opprettet: string
           profil_id: string
         }
         Insert: {
           emoji: string
+          klubb_id?: string
           melding_id: string
           opprettet?: string
           profil_id: string
         }
         Update: {
           emoji?: string
+          klubb_id?: string
           melding_id?: string
           opprettet?: string
           profil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "melding_reaksjon_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "melding_reaksjon_melding_id_fkey"
             columns: ["melding_id"]
@@ -1218,6 +1538,7 @@ export type Database = {
           id: string
           innhold: string | null
           kilde_ekstern_id: string | null
+          klubb_id: string
           opprettet: string
           profil_id: string
           sist_aktivitet: string
@@ -1231,6 +1552,7 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id: string
           sist_aktivitet?: string
@@ -1244,6 +1566,7 @@ export type Database = {
           id?: string
           innhold?: string | null
           kilde_ekstern_id?: string | null
+          klubb_id?: string
           opprettet?: string
           profil_id?: string
           sist_aktivitet?: string
@@ -1258,6 +1581,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "meldinger_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "meldinger_profil_id_fkey"
             columns: ["profil_id"]
             isOneToOne: false
@@ -1269,18 +1599,21 @@ export type Database = {
       paameldinger: {
         Row: {
           arrangement_id: string
+          klubb_id: string
           oppdatert: string
           profil_id: string
           status: Database["public"]["Enums"]["paameldingsstatus"]
         }
         Insert: {
           arrangement_id: string
+          klubb_id?: string
           oppdatert?: string
           profil_id: string
           status: Database["public"]["Enums"]["paameldingsstatus"]
         }
         Update: {
           arrangement_id?: string
+          klubb_id?: string
           oppdatert?: string
           profil_id?: string
           status?: Database["public"]["Enums"]["paameldingsstatus"]
@@ -1291,6 +1624,13 @@ export type Database = {
             columns: ["arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paameldinger_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -1339,6 +1679,7 @@ export type Database = {
           eier_id: string
           gyldig_til: string | null
           id: string
+          klubb_id: string
           opprettet: string
           soker_id: string
           status: string
@@ -1351,6 +1692,7 @@ export type Database = {
           eier_id: string
           gyldig_til?: string | null
           id?: string
+          klubb_id?: string
           opprettet?: string
           soker_id: string
           status?: string
@@ -1363,6 +1705,7 @@ export type Database = {
           eier_id?: string
           gyldig_til?: string | null
           id?: string
+          klubb_id?: string
           opprettet?: string
           soker_id?: string
           status?: string
@@ -1391,6 +1734,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pass_tilgang_forespørsel_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pass_tilgang_forespørsel_soker_id_fkey"
             columns: ["soker_id"]
             isOneToOne: false
@@ -1407,6 +1757,7 @@ export type Database = {
           flervalg: boolean
           id: string
           kaaring_mal_id: string | null
+          klubb_id: string
           kontekst: string | null
           kontekst_data: Json | null
           opprettet: string
@@ -1424,6 +1775,7 @@ export type Database = {
           flervalg?: boolean
           id?: string
           kaaring_mal_id?: string | null
+          klubb_id?: string
           kontekst?: string | null
           kontekst_data?: Json | null
           opprettet?: string
@@ -1441,6 +1793,7 @@ export type Database = {
           flervalg?: boolean
           id?: string
           kaaring_mal_id?: string | null
+          klubb_id?: string
           kontekst?: string | null
           kontekst_data?: Json | null
           opprettet?: string
@@ -1467,6 +1820,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "poll_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "poll_opprettet_av_fkey"
             columns: ["opprettet_av"]
             isOneToOne: false
@@ -1480,6 +1840,7 @@ export type Database = {
           bilde_url: string | null
           id: string
           innhold: string | null
+          klubb_id: string
           opprettet: string
           poll_id: string
           profil_id: string
@@ -1489,6 +1850,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           opprettet?: string
           poll_id: string
           profil_id: string
@@ -1498,12 +1860,20 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           opprettet?: string
           poll_id?: string
           profil_id?: string
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "poll_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "poll_chat_poll_id_fkey"
             columns: ["poll_id"]
@@ -1522,24 +1892,34 @@ export type Database = {
       }
       poll_stemme: {
         Row: {
+          klubb_id: string
           opprettet: string
           poll_id: string
           profil_id: string
           valg_id: string
         }
         Insert: {
+          klubb_id?: string
           opprettet?: string
           poll_id: string
           profil_id: string
           valg_id: string
         }
         Update: {
+          klubb_id?: string
           opprettet?: string
           poll_id?: string
           profil_id?: string
           valg_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "poll_stemme_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "poll_stemme_poll_id_fkey"
             columns: ["poll_id"]
@@ -1566,6 +1946,7 @@ export type Database = {
       poll_valg: {
         Row: {
           id: string
+          klubb_id: string
           opprettet: string
           poll_id: string
           referanse_arrangement_id: string | null
@@ -1575,6 +1956,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          klubb_id?: string
           opprettet?: string
           poll_id: string
           referanse_arrangement_id?: string | null
@@ -1584,6 +1966,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          klubb_id?: string
           opprettet?: string
           poll_id?: string
           referanse_arrangement_id?: string | null
@@ -1592,6 +1975,13 @@ export type Database = {
           tekst?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "poll_valg_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "poll_valg_poll_id_fkey"
             columns: ["poll_id"]
@@ -1784,6 +2174,7 @@ export type Database = {
       samtale: {
         Row: {
           id: string
+          klubb_id: string
           opprettet: string
           profil_a: string
           profil_b: string
@@ -1791,6 +2182,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          klubb_id?: string
           opprettet?: string
           profil_a: string
           profil_b: string
@@ -1798,12 +2190,20 @@ export type Database = {
         }
         Update: {
           id?: string
+          klubb_id?: string
           opprettet?: string
           profil_a?: string
           profil_b?: string
           sist_aktivitet?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "samtale_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "samtale_profil_a_fkey"
             columns: ["profil_a"]
@@ -1825,6 +2225,7 @@ export type Database = {
           bilde_url: string | null
           id: string
           innhold: string | null
+          klubb_id: string
           lest: boolean
           opprettet: string
           profil_id: string
@@ -1835,6 +2236,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           lest?: boolean
           opprettet?: string
           profil_id: string
@@ -1845,6 +2247,7 @@ export type Database = {
           bilde_url?: string | null
           id?: string
           innhold?: string | null
+          klubb_id?: string
           lest?: boolean
           opprettet?: string
           profil_id?: string
@@ -1852,6 +2255,13 @@ export type Database = {
           video_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "samtale_chat_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "samtale_chat_profil_id_fkey"
             columns: ["profil_id"]
@@ -1873,6 +2283,7 @@ export type Database = {
           adresse: string | null
           arrangement_id: string
           id: string
+          klubb_id: string
           lat: number | null
           lng: number | null
           opprettet: string
@@ -1884,6 +2295,7 @@ export type Database = {
           adresse?: string | null
           arrangement_id: string
           id?: string
+          klubb_id?: string
           lat?: number | null
           lng?: number | null
           opprettet?: string
@@ -1895,6 +2307,7 @@ export type Database = {
           adresse?: string | null
           arrangement_id?: string
           id?: string
+          klubb_id?: string
           lat?: number | null
           lng?: number | null
           opprettet?: string
@@ -1908,6 +2321,13 @@ export type Database = {
             columns: ["arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeplan_post_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -1925,6 +2345,7 @@ export type Database = {
           beskrivelse: string | null
           dager_foer: number | null
           id: string
+          klubb_id: string
           noekkel: string
           oppdatert: string
         }
@@ -1933,6 +2354,7 @@ export type Database = {
           beskrivelse?: string | null
           dager_foer?: number | null
           id?: string
+          klubb_id?: string
           noekkel: string
           oppdatert?: string
         }
@@ -1941,10 +2363,19 @@ export type Database = {
           beskrivelse?: string | null
           dager_foer?: number | null
           id?: string
+          klubb_id?: string
           noekkel?: string
           oppdatert?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "varsel_innstillinger_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       varsel_logg: {
         Row: {
@@ -1952,6 +2383,7 @@ export type Database = {
           dedup_noekkel: string | null
           id: string
           kanal: string | null
+          klubb_id: string
           lest: boolean
           melding: string
           opprettet: string | null
@@ -1967,6 +2399,7 @@ export type Database = {
           dedup_noekkel?: string | null
           id?: string
           kanal?: string | null
+          klubb_id?: string
           lest?: boolean
           melding: string
           opprettet?: string | null
@@ -1982,6 +2415,7 @@ export type Database = {
           dedup_noekkel?: string | null
           id?: string
           kanal?: string | null
+          klubb_id?: string
           lest?: boolean
           melding?: string
           opprettet?: string | null
@@ -2005,6 +2439,13 @@ export type Database = {
             columns: ["arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "varsel_logg_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -2052,6 +2493,7 @@ export type Database = {
         Row: {
           id: string
           innhold: string
+          klubb_id: string
           oppdatert: string
           slug: string
           tittel: string
@@ -2059,6 +2501,7 @@ export type Database = {
         Insert: {
           id?: string
           innhold: string
+          klubb_id?: string
           oppdatert?: string
           slug: string
           tittel: string
@@ -2066,11 +2509,20 @@ export type Database = {
         Update: {
           id?: string
           innhold?: string
+          klubb_id?: string
           oppdatert?: string
           slug?: string
           tittel?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vedtekter_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vedtekter_versjoner: {
         Row: {
@@ -2078,6 +2530,7 @@ export type Database = {
           endringsnotat: string
           id: string
           innhold: string
+          klubb_id: string
           opprettet: string
           vedtaksdato: string
           vedtekt_id: string
@@ -2087,6 +2540,7 @@ export type Database = {
           endringsnotat: string
           id?: string
           innhold: string
+          klubb_id?: string
           opprettet?: string
           vedtaksdato: string
           vedtekt_id: string
@@ -2096,6 +2550,7 @@ export type Database = {
           endringsnotat?: string
           id?: string
           innhold?: string
+          klubb_id?: string
           opprettet?: string
           vedtaksdato?: string
           vedtekt_id?: string
@@ -2106,6 +2561,13 @@ export type Database = {
             columns: ["endret_av"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vedtekter_versjoner_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
             referencedColumns: ["id"]
           },
           {
@@ -2121,6 +2583,7 @@ export type Database = {
         Row: {
           device_type: string | null
           id: string
+          klubb_id: string
           metric: string
           nav_type: string | null
           opprettet: string
@@ -2132,6 +2595,7 @@ export type Database = {
         Insert: {
           device_type?: string | null
           id?: string
+          klubb_id?: string
           metric: string
           nav_type?: string | null
           opprettet?: string
@@ -2143,6 +2607,7 @@ export type Database = {
         Update: {
           device_type?: string | null
           id?: string
+          klubb_id?: string
           metric?: string
           nav_type?: string | null
           opprettet?: string
@@ -2151,7 +2616,15 @@ export type Database = {
           transfer_size?: number | null
           verdi?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vitals_logg_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -2190,6 +2663,7 @@ export type Database = {
           bilde_url: string | null
           feiringsdato: string
           forsok: number
+          klubb_id: string
           modell: string | null
           paabegynt: string | null
           profil_id: string
@@ -2227,6 +2701,7 @@ export type Database = {
         Args: { p_aar: number; p_data: Json }
         Returns: undefined
       }
+      standard_klubb_id: { Args: never; Returns: string }
       stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
       tell_aktivitet: {
         Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
