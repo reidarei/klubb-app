@@ -1004,6 +1004,27 @@ export type Database = {
         }
         Relationships: []
       }
+      klubb: {
+        Row: {
+          id: string
+          navn: string
+          opprettet: string
+          slug: string
+        }
+        Insert: {
+          id?: string
+          navn: string
+          opprettet?: string
+          slug: string
+        }
+        Update: {
+          id?: string
+          navn?: string
+          opprettet?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       klubb_chat: {
         Row: {
           bilde_url: string | null

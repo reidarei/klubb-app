@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { ARRANGEMENT, MELDING, POLL, MEDLEM, ALBUM, SAMTALE, VARSEL } from '../e2e/helpers/ruter'
 import { TESTBRUKERE } from '../e2e/helpers/rls-klienter'
+import { FOERSTE_KLUBB_ID } from '../e2e/helpers/klubb'
 
 const SEED = readFileSync(path.resolve(__dirname, '../supabase/seed.sql'), 'utf-8')
   .replace(/\r\n/g, '\n')
@@ -34,5 +35,15 @@ describe('TESTBRUKERE (e2e/helpers/rls-klienter.ts) ↔ seed.sql', () => {
       .find(s => /update\s+public\.profiles\s+set/i.test(s) && s.includes(`where id = '${bruker.id}'`))
       ?.match(/rolle\s*=\s*'(\w+)'/)?.[1]
     expect(rolle).toBe(bruker.rolle)
+  })
+})
+
+describe('FOERSTE_KLUBB_ID (e2e/helpers/klubb.ts) ↔ migrasjon 160', () => {
+  it('står i insert-setningen for public.klubb', () => {
+    const mig = readFileSync(path.resolve(__dirname, '../supabase/migrations/160_klubb.sql'), 'utf-8')
+      .replace(/\r\n/g, '\n')
+      .replace(/--[^\n]*/g, '')
+    const insert = mig.split(';').find(s => /insert\s+into\s+public\.klubb/i.test(s))
+    expect(insert).toContain(`'${FOERSTE_KLUBB_ID}'`)
   })
 })
