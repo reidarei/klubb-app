@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendVarsel } from '@/lib/varsler'
+import { klubbForSystemjobb } from '@/lib/klubb-system'
 import {
   KLIENT_FEIL_ALARM_TERSKEL,
   LOGG_FEIL_RETENSJONSDAGER,
@@ -86,6 +87,9 @@ async function handle(req: NextRequest) {
       // Uten catch her ville en varsel-feil gitt 500 og hoppet over oppryddingen,
       // altså: dagen alarmen faktisk går er dagen retention ryker. (#503-review)
       await sendVarsel({
+        // Fase 1: alarmen går til standardklubbens mottakere (beslutning 3 på #865). Rutes per
+        // klubb i PR 2 / 2.5.
+        klubbId: klubbForSystemjobb(),
         mottakere: admins.map(p => p.id),
         tittel: 'Feil siste døgn',
         melding: `${antall} feil registrert i feil_logg siste 24 timer.${lagToppEventTekst(eventRader ?? [])}`,

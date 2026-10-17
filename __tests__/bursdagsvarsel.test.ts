@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { iDagOslo } from '@/lib/dato'
-import { lagChain } from './helpers/supabase-mock'
+import { lagChain, medlem } from './helpers/supabase-mock'
 
 const mockSendVarsel = vi.fn().mockResolvedValue({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 0 })
 vi.mock('@/lib/varsler', () => ({
@@ -32,7 +32,10 @@ type Admin = Parameters<typeof kjorBursdagsvarsel>[0]
 
 function lagAdmin(profiler: unknown, feil: unknown = null) {
   return {
-    from: vi.fn(() => lagChain(profiler, feil)),
+    // Bursdagsgrunnlaget er medlemskapet i klubben (#871): radene er { profil_id, profiles }.
+    from: vi.fn(() =>
+      lagChain(Array.isArray(profiler) ? medlem(profiler as { id: string }[]) : profiler, feil),
+    ),
   } as unknown as Admin
 }
 
@@ -145,5 +148,18 @@ describe('kjorBursdagsvarsel – #638', () => {
 
     expect(resultat).toEqual({ varslet: 0, hoppet: 1, blokkert: 0, feil: 0 })
     expect(mockSendVarsel).not.toHaveBeenCalled()
+  })
+})
+
+describe('kjorBursdagsvarsel – rotet i medlemskap (#871)', () => {
+  it('leser fra aktive medlemskap, aldri fra profiles direkte', async () => {
+    const admin = lagAdmin([{ id: 'barn1', navn: 'Ola Nordmann', fodselsdato: `2000-${iDag.slice(5)}` }])
+    await kjorBursdagsvarsel(admin)
+    const from = (admin as unknown as { from: ReturnType<typeof vi.fn> }).from
+    expect(from).toHaveBeenCalledWith('medlemskap')
+    expect(from).not.toHaveBeenCalledWith('profiles')
+    const kjede = from.mock.results[0].value
+    expect(kjede.select).toHaveBeenCalledWith(expect.stringContaining('profiles!medlemskap_profil_id_fkey!inner('))
+    expect(kjede.eq).toHaveBeenCalledWith('aktiv', true)
   })
 })

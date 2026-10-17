@@ -32,10 +32,10 @@ import {
 import { sendChatVarsler } from '@/lib/varsler'
 import { rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import type { KlubbAdmin } from '@/lib/supabase/admin'
 
-type Admin = SupabaseClient<Database>
+// KlubbAdmin: bundet til én klubb (#871); klubbId følger med til sendVarsel.
+type Admin = KlubbAdmin
 
 // N unike emoji via Fisher-Yates. Math.random() holder — ikke et kryptokrav.
 function trekkEmoji(antall: number): string[] {
@@ -58,11 +58,14 @@ export async function kjorBursdagsgratulasjon(
   const iDag = iDagOslo()
   const aarStr = iDag.split('-')[0]
 
-  const { data: profiler, error: profilerFeil } = await admin
-    .from('profiles')
-    .select('id, navn, fodselsdato')
+  // Rotet i medlemskap, ikke i den globale profiles-tabellen: bursdagsbarnet må være
+  // aktivt medlem i klubben den bundne klienten gjelder (#871, flaggene bor på
+  // medlemskap, #868). Profiler uten fødselsdato filtreres av finnBursdagsbarn.
+  // FK-hintet: se spoerMedlemsprofiler() i lib/varsler.ts (PGRST201 uten det).
+  const { data: medlemmer, error: profilerFeil } = await admin
+    .from('medlemskap')
+    .select('profil_id, profiles!medlemskap_profil_id_fkey!inner(id, navn, fodselsdato)')
     .eq('aktiv', true)
-    .not('fodselsdato', 'is', null)
 
   // Fail closed: feil ≠ «ingen har bursdag i dag» (#504).
   if (profilerFeil) {
@@ -71,7 +74,11 @@ export async function kjorBursdagsgratulasjon(
     return { sendt, hoppet, feil }
   }
 
-  if (!profiler || profiler.length === 0) {
+  const profiler = (medlemmer ?? []).map(
+    m => m.profiles as unknown as { id: string; navn: string; fodselsdato: string | null },
+  )
+
+  if (profiler.length === 0) {
     return { sendt, hoppet, feil }
   }
 
@@ -82,9 +89,11 @@ export async function kjorBursdagsgratulasjon(
     return { sendt, hoppet, feil }
   }
 
-  const { data: avsendere, error: avsendereFeil } = await admin
-    .from('profiles')
-    .select('id, navn')
+  // Rolle, aktiv og bursdagsgratulasjon_aktiv leses fra medlemskapet i DENNE klubben
+  // (#868) — en admin i en annen klubb skal ikke poste her.
+  const { data: avsenderMedlemskap, error: avsendereFeil } = await admin
+    .from('medlemskap')
+    .select('profil_id, profiles!medlemskap_profil_id_fkey!inner(id, navn)')
     .eq('aktiv', true)
     .eq('bursdagsgratulasjon_aktiv', true)
     .in('rolle', rollerMed('kanAdministrere'))
@@ -96,7 +105,11 @@ export async function kjorBursdagsgratulasjon(
     return { sendt, hoppet, feil }
   }
 
-  if (!avsendere || avsendere.length === 0) {
+  const avsendere = (avsenderMedlemskap ?? []).map(
+    m => m.profiles as unknown as { id: string; navn: string },
+  )
+
+  if (avsendere.length === 0) {
     return { sendt, hoppet, feil }
   }
 
@@ -186,6 +199,7 @@ export async function kjorBursdagsgratulasjon(
       if (postetInnhold) {
         try {
           await sendChatVarsler({ type: 'klubb' }, postetInnhold, avsender.id, false, {
+            klubbId: admin.klubbId,
             dedupNoekkel: `bursdag-chat:${barn.id}:${aarStr}:${avsender.id}`,
             nevnte: [barn.id],
           })

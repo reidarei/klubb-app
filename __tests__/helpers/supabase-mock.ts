@@ -54,3 +54,13 @@ export function lagChain(resolveData: unknown = [], feil: unknown = null) {
 export function lagFromMock(tabeller: Record<string, unknown>, feilPerTabell?: Record<string, unknown>) {
   return vi.fn((tabell: string) => lagChain(tabeller[tabell] ?? [], feilPerTabell?.[tabell] ?? null))
 }
+
+// sendVarsel() henter mottakere fra medlemskap med profiles!inner(...) (#871/#868):
+// radene er { profil_id, profiles: {...} }, ikke profil-radene alene. Brukes av
+// varsel-testene til å bygge medlemskap-fixtures fra vanlige profil-rader.
+export function medlem<T extends { id: string }>(profiler: T[]) {
+  return profiler.map(p => ({ profil_id: p.id, profiles: p }))
+}
+
+// Standardklubbens id, brukt som klubbId i varsel-testene (sendVarsel() krever den, #871).
+export const TEST_KLUBB_ID = '00000000-0000-4000-a000-000000000001'

@@ -133,9 +133,12 @@ export async function ensureGodkjennerPassTilgang() {
 // men handlingen krever at vi vet hvem brukeren er.
 export async function ensureInnlogget() {
   const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    {
+      data: { user },
+    },
+    klubbId,
+  ] = await Promise.all([supabase.auth.getUser(), aktivKlubbId()])
   if (!user) throw new IkkeInnloggetFeil()
-  return { supabase, user }
+  return { supabase, user, klubbId }
 }

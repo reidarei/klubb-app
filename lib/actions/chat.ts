@@ -39,6 +39,7 @@ async function sendVarslerEtterPost(
   scope: ChatScope,
   tekst: string | null,
   avsenderId: string,
+  klubbId: string,
   bildeUrl: string | null = null,
 ): Promise<void> {
   if (scope.type === 'privat') {
@@ -46,7 +47,7 @@ async function sendVarslerEtterPost(
     // tekst eller bilde, men vi beholder fallback for trygghet.
     const varselTekst =
       tekst ?? (bildeUrl ? '📷 Sendte deg et bilde' : 'Sendte deg en melding')
-    await sendPrivatMeldingVarsel(scope.samtaleId, varselTekst, avsenderId)
+    await sendPrivatMeldingVarsel(scope.samtaleId, varselTekst, avsenderId, klubbId)
     return
   }
   // Chat-varsler MÅ awaites — fire-and-forget kuttes av Vercel når server
@@ -84,13 +85,14 @@ async function sendVarslerEtterPost(
       throw new Error(`Ukjent chat-scope: ${JSON.stringify(ukjent)}`)
     }
   }
-  await sendChatVarsler(varselScope, tekst, avsenderId, !!bildeUrl)
+  await sendChatVarsler(varselScope, tekst, avsenderId, !!bildeUrl, { klubbId })
 }
 
 async function sendPrivatMeldingVarsel(
   samtaleId: string,
   tekst: string,
   avsenderId: string,
+  klubbId: string,
 ): Promise<void> {
   const supabase = await createServerClient()
 
@@ -126,6 +128,7 @@ async function sendPrivatMeldingVarsel(
   // Hver privatmelding er sin egen — tillatDuplikat: true så samme avsender
   // kan sende flere meldinger uten at de filtreres bort i dedup-laget.
   await sendVarsel({
+    klubbId,
     mottakere: [motpartId],
     tittel: `${avsenderNavn} skrev`,
     melding: utdrag,
@@ -159,7 +162,7 @@ export async function sendChatMelding(
   const k = konfigFor(scope)
   const { tekst } = validerInnhold(innhold, bildeUrl, k.charLimit)
 
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const fkData = k.fkFelt ? { [k.fkFelt]: k.scopeId(scope) } : {}
   // Returner den innsatte raden (.select().single) så avsenderen kan avstemme
@@ -180,7 +183,7 @@ export async function sendChatMelding(
   revalideringsPaths(scope).forEach((p) => revalidatePath(p))
 
   try {
-    await sendVarslerEtterPost(scope, tekst, user.id, bildeUrl)
+    await sendVarslerEtterPost(scope, tekst, user.id, klubbId, bildeUrl)
   } catch (err) {
     // Varsel-svikt skal ikke feile selve meldingen — den er allerede skrevet
     // til DB. Logg og gå videre.

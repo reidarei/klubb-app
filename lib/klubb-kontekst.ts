@@ -2,11 +2,10 @@ import 'server-only'
 import { cache } from 'react'
 import { hentSesjon } from '@/lib/sesjon'
 import { logg } from '@/lib/logg'
+import { STANDARD_KLUBB_ID } from '@/lib/klubb-system'
 
-// Standardklubbens id — samme uuid som standard_klubb_id() i 161_klubb_id.sql
-// (pinnet i __tests__/klubb-kontekst.test.ts). Bevisst IKKE eksportert: all
-// kode går via aktivKlubbId(), så det finnes ett sted å bytte kilde.
-const STANDARD_KLUBB_ID = '00000000-0000-4000-a000-000000000001'
+// Standardklubbens id bor i lib/klubb-system.ts (delt med klubbForSystemjobb(), #871) —
+// samme uuid som standard_klubb_id() i 161_klubb_id.sql. Annen kode går via aktivKlubbId().
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

@@ -76,7 +76,7 @@ vi.mock('@/lib/varsler', () => ({ sendVarsel: mockSendVarsel }))
 vi.mock('@/lib/logg', () => ({
   logg: { feil: vi.fn(), warn: vi.fn() },
 }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdmin }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdmin, adminForKlubb: mockCreateAdmin, adminPlattform: mockCreateAdmin }))
 vi.mock('@/lib/feil-alarm', () => ({
   tellAlarmverdigeFeil: mockTellAlarmverdigeFeil,
   hentToppEventRader: mockHentToppEventRader,

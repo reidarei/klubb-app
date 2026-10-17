@@ -102,12 +102,14 @@ export async function stempleKaaringspollVarslet(
 // både cron (paaminnelser.ts) og manuell lukk-flyt (kaaringspoll.ts) så
 // vi ikke duplikerer if/else-grenene to steder.
 export async function behandleKaaringspollAvsluttResultat({
+  klubbId,
   pollId,
   spoersmaal,
   status,
   tiebreakIder,
   adminIder,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
   status: string
@@ -115,12 +117,13 @@ export async function behandleKaaringspollAvsluttResultat({
   adminIder: string[]
 }): Promise<{ sendt: boolean }> {
   if (status === 'avgjort') {
-    await sendKaaringspollVinnerVarsel({ pollId, spoersmaal })
+    await sendKaaringspollVinnerVarsel({ klubbId, pollId, spoersmaal })
     return { sendt: true }
   }
   if (status === 'venter_paa_tiebreak') {
     if (tiebreakIder.length === 0) return { sendt: false }
     await sendKaaringspollTiebreakVarsel({
+      klubbId,
       pollId,
       spoersmaal,
       mottakere: tiebreakIder,
@@ -130,6 +133,7 @@ export async function behandleKaaringspollAvsluttResultat({
   if (status === 'ingen_stemmer') {
     if (adminIder.length === 0) return { sendt: false }
     await sendKaaringspollIngenStemmerVarsel({
+      klubbId,
       pollId,
       spoersmaal,
       mottakere: adminIder,

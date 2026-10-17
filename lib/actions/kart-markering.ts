@@ -33,7 +33,7 @@ export async function settMarkering(
   tekst: string,
   symbol: string,
 ): Promise<MarkeringResultat> {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const rentekst = tekst.trim()
   if (!rentekst) return { ok: false, melding: 'Skriv hva markeringen gjelder.' }
@@ -113,6 +113,7 @@ export async function settMarkering(
       await logg.feil(varsel.loggMottakere, mottakerFeil).catch(() => {})
     } else {
       await sendVarsel({
+        klubbId,
         mottakere: (mottakere ?? []).map(m => m.id),
         tittel: varsel.tittel,
         melding: rentekst,

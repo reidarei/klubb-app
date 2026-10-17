@@ -1,4 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/admin'
+import { adminForKlubb } from '@/lib/supabase/admin'
+import { klubbForSystemjobb } from '@/lib/klubb-system'
 import { kjorPaaminnelser } from '@/lib/actions/paaminnelser'
 import { kjorBursdagsgratulasjon } from '@/lib/actions/bursdagsgratulasjon'
 import { kjorBursdagsvarsel } from '@/lib/actions/bursdagsvarsel'
@@ -14,7 +15,8 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ feil: 'Uautorisert' }, { status: 401 })
   }
 
-  const admin = createAdminClient()
+  // Fase 1: én klubb. 2.5 (#872) gjør dette til en løkke over `klubb`.
+  const admin = adminForKlubb(klubbForSystemjobb())
 
   // Slot-indeks-utregningen (inkl. DST-resonnementet) er flyttet til
   // lib/cron-slot.ts (#641) — delt med app/api/cron/bursdagsbilde/route.ts.

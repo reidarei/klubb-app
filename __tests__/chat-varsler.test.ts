@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { lagChain } from './helpers/supabase-mock'
+import { lagChain, medlem, TEST_KLUBB_ID } from './helpers/supabase-mock'
 
 // Mock Supabase admin-klient — samme oppsett som varsler.test.ts. vi.hoisted
 // fordi createServerClient/ensureInnlogget-mockene under refererer
@@ -23,6 +23,7 @@ const { mockFrom, mockSupabase } = vi.hoisted(() => {
 })
 
 vi.mock('@/lib/supabase/admin', () => ({
+  adminForKlubb: () => mockSupabase,
   createAdminClient: () => mockSupabase,
 }))
 
@@ -103,7 +104,10 @@ function profilChain(profiler: typeof ALLE_PROFILER = ALLE_PROFILER) {
     data: idFilter ? profiler.filter(p => idFilter!.includes(p.id)) : profiler,
     error: null,
   })
-  chain.then = (resolve: (v: unknown) => void) => Promise.resolve(resultat()).then(resolve)
+  // Plain await er medlemskap-oppslaget (sendChatVarsler/sendVarsel henter mottakere via
+  // medlemskap med profiles!inner, #871); .maybeSingle() er avsendernavn-oppslaget mot profiles.
+  chain.then = (resolve: (v: unknown) => void) =>
+    Promise.resolve({ ...resultat(), data: medlem(resultat().data) }).then(resolve)
   chain.maybeSingle = vi.fn(async () => ({ data: resultat().data[0] ?? null, error: null }))
   return chain
 }
@@ -155,7 +159,7 @@ function standardOppsett(
 ) {
   const { rader, insertSpy } = insertSpyOppsett()
   mockFrom.mockImplementation((tabell: string) => {
-    if (tabell === 'profiles') return profilChain()
+    if (tabell === 'profiles' || tabell === 'medlemskap') return profilChain()
     if (tabell === 'varsel_innstillinger') return innstillingerChain(opts.innstillingerOverrides ?? {})
     if (tabell === 'varsel_preferanser') {
       return lagChain([
@@ -200,7 +204,7 @@ describe('sendChatVarsler – broadcast uten mention', () => {
   it('går til alle aktive minus avsender, med type chat_klubb', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Bare en vanlig melding, ingen mention her', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Bare en vanlig melding, ingen mention her', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     const perProfil = new Map(rader.map(r => [r.profil_id, r.type]))
     expect(perProfil.get('user1')).toBe('chat_klubb')
@@ -215,7 +219,7 @@ describe('sendChatVarsler – mention + broadcast er disjunkte', () => {
   it('@Ola gir Ola nøyaktig én rad (mention), Per nøyaktig én rad (chat_klubb)', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, ser deg i kveld', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, ser deg i kveld', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     const olaRader = rader.filter(r => r.profil_id === 'user1')
     const perRader = rader.filter(r => r.profil_id === 'user2')
@@ -229,7 +233,7 @@ describe('sendChatVarsler – mention + broadcast er disjunkte', () => {
   it('@alle gir kun mention-rader — broadcast-benet kalles ikke i det hele tatt', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, '@alle — møtes kl 18', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, '@alle — møtes kl 18', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(rader.every(r => r.type === 'mention')).toBe(true)
     expect(rader.map(r => r.profil_id).sort()).toEqual(['user1', 'user2'])
@@ -246,7 +250,7 @@ describe('sendChatVarsler – avskrudde brytere', () => {
   it('avskrudd chat_klubb: ingen broadcast, men mention går fortsatt', async () => {
     const { rader } = standardOppsett({ innstillingerOverrides: { chat_klubb: false } })
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(rader.find(r => r.profil_id === 'user1')?.type).toBe('mention')
     // Per skulle fått chat_klubb, men bryteren er av — ingen rad for ham.
@@ -256,7 +260,7 @@ describe('sendChatVarsler – avskrudde brytere', () => {
   it('avskrudd mention: Ola havner i broadcasten i stedet for å bli hoppet over', async () => {
     const { rader } = standardOppsett({ innstillingerOverrides: { mention: false } })
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // type_deaktivert (ikke kastet) ⇒ ekskludert forblir tom ⇒ Ola er fortsatt
     // med i broadcast-lista. Pinner #504-kontrakten («returnerer = terminalt
@@ -273,7 +277,7 @@ describe('sendChatVarsler – ren bilde-melding', () => {
   it('«Nils la ut et bilde» — ikke tom melding, ikke privat-fallbacken', async () => {
     standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, null, 'avsender1', true)
+    await sendChatVarsler({ type: 'klubb' }, null, 'avsender1', true, { klubbId: TEST_KLUBB_ID })
 
     const push = JSON.stringify(mockSendPush.mock.calls)
     expect(push).toContain('Nils la ut et bilde')
@@ -296,7 +300,7 @@ describe('sendChatVarsler – riktig broadcast-type per scope', () => {
   ])('scope %o → type %s', async (scope, forventetType) => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler(scope, 'En vanlig melding uten mention', 'avsender1', false)
+    await sendChatVarsler(scope, 'En vanlig melding uten mention', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(rader).toHaveLength(2)
     expect(rader.every(r => r.type === forventetType)).toBe(true)
@@ -347,13 +351,13 @@ describe('sendChatMelding – privat-scope er urørt av #612', () => {
       // 'profiles' må håndtere BÅDE avsender-navn-oppslaget (.maybeSingle())
       // i sendPrivatMeldingVarsel OG mottaker-arrayet (plain await) i
       // sendVarsel — de to bruker samme tabell med ulik metode.
-      if (tabell === 'profiles') {
+      if (tabell === 'profiles' || tabell === 'medlemskap') {
         const chain: Record<string, unknown> = {}
         for (const m of ['select', 'eq', 'in', 'limit', 'order', 'neq', 'gt', 'gte', 'lt', 'is', 'not']) {
           chain[m] = vi.fn().mockReturnValue(chain)
         }
         chain.then = (resolve: (v: unknown) => void) =>
-          Promise.resolve({ data: [{ id: 'user1', navn: 'Ola Nordmann', epost: 'ola@test.no' }], error: null }).then(
+          Promise.resolve({ data: medlem([{ id: 'user1', navn: 'Ola Nordmann', epost: 'ola@test.no' }]), error: null }).then(
             resolve,
           )
         chain.maybeSingle = vi.fn(async () => ({
@@ -378,12 +382,12 @@ describe('sendChatMelding – privat-scope er urørt av #612', () => {
 describe('sendChatVarsler – fail closed', () => {
   it('kaster når profiles-oppslaget feiler — tolkes ALDRI som «ingen å varsle»', async () => {
     mockFrom.mockImplementation((tabell: string) => {
-      if (tabell === 'profiles') return lagChain([], new Error('DB nede'))
+      if (tabell === 'medlemskap') return lagChain([], new Error('DB nede'))
       return lagChain([])
     })
 
     await expect(
-      sendChatVarsler({ type: 'klubb' }, 'Hei alle sammen', 'avsender1', false),
+      sendChatVarsler({ type: 'klubb' }, 'Hei alle sammen', 'avsender1', false, { klubbId: TEST_KLUBB_ID }),
     ).rejects.toThrow(/chat-varsel/)
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -475,7 +479,7 @@ describe('sendChatVarsler – teller_ulest', () => {
   it('false på broadcast-rader, true (default) på mention-rader', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     const olaRad = rader.find(r => r.profil_id === 'user1')
     const perRad = rader.find(r => r.profil_id === 'user2')
@@ -495,7 +499,7 @@ describe('push-tag', () => {
   it('chat_klubb-broadcast får tag «chat:klubb»', async () => {
     standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(tagger()).toEqual(['chat:klubb', 'chat:klubb'])
   })
@@ -510,7 +514,7 @@ describe('push-tag', () => {
   ])('scope %o gir tag %s', async (scope, forventetTag) => {
     standardOppsett()
 
-    await sendChatVarsler(scope, 'En vanlig melding', 'avsender1', false)
+    await sendChatVarsler(scope, 'En vanlig melding', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(new Set(tagger())).toEqual(new Set([forventetTag]))
   })
@@ -518,7 +522,7 @@ describe('push-tag', () => {
   it('mention-sendingen er utagget — en vanlig chat-melding skal ikke kunne erstatte «X nevnte deg»', async () => {
     standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     const perProfil = new Map(
       mockSendPush.mock.calls.map(c => [
@@ -534,7 +538,7 @@ describe('push-tag', () => {
   it('ikke-chat-varsel har ingen tag — en påminnelse skal aldri kollapses bort', async () => {
     standardOppsett()
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Arrangement oppdatert',
       melding: 'Vårfest er flyttet',
@@ -555,7 +559,7 @@ describe('sendChatVarsler – mention-benet kaster', () => {
     // — da tester vi throw-stien, ikke type_deaktivert-stien (som § 4 dekker).
     const { rader, insertSpy } = insertSpyOppsett()
     mockFrom.mockImplementation((tabell: string) => {
-      if (tabell === 'profiles') return profilChain()
+      if (tabell === 'profiles' || tabell === 'medlemskap') return profilChain()
       if (tabell === 'varsel_innstillinger') {
         const chain: Record<string, unknown> = {}
         let noekkel = ''
@@ -588,7 +592,7 @@ describe('sendChatVarsler – mention-benet kaster', () => {
 
     // Kaster ikke ut av sendChatVarsler — meldingen er alt lagret, og et tapt
     // varsel skal ikke se ut som en feilet «Send».
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // Kjernen i invarianten «sendVarsel kaster kun FØR utsendingsløkka»:
     // kastet betyr at Ola GARANTERT ikke fikk mention-varselet, og han kan
@@ -615,7 +619,7 @@ describe('e-post-døgnbudsjett for chat', () => {
   it('over terskel: chat-varselet får push og in-app, men ingen e-post', async () => {
     const { rader } = standardOppsett({ epostDoegnCount: 95 })
 
-    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(mockSendPush).toHaveBeenCalledTimes(2)
     expect(epostAntall()).toBe(0)
@@ -630,7 +634,7 @@ describe('e-post-døgnbudsjett for chat', () => {
   it('under terskel: e-post går som normalt', async () => {
     standardOppsett({ epostDoegnCount: 10 })
 
-    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(epostAntall()).toBe(2)
   })
@@ -638,7 +642,7 @@ describe('e-post-døgnbudsjett for chat', () => {
   it('ikke-chat-varsel går uansett — påminnelsene har forrang', async () => {
     standardOppsett({ epostDoegnCount: 95 })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1', 'user2'],
       tittel: 'Påminnelse',
       melding: 'Vårfest om 7 dager',
@@ -656,7 +660,7 @@ describe('e-post-døgnbudsjett for chat', () => {
   it('feilet telling feiler ÅPENT: e-post sendes som normalt, men feilen logges', async () => {
     standardOppsett({ epostDoegnFeil: true })
 
-    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'En vanlig melding', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(epostAntall()).toBe(2)
     expect(mockLoggFeil).toHaveBeenCalledWith(
@@ -674,6 +678,7 @@ describe('sendChatVarsler – dedupNoekkel-opts', () => {
     const { rader } = standardOppsett()
 
     await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, med dagen!', 'avsender1', false, {
+      klubbId: TEST_KLUBB_ID,
       dedupNoekkel: 'bursdag-chat:barn1:2026:avsender1',
     })
 
@@ -684,7 +689,7 @@ describe('sendChatVarsler – dedupNoekkel-opts', () => {
   it('nøkkel utelatt: dedup_noekkel er null på alle rader — menneskestien er uendret', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(rader).toHaveLength(2)
     expect(rader.every(r => r.dedup_noekkel === null)).toBe(true)
@@ -700,6 +705,7 @@ describe('sendChatVarsler – nevnte-opts', () => {
     // Teksten inneholder ingen «@» i det hele tatt — finnNevnte ville gitt
     // tom liste. opts.nevnte overstyrer likevel og treffer Ola eksplisitt.
     await sendChatVarsler({ type: 'klubb' }, 'Gratulerer med dagen, ingen tagg her', 'avsender1', false, {
+      klubbId: TEST_KLUBB_ID,
       nevnte: ['user1'],
     })
 
@@ -711,6 +717,7 @@ describe('sendChatVarsler – nevnte-opts', () => {
     const { rader } = standardOppsett()
 
     await sendChatVarsler({ type: 'klubb' }, 'Hei gutta', 'avsender1', false, {
+      klubbId: TEST_KLUBB_ID,
       nevnte: ['user1', 'avsender1'],
     })
 
@@ -723,7 +730,7 @@ describe('sendChatVarsler – nevnte-opts', () => {
   it('nevnte utelatt: uendret oppførsel — finnNevnte styrer fortsatt (menneskestien)', async () => {
     const { rader } = standardOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola, husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(rader.find(r => r.profil_id === 'user1')?.type).toBe('mention')
     expect(rader.find(r => r.profil_id === 'user2')?.type).toBe('chat_klubb')
@@ -742,7 +749,7 @@ describe('sendChatVarsler – nevnte-opts', () => {
     const { rader, insertSpy } = insertSpyOppsett()
 
     mockFrom.mockImplementation((tabell: string) => {
-      if (tabell === 'profiles') return profilChain(profiler)
+      if (tabell === 'profiles' || tabell === 'medlemskap') return profilChain(profiler)
       if (tabell === 'varsel_innstillinger') return innstillingerChain()
       if (tabell === 'varsel_preferanser') return lagChain([])
       if (tabell === 'push_subscriptions') return lagChain([])
@@ -759,7 +766,7 @@ describe('sendChatVarsler – nevnte-opts', () => {
       'Gratulerer med dagen @Per Hansen! 🎉',
       'avsender1',
       false,
-      { nevnte: ['per-hansen'] },
+      { klubbId: TEST_KLUBB_ID, nevnte: ['per-hansen'] },
     )
 
     expect(rader.find(r => r.profil_id === 'per-hansen')?.type).toBe('mention')

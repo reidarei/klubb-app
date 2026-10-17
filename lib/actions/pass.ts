@@ -33,7 +33,7 @@ export async function lagrePassInfo(input: { nummer: string; utloper: string }) 
  * Generalsekretæren får varsel og må godkjenne.
  */
 export async function bePassTilgang(input: { eier_id: string; arrangement_id: string }) {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const { data: ny, error } = await supabase
     .from('pass_tilgang_forespørsel')
@@ -97,6 +97,7 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
   // kastet en maskert prod-feil videre til brukeren, som ville trodd at selve
   // forespørselen feilet — selv om den faktisk gikk fint. (#503)
   await sendVarsel({
+    klubbId,
     mottakere,
     tittel: 'Forespørsel om passinfo',
     melding: `${sokerNavn} ber om passinfo for ${eierNavn} til ${turTittel}.`,
@@ -113,7 +114,7 @@ export async function bePassTilgang(input: { eier_id: string; arrangement_id: st
  */
 export async function godkjennPassTilgang(forespørselId: string) {
   // Kun generalsekretær — ikke enhver admin. Se ensureGodkjennerPassTilgang().
-  const { supabase, user } = await ensureGodkjennerPassTilgang()
+  const { supabase, user, klubbId } = await ensureGodkjennerPassTilgang()
 
   const naDate = new Date()
   const utloper = new Date(naDate.getTime() + PASS_TILGANG_TIMER * 60 * 60 * 1000)
@@ -161,6 +162,7 @@ export async function godkjennPassTilgang(forespørselId: string) {
   // dobbel-varsling) og er suksess, ikke feil — kun DB-feil logges. (#504)
   try {
     await sendVarsel({
+      klubbId,
       mottakere: [oppdatert.soker_id],
       tittel: 'Pass-tilgang godkjent',
       melding: `Du har nå tilgang til passinfo for ${eierNavn} i 24 timer.`,
@@ -180,7 +182,7 @@ export async function godkjennPassTilgang(forespørselId: string) {
 
 export async function avslaaPassTilgang(forespørselId: string) {
   // Kun generalsekretær — avslagsteksten under sier det, og nå stemmer det.
-  const { supabase, user } = await ensureGodkjennerPassTilgang()
+  const { supabase, user, klubbId } = await ensureGodkjennerPassTilgang()
 
   const { data: oppdatert, error } = await supabase
     .from('pass_tilgang_forespørsel')
@@ -204,6 +206,7 @@ export async function avslaaPassTilgang(forespørselId: string) {
   const admin = createAdminClient()
   try {
     await sendVarsel({
+      klubbId,
       mottakere: [oppdatert.soker_id],
       tittel: 'Pass-tilgang avslått',
       melding: 'Generalsekretæren har avslått forespørselen.',

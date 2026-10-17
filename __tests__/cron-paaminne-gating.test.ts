@@ -24,6 +24,7 @@ const { mockPaaminnelser, mockBursdag, mockBursdagsvarsel, mockPosisjon, mockLog
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({}),
+  adminForKlubb: () => ({}),
 }))
 vi.mock('@/lib/logg', () => ({
   logg: { warn: vi.fn(), feil: (...a: unknown[]) => mockLoggFeil(...a) },

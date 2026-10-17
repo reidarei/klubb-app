@@ -184,7 +184,7 @@ export async function fjernAnsvarlig(ansvarId: string) {
 // (som respekterer push_aktiv/epost_aktiv). hilsen er valgfri fritekst fra
 // den som purrer; uten hilsen brukes standardteksten. Se #267.
 export async function purreAnsvarlig(ansvarId: string, hilsen?: string) {
-  const { user } = await ensureInnlogget()
+  const { user, klubbId } = await ensureInnlogget()
   const admin = createAdminClient()
 
   // Meldingsbygging og lengde-validering av hilsen ligger i
@@ -256,6 +256,7 @@ export async function purreAnsvarlig(ansvarId: string, hilsen?: string) {
   })
 
   await sendVarsel({
+    klubbId,
     mottakere,
     tittel: `Purring: ${ansvar.arrangement_navn}`,
     melding,

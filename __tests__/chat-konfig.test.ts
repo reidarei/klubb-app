@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { lagFromMock } from './helpers/supabase-mock'
+import { lagFromMock, medlem, TEST_KLUBB_ID } from './helpers/supabase-mock'
 import { revalideringsPaths, type ChatScope } from '@/lib/chat-konfig'
 
 // Mock Supabase admin-klient + push/epost — samme oppsett som varsler.test.ts.
@@ -9,6 +9,7 @@ const mockFrom = vi.fn()
 const mockSupabase = { from: mockFrom }
 
 vi.mock('@/lib/supabase/admin', () => ({
+  adminForKlubb: () => mockSupabase,
   createAdminClient: () => mockSupabase,
 }))
 
@@ -45,10 +46,10 @@ describe('chat-varsel for albumbilde-scope', () => {
   it('bygger URL på formen /album/{albumId}?bilde={bildeId}', async () => {
     mockFrom.mockImplementation(
       lagFromMock({
-        profiles: [
+        medlemskap: medlem([
           { id: 'avsender1', navn: 'Kari', visningsnavn: null, epost: 'kari@test.no' },
           { id: 'mottaker1', navn: 'Ola', visningsnavn: null, epost: 'ola@test.no' },
-        ],
+        ]),
         varsel_innstillinger: { aktiv: true, beskrivelse: null },
         varsel_preferanser: [],
         push_subscriptions: [],
@@ -60,6 +61,7 @@ describe('chat-varsel for albumbilde-scope', () => {
       '@Ola kikk på dette bildet',
       'avsender1',
       false,
+      { klubbId: TEST_KLUBB_ID },
     )
 
     expect(mockArrangementEpostHtml).toHaveBeenCalledWith(

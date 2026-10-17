@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { lagFromMock } from './helpers/supabase-mock'
+import { lagFromMock, TEST_KLUBB_ID } from './helpers/supabase-mock'
 import { sendVarsel } from '@/lib/varsler'
 
 // Egen fil (i stedet for en test inni varsler.test.ts): rent organisatorisk,
@@ -12,6 +12,7 @@ import { sendVarsel } from '@/lib/varsler'
 // vitest-suite i #765.
 const mockFrom = vi.fn()
 vi.mock('@/lib/supabase/admin', () => ({
+  adminForKlubb: () => ({ from: mockFrom }),
   createAdminClient: () => ({ from: mockFrom }),
 }))
 vi.mock('@/lib/push', () => ({ sendPush: vi.fn().mockResolvedValue(undefined) }))
@@ -46,7 +47,7 @@ describe('sendVarsel – utfall: blokkert_lokal (#504)', () => {
     vi.stubEnv('ALLOW_LOCAL_NOTIFICATIONS', '')
     vi.stubEnv('NODE_ENV', 'test')
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',

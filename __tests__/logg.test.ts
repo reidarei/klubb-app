@@ -9,6 +9,7 @@ const mockSupabase = { from: mockFrom }
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
+  adminPlattform: () => mockSupabase,
 }))
 
 import { logg, DbFeil } from '@/lib/logg'
@@ -78,6 +79,28 @@ describe('logg.feil() – feil_logg-persistering (#496)', () => {
     // noekler: 'code,message' fordi pgFeil() returnerer et rått objekt med
     // nøyaktig disse to nøklene (#711).
     expect(rad.kontekst).toEqual({ code: '23505', tabell: 'profiles_epost_key', noekler: 'code,message' })
+  })
+
+  it('skriver klubb_id på raden kun når kallstedet oppgir klubbId (#871)', async () => {
+    const rader: Record<string, unknown>[] = []
+    mockFrom.mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.insert = vi.fn((rad: Record<string, unknown>) => {
+        rader.push(rad)
+        return chain
+      })
+      chain.abortSignal = vi.fn().mockReturnValue(chain)
+      chain.then = (resolve: (v: unknown) => void) =>
+        Promise.resolve({ data: null, error: null }).then(resolve)
+      return chain
+    })
+
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'x'), { klubbId: '00000000-0000-4000-a000-000000000001' })
+    await logg.feil(TEST_EVENT, pgFeil('23505', 'x'))
+
+    expect(rader[0].klubb_id).toBe('00000000-0000-4000-a000-000000000001')
+    // Uten klubbId utelates feltet helt («uten klubb»), radformen er som før.
+    expect('klubb_id' in rader[1]).toBe(false)
   })
 
   it('persisterer aldri melding-feltet (kan bære radverdier)', async () => {

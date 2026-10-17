@@ -11,7 +11,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerClient: async () => ({ auth: { getSession } }),
 }))
 const mockFrom = vi.fn()
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: mockFrom }) }))
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({ from: mockFrom }),
+  adminPlattform: () => ({ from: mockFrom }),
+}))
 
 // Statisk import (ikke resetModules + dynamisk import i testen): ekte lib/logg er tung å
 // transformere kaldt, og det skal ikke telle mot testens timeout. cache() memoiserer

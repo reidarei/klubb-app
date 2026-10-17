@@ -42,7 +42,7 @@ vi.mock('@/lib/auth', () => ({
   }),
 }))
 
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => mockSupabase }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => mockSupabase, adminForKlubb: () => mockSupabase }))
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn().mockResolvedValue(mockSupabase) }))
 vi.mock('@/lib/auth-cache', () => ({ getProfil: vi.fn().mockResolvedValue({ rolle: 'admin' }) }))
 vi.mock('next/cache', () => ({ revalidatePath: (...a: unknown[]) => mockRevalidatePath(...a) }))

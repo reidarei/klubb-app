@@ -22,7 +22,7 @@ const { mockFrom, ensureAdmin, createAdminClient } = vi.hoisted(() => {
 
 // Autorisasjon og skriving går via ensureAdmin() sin RLS-klient (Policy: Auth, #851).
 vi.mock('@/lib/auth', () => ({ ensureAdmin }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient, adminForKlubb: createAdminClient }))
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }))
 vi.mock('@/lib/auth-cache', () => ({ getProfil: vi.fn(), getInnloggetBruker: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))

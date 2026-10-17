@@ -16,6 +16,8 @@ import { logg } from '@/lib/logg'
 type OpprettInnleggInput = {
   supabase: SupabaseClient
   user: User
+  /** Fra ensure*().klubbId — varselet avgrenses til denne klubbens medlemmer (#871). */
+  klubbId: string
   tekst: string
   bilder: string[]
   albumId: string | null
@@ -37,6 +39,7 @@ type OpprettInnleggInput = {
 export async function opprettInnleggOgVarsle({
   supabase,
   user,
+  klubbId,
   tekst,
   bilder,
   albumId,
@@ -107,6 +110,7 @@ export async function opprettInnleggOgVarsle({
     varselUtdrag ?? (tekst ? (tekst.length > 80 ? tekst.slice(0, 77) + '...' : tekst) : '[delte bilde]')
 
   sendVarsel({
+    klubbId,
     tittel: `${avsenderNavn} skrev`,
     melding: utdrag,
     url: `${BASE_URL}/meldinger/${data.id}`,

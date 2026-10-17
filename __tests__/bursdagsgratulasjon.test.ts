@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { formatInTimeZone } from 'date-fns-tz'
 import { TIDSSONE } from '@/lib/dato'
-import { lagChain } from './helpers/supabase-mock'
+import { lagChain, medlem } from './helpers/supabase-mock'
 
 const mockSendVarsel = vi.fn().mockResolvedValue({ utfall: 'sendt', levert: 1, kunApp: 0, dedupHoppet: 0 })
 const mockSendChatVarsler = vi.fn().mockResolvedValue(undefined)
@@ -61,21 +61,21 @@ describe('kjorBursdagsgratulasjon – #504', () => {
 // dagen!»-varselet er fjernet, se lib/actions/bursdagsgratulasjon.ts filhode).
 describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
   function lagAdmin(klubbChatData: unknown) {
-    let profilesKall = 0
+    let medlemskapKall = 0
     return {
       from: vi.fn((tabell: string) => {
-        if (tabell === 'profiles') {
-          profilesKall++
-          if (profilesKall === 1) {
-            return lagChain([
+        if (tabell === 'medlemskap') {
+          medlemskapKall++
+          if (medlemskapKall === 1) {
+            return lagChain(medlem([
               {
                 id: 'barn1',
                 navn: 'Ola Nordmann',
                 fodselsdato: `2000-${dagStr}`,
               },
-            ])
+            ]))
           }
-          return lagChain([{ id: 'admin1', navn: 'Admin Adminsen' }])
+          return lagChain(medlem([{ id: 'admin1', navn: 'Admin Adminsen' }]))
         }
         if (tabell === 'klubb_chat') {
           return lagChain(klubbChatData)
@@ -136,21 +136,21 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
     // uavhengig av teksten — sendChatVarsler (testet for seg i
     // chat-varsler.test.ts) skal derfor aldri trenge å gjette hvilken Per
     // det gjelder.
-    let profilesKall = 0
+    let medlemskapKall = 0
     const admin = {
       from: vi.fn((tabell: string) => {
-        if (tabell === 'profiles') {
-          profilesKall++
-          if (profilesKall === 1) {
-            return lagChain([
+        if (tabell === 'medlemskap') {
+          medlemskapKall++
+          if (medlemskapKall === 1) {
+            return lagChain(medlem([
               {
                 id: 'per-hansen',
                 navn: 'Per Hansen',
                 fodselsdato: `2000-${dagStr}`,
               },
-            ])
+            ]))
           }
-          return lagChain([{ id: 'admin1', navn: 'Admin Adminsen' }])
+          return lagChain(medlem([{ id: 'admin1', navn: 'Admin Adminsen' }]))
         }
         if (tabell === 'klubb_chat') return lagChain(null)
         return lagChain([])
@@ -204,15 +204,15 @@ describe('kjorBursdagsgratulasjon – chat-varsel (#642)', () => {
 // siden av chat-mention-varselet.
 describe('kjorBursdagsgratulasjon – ett varsel, ikke to (#643)', () => {
   it('én avsender, én bursdagsmann: mockSendVarsel kalles aldri, mockSendChatVarsler nøyaktig én gang', async () => {
-    let profilesKall = 0
+    let medlemskapKall = 0
     const admin = {
       from: vi.fn((tabell: string) => {
-        if (tabell === 'profiles') {
-          profilesKall++
-          if (profilesKall === 1) {
-            return lagChain([{ id: 'barn1', navn: 'Ola Nordmann', fodselsdato: `2000-${dagStr}` }])
+        if (tabell === 'medlemskap') {
+          medlemskapKall++
+          if (medlemskapKall === 1) {
+            return lagChain(medlem([{ id: 'barn1', navn: 'Ola Nordmann', fodselsdato: `2000-${dagStr}` }]))
           }
-          return lagChain([{ id: 'admin1', navn: 'Admin Adminsen' }])
+          return lagChain(medlem([{ id: 'admin1', navn: 'Admin Adminsen' }]))
         }
         if (tabell === 'klubb_chat') return lagChain(null)
         return lagChain([])
@@ -223,5 +223,43 @@ describe('kjorBursdagsgratulasjon – ett varsel, ikke to (#643)', () => {
 
     expect(mockSendVarsel).not.toHaveBeenCalled()
     expect(mockSendChatVarsler).toHaveBeenCalledTimes(1)
+  })
+})
+
+// #871: grunnlaget er medlemskapet i den bundne klubben, ikke den globale
+// profiles-tabellen — ellers kunne en annen klubbs medlem bli gratulert her.
+describe('kjorBursdagsgratulasjon – rotet i medlemskap (#871)', () => {
+  it('leser bursdagsbarn og avsendere fra medlemskap, aldri fra profiles direkte', async () => {
+    const kjeder: Record<string, ReturnType<typeof lagChain>[]> = {}
+    let medlemskapKall = 0
+    const from = vi.fn((tabell: string) => {
+      let c: ReturnType<typeof lagChain>
+      if (tabell === 'medlemskap') {
+        medlemskapKall++
+        c =
+          medlemskapKall === 1
+            ? lagChain(medlem([{ id: 'barn1', navn: 'Ola Nordmann', fodselsdato: `2000-${dagStr}` }]))
+            : lagChain(medlem([{ id: 'admin1', navn: 'Admin Adminsen' }]))
+      } else if (tabell === 'klubb_chat') {
+        c = lagChain(null)
+      } else {
+        c = lagChain([])
+      }
+      ;(kjeder[tabell] ??= []).push(c)
+      return c
+    })
+    const admin = { from, klubbId: 'klubb-x' } as unknown as Admin
+
+    await kjorBursdagsgratulasjon(admin, { slotIndex: 3, totalSlots: 4 })
+
+    expect(from).not.toHaveBeenCalledWith('profiles')
+    const [barnKjede, avsenderKjede] = kjeder.medlemskap
+    expect(barnKjede.select).toHaveBeenCalledWith(expect.stringContaining('profiles!medlemskap_profil_id_fkey!inner('))
+    expect(barnKjede.eq).toHaveBeenCalledWith('aktiv', true)
+    // Rolle og gratulasjonsflagg leses fra medlemskapet (#868).
+    expect(avsenderKjede.eq).toHaveBeenCalledWith('aktiv', true)
+    expect(avsenderKjede.eq).toHaveBeenCalledWith('bursdagsgratulasjon_aktiv', true)
+    expect(avsenderKjede.in).toHaveBeenCalledWith('rolle', ['admin', 'generalsekretaer'])
+    expect(mockSendChatVarsler.mock.calls[0][4]).toMatchObject({ klubbId: 'klubb-x' })
   })
 })

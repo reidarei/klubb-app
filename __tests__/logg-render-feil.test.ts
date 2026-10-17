@@ -6,6 +6,7 @@ import { lagFromMock } from './helpers/supabase-mock'
 const mockFrom = vi.fn()
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({ from: mockFrom }),
+  adminPlattform: () => ({ from: mockFrom }),
 }))
 
 import { loggRenderFeil } from '@/lib/logg'

@@ -27,7 +27,7 @@ vi.mock('@/lib/auth', () => ({
   ensureInnlogget: vi.fn().mockResolvedValue({ supabase: mockSupabase, user: { id: 'admin-1' } }),
 }))
 
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => mockSupabase }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => mockSupabase, adminForKlubb: () => mockSupabase }))
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn().mockResolvedValue(mockSupabase) }))
 vi.mock('@/lib/auth-cache', () => ({
   getProfil: vi.fn().mockResolvedValue({ rolle: 'admin' }),

@@ -22,6 +22,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(() => ({ from: () => ({ insert: vi.fn(async () => ({ error: null })) }) })),
+  adminPlattform: vi.fn(() => ({ from: () => ({ insert: vi.fn(async () => ({ error: null })) }) })),
 }))
 
 vi.mock('@/lib/logg', () => ({

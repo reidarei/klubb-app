@@ -64,7 +64,7 @@ const { MOCK_ENDRING } = vi.hoisted(() => ({
 
 vi.mock('@/lib/varsler', () => ({ sendVarsel: mockSendVarsel }))
 vi.mock('@/lib/logg', () => ({ logg: { feil: mockLoggFeil, warn: mockLoggWarn } }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdmin }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mockCreateAdmin, adminForKlubb: mockCreateAdmin, adminPlattform: mockCreateAdmin }))
 // Én endringslogg-oppføring merket #625 (#633) — nok til å teste både
 // «finnes» og «finnes ikke»-grenen uten å røre den ekte, håndskrevne listen.
 vi.mock('@/lib/endringslogg-data', () => ({ ENDRINGER: [MOCK_ENDRING] }))

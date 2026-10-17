@@ -185,7 +185,7 @@ export async function stoppDeling(): Promise<PosisjonResultat> {
  * ikke se en grønn kvittering på noe som aldri ble sendt.
  */
 export async function plingEtterPosisjon(mottakerId: string): Promise<void> {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   if (mottakerId === user.id) throw new Error('Du kan ikke plinge deg selv')
 
@@ -203,6 +203,7 @@ export async function plingEtterPosisjon(mottakerId: string): Promise<void> {
   const navn = avsender?.visningsnavn || avsender?.navn || 'Noen'
 
   await sendVarsel({
+    klubbId,
     mottakere: [mottakerId],
     tittel: 'Hvor er du?',
     melding: `${navn} lurer på hvor du er. Åpne kartet, så ser han det.`,

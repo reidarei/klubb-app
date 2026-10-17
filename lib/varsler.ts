@@ -3,7 +3,7 @@
 // scope-oppslag feiler åpent, men logger med logg.feil.
 // push_subscriptions kaster også: tomt resultat er bit-identisk med «ingen
 // push», og den som kun har push aktiv ville stille fått ingenting.
-import { createAdminClient } from '@/lib/supabase/admin'
+import { adminForKlubb, type KlubbAdmin } from '@/lib/supabase/admin'
 import { sendPush } from '@/lib/push'
 import { sendEpostBatch, arrangementEpostHtml } from '@/lib/epost'
 import { formaterDato, FORMAT_DATO_KLOKKE, FORMAT_KLOKKE, FORMAT_DATO_KORT } from '@/lib/dato'
@@ -42,8 +42,7 @@ function blokkerUtsending(): boolean {
   return ER_LOKAL_BASE && !TILLAT_LOKAL && !ER_UNIT_TEST
 }
 
-async function erVarselAktiv(noekkel: string): Promise<boolean> {
-  const supabase = createAdminClient()
+async function erVarselAktiv(supabase: KlubbAdmin, noekkel: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('varsel_innstillinger')
     .select('aktiv')
@@ -58,8 +57,8 @@ async function erVarselAktiv(noekkel: string): Promise<boolean> {
   return data?.aktiv ?? true
 }
 
-async function erTypeAktiv(type: string): Promise<boolean> {
-  return erVarselAktiv(typeTilNoekkel(type))
+async function erTypeAktiv(supabase: KlubbAdmin, type: string): Promise<boolean> {
+  return erVarselAktiv(supabase, typeTilNoekkel(type))
 }
 
 // Fortids-sperret — se CLAUDE.md § Policy: Varsler. «oppdatert» står bevisst
@@ -67,8 +66,7 @@ async function erTypeAktiv(type: string): Promise<boolean> {
 const HENDELSE_VARSLER = new Set(['nytt_arrangement', 'paaminne_7', 'paaminne_1'])
 
 // Returnerer test-eposten når testmodus er på, ellers null.
-async function hentTestModus(): Promise<string | null> {
-  const supabase = createAdminClient()
+async function hentTestModus(supabase: KlubbAdmin): Promise<string | null> {
   const { data, error } = await supabase
     .from('varsel_innstillinger')
     .select('aktiv, beskrivelse')
@@ -83,14 +81,33 @@ async function hentTestModus(): Promise<string | null> {
   return null
 }
 
+type Medlemsprofil = { id: string; navn: string | null; visningsnavn: string | null; epost: string | null }
+
+// Aktive medlemmer i klubben (medlemskap.aktiv, ikke profiles.aktiv-speilet, #868),
+// valgfritt avgrenset til oppgitte profil-id-er. Rolle/aktiv leses aldri fra profiles.
+// Returnerer rå { data, error } — kallstedene logger og kaster hver med sin egen tekst.
+async function spoerMedlemsprofiler(
+  supabase: KlubbAdmin,
+  opts: { ider?: string[]; testEpost?: string | null } = {},
+): Promise<{ data: Medlemsprofil[] | null; error: { message: string } | null }> {
+  // klubb_id-filteret legges på av den bundne klienten (#871). FK-hintet er påkrevd:
+  // tabeller med FK til både medlemskap og profiles gir PostgREST flere veier mellom
+  // dem, og uten hint feiler embeddet med PGRST201 (fanget av feil_logg-vakten i e2e).
+  let query = supabase
+    .from('medlemskap')
+    .select('profil_id, profiles!medlemskap_profil_id_fkey!inner(id, navn, visningsnavn, epost)')
+    .eq('aktiv', true)
+  if (opts.ider) query = query.in('profil_id', opts.ider)
+  if (opts.testEpost) query = query.eq('profiles.epost', opts.testEpost)
+  const { data, error } = await query
+  if (error) return { data: null, error }
+  return { data: (data ?? []).map(m => m.profiles as unknown as Medlemsprofil), error: null }
+}
+
 // Aktive profiler (i testmodus: kun testprofilen). testEpost tas inn fordi
 // begge kallstedene alt har slått den opp (#503).
-async function hentProfiler(testEpost: string | null) {
-  const supabase = createAdminClient()
-
-  const query = supabase.from('profiles').select('id, navn, epost').eq('aktiv', true)
-  if (testEpost) query.eq('epost', testEpost)
-  const { data, error } = await query
+async function hentProfiler(supabase: KlubbAdmin, testEpost: string | null) {
+  const { data, error } = await spoerMedlemsprofiler(supabase, { testEpost })
   // Fail closed: tomt array er bit-identisk med «ingen aktive mottakere».
   if (error) {
     // «broadcast» skiller denne fra de andre kildene til samme event.
@@ -100,8 +117,7 @@ async function hentProfiler(testEpost: string | null) {
   return data ?? []
 }
 
-async function hentVarselPreferanser(profilIder: string[]) {
-  const supabase = createAdminClient()
+async function hentVarselPreferanser(supabase: KlubbAdmin, profilIder: string[]) {
   const { data, error } = await supabase
     .from('varsel_preferanser')
     .select('profil_id, push_aktiv, epost_aktiv, varsel_nivaa')
@@ -117,8 +133,7 @@ async function hentVarselPreferanser(profilIder: string[]) {
   return map
 }
 
-async function hentPushSubscriptions(profilIder: string[]) {
-  const supabase = createAdminClient()
+async function hentPushSubscriptions(supabase: KlubbAdmin, profilIder: string[]) {
   const { data, error } = await supabase
     .from('push_subscriptions')
     .select('profil_id, endpoint, p256dh, auth')
@@ -144,7 +159,7 @@ async function hentPushSubscriptions(profilIder: string[]) {
  * så vakten er heller for streng enn for slapp.
  */
 async function chatEpostBudsjettBrukt(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: KlubbAdmin,
   type: string,
 ): Promise<boolean> {
   if (!CHAT_BROADCAST_TYPER.has(type)) return false
@@ -237,6 +252,7 @@ export type VarselUtfall = {
 const INGEN_UTSENDING: Omit<VarselUtfall, 'utfall'> = { levert: 0, kunApp: 0, dedupHoppet: 0 }
 
 export async function sendVarsel({
+  klubbId,
   mottakere,
   tittel,
   melding,
@@ -250,6 +266,10 @@ export async function sendVarsel({
   tellerUlest = true,
   pushTag,
 }: {
+  // Påkrevd (#871): hvilken klubb sendingen gjelder. Fra ensure*().klubbId, aktivKlubbId(),
+  // en forelder-rad eller klubbForSystemjobb() — aldri fra request-body. Mottakere
+  // (broadcast og oppgitte) avgrenses til aktive medlemskap i denne klubben.
+  klubbId: string
   mottakere?: string[]
   tittel: string
   // Funksjonsformen bygger teksten per mottaker (i dag kun paaminne_7). Del
@@ -281,13 +301,15 @@ export async function sendVarsel({
     return { utfall: 'blokkert_lokal', ...INGEN_UTSENDING }
   }
 
+  // Én klubb-bundet klient for hele sendingen: innstillinger, preferanser, dedup og
+  // varsel_logg-inserten får klubb_id fra bindingen (#871).
+  const supabase = adminForKlubb(klubbId)
+
   // 0. Admin-bryter per varseltype. Manglende nøkkel = aktiv.
-  if (!(await erTypeAktiv(type))) {
+  if (!(await erTypeAktiv(supabase, type))) {
     logg.warn('varsel.type.deaktivert', { sample: type })
     return { utfall: 'type_deaktivert', ...INGEN_UTSENDING }
   }
-
-  const supabase = createAdminClient()
 
   // 0b. Fortids-sperre (backfill av gamle turer). Sammenligner to instanter,
   // så tidssone spiller ingen rolle.
@@ -349,17 +371,14 @@ export async function sendVarsel({
   }
 
   // 2. Testmodus
-  const testEpost = await hentTestModus()
+  const testEpost = await hentTestModus(supabase)
 
   // 3. Mottakere, deduplisert. Fail closed: feil ≠ «ingen mottakere» (#503).
-  let profiler: { id: string; navn: string | null; epost: string | null }[]
+  // Oppgitte mottakere filtreres mot aktive medlemskap i klubben (#871/#868).
+  let profiler: Medlemsprofil[]
   if (mottakere) {
     const unikeIder = [...new Set(mottakere)]
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, navn, epost')
-      .in('id', unikeIder)
-      .eq('aktiv', true)
+    const { data, error } = await spoerMedlemsprofiler(supabase, { ider: unikeIder })
     if (error) {
       await logg.feil('varsel.mottakere.feilet', error, {
         ctx: { sample: type, count: unikeIder.length },
@@ -368,7 +387,7 @@ export async function sendVarsel({
     }
     profiler = data ?? []
   } else {
-    profiler = await hentProfiler(testEpost)
+    profiler = await hentProfiler(supabase, testEpost)
   }
 
   if (testEpost) {
@@ -395,8 +414,8 @@ export async function sendVarsel({
   // 4. Preferanser + push-subscriptions
   const profilIder = profiler.map(p => p.id)
   const [subs, prefs] = await Promise.all([
-    hentPushSubscriptions(profilIder),
-    hentVarselPreferanser(profilIder),
+    hentPushSubscriptions(supabase, profilIder),
+    hentVarselPreferanser(supabase, profilIder),
   ])
 
   const subsByProfil = new Map<string, typeof subs>()
@@ -522,16 +541,19 @@ export async function sendVarsel({
 // ─── WRAPPER-FUNKSJONER ─────────────────────────────────────────────────────
 
 export async function sendNyttArrangementVarsler({
+  klubbId,
   arrangementId,
   tittel,
   startTidspunkt,
 }: {
+  klubbId: string
   arrangementId: string
   tittel: string
   startTidspunkt: string
 }) {
   const dato = formaterDatoKlokke(startTidspunkt)
   await sendVarsel({
+    klubbId,
     tittel: 'Nytt arrangement',
     melding: `${tittel} — ${dato}`,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
@@ -541,12 +563,14 @@ export async function sendNyttArrangementVarsler({
 }
 
 export async function sendOppdatertVarsler({
+  klubbId,
   arrangementId,
   tittel,
   startTidspunkt,
   fraNavn,
   hilsen,
 }: {
+  klubbId: string
   arrangementId: string
   tittel: string
   startTidspunkt: string
@@ -564,6 +588,7 @@ export async function sendOppdatertVarsler({
     maksLengde: VARSLE_MAKS_LENGDE,
   })
   await sendVarsel({
+    klubbId,
     tittel: 'Arrangement oppdatert',
     melding,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
@@ -685,6 +710,7 @@ export function byggPaaminne1Melding({
 }
 
 export async function sendPaaminneVarsler({
+  klubbId,
   arrangementId,
   tittel,
   startTidspunkt,
@@ -692,6 +718,7 @@ export async function sendPaaminneVarsler({
   paameldinger,
   type,
 }: {
+  klubbId: string
   arrangementId: string
   tittel: string
   startTidspunkt: string
@@ -718,6 +745,7 @@ export async function sendPaaminneVarsler({
         }
 
   await sendVarsel({
+    klubbId,
     tittel: `Påminnelse: ${tittel}`,
     melding,
     url: `${BASE_URL}/arrangementer/${arrangementId}`,
@@ -727,15 +755,18 @@ export async function sendPaaminneVarsler({
 }
 
 export async function sendArrangorPurringVarsler({
+  klubbId,
   ansvarligId,
   arrangementNavn,
   aar,
 }: {
+  klubbId: string
   ansvarligId: string
   arrangementNavn: string
   aar: number
 }) {
   await sendVarsel({
+    klubbId,
     mottakere: [ansvarligId],
     tittel: 'Husk arrangøransvaret ditt!',
     melding: `Du er ansvarlig for å arrangere ${arrangementNavn} i ${aar}. Fint om du legger inn arrangementet!`,
@@ -749,16 +780,19 @@ export async function sendArrangorPurringVarsler({
 }
 
 export async function sendNyPollVarsler({
+  klubbId,
   pollId,
   spoersmaal,
   svarfrist,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
   svarfrist: string
 }) {
   const frist = formaterDatoKlokke(svarfrist)
   await sendVarsel({
+    klubbId,
     tittel: 'Ny avstemming',
     melding: `${spoersmaal} — svarfrist ${frist}`,
     url: `${BASE_URL}/poll/${pollId}`,
@@ -772,16 +806,19 @@ export async function sendNyPollVarsler({
 // ─── KÅRINGSPOLL-VARSLER (#87) ──────────────────────────────────────────────
 
 export async function sendKaaringspollOpprettetVarsel({
+  klubbId,
   pollId,
   spoersmaal,
   svarfrist,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
   svarfrist: string
 }) {
   const frist = formaterDatoKlokke(svarfrist)
   await sendVarsel({
+    klubbId,
     tittel: 'Ny kåring',
     melding: `${spoersmaal} — svarfrist ${frist}`,
     url: `${BASE_URL}/poll/${pollId}`,
@@ -792,13 +829,16 @@ export async function sendKaaringspollOpprettetVarsel({
 }
 
 export async function sendKaaringspollVinnerVarsel({
+  klubbId,
   pollId,
   spoersmaal,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
 }) {
   await sendVarsel({
+    klubbId,
     tittel: 'Kåringen er avgjort',
     melding: `${spoersmaal} — vinneren er kåret`,
     url: `${BASE_URL}/poll/${pollId}`,
@@ -809,15 +849,18 @@ export async function sendKaaringspollVinnerVarsel({
 }
 
 export async function sendKaaringspollTiebreakVarsel({
+  klubbId,
   pollId,
   spoersmaal,
   mottakere,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
   mottakere: string[]
 }) {
   await sendVarsel({
+    klubbId,
     mottakere,
     tittel: 'Likt antall stemmer',
     melding: `${spoersmaal} — du må velge vinneren`,
@@ -829,15 +872,18 @@ export async function sendKaaringspollTiebreakVarsel({
 }
 
 export async function sendKaaringspollIngenStemmerVarsel({
+  klubbId,
   pollId,
   spoersmaal,
   mottakere,
 }: {
+  klubbId: string
   pollId: string
   spoersmaal: string
   mottakere: string[]
 }) {
   await sendVarsel({
+    klubbId,
     mottakere,
     tittel: 'Kåring uten stemmer',
     melding: `${spoersmaal} — ingen stemte, ingen vinner kåret`,
@@ -901,6 +947,7 @@ const PURRE_VARIANTER: Record<
 }
 
 export async function sendPurringVarsler({
+  klubbId,
   arrangementId,
   tittel,
   startTidspunkt,
@@ -908,6 +955,7 @@ export async function sendPurringVarsler({
   hilsen,
   variant = 'auto',
 }: {
+  klubbId: string
   arrangementId: string
   tittel: string
   startTidspunkt: string
@@ -925,7 +973,7 @@ export async function sendPurringVarsler({
   // Mottakere beregnes her, tett på utsendingen, for å lukke TOCTOU-vinduet
   // (TOCTOU: tilstanden endres mellom sjekk og bruk) der en som nettopp
   // svarte likevel ble purret (#287).
-  const supabase = createAdminClient()
+  const supabase = adminForKlubb(klubbId)
   const { data: paameldinger, error: paameldingerFeil } = await supabase
     .from('paameldinger')
     .select('profil_id, status')
@@ -939,7 +987,7 @@ export async function sendPurringVarsler({
 
   // Alltid via hentProfiler, aldri rett fra påmeldingsradene — bevarer testmodus
   // og aktiv=true (en deaktivert kanskje-svarer skal ikke purres).
-  const profiler = await hentProfiler(await hentTestModus())
+  const profiler = await hentProfiler(supabase, await hentTestModus(supabase))
   let sendTil: string[]
   if (maalgruppe === 'uten_svar') {
     const harSvart = new Set((paameldinger ?? []).map(p => p.profil_id))
@@ -964,6 +1012,7 @@ export async function sendPurringVarsler({
   })
 
   await sendVarsel({
+    klubbId,
     mottakere: sendTil,
     tittel: varselTittel,
     melding,
@@ -1030,7 +1079,7 @@ function utdrag(tekst: string, maks = 80): string {
 
 async function hentScopeInnhold(
   scope: ChatVarselScope,
-  admin: ReturnType<typeof createAdminClient>,
+  admin: KlubbAdmin,
 ): Promise<{ tittel: string; url: string; knappTekst: string }> {
   // never-default: en ny scope-variant gir kompileringsfeil, ikke stille feil URL (#481).
   switch (scope.type) {
@@ -1148,16 +1197,14 @@ export async function sendChatVarsler(
   //
   // nevnte: eksplisitte profil-id-er i stedet for navnematching (fornavn kan
   // være tvetydige). undefined = tekstmatching; [] = slå tekstmatching AV.
-  opts: { dedupNoekkel?: string; nevnte?: string[] } = {},
+  opts: { klubbId: string; dedupNoekkel?: string; nevnte?: string[] },
 ): Promise<void> {
   const start = Date.now()
-  const admin = createAdminClient()
+  const { klubbId } = opts
+  const admin = adminForKlubb(klubbId)
 
   // Felles oppslag, så begge benene regner på samme snapshot. Fail closed (#503).
-  const { data, error } = await admin
-    .from('profiles')
-    .select('id, navn, visningsnavn, epost')
-    .eq('aktiv', true)
+  const { data, error } = await spoerMedlemsprofiler(admin)
   if (error) {
     await logg.feil('varsel.mottakere.feilet', error, { ctx: { sample: 'chat' } })
     throw new Error(`Kunne ikke hente profiler for chat-varsel: ${error.message}`)
@@ -1189,6 +1236,7 @@ export async function sendChatVarsler(
     let mentionUtfall: VarselUtfall | null = null
     try {
       mentionUtfall = await sendVarsel({
+        klubbId,
         mottakere: nevnte.map(p => p.id),
         tittel: innhold.tittel,
         melding: meldingTekst,
@@ -1213,6 +1261,7 @@ export async function sendChatVarsler(
   if (rest.length > 0) {
     try {
       await sendVarsel({
+        klubbId,
         mottakere: rest.map(p => p.id),
         tittel: innhold.tittel,
         melding: meldingTekst,

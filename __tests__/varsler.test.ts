@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { lagFromMock, lagChain } from './helpers/supabase-mock'
+import { lagFromMock, lagChain, medlem, TEST_KLUBB_ID } from './helpers/supabase-mock'
 import { BASE_URL } from '@/lib/config'
 
 const mockFrom = vi.fn()
 const mockSupabase = { from: mockFrom }
 
+const mockAdminForKlubb = vi.fn((_klubbId: string) => mockSupabase)
+
 vi.mock('@/lib/supabase/admin', () => ({
+  adminForKlubb: (klubbId: string) => mockAdminForKlubb(klubbId),
   createAdminClient: () => mockSupabase,
 }))
 
@@ -62,12 +65,12 @@ describe('sendVarsel – kanalvalg', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -83,12 +86,12 @@ describe('sendVarsel – kanalvalg', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
       push_subscriptions: [{ profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' }],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -113,14 +116,14 @@ describe('sendVarsel – kanalvalg', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: null }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: null }]))
       if (tabell === 'varsel_preferanser') {
         return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: false }])
       }
       return lagChain([])
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -134,6 +137,30 @@ describe('sendVarsel – kanalvalg', () => {
       expect.objectContaining({ profil_id: 'user1', kanal: 'kun_app' }),
     )
     expect(utfall).toEqual({ utfall: 'sendt', levert: 0, kunApp: 1, dedupHoppet: 0 })
+  })
+})
+
+describe('sendVarsel – mottakeroppslag (#871)', () => {
+  it('embedder profiles med FK-hint — uten det gir PostgREST PGRST201 (flere veier medlemskap↔profiles)', async () => {
+    const kjeder: ReturnType<typeof lagChain>[] = []
+    mockFrom.mockImplementation((tabell: string) => {
+      if (tabell === 'medlemskap') {
+        const c = lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
+        kjeder.push(c)
+        return c
+      }
+      if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
+      return lagChain([])
+    })
+
+    await sendVarsel({ klubbId: TEST_KLUBB_ID, tittel: 'Test', melding: 'm', type: 'test', tillatDuplikat: true })
+
+    expect(kjeder.length).toBeGreaterThan(0)
+    for (const c of kjeder) {
+      expect(c.select).toHaveBeenCalledWith(
+        expect.stringContaining('profiles!medlemskap_profil_id_fkey!inner('),
+      )
+    }
   })
 })
 
@@ -153,7 +180,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') {
         return lagChain([
           { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'viktige' },
@@ -165,7 +192,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       return lagChain([])
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Ny melding i klubbchatten',
       melding: 'Test',
@@ -186,7 +213,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [
         { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'alle' },
       ],
@@ -195,7 +222,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       ],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Ny melding i klubbchatten',
       melding: 'Test',
@@ -212,7 +239,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [
         { profil_id: 'user1', push_aktiv: true, epost_aktiv: true, varsel_nivaa: 'viktige' },
       ],
@@ -221,7 +248,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       ],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Nytt arrangement',
       melding: 'Test',
@@ -244,11 +271,11 @@ describe('sendVarsel – nivåvalg (#614)', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') {
-        return lagChain([
+      if (tabell === 'medlemskap') {
+        return lagChain(medlem([
           { id: 'user1', navn: 'Ola', epost: 'ola@test.no' },
           { id: 'user2', navn: 'Per', epost: 'per@test.no' },
-        ])
+        ]))
       }
       if (tabell === 'varsel_preferanser') {
         return lagChain([
@@ -265,7 +292,7 @@ describe('sendVarsel – nivåvalg (#614)', () => {
       return lagChain([])
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1', 'user2'],
       tittel: 'Ny melding i klubbchatten',
       melding: 'Test',
@@ -294,12 +321,12 @@ describe('sendVarsel – nivåvalg (#614)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [], // ingen rad for user1
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Ny melding i klubbchatten',
       melding: 'Test',
@@ -318,12 +345,12 @@ describe('sendVarsel – dedup', () => {
     setupMock({
       varsel_logg: [{ id: 'eksisterende' }],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -341,12 +368,12 @@ describe('sendVarsel – dedup', () => {
     setupMock({
       varsel_logg: [{ id: 'eksisterende' }],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -364,12 +391,12 @@ describe('wrapper-funksjoner', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendNyttArrangementVarsler({
+    await sendNyttArrangementVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -392,7 +419,7 @@ describe('wrapper-funksjoner', () => {
       return chain
     })
 
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Test',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -403,7 +430,7 @@ describe('wrapper-funksjoner', () => {
     expect(eqCalls).toContain('paaminnelse_7d')
 
     eqCalls.length = 0
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr2',
       tittel: 'Test',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -418,12 +445,12 @@ describe('wrapper-funksjoner', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'ansvarlig1', navn: 'Kari', epost: 'kari@test.no' }],
+      medlemskap: medlem([{ id: 'ansvarlig1', navn: 'Kari', epost: 'kari@test.no' }]),
       varsel_preferanser: [{ profil_id: 'ansvarlig1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendArrangorPurringVarsler({
+    await sendArrangorPurringVarsler({ klubbId: TEST_KLUBB_ID,
       ansvarligId: 'ansvarlig1',
       arrangementNavn: 'Mars-april møte',
       aar: 2026,
@@ -592,7 +619,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
   const KANAL_EPOST = {
     varsel_logg: [],
     varsel_innstillinger: { aktiv: true, beskrivelse: null },
-    profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+    medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
     varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
     push_subscriptions: [],
   }
@@ -604,7 +631,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
   it('bruker 7-dagers-teksten for paaminne_7', async () => {
     setupMock(KANAL_EPOST)
 
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -625,12 +652,12 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -650,7 +677,7 @@ describe('sendPaaminneVarsler – riktig tekst per type', () => {
     // 1-dagers er ikke personalisert: én broadcast-sending uten mottakerliste.
     setupMock(KANAL_EPOST)
 
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -682,7 +709,7 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: PROFILER,
+      medlemskap: medlem(PROFILER),
       varsel_preferanser: PROFILER.map(p => ({
         profil_id: p.id,
         push_aktiv: false,
@@ -693,7 +720,7 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
   }
 
   async function send() {
-    await sendPaaminneVarsler({
+    await sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'arr1',
       tittel: 'Vårfest',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -739,8 +766,8 @@ describe('sendPaaminneVarsler – 7-dagers grupperes per RSVP-status', () => {
     })
     mockFrom.mockImplementation((tabell: string) => {
       const chain = lagChain(
-        tabell === 'profiles'
-          ? PROFILER
+        tabell === 'medlemskap'
+          ? medlem(PROFILER)
           : tabell === 'varsel_innstillinger'
             ? { aktiv: true, beskrivelse: null }
             : tabell === 'varsel_preferanser'
@@ -843,8 +870,8 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
     { id: 'user2', navn: 'Per Hansen', visningsnavn: 'Per', epost: 'per@test.no' },
   ]
 
-  // Egen profiles-chain fordi lagChain ignorerer filtrene: sendVarsel sin
-  // .in('id', mottakere) må respekteres, ellers kan testen ikke skille «Ola ble
+  // Egen medlemskap-chain fordi lagChain ignorerer filtrene: sendVarsel sin
+  // .in('profil_id', mottakere) må respekteres, ellers kan testen ikke skille «Ola ble
   // varslet» fra «alle ble varslet».
   function profilChain() {
     let idFilter: string[] | null = null
@@ -857,7 +884,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
       return chain
     })
     const resultat = () => ({
-      data: idFilter ? ALLE_PROFILER.filter(p => idFilter!.includes(p.id)) : ALLE_PROFILER,
+      data: medlem(idFilter ? ALLE_PROFILER.filter(p => idFilter!.includes(p.id)) : ALLE_PROFILER),
       error: null,
     })
     chain.then = (resolve: (v: unknown) => void) => Promise.resolve(resultat()).then(resolve)
@@ -879,14 +906,14 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
       ],
     })
     mockFrom.mockImplementation((tabell: string) =>
-      tabell === 'profiles' ? profilChain() : rest(tabell),
+      tabell === 'medlemskap' ? profilChain() : rest(tabell),
     )
   }
 
   it('varsler den som nevnes med @ — OG broadcaster til resten (#612)', async () => {
     mentionOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Grattis med dagen @Ola!', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     expect(mockSendPush).toHaveBeenCalled()
     // Mention (Ola) FØR broadcast (Per) — ett sendEpostBatch-kall per sending.
@@ -901,7 +928,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
   it('setter avsenderens navn i meldinga', async () => {
     mentionOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Hei @Ola', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // Første push er mention-benet (Ola).
     const push = mockSendPush.mock.calls[0]
@@ -911,7 +938,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
   it('varsler ikke avsenderen selv, men broadcaster fortsatt til de andre (#612)', async () => {
     mentionOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Dette er @Nils sitt ansvar', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // Ingen mention-treff (Nils er avsender), men broadcasten går til Ola og Per.
     expect(mockSendPush).toHaveBeenCalledTimes(2)
@@ -922,7 +949,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
   it('@alle varsler alle andre enn avsenderen — kun mention, ingen egen broadcast', async () => {
     mentionOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // @alle dekker alle andre — broadcast-benet har ingen igjen og skal ALDRI kalles.
     expect(mockSendEpostBatch).toHaveBeenCalledTimes(1)
@@ -933,7 +960,7 @@ describe('sendChatVarsler – broadcast + @-mention (#612)', () => {
   it('broadcaster til alle når teksten ikke har noen @ (#612 — kjerneatferden)', async () => {
     mentionOppsett()
 
-    await sendChatVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1', false)
+    await sendChatVarsler({ type: 'klubb' }, 'Ingen nevnt her', 'avsender1', false, { klubbId: TEST_KLUBB_ID })
 
     // Broadcast til alle andre (#612).
     expect(mockSendPush).toHaveBeenCalled()
@@ -948,12 +975,12 @@ describe('sendVarsel – URL-normalisering', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -971,12 +998,12 @@ describe('sendVarsel – URL-normalisering', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -993,12 +1020,12 @@ describe('sendVarsel – URL-normalisering', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1019,14 +1046,14 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
       push_subscriptions: [
         { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
       ],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1049,14 +1076,14 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
       push_subscriptions: [
         { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
       ],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1074,14 +1101,14 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
       push_subscriptions: [
         { profil_id: 'user1', endpoint: 'https://push.example.com', p256dh: 'key', auth: 'auth' },
       ],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1119,7 +1146,7 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser')
         return lagChain([{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }])
       if (tabell === 'push_subscriptions')
@@ -1129,7 +1156,7 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
       return lagChain([])
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1163,7 +1190,7 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser')
         return lagChain([{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }])
       if (tabell === 'push_subscriptions')
@@ -1173,7 +1200,7 @@ describe('sendVarsel – push relativ, e-post absolutt (#687)', () => {
       return lagChain([])
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1195,13 +1222,13 @@ describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
     // Ingen dedup-nøkkel og tillatDuplikat default false — dedup er en no-op (#518).
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1218,12 +1245,12 @@ describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1241,12 +1268,12 @@ describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1264,12 +1291,12 @@ describe('sendVarsel – dedup-nøkkel-fella (#518)', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test melding',
@@ -1290,17 +1317,17 @@ describe('sendVarsel – testmodus', () => {
       if (tabell === 'varsel_innstillinger') {
         return lagChain({ aktiv: true, beskrivelse: 'test@test.no' })
       }
-      if (tabell === 'profiles') {
-        const chain = lagChain([
+      if (tabell === 'medlemskap') {
+        const chain = lagChain(medlem([
           { id: 'user1', navn: 'Ola', epost: 'ola@test.no' },
           { id: 'user2', navn: 'Test', epost: 'test@test.no' },
-        ])
+        ]))
         return chain
       }
       return lagChain([])
     })
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       tittel: 'Test',
       melding: 'Test',
       type: 'test',
@@ -1325,12 +1352,12 @@ describe('sendVarsel – feilhåndtering', () => {
           push_subscriptions: [],
           varsel_preferanser: [],
         },
-        { profiles: new Error('DB nede') },
+        { medlemskap: new Error('DB nede') },
       ),
     )
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow()
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1341,7 +1368,7 @@ describe('sendVarsel – feilhåndtering', () => {
     mockFrom.mockImplementation(lagFromMock({}, { varsel_innstillinger: new Error('DB nede') }))
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow()
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1359,12 +1386,12 @@ describe('sendVarsel – feilhåndtering', () => {
           varsel_preferanser: [],
           push_subscriptions: [],
         },
-        { profiles: new Error('DB nede') },
+        { medlemskap: new Error('DB nede') },
       ),
     )
 
     await expect(
-      sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow(/kunne ikke hente profiler/i)
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1389,7 +1416,7 @@ describe('sendVarsel – feilhåndtering', () => {
         )
         return chain
       }
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') {
         return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
       }
@@ -1397,7 +1424,7 @@ describe('sendVarsel – feilhåndtering', () => {
     })
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow(/test_modus/)
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1422,7 +1449,7 @@ describe('sendVarsel – feilhåndtering', () => {
         )
         return chain
       }
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') {
         return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
       }
@@ -1430,7 +1457,7 @@ describe('sendVarsel – feilhåndtering', () => {
     })
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow(/varsel-innstilling/)
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1445,7 +1472,7 @@ describe('sendVarsel – feilhåndtering', () => {
         {
           varsel_logg: [],
           varsel_innstillinger: { aktiv: true, beskrivelse: null },
-          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
           varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
           push_subscriptions: [],
         },
@@ -1454,7 +1481,7 @@ describe('sendVarsel – feilhåndtering', () => {
     )
 
     await expect(
-      sendVarsel({
+      sendVarsel({ klubbId: TEST_KLUBB_ID,
         mottakere: ['user1'],
         tittel: 'Test',
         melding: 'Test',
@@ -1469,10 +1496,10 @@ describe('sendVarsel – feilhåndtering', () => {
 
   it('sendChatVarsler kaster når profil-oppslaget feiler', async () => {
     // Feilet spørring ≠ «ingen å varsle», for både mention og broadcast (#612).
-    mockFrom.mockImplementation(lagFromMock({}, { profiles: new Error('DB nede') }))
+    mockFrom.mockImplementation(lagFromMock({}, { medlemskap: new Error('DB nede') }))
 
     await expect(
-      sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false),
+      sendChatVarsler({ type: 'klubb' }, '@alle husk møtet', 'avsender1', false, { klubbId: TEST_KLUBB_ID }),
     ).rejects.toThrow(/chat-varsel/)
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1485,7 +1512,7 @@ describe('sendVarsel – feilhåndtering', () => {
         {
           varsel_logg: [],
           varsel_innstillinger: { aktiv: true, beskrivelse: null },
-          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
           push_subscriptions: [],
         },
         { varsel_preferanser: new Error('DB nede') },
@@ -1493,7 +1520,7 @@ describe('sendVarsel – feilhåndtering', () => {
     )
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow()
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1506,7 +1533,7 @@ describe('sendVarsel – feilhåndtering', () => {
         {
           varsel_logg: [],
           varsel_innstillinger: { aktiv: true, beskrivelse: null },
-          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
           varsel_preferanser: [{ profil_id: 'user1', push_aktiv: true, epost_aktiv: true }],
         },
         { push_subscriptions: new Error('DB nede') },
@@ -1514,7 +1541,7 @@ describe('sendVarsel – feilhåndtering', () => {
     )
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).rejects.toThrow()
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1526,7 +1553,7 @@ describe('sendVarsel – feilhåndtering', () => {
       lagFromMock(
         {
           varsel_innstillinger: { aktiv: true, beskrivelse: null },
-          profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+          medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
           varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
           push_subscriptions: [],
         },
@@ -1534,7 +1561,7 @@ describe('sendVarsel – feilhåndtering', () => {
       ),
     )
 
-    await sendVarsel({
+    await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1566,7 +1593,7 @@ describe('sendVarsel – feilhåndtering', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') return lagChain([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') {
         return lagChain([{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }])
       }
@@ -1574,7 +1601,7 @@ describe('sendVarsel – feilhåndtering', () => {
       return lagChain([])
     })
 
-    await sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' })
+    await sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' })
 
     expect(mockSendEpostBatch).toHaveBeenCalledWith([expect.objectContaining({ til: 'ola@test.no' })])
     expect(mockLoggFeil).toHaveBeenCalledWith('varsel.logg.insert.feilet', expect.anything(), expect.anything())
@@ -1584,13 +1611,13 @@ describe('sendVarsel – feilhåndtering', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [],
+      medlemskap: medlem([]),
       varsel_preferanser: [],
       push_subscriptions: [],
     })
 
     await expect(
-      sendVarsel({ mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'Test', melding: 'Test', type: 'test' }),
     ).resolves.not.toThrow()
 
     expect(mockSendPush).not.toHaveBeenCalled()
@@ -1602,12 +1629,12 @@ describe('sendVarsel – feilhåndtering', () => {
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [],
+      medlemskap: medlem([]),
       varsel_preferanser: [],
       push_subscriptions: [],
     })
 
-    const utfall = await sendVarsel({ tittel: 'Test', melding: 'Test', type: 'test' })
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID, tittel: 'Test', melding: 'Test', type: 'test' })
 
     expect(mockSendPush).not.toHaveBeenCalled()
     expect(mockSendEpostBatch).not.toHaveBeenCalled()
@@ -1631,7 +1658,7 @@ describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () 
       varsel_innstillinger: { aktiv: false, beskrivelse: null },
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1647,7 +1674,7 @@ describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () 
       arrangementer: { start_tidspunkt: '2020-01-01T00:00:00Z' },
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1664,7 +1691,7 @@ describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () 
       varsel_logg: [{ id: 'eksisterende' }],
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1680,10 +1707,10 @@ describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () 
     setupMock({
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
       varsel_logg: [],
-      profiles: [],
+      medlemskap: medlem([]),
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1697,12 +1724,12 @@ describe('sendVarsel – VarselUtfall-diskriminant per tidlig-retur (#504)', () 
     setupMock({
       varsel_logg: [],
       varsel_innstillinger: { aktiv: true, beskrivelse: null },
-      profiles: [{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }],
+      medlemskap: medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }]),
       varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
       push_subscriptions: [],
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1'],
       tittel: 'Test',
       melding: 'Test',
@@ -1734,11 +1761,11 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
         return chain
       }
       if (tabell === 'varsel_innstillinger') return lagChain({ aktiv: true, beskrivelse: null })
-      if (tabell === 'profiles') {
-        return lagChain([
+      if (tabell === 'medlemskap') {
+        return lagChain(medlem([
           { id: 'user1', navn: 'Ola', epost: 'ola@test.no' },
           { id: 'user2', navn: 'Kari', epost: 'kari@test.no' },
-        ])
+        ]))
       }
       if (tabell === 'varsel_preferanser') {
         return lagChain([
@@ -1750,7 +1777,7 @@ describe('sendVarsel – dedup_noekkel per mottaker (#504)', () => {
       return lagChain([])
     })
 
-    const utfall = await sendVarsel({
+    const utfall = await sendVarsel({ klubbId: TEST_KLUBB_ID,
       mottakere: ['user1', 'user2'],
       tittel: 'Test',
       melding: 'Test',
@@ -1784,7 +1811,7 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
       // ekte kanskje-svarer for å nå porten. Harmløst for de andre wrapperne,
       // som blokkeres av egen nøkkel før mottakere hentes.
       if (tabell === 'paameldinger') return lagChain([{ profil_id: 'p1', status: 'kanskje' }])
-      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell !== 'varsel_innstillinger') return lagChain([])
       // .eq('noekkel', x) kommer etter at chainen lages, så maybeSingle leser
       // nøkkelen fra en lukket variabel.
@@ -1808,15 +1835,15 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
 
   it.each([
     ['sendNyttArrangementVarsler', 'nytt_arrangement', () =>
-      sendNyttArrangementVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z' })],
+      sendNyttArrangementVarsler({ klubbId: TEST_KLUBB_ID, arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z' })],
     ['sendPaaminneVarsler', 'paaminnelse_7d', () =>
-      sendPaaminneVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', type: 'paaminne_7', oppmoetested: null, paameldinger: [] })],
+      sendPaaminneVarsler({ klubbId: TEST_KLUBB_ID, arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', type: 'paaminne_7', oppmoetested: null, paameldinger: [] })],
     ['sendArrangorPurringVarsler', 'arrangor_purring', () =>
-      sendArrangorPurringVarsler({ ansvarligId: 'p1', arrangementNavn: 'Tur', aar: 2026 })],
+      sendArrangorPurringVarsler({ klubbId: TEST_KLUBB_ID, ansvarligId: 'p1', arrangementNavn: 'Tur', aar: 2026 })],
     ['sendNyPollVarsler', 'ny_poll', () =>
-      sendNyPollVarsler({ pollId: 'p1', spoersmaal: 'Hva?', svarfrist: '2026-06-15T16:00:00Z' })],
+      sendNyPollVarsler({ klubbId: TEST_KLUBB_ID, pollId: 'p1', spoersmaal: 'Hva?', svarfrist: '2026-06-15T16:00:00Z' })],
     ['sendPurringVarsler (kanskje)', 'purring_kanskje', () =>
-      sendPurringVarsler({ arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', variant: 'kanskje' })],
+      sendPurringVarsler({ klubbId: TEST_KLUBB_ID, arrangementId: 'a1', tittel: 'T', startTidspunkt: '2026-06-15T16:00:00Z', variant: 'kanskje' })],
   ])('%s slår opp %s nøyaktig én gang', async (_navn, forventetNoekkel, kall) => {
     const spurte = mockMedTeller({ [forventetNoekkel]: false })
     await kall()
@@ -1844,14 +1871,14 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
         return chain
       }
       if (tabell === 'paameldinger') return lagChain([])  // ingen har svart
-      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
       if (tabell === 'push_subscriptions') return lagChain([])
       if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
       return lagChain([])
     })
 
-    await sendPurringVarsler({
+    await sendPurringVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -1883,14 +1910,14 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
         return chain
       }
       if (tabell === 'paameldinger') return lagChain([{ profil_id: 'p1', status: 'kanskje' }])
-      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
       if (tabell === 'push_subscriptions') return lagChain([])
       if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
       return lagChain([])
     })
 
-    await sendPurringVarsler({
+    await sendPurringVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -1919,14 +1946,14 @@ describe('bryter-oppslaget skjer kun i porten (#547)', () => {
         return chain
       }
       if (tabell === 'paameldinger') return lagChain([])
-      if (tabell === 'profiles') return lagChain([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }])
+      if (tabell === 'medlemskap') return lagChain(medlem([{ id: 'p1', navn: 'Ola', epost: 'ola@test.no' }]))
       if (tabell === 'varsel_preferanser') return lagChain([{ profil_id: 'p1', push_aktiv: false, epost_aktiv: true }])
       if (tabell === 'push_subscriptions') return lagChain([])
       if (tabell === 'varsel_logg') return lagChain({ id: 'logg1' })
       return lagChain([])
     })
 
-    await sendPurringVarsler({
+    await sendPurringVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -1942,7 +1969,7 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
   // ser på HVEM som har svart, ikke MED HVA.
   //
   // lagChain filtrerer ikke på .in()/.eq(), så testen spionerer på
-  // .in('id', …)-kallet mot profiles i stedet for å lese batch-mottakerne.
+  // .in('profil_id', …)-kallet mot medlemskap i stedet for å lese batch-mottakerne.
   function mockMedInSpion() {
     const idKall: string[][] = []
     mockFrom.mockImplementation((tabell: string) => {
@@ -1956,15 +1983,15 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
           { profil_id: 'p5', status: 'kanskje' },
         ])
       }
-      if (tabell === 'profiles') {
-        const chain = lagChain([
+      if (tabell === 'medlemskap') {
+        const chain = lagChain(medlem([
           { id: 'p1', navn: 'Ola', epost: 'ola@test.no' },
           { id: 'p2', navn: 'Kari', epost: 'kari@test.no' },
           { id: 'p3', navn: 'Per', epost: 'per@test.no' },
           { id: 'p4', navn: 'Nils', epost: 'nils@test.no' },
-        ]) as Record<string, unknown>
+        ])) as Record<string, unknown>
         chain.in = vi.fn((col: string, ids: string[]) => {
-          if (col === 'id') idKall.push(ids)
+          if (col === 'profil_id') idKall.push(ids)
           return chain
         })
         return chain
@@ -1986,7 +2013,7 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
   it('variant kanskje sender kun til p2', async () => {
     const idKall = mockMedInSpion()
 
-    await sendPurringVarsler({
+    await sendPurringVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -1999,7 +2026,7 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
   it('variant manuell sender kun til p4 (uendret uten_svar-oppførsel)', async () => {
     const idKall = mockMedInSpion()
 
-    await sendPurringVarsler({
+    await sendPurringVarsler({ klubbId: TEST_KLUBB_ID,
       arrangementId: 'a1',
       tittel: 'Vårtur',
       startTidspunkt: '2026-06-15T16:00:00Z',
@@ -2007,5 +2034,91 @@ describe('sendPurringVarsler – kanskje treffer kun kanskje-gruppa (#596)', () 
     })
 
     expect(idKall).toEqual([['p4']])
+  })
+})
+
+// ─── Klubb-avgrensning (#871): mottakere via medlemskap, ikke profiles ───────
+
+describe('sendVarsel – klubb-avgrensede mottakere (#871)', () => {
+  const ANNEN_KLUBB = '00000000-0000-4000-a000-000000000002'
+
+  // Chain som husker filtrene sendVarsel la på medlemskap-oppslaget.
+  function medlemskapSpion() {
+    const kall: { eq: [string, unknown][]; in: [string, unknown][]; tabeller: string[] } = {
+      eq: [],
+      in: [],
+      tabeller: [],
+    }
+    const rest = lagFromMock({
+      varsel_logg: [],
+      varsel_innstillinger: { aktiv: true, beskrivelse: null },
+      varsel_preferanser: [{ profil_id: 'user1', push_aktiv: false, epost_aktiv: true }],
+      push_subscriptions: [],
+    })
+    mockFrom.mockImplementation((tabell: string) => {
+      kall.tabeller.push(tabell)
+      if (tabell !== 'medlemskap') return rest(tabell)
+      const chain = lagChain(medlem([{ id: 'user1', navn: 'Ola', epost: 'ola@test.no' }])) as Record<string, unknown>
+      chain.eq = vi.fn((kol: string, verdi: unknown) => {
+        kall.eq.push([kol, verdi])
+        return chain
+      })
+      chain.in = vi.fn((kol: string, verdi: unknown) => {
+        kall.in.push([kol, verdi])
+        return chain
+      })
+      return chain
+    })
+    return kall
+  }
+
+  it('binder ALL admin-tilgang til klubben som ble oppgitt', async () => {
+    medlemskapSpion()
+    await sendVarsel({ klubbId: ANNEN_KLUBB, mottakere: ['user1'], tittel: 'T', melding: 'M', type: 'test' })
+    expect(mockAdminForKlubb).toHaveBeenCalledTimes(1)
+    expect(mockAdminForKlubb).toHaveBeenCalledWith(ANNEN_KLUBB)
+  })
+
+  it('oppgitte mottakere filtreres mot AKTIVE medlemskap (ikke profiles.aktiv)', async () => {
+    const kall = medlemskapSpion()
+    await sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1', 'user1', 'user2'], tittel: 'T', melding: 'M', type: 'test' })
+    expect(kall.tabeller).toContain('medlemskap')
+    expect(kall.tabeller).not.toContain('profiles')
+    expect(kall.eq).toContainEqual(['aktiv', true])
+    // Deduplisert liste inn i .in('profil_id', …)
+    expect(kall.in).toContainEqual(['profil_id', ['user1', 'user2']])
+  })
+
+  it('broadcast henter ALLE aktive medlemskap, uten profil-id-filter', async () => {
+    const kall = medlemskapSpion()
+    await sendVarsel({ klubbId: TEST_KLUBB_ID, tittel: 'T', melding: 'M', type: 'test' })
+    expect(kall.tabeller).not.toContain('profiles')
+    expect(kall.eq).toContainEqual(['aktiv', true])
+    // Spionen ser kun medlemskap-kjeden: ingen .in('profil_id', …) = ikke avgrenset til en liste.
+    expect(kall.in).toHaveLength(0)
+  })
+
+  it('kaster fortsatt (fail closed) når medlemskap-oppslaget feiler, for oppgitte mottakere', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        { varsel_innstillinger: { aktiv: true, beskrivelse: null } },
+        { medlemskap: new Error('DB nede') },
+      ),
+    )
+    await expect(
+      sendVarsel({ klubbId: TEST_KLUBB_ID, mottakere: ['user1'], tittel: 'T', melding: 'M', type: 'test' }),
+    ).rejects.toThrow(/mottakere/)
+    expect(mockSendEpostBatch).not.toHaveBeenCalled()
+  })
+
+  it('kaster fortsatt (fail closed) når medlemskap-oppslaget feiler, for broadcast', async () => {
+    mockFrom.mockImplementation(
+      lagFromMock(
+        { varsel_innstillinger: { aktiv: true, beskrivelse: null } },
+        { medlemskap: new Error('DB nede') },
+      ),
+    )
+    await expect(sendVarsel({ klubbId: TEST_KLUBB_ID, tittel: 'T', melding: 'M', type: 'test' })).rejects.toThrow(/profiler/)
+    expect(mockLoggFeil).toHaveBeenCalledWith('varsel.mottakere.feilet', expect.anything(), expect.anything())
   })
 })

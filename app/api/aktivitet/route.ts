@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { adminForKlubb } from '@/lib/supabase/admin'
 import { ensureInnlogget } from '@/lib/auth'
 import { logg } from '@/lib/logg'
 
@@ -8,8 +8,9 @@ import { logg } from '@/lib/logg'
 // videreføres aldri til RPC-kallet eller logging — det er hele poenget med
 // "anonym". Vi teller kun tre booleans, ingen identifikator.
 export async function POST(req: Request) {
+  let klubbId: string
   try {
-    await ensureInnlogget()
+    ;({ klubbId } = await ensureInnlogget())
   } catch {
     return new NextResponse(null, { status: 204 })
   }
@@ -24,11 +25,12 @@ export async function POST(req: Request) {
     // Behold tom body — treff/unik/uke telles da som false
   }
 
-  const admin = createAdminClient()
+  const admin = adminForKlubb(klubbId)
   const { error, status } = await admin.rpc('tell_aktivitet', {
     p_unik_dag: !!body.unik,
     p_unik_uke: !!body.uke,
     p_treff: !!body.treff,
+    p_klubb_id: klubbId,
   })
 
   if (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { adminForKlubb } from '@/lib/supabase/admin'
+import { aktivKlubbId } from '@/lib/klubb-kontekst'
 import { logg } from '@/lib/logg'
 
 // Tillat mobil-klienter som bruker navigator.sendBeacon (sender
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
   const device_type = parseDevice(req.headers.get('user-agent'))
 
   // Bruk admin-klient for insert siden RLS ikke har insert-policy
-  const admin = createAdminClient()
+  const admin = adminForKlubb(await aktivKlubbId())
   const { error, status } = await admin.from('vitals_logg').insert({
     rute,
     metric,

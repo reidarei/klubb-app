@@ -14,10 +14,10 @@ import {
 import { PAAMINNELSE_DAGER, KAARING_VARSEL_RETRY_DAGER } from '@/lib/konstanter'
 import { rollerMed } from '@/lib/roller'
 import { logg } from '@/lib/logg'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import type { KlubbAdmin } from '@/lib/supabase/admin'
 
-type Admin = SupabaseClient<Database>
+// KlubbAdmin: bundet til én klubb (#871); klubbId følger med til sendVarsel.
+type Admin = KlubbAdmin
 
 // Fail closed: tomt resultat er bit-identisk med «ingen arrangementer i dag» (#504).
 // paameldinger embeddes for å unngå N+1 og arve samme feilvakt (#591);
@@ -74,6 +74,7 @@ export async function kjorPaaminnelser(admin: Admin) {
   for (const a of arr_7) {
     oppgaver.push(
       sendPaaminneVarsler({
+        klubbId: admin.klubbId,
         arrangementId: a.id,
         tittel: a.tittel,
         startTidspunkt: a.start_tidspunkt,
@@ -87,6 +88,7 @@ export async function kjorPaaminnelser(admin: Admin) {
   for (const a of arr_1) {
     oppgaver.push(
       sendPaaminneVarsler({
+        klubbId: admin.klubbId,
         arrangementId: a.id,
         tittel: a.tittel,
         startTidspunkt: a.start_tidspunkt,
@@ -99,13 +101,13 @@ export async function kjorPaaminnelser(admin: Admin) {
   }
   for (const a of arr_3) {
     oppgaver.push(
-      sendPurringVarsler({ arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt })
+      sendPurringVarsler({ klubbId: admin.klubbId, arrangementId: a.id, tittel: a.tittel, startTidspunkt: a.start_tidspunkt })
         .then(() => ({ id: a.id, type: 'purring' }))
     )
   }
   for (const a of arrangorPurringer) {
     oppgaver.push(
-      sendArrangorPurringVarsler({ ansvarligId: a.ansvarlig_id!, arrangementNavn: a.arrangement_navn, aar: a.aar })
+      sendArrangorPurringVarsler({ klubbId: admin.klubbId, ansvarligId: a.ansvarlig_id!, arrangementNavn: a.arrangement_navn, aar: a.aar })
         .then(() => ({ id: a.id, type: 'arrangor_purring' }))
     )
   }
@@ -296,6 +298,7 @@ async function behandleKaaringspoller(admin: Admin, anker: string) {
       }
 
       const { sendt } = await behandleKaaringspollAvsluttResultat({
+        klubbId: admin.klubbId,
         pollId: poll.id,
         spoersmaal: poll.spoersmaal,
         status,

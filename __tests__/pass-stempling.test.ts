@@ -36,6 +36,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({ from: mockAdminFrom, rpc: mockRpc }),
+  adminForKlubb: () => ({ from: mockAdminFrom, rpc: mockRpc }),
 }))
 
 vi.mock('@/lib/varsler', () => ({

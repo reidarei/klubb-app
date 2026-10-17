@@ -44,11 +44,11 @@ export async function opprettMelding(input: {
     throw new Error(`Innholdet kan maks være ${INNLEGG_MAKS_LENGDE} tegn`)
   }
 
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   // Insert + bilder + navneoppslag + varsel — delt med fondsrapport-
   // publiseringen, se lib/melding-opprett.ts.
-  await opprettInnleggOgVarsle({ supabase, user, tekst, bilder, albumId, aktuellDato })
+  await opprettInnleggOgVarsle({ supabase, user, klubbId, tekst, bilder, albumId, aktuellDato })
 
   // Uten dette serverer Router Cache den gamle forsiden ved redirect, så det
   // nye innlegget mangler til brukeren refresher manuelt. Alle andre

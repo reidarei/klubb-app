@@ -6,7 +6,7 @@
 // loop som kaller beaconen 1000 ganger), ikke koordinere globalt.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { adminPlattform } from '@/lib/supabase/admin'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
 import {
@@ -197,7 +197,11 @@ export async function POST(req: NextRequest) {
 
   // ── Insert ──────────────────────────────────────────────────────────────────
 
-  const admin = createAdminClient()
+  // Rader lagres «uten klubb» (utelatt klubb_id: standardklubb nå, NULL i 2.4b). Klubb hentes
+  // aldri fra body, og aktivKlubbId() kan ikke brukes her: ruta er bevisst uten middleware-
+  // verifisering (#688), og __tests__/klubb-kontekst-middleware.test.ts forbyr importen.
+  // Vert→klubb for anonyme beacons kommer i 5.1 (#882).
+  const admin = adminPlattform('logg-feil')
   // Cast til Json-typen fra database.types — Record<string, unknown> er semantisk
   // ekvivalent med { [key: string]: Json | undefined } men TypeScript krever
   // eksplisitt cast fordi unknown er bredere enn Json-treet.

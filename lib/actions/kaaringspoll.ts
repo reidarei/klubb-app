@@ -34,7 +34,7 @@ type OpprettInput = {
  * Krever admin/generalsekretær — RLS dobbeltsjekker via 073.
  */
 export async function opprettKaaringspoll(input: OpprettInput) {
-  const { user } = await ensureAdmin()
+  const { user, klubbId } = await ensureAdmin()
   const admin = createAdminClient()
 
   const frist = new Date(input.svarfrist)
@@ -145,6 +145,7 @@ export async function opprettKaaringspoll(input: OpprettInput) {
   }
 
   await sendKaaringspollOpprettetVarsel({
+    klubbId,
     pollId: poll.id,
     spoersmaal,
     svarfrist: frist.toISOString(),
@@ -161,7 +162,7 @@ export async function opprettKaaringspoll(input: OpprettInput) {
  * kaaring_vinnere og sender ett vinner-varsel.
  */
 export async function velgTiebreakVinner(pollId: string, valgId: string) {
-  const { user, profil } = await ensureLoeserTiebreak()
+  const { user, profil, klubbId } = await ensureLoeserTiebreak()
   const admin = createAdminClient()
 
   // Feil hentes eksplisitt: uten den ville en DB-feil sett identisk ut som
@@ -229,6 +230,7 @@ export async function velgTiebreakVinner(pollId: string, valgId: string) {
   // — kaster sendKaaringspollVinnerVarsel, stempler vi ikke.
   try {
     await sendKaaringspollVinnerVarsel({
+      klubbId,
       pollId: poll.id,
       spoersmaal: poll.spoersmaal,
     })
@@ -256,7 +258,7 @@ export async function lukkKaaringspollNaa(pollId: string) {
   // `auth.uid()`. Med service_role-klienten er auth.uid() null, og RPC-en
   // ville alltid kaste 'forbudt'. Mottaker-oppslagene under bruker fortsatt
   // admin-klienten fordi de leser på tvers av brukere.
-  const { supabase: brukerKlient } = await ensureLoeserTiebreak()
+  const { supabase: brukerKlient, klubbId } = await ensureLoeserTiebreak()
   const admin = createAdminClient()
 
   const { data: poll, error: pollErr } = await admin
@@ -328,6 +330,7 @@ export async function lukkKaaringspollNaa(pollId: string) {
 
   try {
     await behandleKaaringspollAvsluttResultat({
+      klubbId,
       pollId,
       spoersmaal: poll.spoersmaal,
       status: rad.status,

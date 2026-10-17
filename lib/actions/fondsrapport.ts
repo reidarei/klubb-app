@@ -297,7 +297,7 @@ export async function publiserFondsrapport({
 }: {
   hilsen: string
 }): Promise<{ ok: false; feil: string }> {
-  const { supabase, user } = await ensureAdmin()
+  const { supabase, user, klubbId } = await ensureAdmin()
 
   try {
     const grunnlag = await hentGrunnlag(supabase)
@@ -318,6 +318,7 @@ export async function publiserFondsrapport({
     await opprettInnleggOgVarsle({
       supabase,
       user,
+      klubbId,
       tekst: innhold,
       bilder: [],
       albumId: null,

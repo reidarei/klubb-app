@@ -18,10 +18,10 @@ import { iDagOslo } from '@/lib/dato'
 import { finnBursdagsbarn, alderIAar } from '@/lib/bursdag'
 import { sendVarsel } from '@/lib/varsler'
 import { logg } from '@/lib/logg'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import type { KlubbAdmin } from '@/lib/supabase/admin'
 
-type Admin = SupabaseClient<Database>
+// KlubbAdmin: bundet til én klubb (#871); klubbId følger med til sendVarsel.
+type Admin = KlubbAdmin
 
 export async function kjorBursdagsvarsel(
   admin: Admin,
@@ -32,9 +32,13 @@ export async function kjorBursdagsvarsel(
   let feil = 0
 
   // Uten fodselsdato-filter: mottakerne er alle aktive, også dem uten kjent dato.
-  const { data: alle, error: profilerFeil } = await admin
-    .from('profiles')
-    .select('id, navn, fodselsdato')
+  // Rotet i medlemskap (klubb_id-filteret legges på av den bundne klienten), ikke i
+  // den globale profiles-tabellen — ellers varsles klubben om bursdagen til en mann
+  // som ikke er medlem der (#871). `aktiv` leses fra medlemskapet (#868).
+  // FK-hintet: se spoerMedlemsprofiler() i lib/varsler.ts (PGRST201 uten det).
+  const { data: medlemmer, error: profilerFeil } = await admin
+    .from('medlemskap')
+    .select('profil_id, profiles!medlemskap_profil_id_fkey!inner(id, navn, fodselsdato)')
     .eq('aktiv', true)
 
   // Fail closed: feil ≠ «ingen har bursdag i dag» (#504).
@@ -44,7 +48,11 @@ export async function kjorBursdagsvarsel(
     return { varslet, hoppet, blokkert, feil }
   }
 
-  if (!alle || alle.length === 0) {
+  const alle = (medlemmer ?? []).map(
+    m => m.profiles as unknown as { id: string; navn: string; fodselsdato: string | null },
+  )
+
+  if (alle.length === 0) {
     return { varslet, hoppet, blokkert, feil }
   }
 
@@ -73,6 +81,7 @@ export async function kjorBursdagsvarsel(
 
     try {
       const utfall = await sendVarsel({
+        klubbId: admin.klubbId,
         mottakere,
         tittel: 'Bursdag i klubben 🎂',
         melding: `${navn} fyller ${alder} i dag.`,

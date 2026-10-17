@@ -2944,6 +2944,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      aktiv_klubb: { Args: never; Returns: string }
       avslutt_kaaringspoll: {
         Args: { p_poll_id: string }
         Returns: {
@@ -2974,6 +2975,7 @@ export type Database = {
       krev_bursdagsbilde: {
         Args: {
           p_feiringsdato: string
+          p_klubb_id?: string
           p_profil_id: string
           p_tvungen?: boolean
         }
@@ -3047,7 +3049,12 @@ export type Database = {
       standard_klubb_id: { Args: never; Returns: string }
       stemple_pass_varslet: { Args: { p_id: string }; Returns: boolean }
       tell_aktivitet: {
-        Args: { p_treff: boolean; p_unik_dag: boolean; p_unik_uke: boolean }
+        Args: {
+          p_klubb_id?: string
+          p_treff: boolean
+          p_unik_dag: boolean
+          p_unik_uke: boolean
+        }
         Returns: undefined
       }
       tell_poll_stemmer: {

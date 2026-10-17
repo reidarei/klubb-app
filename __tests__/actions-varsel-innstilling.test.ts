@@ -35,7 +35,7 @@ const { mockFrom, mockSupabase, mockUpsert, ensureAdmin, revalidatePath } = vi.h
 })
 
 vi.mock('@/lib/auth', () => ({ ensureAdmin }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(), adminForKlubb: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }))
 vi.mock('@/lib/auth-cache', () => ({ getProfil: vi.fn(), getInnloggetBruker: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath }))

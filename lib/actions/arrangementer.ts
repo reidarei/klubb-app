@@ -67,7 +67,7 @@ async function losne(
 }
 
 export async function opprettArrangement(data: ArrangementInput) {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   // Geokod destinasjonen til koordinat for Stedene-kartet. Kun for turer med
   // en destinasjon; best-effort (null ved feil) så oppretting aldri blokkeres.
@@ -135,6 +135,7 @@ export async function opprettArrangement(data: ArrangementInput) {
 
   // Send varsler før redirect — after() er ikke pålitelig på Vercel Hobby
   await sendNyttArrangementVarsler({
+    klubbId,
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,
@@ -220,7 +221,7 @@ export async function oppdaterArrangement(id: string, data: Partial<ArrangementI
 // hilsen er valgfri fri tekst fra avsender — valideres server-side mot
 // VARSLE_MAKS_LENGDE slik at klient-maxLength aldri er eneste sperre. Se #282.
 export async function varslOmArrangement(arrangementId: string, hilsen?: string) {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const trimmetHilsen = hilsen?.trim()
 
@@ -266,6 +267,7 @@ export async function varslOmArrangement(arrangementId: string, hilsen?: string)
 
   // Send én oppdatert-varsling til alle — med eller uten hilsen
   await sendOppdatertVarsler({
+    klubbId,
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,
@@ -283,7 +285,7 @@ export async function varslOmArrangement(arrangementId: string, hilsen?: string)
 // kropper er drift — en fiks (f.eks. i tilgangssjekken) som lander i den ene
 // men glemmes i den andre. Se #596.
 async function purreArrangement(arrangementId: string, variant: PurreVariant, hilsen?: string) {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const trimmetHilsen = hilsen?.trim()
 
@@ -328,6 +330,7 @@ async function purreArrangement(arrangementId: string, variant: PurreVariant, hi
   // bare hvilken variant dette er, som får sin egen varseltype og dermed sin
   // egen bryter i kontrollpanelet. (#287, #547, #596)
   await sendPurringVarsler({
+    klubbId,
     arrangementId: arrangement.id,
     tittel: arrangement.tittel,
     startTidspunkt: arrangement.start_tidspunkt,

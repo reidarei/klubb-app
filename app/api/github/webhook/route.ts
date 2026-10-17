@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { finnInnsender, erTaptAppInnspill } from '@/lib/innspill-kobling'
 import { sendVarsel } from '@/lib/varsler'
+import { klubbForSystemjobb } from '@/lib/klubb-system'
 import { finnEndringForInnspill, byggInnspillSvar } from '@/lib/innspill-svar'
 import { ENDRINGER } from '@/lib/endringslogg-data'
 import VERSJON from '@/lib/versjon.json'
@@ -90,6 +91,8 @@ export async function POST(request: Request) {
     const mottakere = oppretterId ? [...adminIder, oppretterId] : adminIder
 
     await sendVarsel({
+      // Fase 1: standardklubben (beslutning 3 på #865); koblingsradens klubb i PR 2.
+      klubbId: klubbForSystemjobb(),
       mottakere,
       tittel: 'Nytt innspill fra appen',
       melding: innhold,
@@ -186,6 +189,7 @@ export async function POST(request: Request) {
     const { tittel, melding } = byggInnspillSvar(endring, issue.state_reason)
 
     await sendVarsel({
+      klubbId: klubbForSystemjobb(),
       mottakere: [profilId],
       tittel,
       melding,

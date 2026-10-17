@@ -24,7 +24,7 @@ export type PollInput = {
  * også for å gi ordentlige feilmeldinger til brukeren.
  */
 export async function opprettPoll(data: PollInput) {
-  const { supabase, user } = await ensureInnlogget()
+  const { supabase, user, klubbId } = await ensureInnlogget()
 
   const spoersmaal = data.spoersmaal.trim()
   if (spoersmaal.length < 1 || spoersmaal.length > 200) {
@@ -78,6 +78,7 @@ export async function opprettPoll(data: PollInput) {
 
   // Send varsler før redirect — after() er ikke pålitelig på Vercel Hobby
   await sendNyPollVarsler({
+    klubbId,
     pollId: poll.id,
     spoersmaal,
     svarfrist: frist.toISOString(),

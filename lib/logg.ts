@@ -328,13 +328,15 @@ function klassifiserTilgangsfeil(melding: string, code?: string): 'error' | 'war
 async function skrivFeilLoggRad(
   event: string,
   kontekst: Record<string, unknown>,
-  opts?: { profilId?: string | null; url?: string | null },
+  opts?: { profilId?: string | null; url?: string | null; klubbId?: string | null },
 ): Promise<void> {
   try {
     // Lazy import: ingen 'use client'-fil importerer @/lib/logg (verifisert),
     // så service_role-nøkkelen havner aldri i klient-bundlen. 0 kB vekst.
-    const { createAdminClient } = await import('@/lib/supabase/admin')
-    const admin = createAdminClient()
+    const { adminPlattform } = await import('@/lib/supabase/admin')
+    // Plattformklient: loggen kan komme fra kode uten klubb (cron, anonym beacon). Kaller ALDRI
+    // aktivKlubbId() her — rekursjon via logg.feil, og cron har ikke cookies (#871).
+    const admin = adminPlattform('feil_logg')
 
     const { error } = await admin
       .from('feil_logg')
@@ -343,6 +345,9 @@ async function skrivFeilLoggRad(
         nivaa: 'error',
         kontekst: kontekst as Json,
         profil_id: opts?.profilId ?? null,
+        // Utelatt = «uten klubb» (standardklubb nå, NULL i 2.4b). Radformen er uendret når
+        // kallstedet ikke har klubb — pinnet i __tests__/logg.test.ts.
+        ...(opts?.klubbId ? { klubb_id: opts.klubbId } : {}),
         // url settes kun når kallstedet faktisk har en rute. Å alltid sende
         // `url: null` ville utvidet radformen logg.feil()-stien skriver, og
         // den formen er pinnet i __tests__/logg.test.ts med vilje.
@@ -381,6 +386,7 @@ async function persisterFeilLogg(
   noekler: string | undefined,
   status: number | undefined,
   ctx?: Record<string, unknown>,
+  klubbId?: string | null,
 ): Promise<void> {
   // Kun profil_id tas med fra ctx — resten av KONTEKST_WHITELIST
   // (arrangement_id, count, fingerprint, sample) er ikke del av kontrakten
@@ -417,7 +423,7 @@ async function persisterFeilLogg(
       ? statusKandidat
       : undefined
 
-  await skrivFeilLoggRad(event, { code, tabell, navn, noekler, status: validertStatus }, { profilId })
+  await skrivFeilLoggRad(event, { code, tabell, navn, noekler, status: validertStatus }, { profilId, klubbId })
 }
 
 // ─── SENTRY LAZY IMPORT ──────────────────────────────────────────────────────
@@ -469,6 +475,8 @@ export const logg = {
       fingerprint?: string
       sample?: unknown   // eksempel på payload som forårsaket feilen
       ctx?: Record<string, unknown>
+      /** Klubben feilen hører til, når kallstedet kjenner den (#871). Utelatt = uten klubb. */
+      klubbId?: string | null
     },
   ) {
     const { code, tabell, melding, navn, noekler, status } = normaliserFeil(error)
@@ -503,7 +511,7 @@ export const logg = {
     // after(): Vercel kan fryse funksjonen før en floating promise fullfører.
     // persisterFeilLogg() kaster aldri selv (intern try/catch), så denne
     // linjen kan ikke velte kallstedet uansett hva som skjer i DB-kallet.
-    await persisterFeilLogg(event, code, tabell, navn, noekler, status, opts?.ctx)
+    await persisterFeilLogg(event, code, tabell, navn, noekler, status, opts?.ctx, opts?.klubbId)
 
     const Sentry = await getSentry()
     if (!Sentry) return
