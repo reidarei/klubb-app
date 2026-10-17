@@ -250,17 +250,17 @@ create table klubb (
 
 ### 2.10 klubb_id på klubbeide tabeller
 
-Multi-tenant steg 1.2. Migrasjon 161.
+Multi-tenant steg 1.2 (#861, #865). Migrasjon 161.
 
-**Klassifisering av de 53 tabellene i `public`:** 46 er klubbeide og får `klubb_id`; 7 står på en eksplisitt unntaksliste.
+**Klassifisering av de 53 tabellene i `public`:** 49 er klubbeide og har `klubb_id` (46 fra migrasjon 161, tre til fra 164); 4 står på en eksplisitt unntaksliste.
 
 - *Rot:* `klubb`.
 - *Globale:* `profiles` (personen er global; `rolle` og `faar_*` flyttes til medlemskap i 2.1), `push_subscriptions` (per enhet — samme telefon skal få varsler fra alle klubbene), `pass_info` (passet tilhører personen; klubbkonteksten bor i `pass_tilgang_forespørsel`).
-- *Venter på 2.1:* `varsel_preferanser` og `posisjon_deling` (tilhører medlemskapet, PK byttes i 2.1), `posisjon_punkt` (nullable `arrangement_id`, ingen sann klubb før medlemskap finnes).
+- *Tatt inn i 164 (#868):* `varsel_preferanser`, `posisjon_deling` og `posisjon_punkt` sto først på unntakslista fordi de tilhører medlemskapet. De fikk `klubb_id` i migrasjon 164, se § 2.12.
 
 Klassifiseringen ligger som data i `__tests__/helpers/klubb-tabeller.ts` og vaktes av `__tests__/migrasjon-klubb-id.test.ts`.
 
-**Løpende vakt (1.3):** `__tests__/skjemavakt-klubb.test.ts` leser alle migrasjonene og krever at hver tabell har `klubb_id` eller står i unntakslista; `migrasjon-klubb-id.test.ts` vokter kun migrasjon 161 slik den ble skrevet. Tabellopprettelse den ikke gjenkjenner (`create table` inni `do $$`/`execute`, `as select`, `partition of`) gjør den rød i stedet for å slippe tabellen gjennom. To pinnede lister kan bare krympe: `KLUBB_UTEN_KLUBB_POLICY` (tømmes av 2.3; en tabell som noen gang har hatt en klubb-policy kan ikke føres tilbake) og `KLUBB_FK_UTEN_STOETTEINDEKS` (tømmes av 2.1b, 2.3 og 6.2).
+**Løpende vakt (1.3, #866):** `__tests__/skjemavakt-klubb.test.ts` leser alle migrasjonene og krever at hver tabell har `klubb_id` eller står i unntakslista; `migrasjon-klubb-id.test.ts` vokter kun migrasjon 161 slik den ble skrevet. Tabellopprettelse den ikke gjenkjenner (`create table` inni `do $$`/`execute`, `as select`, `partition of`) gjør den rød i stedet for å slippe tabellen gjennom. To pinnede lister kan bare krympe: `KLUBB_UTEN_KLUBB_POLICY` (tømmes av 2.3, #870; en tabell som noen gang har hatt en klubb-policy kan ikke føres tilbake) og `KLUBB_FK_UTEN_STOETTEINDEKS` (tømmes av 2.1b #895, 2.3 og 6.2 #886).
 
 **Kolonnen:**
 
@@ -271,45 +271,55 @@ klubb_id uuid not null default public.standard_klubb_id()
 
 `standard_klubb_id()` er eneste sted den første klubbens uuid står i skjemaet. Funksjonen er `stable`, ikke `security definer`; `authenticated` og `service_role` har `execute` (en default evalueres med rollen som setter inn), `anon` har ikke. Innmaten byttes til JWT-claim uten fallback (med `raise`) i 2.4b, og `feil_logg` får `drop not null` samtidig.
 
-**Indekser:** 10 rot-indekser med `klubb_id` først (`arrangementer`, `meldinger`, `klubb_chat`, `album`, `poll`, `feil_logg`, `vitals_logg`, `kaaring_vinnere`, `arrangoransvar`, `kart_markering`). Barne-indekser kommer i 2.1b, 2.3 og 6.2.
+**Indekser:** 10 rot-indekser med `klubb_id` først (`arrangementer`, `meldinger`, `klubb_chat`, `album`, `poll`, `feil_logg`, `vitals_logg`, `kaaring_vinnere`, `arrangoransvar`, `kart_markering`). Barne-indekser kommer i 2.1b (#895), 2.3 og 6.2.
 
-**Nøkler:** flyttet i 1.4, se § 2.11.
+**Nøkler:** flyttet i 1.4 (#867), se § 2.11.
 
 **Array-insert:** postgrest-js sender `null` for manglende nøkler i en array-insert der minst én rad har `klubb_id`, som gir 23502. Alle rader må ha nøkkelen, eller kallet bruker `{ defaultToNull: false }` (pinnet i `e2e/rls/klubb-id.spec.ts`).
 
 ### 2.11 Unike nøkler per klubb
 
-Multi-tenant steg 1.4. Migrasjon 162.
+Multi-tenant steg 1.4 (#861, #867). Migrasjon 162.
 
 **Regelen:** hver primærnøkkel og unike nøkkel på en klubbeid tabell har `klubb_id` som første kolonne. Tre godkjente former, vaktet av psql-steget «Verifiser unike nøkler per klubb» i `pr-check.yml`:
 
 - (a) `klubb_id` er første nøkkelkolonne (`INCLUDE`-kolonner telles ikke).
 - (b) Surrogatnøkkel: én kolonne som heter `id`.
-- (c) En enkeltkolonne i nøkkelen er FK til en klubbeid forelder (`paameldinger (arrangement_id, profil_id)`). Klubben følger forelderen; å legge til `klubb_id` ville gjort nøkkelen romsligere, ikke strengere. Krysskobling stoppes av sammensatte FK-er i 2.1b.
+- (c) En enkeltkolonne i nøkkelen er FK til en klubbeid forelder (`paameldinger (arrangement_id, profil_id)`). Klubben følger forelderen; å legge til `klubb_id` ville gjort nøkkelen romsligere, ikke strengere. Krysskobling stoppes av sammensatte FK-er i 2.1b (#895).
 
 Ingen unntaksliste: en nøkkel som ikke passer a–c er rød. `chat_reaksjoner` har en polymorf `melding_id` uten FK, så klubben kan ikke følge en forelder — derfor fikk begge nøklene `klubb_id` først som alle andre.
 
 **De 21 nøklene som ble endret** (samme navn beholdt): PK på `aktivitet_dag`, `aktivitet_uke`, `app_innstillinger`, `bursdagsbilde`, `fond_navn_alias`, `innspill_kobling`, `kart_symbol_tilpasning`; unik på `arrangoransvar`, `samtale`, `varsel_innstillinger`, `vedtekter` (`vedtekter_versjoner` refererer `vedtekter(id)`, ikke slug); PK og «én emoji per bruker» på `chat_reaksjoner`; unike indekser på `feil_logg` (to), `klubb_chat`, `melding_chat`, `meldinger` og `varsel_logg` (dedup); og PK `(klubb_id)` på én-rad-tabellene `klubb_info` og `fond_kontant`, som mistet `id`-kolonnen. `on conflict`-målet må ha nøyaktig samme kolonnesett som nøkkelen, så `tell_aktivitet()`, `krev_bursdagsbilde()` og alle `onConflict` i koden ble byttet samtidig.
 
-**Seeds** skrives per klubb fra nå (`insert … select k.id, … from public.klubb k on conflict (klubb_id, …) do nothing`). Klubb nr. 2 trenger egne standarddata når den kommer.
+**Seeds** skrives per klubb fra nå (`insert … select k.id, … from public.klubb k on conflict (klubb_id, …) do nothing`). Klubb nr. 2 trenger egne standarddata (5.3).
 
 **Dedup-doktrinen** i CLAUDE.md § Policy: Varsler gjelder uendret innenfor én klubb: indeksen er `(klubb_id, dedup_noekkel, profil_id)`, så navnerom-prefikset skal ikke bære klubben.
 
 ### 2.12 medlemskap
 
-Multi-tenant steg 2.1a. Migrasjon 163.
+Multi-tenant steg 2.1a (#861, #868). Migrasjon 163.
 
-**Skjema:** `medlemskap (klubb_id, profil_id)` er primærnøkkel; `rolle` (`medlem`/`admin`/`generalsekretaer`), `aktiv` og de tre admin-styrte flaggene `faar_issue_varsler`, `faar_feilvarsler`, `bursdagsgratulasjon_aktiv` bor her, per klubb. FK til `profiles` heter `medlemskap_profil_id_fkey`. Partial unik indeks `medlemskap_unik_generalsekretaer (klubb_id) where rolle = 'generalsekretaer'`: maks én generalsekretær per klubb.
+**Skjema:** `medlemskap (klubb_id, profil_id)` er primærnøkkel; `rolle` (`medlem`/`admin`/`generalsekretaer`), `aktiv` og de tre admin-styrte flaggene `faar_issue_varsler`, `faar_feilvarsler`, `bursdagsgratulasjon_aktiv` bor her, per klubb. FK til `profiles` heter `medlemskap_profil_id_fkey` (embeds må oppgi hintet, jf. `getProfil()`). Partial unik indeks `medlemskap_unik_generalsekretaer (klubb_id) where rolle = 'generalsekretaer'`: maks én generalsekretær per klubb.
 
-**RLS og grants:** `authenticated` har `select` og en KOLONNE-grant på `update` (de fem kolonnene + `oppdatert`), aldri tabellnivå, så `klubb_id`/`profil_id` kan ikke flyttes fra klienten. Select: egen klubb og `aktiv`, men admin ser også inaktive (en UPDATE må la den nye raden passere select-policyen, ellers feiler deaktivering). Update: admin-sjekk. Ingen insert/delete-policy: rader opprettes av en trigger når nye brukere registreres.
+**RLS og grants:** `authenticated` har `select` og en KOLONNE-grant på `update` (de fem kolonnene + `oppdatert`), aldri tabellnivå, så `klubb_id`/`profil_id` kan ikke flyttes fra klienten. Select: egen klubb og `aktiv`, men admin ser også inaktive (en UPDATE må la den nye raden passere select-policyen, ellers feiler deaktivering). Update: `er_admin(klubb_id)`. Ingen insert/delete-policy: rader opprettes av `handle_ny_bruker()` (klubb fra `app_metadata.klubb_id`, fallback standardklubben) og `service_role`.
 
-**Speil, vern, paritet** (mens én klubb er aktiv): En trigger skriver de fem kolonnene til `profiles` for én klubb. En avvisnings-constraint avviser enhver direkte endring av dem på `profiles` som ikke er lik medlemskapet. Constraint triggers sjekker ved commit at begge sider stemmer.
+**Speil, vern, paritet** (til PR C): `medlemskap_speil_til_profiles` (trigger) skriver de fem kolonnene til `profiles` for standardklubben. `beskytt_profil_kolonner` avviser enhver direkte endring av dem på `profiles` som ikke er lik medlemskapet (`medlemskap.speil.vern`, gjelder også service_role). Constraint triggers `medlemskap_speil_paritet*` sjekker ved commit at begge sider stemmer (`medlemskap.speil.paritet`). Standardklubbens uuid står bokstavelig i disse, ikke `standard_klubb_id()`.
 
-**Rollefunksjoner:** `er_admin()` / `er_admin(klubb_id)` og `er_generalsekretaer()` / `er_generalsekretaer(klubb_id)` leser `medlemskap` og krever `aktiv`.
+**Rollefunksjoner:** `er_admin()` / `er_admin(klubb_id)` og `er_generalsekretaer()` / `er_generalsekretaer(klubb_id)` leser `medlemskap` og krever `aktiv`. `sett_generalsekretaer`/`fjern_generalsekretaer` har samme signatur, men går mot `medlemskap`.
 
-**Admin-redigering:** RPC-er for oppdatering av medlemskapet skriver profilfeltene og medlemskapet i én transaksjon.
+**Admin-redigering:** RPC `oppdater_medlem_admin(...)` (security invoker) skriver profilfeltene og medlemskapet i én transaksjon, med `for update`-låsen som håndhever at en sittende generalsekretær aldri får rollen skrevet der.
 
-**Kode:** `aktivKlubbId()` i `lib/klubb-kontekst.ts` er kontrakten for innloggede forespørsler. `ensure*()` og `getProfil()` leser rolle fra `medlemskap`.
+### 2.12b Medlemskapets data (164)
+
+Multi-tenant steg 2.1b (#868). Migrasjon 164.
+
+**Skjema:** `varsel_preferanser`, `posisjon_deling` og `posisjon_punkt` flyttes fra å være global til medlem-scope under medlemskapet (sammensatt FK `(klubb_id, profil_id)`). Varsel-preferansene (`push_aktiv`, `epost_aktiv`, `varsel_nivaa`) og posisjondeling-flagget (`aktiv`) som var global innan blir nå per medlem per klubb — hver bruker kan ha ulike instillinger i ulike klubber. `posisjon_punkt` har samme data struktur som før, men bor no på medlemskapet.
+
+**Trigger:** når en ny `medlemskap`-rad opprettes, lager en trigger en default `varsel_preferanser`-rad (med defaults fra `varsel_innstillinger` hvis de finnes, ellers `push_aktiv=true, epost_aktiv=false, varsel_nivaa='alle'`) og en `posisjon_deling`-rad (`aktiv=false`).
+
+**RLS og grants:** `authenticated` har `select` og `update` per medlem, `service_role` har full tilgang. Select: kun egen medlemskap. Update: egen medlem (varsel_preferanser og posisjon_deling kun selv, admin kan også redigere andres).
+
+**Indekser:** `posisjon_punkt` får `(klubb_id, arrangement_id)` forFK-oppslag ved arrangement-utvidinger. `varsel_logg` får `(klubb_id, dedup_noekkel, profil_id)` for dedup-sjekk per klub.
 
 ---
 

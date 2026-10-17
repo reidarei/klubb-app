@@ -219,6 +219,8 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 
 **Medlemskap (#868, migrasjon 163):** rolle, `aktiv` og flaggene `faar_issue_varsler`/`faar_feilvarsler`/`bursdagsgratulasjon_aktiv` bor på `medlemskap (klubb_id, profil_id)` og skrives KUN der. De samme kolonnene på `profiles` er et vernet, enveis speil for én klubb når den er aktiv (verdivern + paritetssjekk ved commit). `lib/klubb-kontekst.ts` → `aktivKlubbId()` er hvilken klubb en innlogget forespørsel gjelder. **Database-siden:** Funksjonene `er_admin()` / `er_admin(klubb_id)` leser `medlemskap`, krever `aktiv` og returnerer true for både admin og generalsekretær; de brukes i alle RLS-policies. Hvis matrisen endres slik at en ny rolle skal ha admin-rettigheter, må `er_admin()` oppdateres i en ny migrasjon — dette er duplisering vi lever med fordi RLS må kjøre i DB.
 
+`varsel_preferanser`, `posisjon_deling` og `posisjon_punkt` (migrasjon 164) hører til medlemskapet (sammensatt FK `(klubb_id, profil_id)`), og en ny bruker får varselvalg via trigger på `medlemskap`-insert.
+
 **Når nye RLS-policies skrives:** Bruk `er_admin()`, ikke inline `rolle = 'admin'`. Sistnevnte glipper unna når nye roller med admin-rettigheter kommer.
 
 **Setting av generalsekretær-rollen:** Via SQL (`update medlemskap set rolle = 'generalsekretaer' where klubb_id = … and profil_id = …`) eller GS-RPC-ene (`sett_generalsekretaer`/`fjern_generalsekretaer`). `update profiles set rolle …` avvises av verdivernet. UI-et til medlemsredigering kan ikke sette denne rollen — bare bevare den hvis den allerede er satt.
