@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagChain } from './helpers/supabase-mock'
 
 const mockEnsureAdmin = vi.fn()
+const KLUBB = '00000000-0000-4000-a000-000000000001'
 vi.mock('@/lib/auth', () => ({ ensureAdmin: (...a: unknown[]) => mockEnsureAdmin(...a) }))
 
 const mockCreateUser = vi.fn()
@@ -41,7 +42,8 @@ function lagRequest(body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockEnsureAdmin.mockResolvedValue({ user: { id: 'admin-1' }, profil: { rolle: 'admin' } })
+  // klubbId kommer fra ensureAdmin() (#869), ikke et nytt aktivKlubbId()-kall i ruta.
+  mockEnsureAdmin.mockResolvedValue({ user: { id: 'admin-1' }, profil: { rolle: 'admin' }, klubbId: KLUBB })
   mockCreateUser.mockResolvedValue({ data: { user: { id: 'ny-bruker-1' } }, error: null })
   mockFrom.mockReturnValue(lagChain(null))
   mockSendEpost.mockResolvedValue(undefined)
@@ -58,6 +60,9 @@ describe('POST /api/admin/opprett-medlem', () => {
     expect(typeof json.passord).toBe('string')
     expect(mockLoggFeil).not.toHaveBeenCalled()
     expect(mockSendEpost).toHaveBeenCalled()
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ app_metadata: { klubb_id: KLUBB } }),
+    )
   })
 
   it('logger admin.opprett_medlem.profil.feilet, men returnerer likevel 200 med passord når profil-oppdateringen feiler', async () => {

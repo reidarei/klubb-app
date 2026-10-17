@@ -13,12 +13,16 @@
 import { describe, it, expect, vi } from 'vitest'
 import { lagChain } from './helpers/supabase-mock'
 
+// lib/auth → lib/klubb-kontekst → lib/logg (#869). Ekte logg er irrelevant her og tung å
+// laste kaldt etter vi.resetModules() — uten mock bikket testene 5 s-timeouten lokalt.
+vi.mock('@/lib/logg', () => ({ logg: { feil: vi.fn(async () => {}), warn: vi.fn() } }))
+
 const feilendeSpoerring = { code: '500', message: 'connection reset', details: null, hint: null }
 
 function mockSupabaseMedProfilFeil(bruker: { id: string } | null) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: bruker }, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }), getUser: vi.fn().mockResolvedValue({ data: { user: bruker }, error: null }),
     },
     from: vi.fn(() => lagChain([], feilendeSpoerring)),
   }
@@ -49,7 +53,7 @@ describe('lib/auth.ts — fail closed på feilet profil-oppslag', () => {
     vi.resetModules()
     vi.doMock('@/lib/supabase/server', () => ({
       createServerClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }), getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
         from: vi.fn(() => lagChain({ rolle: 'medlem' })),
       }),
     }))
@@ -66,7 +70,7 @@ describe('lib/auth.ts — rolle leses fra medlemskap i aktiv klubb (#868)', () =
     const from = vi.fn(() => chain)
     vi.doMock('@/lib/supabase/server', () => ({
       createServerClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }), getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
         from,
       }),
     }))
@@ -83,7 +87,7 @@ describe('lib/auth.ts — rolle leses fra medlemskap i aktiv klubb (#868)', () =
     vi.resetModules()
     vi.doMock('@/lib/supabase/server', () => ({
       createServerClient: vi.fn().mockResolvedValue({
-        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }), getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
         from: vi.fn(() => lagChain(null)),
       }),
     }))

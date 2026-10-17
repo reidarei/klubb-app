@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { rollerMed } from '@/lib/roller'
 import { naa } from '@/lib/dato'
 import { ensureAdmin } from '@/lib/auth'
-import { aktivKlubbId } from '@/lib/klubb-kontekst'
 import { KJENTE_FLAGG, erKjentFlagg } from '@/lib/app-innstillinger'
 import { erVarselBryter } from '@/lib/varsel-typer'
 
@@ -111,11 +110,11 @@ export async function oppdaterAppInnstilling(noekkel: string, aktiv: boolean) {
 // kolonnen er et vernet speil). Admin kan teknisk oppdatere andres rader, men
 // filteret her tar bare brukerens egen.
 export async function oppdaterBursdagsgratulasjon(aktiv: boolean) {
-  const { supabase, user } = await ensureAdmin()
+  const { supabase, user, klubbId } = await ensureAdmin()
   const { error } = await supabase
     .from('medlemskap')
     .update({ bursdagsgratulasjon_aktiv: aktiv, oppdatert: naa() })
-    .eq('klubb_id', aktivKlubbId())
+    .eq('klubb_id', klubbId)
     .eq('profil_id', user.id)
   if (error) throw new Error(`Kunne ikke lagre bursdagsgratulasjon-valget: ${error.message}`)
 

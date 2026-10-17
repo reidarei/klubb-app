@@ -361,6 +361,14 @@ export interface LoggHendelser {
   'profil.generalsekretaer.oppslag.feilet': true
   /** speilet profiles <-> medlemskap avviker, eller en 2. klubb har fått medlemskap (fristen for PR C) — fra sjekk-klientfeil (#868) */
   'medlemskap.speil.avvik': true
+  /** access-tokenet har ingen klubb_status-claim: hooken er ikke aktivert, eller tokenet er eldre enn aktiveringen (#869) */
+  'klubb.claim.mangler': true
+  /** custom_access_token_hook svarte klubb_status = 'feil' (#869) */
+  'klubb.claim.hookfeil': true
+  /** claimen peker på en annen klubb enn standardklubben; fase 1 bruker standard uansett (#869) */
+  'klubb.claim.avvik': true
+  /** claimen er uleselig, har ukjent klubb_status eller aktiv uten gyldig klubb_id (#869) */
+  'klubb.claim.inkonsistent': true
   /** oppslaget av speilvakten (medlemskap_speil_avvik) feilet — vakten er blind (#868) */
   'medlemskap.speil.oppslag.feilet': true
   /** oppslaget av kompiser til bursdagsbildet feilet; bildet genereres uten medgjester (#641) */

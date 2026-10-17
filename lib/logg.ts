@@ -99,6 +99,11 @@ export const KONTEKST_WHITELIST = new Set([
   // persisterFeilLogg(), utenom scrubbet(ctx) — det står her for å dekke
   // tilfellet en fremtidig kaller sender det eksplisitt via ctx.
   'noekler',
+  // Klubb-claimen fra access-tokenet (#869, klubb.claim.*): klubb_status er en
+  // fast enum fra custom_access_token_hook (evt. en kappet ukjent verdi), og
+  // klubb_id er en uuid på linje med profil_id — ingenting tokenet ikke alt bærer.
+  'klubb_status',
+  'klubb_id',
 ])
 
 function scrubbet(data?: Record<string, unknown>): Record<string, unknown> {

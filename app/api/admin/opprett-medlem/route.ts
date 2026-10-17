@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server'
 import { ensureAdmin } from '@/lib/auth'
 import { BASE_URL } from '@/lib/config'
 import { KLUBB_NAVN } from '@/lib/klubb-config'
-import { aktivKlubbId } from '@/lib/klubb-kontekst'
 import { logg } from '@/lib/logg'
 
 function genererPassord() {
@@ -17,8 +16,9 @@ function genererPassord() {
 export async function POST(request: Request) {
   // Verifiser at kaller er admin — ensureAdmin kaster ved manglende auth/rolle,
   // vi fanger og returnerer riktig HTTP-status
+  let klubbId: string
   try {
-    await ensureAdmin()
+    ;({ klubbId } = await ensureAdmin())
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Feil'
     if (msg === 'Ikke innlogget') return NextResponse.json({ feil: msg }, { status: 401 })
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     password: passord,
     email_confirm: true,
     // handle_ny_bruker leser klubb_id herfra og oppretter medlemskapet (#868).
-    app_metadata: { klubb_id: aktivKlubbId() },
+    app_metadata: { klubb_id: klubbId },
   })
 
   if (error) return NextResponse.json({ feil: error.message }, { status: 400 })

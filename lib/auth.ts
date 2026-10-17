@@ -30,6 +30,10 @@ export class IkkeInnloggetFeil extends Error {
 // Rolle leses fra medlemskap i aktiv klubb (#868); `aktiv` speiler er_admin() og
 // gjør oppslaget uavhengig av at select-policyen strammes i 2.3.
 //
+// Klubb-id-en (aktivKlubbId()) hentes parallelt med getUser() — den leser bare den
+// lokale sesjonen — og returneres, så kallere slipper et nytt oppslag: cache() deler
+// ikke resultat i route handlers/server actions (#869-review).
+//
 // Returnerer den samme supabase-klienten som ble brukt til auth-sjekken,
 // slik at videre spørringer går mot brukerens RLS-kontekst og ikke krever
 // en ny createServerClient()-runde.
@@ -39,15 +43,18 @@ export class IkkeInnloggetFeil extends Error {
 // 401 vs 403. Endres teksten, må de oppdateres samtidig.
 export async function ensureAdmin() {
   const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    {
+      data: { user },
+    },
+    klubbId,
+  ] = await Promise.all([supabase.auth.getUser(), aktivKlubbId()])
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('medlemskap')
     .select('rolle')
-    .eq('klubb_id', aktivKlubbId())
+    .eq('klubb_id', klubbId)
     .eq('profil_id', user.id)
     .eq('aktiv', true)
     .maybeSingle()
@@ -58,7 +65,7 @@ export async function ensureAdmin() {
   if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
   if (!kanAdministrere(profil?.rolle)) throw new Error('Ikke admin')
 
-  return { supabase, user, profil }
+  return { supabase, user, profil, klubbId }
 }
 
 // Variant for handlinger som kun generalsekretær (eller andre roller med
@@ -67,15 +74,18 @@ export async function ensureAdmin() {
 // selv om de ellers har full CRUD i appen.
 export async function ensureLoeserTiebreak() {
   const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    {
+      data: { user },
+    },
+    klubbId,
+  ] = await Promise.all([supabase.auth.getUser(), aktivKlubbId()])
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('medlemskap')
     .select('rolle')
-    .eq('klubb_id', aktivKlubbId())
+    .eq('klubb_id', klubbId)
     .eq('profil_id', user.id)
     .eq('aktiv', true)
     .maybeSingle()
@@ -84,7 +94,7 @@ export async function ensureLoeserTiebreak() {
   if (profilFeil) throw new Error(`Kunne ikke hente profil: ${profilFeil.message}`)
   if (!loeserTiebreak(profil?.rolle)) throw new Error('Kun generalsekretær kan løse tiebreak')
 
-  return { supabase, user, profil }
+  return { supabase, user, profil, klubbId }
 }
 
 // Variant for pass-tilgang: kun generalsekretær kan godkjenne eller avslå
@@ -95,15 +105,18 @@ export async function ensureLoeserTiebreak() {
 // enhver admin kunne godkjenne stikk i strid med løftet i appen.
 export async function ensureGodkjennerPassTilgang() {
   const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    {
+      data: { user },
+    },
+    klubbId,
+  ] = await Promise.all([supabase.auth.getUser(), aktivKlubbId()])
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
     .from('medlemskap')
     .select('rolle')
-    .eq('klubb_id', aktivKlubbId())
+    .eq('klubb_id', klubbId)
     .eq('profil_id', user.id)
     .eq('aktiv', true)
     .maybeSingle()
@@ -113,7 +126,7 @@ export async function ensureGodkjennerPassTilgang() {
   if (!godkjennerPassTilgang(profil?.rolle))
     throw new Error('Kun generalsekretær kan avgjøre pass-tilgang')
 
-  return { supabase, user, profil }
+  return { supabase, user, profil, klubbId }
 }
 
 // Variant som kun krever innlogging — brukes der enhver bruker er OK,

@@ -9,7 +9,6 @@ import { normaliserTelefon } from '@/lib/telefon'
 import { normaliserFritekst } from '@/lib/fritekst'
 import { MATALLERGIER_MAKS_LENGDE, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 import { logg } from '@/lib/logg'
-import { aktivKlubbId } from '@/lib/klubb-kontekst'
 
 // Resultattyper for GS-actions — strukturert retur i stedet for throw,
 // slik at klienten kan vise reaktiv confirm ved race-tilstand (23505).
@@ -63,7 +62,7 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
 }
 
 export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord: string; matallergier: string }) {
-  const { supabase } = await ensureAdmin()
+  const { supabase, klubbId } = await ensureAdmin()
 
   const navn = data.navn.trim()
   if (!navn) throw new Error('Navn kan ikke være tomt')
@@ -87,7 +86,7 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
   // i RPC-en, ikke ved et løst forhåndsoppslag her (TOCTOU: en annen admin kan
   // demotere GS mellom oppslag og skriving).
   const { data: rolleSkrevet, error } = await supabase.rpc('oppdater_medlem_admin', {
-    p_klubb_id: aktivKlubbId(),
+    p_klubb_id: klubbId,
     p_profil_id: id,
     p_navn: navn,
     p_visningsnavn: visningsnavn,

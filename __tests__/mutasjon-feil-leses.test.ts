@@ -22,6 +22,7 @@ vi.mock('@/lib/auth', () => ({
     supabase: mockSupabase,
     user: { id: 'admin-1' },
     profil: { rolle: 'admin' },
+    klubbId: '00000000-0000-4000-a000-000000000001',
   }),
   ensureInnlogget: vi.fn().mockResolvedValue({ supabase: mockSupabase, user: { id: 'admin-1' } }),
 }))
