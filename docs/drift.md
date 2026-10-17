@@ -196,6 +196,14 @@ Migrasjonen legger ut funksjonen `public.custom_access_token_hook`, men ingentin
 3. **Verifiser:** innloggingen virker; Dashboard → Logs → Postgres har ingen `custom_access_token_hook feilet`; dekod `sb-*-auth-token`-cookien (nyttelasten er del 2 av `access_token`) og se `klubb_status: "aktiv"`.
 4. **Rollback:** slå av hooken i samme panel. Funksjonen kan stå. Skal den fjernes, deaktiver FØRST hooken i Dashboard (ellers blokkerer GoTrue all innlogging), og drop deretter policyen «Auth-hooken leser medlemskap på tvers av klubber», kolonne-grantet, `custom_access_token_hook(jsonb)` og `jwt_klubb_id()`.
 
+### Migrasjon 167: RLS per klubb
+
+Alle 151 RLS-policyer på klubbeide tabeller er nå avgrenset til brukerens klubb via `klubb_id = (select public.aktiv_klubb())`. Hvert medlem ser og redigerer kun rader i sin egen klubb — og en rad i en annen klubb gir `42501` (permission denied). Hvis appen kjører på flere klubber (selv med same Supabase-prosjekt), isolerer RLS dem fullstendig.
+
+**Hva som endret seg:** `aktiv_klubb()`-funksjonen leses fra medlemskapets klubb-kolonne på hver DML-operasjon. Fallback til `standard_klubb_id()` hvis tokenet mangler en klubb-claim (hooken av eller feilet); Fallbacken **fjernes i versjon 2.4b**, så denne versjonen må ikke brukes langsiktig med bare standard_klubb_id().
+
+**Intet å gjøre:** Migrasjonen kjøres automatisk. Kontroller at `/ikke-med-gjengen` rendres når en bruker fra en annen klubb logger inn (den siden vises kun når RLS-isolasjonen hindrer vanlig tilgang).
+
 ---
 
 ## 7. Backup

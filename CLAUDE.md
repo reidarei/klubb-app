@@ -497,6 +497,8 @@ create policy "..." on public.<tabell> ...;
 
 **Grants-opprydding:** Migrasjonene som følger med (grants-audit + `alter default privileges ... revoke all on tables/sequences/functions from anon`) trimmer eksisterende tabeller til minste privilegium og skrur av anon-default på public-schema, så nye tabeller ikke arver anon-grants. `authenticated`-default røres ikke (RLS backstopper; Supabase fjerner uansett alle default-grants 30. oktober 2026). Følg malen over for nye tabeller.
 
+**RLS per klubb:** Migrasjon 167 avgrenset alle 151 RLS-policyer på klubbeide tabeller til brukerens klubb via `klubb_id = (select public.aktiv_klubb())` — hver medlem ser kun rader i sin egen klubb. Hvert klubbeid insert/update/delete gjør RLS-sjekk mot `medlemskap`. Se løsningsdesign § 2.15 og docs/drift.md for detaljer.
+
 ## Policy: Side-effekter ved sidelast
 
 En server action kalt som løs promise **under render** av en server component får **ikke** kalle `revalidatePath`/`revalidateTag` — Next 15 kaster på det, og kallet nådde uansett aldri klienten (ingen Full Route Cache å invalidere på en dynamisk rendret side). Et `.catch(console.error)`/`.catch(() => {})` på kallet svelger kastet i taushet, så siden ser helt normal ut mens effekten aldri fullfører.
