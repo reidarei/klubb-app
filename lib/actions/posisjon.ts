@@ -72,7 +72,8 @@ export async function delPosisjon(
 
   const { error: delingFeil } = await supabase.from('posisjon_deling').upsert(
     { profil_id: user.id, deler_til: delerTil, oppdatert: naa() },
-    { onConflict: 'profil_id' },
+    // PK er (klubb_id, profil_id) fra mig. 164; målet må matche nøkkelen (42P10). klubb_id fylles av defaulten til 2.4.
+    { onConflict: 'klubb_id,profil_id' },
   )
 
   if (delingFeil) {

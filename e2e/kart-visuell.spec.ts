@@ -48,7 +48,7 @@ test.describe('Kartsiden — visuell baseline', () => {
     await admin.from('posisjon_deling').upsert([
       { profil_id: profil.id, deler_til: om4t, oppdatert: new Date().toISOString() },
       { profil_id: PETTER, deler_til: om4t, oppdatert: new Date().toISOString() },
-    ], { onConflict: 'profil_id' }).throwOnError()
+    ], { onConflict: 'klubb_id,profil_id' }).throwOnError()
 
     await admin.from('posisjon_punkt').insert([
       { profil_id: profil.id, lat: 59.9139, lng: 10.7522, noeyaktighet_m: 12, registrert: new Date(Date.now() - 5 * 60_000).toISOString() },

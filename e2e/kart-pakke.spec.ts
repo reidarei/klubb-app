@@ -63,7 +63,7 @@ test.describe('kart-pakken (#719, #721, #722, #725, #726)', () => {
     const om4t = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
     const { error: delingFeil } = await admin.from('posisjon_deling').upsert(
       { profil_id: OLA, deler_til: om4t, oppdatert: new Date().toISOString() },
-      { onConflict: 'profil_id' },
+      { onConflict: 'klubb_id,profil_id' },
     )
     if (delingFeil) throw new Error(`Kunne ikke seede deling for Ola: ${delingFeil.message}`)
 

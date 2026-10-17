@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { byggSkjema, lesMigrasjoner } from './migrasjon-skjema'
 
-export type UnntaksKlasse = 'rot' | 'global' | 'venter_2_1'
+export type UnntaksKlasse = 'rot' | 'global'
 
 // Tabeller som bevisst IKKE har klubb_id. Speiles i unntakslista i psql-steget
 // i .github/workflows/pr-check.yml (vaktet av migrasjon-klubb-id.test.ts).
@@ -14,9 +14,6 @@ export const KLUBB_ID_UNNTAK = [
   { tabell: 'profiles', klasse: 'global', begrunnelse: 'Personen er global. rolle/aktiv/faar_*/bursdagsgratulasjon_aktiv er et skrivebeskyttet speil av medlemskap til PR C (#868).', issue: 868 },
   { tabell: 'push_subscriptions', klasse: 'global', begrunnelse: 'Per enhet: samme telefon skal få varsler fra alle klubbene.', issue: 868 },
   { tabell: 'pass_info', klasse: 'global', begrunnelse: 'Passet tilhører personen; klubbkonteksten bor i pass_tilgang_forespørsel.', issue: 868 },
-  { tabell: 'varsel_preferanser', klasse: 'venter_2_1', begrunnelse: 'Tilhører medlemskapet; PK byttes i 2.1.', issue: 868 },
-  { tabell: 'posisjon_deling', klasse: 'venter_2_1', begrunnelse: 'Tilhører medlemskapet; PK byttes i 2.1.', issue: 868 },
-  { tabell: 'posisjon_punkt', klasse: 'venter_2_1', begrunnelse: 'Nullable arrangement_id: ingen sann klubb før medlemskap finnes i 2.1.', issue: 868 },
 ] as const
 
 // Alle tabellnavn under public.Tables i de genererte typene. En ny tabell
@@ -44,6 +41,8 @@ export const KLUBB_ID_NULLABLE: readonly { tabell: string; begrunnelse: string; 
 
 // Klubbeide tabeller som ennå ikke har en RLS-policy som refererer klubb_id.
 // 2.3 (#870) tømmer lista. Nye tabeller får aldri legges hit.
+// posisjon_deling, posisjon_punkt og varsel_preferanser er ikke nye: de sto på unntakslista
+// (venter_2_1) til mig. 164 ga dem klubb_id. 2.3 (#870) skriver policyene.
 export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = [
   'aktivitet_dag',
   'aktivitet_uke',
@@ -83,11 +82,14 @@ export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = [
   'poll_chat',
   'poll_stemme',
   'poll_valg',
+  'posisjon_deling',
+  'posisjon_punkt',
   'samtale',
   'samtale_chat',
   'timeplan_post',
   'varsel_innstillinger',
   'varsel_logg',
+  'varsel_preferanser',
   'vedtekter',
   'vedtekter_versjoner',
   'vitals_logg',
@@ -115,6 +117,7 @@ export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
   'poll_chat',
   'poll_stemme',
   'poll_valg',
+  'posisjon_punkt',
   'samtale_chat',
   'timeplan_post',
   'varsel_logg',

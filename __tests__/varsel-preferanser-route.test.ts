@@ -37,7 +37,7 @@ describe('PUT /api/varsel-preferanser — varsel_nivaa (#614)', () => {
     expect(res.status).toBe(200)
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ profil_id: 'user1', varsel_nivaa: 'viktige' }),
-      { onConflict: 'profil_id' },
+      { onConflict: 'klubb_id,profil_id' },
     )
   })
 
@@ -46,7 +46,7 @@ describe('PUT /api/varsel-preferanser — varsel_nivaa (#614)', () => {
     expect(res.status).toBe(200)
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ varsel_nivaa: 'alle' }),
-      { onConflict: 'profil_id' },
+      { onConflict: 'klubb_id,profil_id' },
     )
   })
 

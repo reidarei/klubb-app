@@ -16,7 +16,10 @@ const tilfoeydeTabeller = alter.map(s => ALTER_RE.exec(s)?.[1]).filter((x): x is
 
 // Skjemaet slik det så ut etter 161 (ikke senere migrasjoner).
 const skjema161 = byggSkjema(lesMigrasjoner(161)).tabeller
-const klubbeide161 = [...skjema161.keys()].filter(t => !KLUBB_ID_UNNTAK.some(u => u.tabell === t))
+// Unntakene slik de var ved 161. Migrasjon 164 tok de tre siste ut av KLUBB_ID_UNNTAK,
+// men 161 ga dem ikke kolonnen — denne testen beskriver 161, så lista er frosset.
+const UNNTAK_VED_161 = [...KLUBB_ID_UNNTAK.map(u => u.tabell), 'varsel_preferanser', 'posisjon_deling', 'posisjon_punkt']
+const klubbeide161 = [...skjema161.keys()].filter(t => !UNNTAK_VED_161.includes(t))
 
 const FORVENTEDE_INDEKSER = [
   ['arrangementer', 'start_tidspunkt'],
@@ -42,9 +45,9 @@ describe('migrasjon 161: klubb_id', () => {
   })
 
   it('unntakene har ikke klubb_id, og finnes', () => {
-    for (const u of KLUBB_ID_UNNTAK) {
-      expect(tilfoeydeTabeller, u.tabell).not.toContain(u.tabell)
-      expect([...skjema161.keys()], u.tabell).toContain(u.tabell)
+    for (const tabell of UNNTAK_VED_161) {
+      expect(tilfoeydeTabeller, tabell).not.toContain(tabell)
+      expect([...skjema161.keys()], tabell).toContain(tabell)
     }
   })
 

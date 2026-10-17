@@ -45,7 +45,7 @@ test.describe('posisjonskartet tegner markørene (#693)', () => {
         deler_til: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
         oppdatert: new Date().toISOString(),
       },
-      { onConflict: 'profil_id' },
+      { onConflict: 'klubb_id,profil_id' },
     )
 
     if (delingFeil) throw new Error(`Kunne ikke seede deling: ${delingFeil.message}`)

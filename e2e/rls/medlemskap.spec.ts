@@ -95,6 +95,14 @@ test.describe('medlemskap — speil, rollefunksjoner og admin-RPC (mig. 163, #86
     expect(mFeil).toBeNull()
     expect(m).toEqual({ rolle: 'medlem', aktiv: true })
 
+    // Triggeren på medlemskap (mig. 164) gir nøyaktig én varselvalg-rad i samme klubb.
+    const { data: vp, error: vpFeil } = await service
+      .from('varsel_preferanser')
+      .select('klubb_id')
+      .eq('profil_id', midlertidigId!)
+    expect(vpFeil).toBeNull()
+    expect(vp).toEqual([{ klubb_id: FOERSTE_KLUBB_ID }])
+
     // handle_ny_bruker setter profilen inn med aktiv=false; speilet løfter den
     // til true i samme transaksjon (paritet ved commit).
     const { data: p, error: pFeil } = await service.from('profiles').select('aktiv, rolle').eq('id', midlertidigId!).single()

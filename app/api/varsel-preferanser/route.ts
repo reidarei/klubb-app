@@ -22,9 +22,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Ugyldig varsel_nivaa' }, { status: 400 })
   }
 
+  // onConflict må matche PK (klubb_id, profil_id) fra mig. 164 (42P10 ellers).
   const { error } = await supabase
     .from('varsel_preferanser')
-    .upsert({ profil_id: user.id, ...oppdatering }, { onConflict: 'profil_id' })
+    .upsert({ profil_id: user.id, ...oppdatering }, { onConflict: 'klubb_id,profil_id' })
   // En feilet lagring skal ikke se ut som suksess (§ Policy: Databasespørringer).
   // Loggen er hele poenget: uten den forsvinner en 500 her sporløst, og
   // medlemmet tror han skrudde av chat-plinget mens han fortsatt blir pinget.

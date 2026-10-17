@@ -2053,24 +2053,41 @@ export type Database = {
       posisjon_deling: {
         Row: {
           deler_til: string
+          klubb_id: string
           oppdatert: string
           profil_id: string
         }
         Insert: {
           deler_til: string
+          klubb_id?: string
           oppdatert?: string
           profil_id: string
         }
         Update: {
           deler_til?: string
+          klubb_id?: string
           oppdatert?: string
           profil_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "posisjon_deling_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posisjon_deling_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "posisjon_deling_profil_id_fkey"
             columns: ["profil_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -2080,6 +2097,7 @@ export type Database = {
         Row: {
           arrangement_id: string | null
           id: string
+          klubb_id: string
           lat: number
           lng: number
           noeyaktighet_m: number | null
@@ -2089,6 +2107,7 @@ export type Database = {
         Insert: {
           arrangement_id?: string | null
           id?: string
+          klubb_id?: string
           lat: number
           lng: number
           noeyaktighet_m?: number | null
@@ -2098,6 +2117,7 @@ export type Database = {
         Update: {
           arrangement_id?: string | null
           id?: string
+          klubb_id?: string
           lat?: number
           lng?: number
           noeyaktighet_m?: number | null
@@ -2111,6 +2131,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "arrangementer"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posisjon_punkt_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posisjon_punkt_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
           {
             foreignKeyName: "posisjon_punkt_profil_id_fkey"
@@ -2505,6 +2539,7 @@ export type Database = {
       varsel_preferanser: {
         Row: {
           epost_aktiv: boolean
+          klubb_id: string
           oppdatert: string | null
           profil_id: string
           push_aktiv: boolean
@@ -2512,6 +2547,7 @@ export type Database = {
         }
         Insert: {
           epost_aktiv?: boolean
+          klubb_id?: string
           oppdatert?: string | null
           profil_id: string
           push_aktiv?: boolean
@@ -2519,6 +2555,7 @@ export type Database = {
         }
         Update: {
           epost_aktiv?: boolean
+          klubb_id?: string
           oppdatert?: string | null
           profil_id?: string
           push_aktiv?: boolean
@@ -2526,9 +2563,23 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "varsel_preferanser_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "varsel_preferanser_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "varsel_preferanser_profil_id_fkey"
             columns: ["profil_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

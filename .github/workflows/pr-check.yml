@@ -585,7 +585,7 @@ jobs:
           if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
           do $$
           declare
-            unntak constant text[] := array['klubb','profiles','push_subscriptions','pass_info','varsel_preferanser','posisjon_deling','posisjon_punkt'];
+            unntak constant text[] := array['klubb','profiles','push_subscriptions','pass_info'];
             t text;
             avvik text[] := '{}';
             antall int := 0;
@@ -845,6 +845,20 @@ jobs:
           insert into public.medlemskap (klubb_id, profil_id, rolle) values
             ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002', 'admin'),
             ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000003', 'generalsekretaer');
+
+          -- 4b) Triggeren på medlemskap (164): medlemskap i klubb 2 gir varselvalg i klubb 2.
+          do $$
+          declare
+            antall bigint;
+          begin
+            select count(*) into antall from public.varsel_preferanser
+             where klubb_id = '00000000-0000-4000-a000-000000000002'
+               and profil_id in ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003');
+            if antall <> 2 then
+              raise exception 'medlemskap i klubb 2 skulle gitt 2 varsel_preferanser-rader i klubb 2, fant %', antall;
+            end if;
+          end
+          $$;
 
           -- 5) Som Petter: admin bare i klubb 2, og profiles.rolle er urørt.
           do $$

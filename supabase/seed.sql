@@ -672,6 +672,12 @@ begin
     raise exception 'Seed-verifisering: % profiler avviker fra medlemskap-speilet.', antall;
   end if;
 
+  -- Hvert medlemskap har varselvalg (mig. 164: trigger på medlemskap + backfill).
+  select count(*) into antall from public.varsel_preferanser;
+  if antall <> (select count(*) from public.medlemskap) then
+    raise exception 'Seed-verifisering: varsel_preferanser (%) og medlemskap er ikke like mange.', antall;
+  end if;
+
   -- Røyktest-fixturene (prefiks 9800): detaljsidene i e2e/sider-laster.spec.ts
   -- gir notFound() uten dem, og speccen ville da grønt bekreftet 404-grenen i
   -- stedet for innholds-grenen den er skrevet for. Vi teller radene per tabell
