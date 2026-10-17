@@ -15,7 +15,9 @@ on:
 
 jobs:
   sjekk-klientfeil:
-    runs-on: ubuntu-latest
+    # Egen runner når repo-variabelen SJEKK_RUNNER er satt, GitHub-hosted ellers.
+    # Se docs/ci-minuttbudsjett.md § Egen runner.
+    runs-on: ${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Sjekk klientfeil og rydd opp gammel logg
         run: |

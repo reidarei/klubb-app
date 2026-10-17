@@ -10,7 +10,9 @@ on:
 
 jobs:
   ping:
-    runs-on: ubuntu-latest
+    # Egen runner når repo-variabelen SJEKK_RUNNER er satt, GitHub-hosted ellers.
+    # Se docs/ci-minuttbudsjett.md § Egen runner.
+    runs-on: ${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Ping app
         run: curl -s -o /dev/null "${{ secrets.APP_URL }}"
