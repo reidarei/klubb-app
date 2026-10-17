@@ -1,7 +1,7 @@
 // Opprett første admin på en fersk Supabase-instans.
 //
 // ANBEFALT FREMGANGSMÅTE: Bruk Supabase Dashboard (Authentication → Add user)
-// + SQL: UPDATE profiles SET rolle = 'admin', navn = '...' WHERE id = '...';
+// + SQL: update public.medlemskap set rolle = 'admin' where klubb_id = public.standard_klubb_id() and profil_id = '...';
 // Det er det tryggeste og minst feilsårbare for en engangsoperasjon.
 //
 // Dette scriptet er alternativet («advanced») — nyttig ved scripted oppsett
@@ -24,6 +24,10 @@ import { randomBytes } from 'node:crypto'
 // .mjs kan ikke importere TypeScript-moduler, så vi dupliserer konstanten her
 // med kommentar om at de to skal holdes i synk. Se lib/config.ts.
 const KJENT_PROD_SUPABASE_URL = 'https://tdlfswmxezjdnxcbbiwn.supabase.co'
+
+// Speiler lib/klubb-kontekst.ts (og standard_klubb_id() i migrasjon 161) —
+// pinnet i __tests__/klubb-kontekst.test.ts. Rolle bor på medlemskap (#868).
+const STANDARD_KLUBB_ID = '00000000-0000-4000-a000-000000000001'
 
 function avbryt(melding) {
   console.error(`\n  AVBRUTT: ${melding}\n`)
@@ -52,6 +56,22 @@ async function ventPaaProfil(adminClient, userId, maxForsok = 10) {
     await new Promise(r => setTimeout(r, 500))
   }
   return false
+}
+
+// Rolle skrives på medlemskap (profiles.rolle er et vernet speil, #868); navnet
+// er derimot en vanlig profilkolonne og settes separat, bare hvis det er oppgitt.
+async function promoterTilAdmin(adminClient, profilId, navn) {
+  const { error } = await adminClient
+    .from('medlemskap')
+    .update({ rolle: 'admin' })
+    .eq('klubb_id', STANDARD_KLUBB_ID)
+    .eq('profil_id', profilId)
+  if (error) avbryt(`Klarte ikke sette rolle: ${error.message}`)
+
+  if (navn) {
+    const { error: navnFeil } = await adminClient.from('profiles').update({ navn }).eq('id', profilId)
+    if (navnFeil) avbryt(`Klarte ikke sette navn: ${navnFeil.message}`)
+  }
 }
 
 // ─── Validering av argumenter ────────────────────────────────────────────────
@@ -115,18 +135,15 @@ if (count > 0) {
       'Hvis du vil legge til denne adminen likevel:\n' +
       '  1. Opprett brukeren via Supabase Dashboard → Authentication → Users\n' +
       '  2. Sett rollen via SQL i Dashboard:\n' +
-      `     update public.profiles set rolle = 'admin' where epost = '${epost}';\n\n` +
+      `     update public.medlemskap set rolle = 'admin' where klubb_id = public.standard_klubb_id()\n` +
+      `       and profil_id = (select id from public.profiles where epost = '${epost}');\n\n` +
       'Eller bruk Rediger-siden i appen hvis du allerede har innloggede admins.'
     )
   }
 
   // Profilen finnes — promoter til admin (idempotent re-kjøring etter delvis feil).
   console.log(`\n  Profilen ${epost} finnes allerede. Promoterer til admin ...\n`)
-  const { error } = await adminClient
-    .from('profiles')
-    .update({ rolle: 'admin', ...(navnArg ? { navn: navnArg } : {}) })
-    .eq('id', eksisterende.id)
-  if (error) avbryt(`Klarte ikke promotere: ${error.message}`)
+  await promoterTilAdmin(adminClient, eksisterende.id, navnArg)
   console.log(`  OK — ${epost} er nå admin (id: ${eksisterende.id}).\n`)
   process.exit(0)
 }
@@ -152,6 +169,7 @@ const { data: nyBruker, error: brukerfeil } = await adminClient.auth.admin.creat
   email: epost,
   password: passord,
   email_confirm: true,  // hopper over e-postbekreftelse for admin-oppsett
+  app_metadata: { klubb_id: STANDARD_KLUBB_ID },  // handle_ny_bruker oppretter medlemskapet herfra
 })
 
 if (brukerfeil) avbryt(`Klarte ikke opprette bruker: ${brukerfeil.message}`)
@@ -166,18 +184,13 @@ const funnet = await ventPaaProfil(adminClient, userId)
 if (!funnet) {
   avbryt(
     'profiles-raden ble ikke opprettet innen 5 sek. ' +
-    'Kjør manuelt:\n  UPDATE profiles SET rolle = \'admin\', navn = \'...\' WHERE id = \'' + userId + '\';'
+    'Kjør manuelt:\n  update public.medlemskap set rolle = \'admin\' where klubb_id = public.standard_klubb_id() and profil_id = \'' + userId + '\';'
   )
 }
 
 // ─── Promoter til admin + sett navn ──────────────────────────────────────────
 
-const { error: oppdatertFeil } = await adminClient
-  .from('profiles')
-  .update({ rolle: 'admin', ...(navnArg ? { navn: navnArg } : {}) })
-  .eq('id', userId)
-
-if (oppdatertFeil) avbryt(`Klarte ikke sette rolle: ${oppdatertFeil.message}`)
+await promoterTilAdmin(adminClient, userId, navnArg)
 
 // ─── Skriv passord til fil (IKKE til stdout) ──────────────────────────────────
 // Passordet i stdout = shell-historikk-risiko. Vi skriver til fil med

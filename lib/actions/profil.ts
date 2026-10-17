@@ -9,6 +9,7 @@ import { normaliserTelefon } from '@/lib/telefon'
 import { normaliserFritekst } from '@/lib/fritekst'
 import { MATALLERGIER_MAKS_LENGDE, STIKKORD_MAKS_LENGDE } from '@/lib/konstanter'
 import { logg } from '@/lib/logg'
+import { aktivKlubbId } from '@/lib/klubb-kontekst'
 
 // Resultattyper for GS-actions — strukturert retur i stedet for throw,
 // slik at klienten kan vise reaktiv confirm ved race-tilstand (23505).
@@ -61,7 +62,7 @@ export async function oppdaterEgenProfil(data: { navn: string; visningsnavn: str
   revalidatePath(`/klubbinfo/medlemmer/${user.id}`)
 }
 
-export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord?: string; matallergier?: string }) {
+export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visningsnavn: string; telefon: string; rolle: string; aktiv: boolean; fodselsdato?: string; faar_issue_varsler: boolean; faar_feilvarsler: boolean; stikkord: string; matallergier: string }) {
   const { supabase } = await ensureAdmin()
 
   const navn = data.navn.trim()
@@ -71,76 +72,45 @@ export async function oppdaterMedlemAdmin(id: string, data: { navn: string; visn
   // Allowlist på rolle: generalsekretær settes KUN via settGeneralsekretaer()
   // (RPC, atomisk). Hvis noen sender 'generalsekretaer' hit er det enten en
   // bug eller et forsøk på å omgå RPC-ens atomic demotér+promotér — begge deler
-  // skal stoppes tidlig. Se migrasjon 094 for rationale.
+  // skal stoppes tidlig. Se migrasjon 094 for rationale. Samme allowlist står
+  // i RPC-en (22023) — dette er den raske veien før nettverkskallet.
   if (data.rolle !== 'medlem' && data.rolle !== 'admin') {
-    // Spesialtilfelle: hvis personen i DB allerede ER generalsekretær og innsendt
-    // rolle er noe annet enn 'medlem'/'admin', er det UI-en som sender feil verdi.
-    // Vi kaster heller enn å stille demotere — demotering skal skje via
-    // fjernGeneralsekretaer() i handleLagre-rekkefølgen i RedigerMedlemSkjema.
+    // UI-en demoterer en sittende GS via fjernGeneralsekretaer() FØR denne
+    // actionen (handleLagre i RedigerMedlemSkjema) — vi kaster heller enn å
+    // stille demotere.
     throw new Error('Ugyldig rolle. Generalsekretær settes og fjernes via egen flyt.')
   }
 
-  // Hvis personen i DB er generalsekretær og innsendt rolle er 'admin' eller
-  // 'medlem', skal IKKE denne actionen demotere — det håndteres av
-  // fjernGeneralsekretaer() som kalles FØR denne actionen i handleLagre.
-  // Defensiv invariant: når DB-rollen er 'generalsekretaer', utelater vi
-  // rolle-feltet HELT fra update-objektet — vi rører det aldri. Det unngår
-  // en TOCTOU-felle hvor en annen admin demoterer GS i mellomtiden og vi
-  // re-promoterer i stillhet ved å skrive den gamle rollen tilbake.
-  // Slå opp gjeldende rolle. NB: RLS-select-policyen på profiles er
-  // `using (aktiv = true)` (se 009_rls_policyer.sql) — for INAKTIVE profiler
-  // returnerer .maybeSingle() null selv om raden finnes. Vi må derfor
-  // fail-safe: hvis oppslaget feiler ELLER returnerer null, rører vi IKKE
-  // rolle-feltet. Det unngår at en sittende GS demoteres stille gjennom
-  // denne actionen utenom RPC-flyten — som var bug-en Copilot fanget.
-  const { data: gjeldende, error: gjeldendeFeil } = await supabase
-    .from('profiles')
-    .select('rolle')
-    .eq('id', id)
-    .maybeSingle()
-
-  const baseOppdatering = {
-    navn,
-    visningsnavn,
-    telefon: normaliserTelefon(data.telefon),
-    fodselsdato: data.fodselsdato || null,
-    aktiv: data.aktiv,
+  // Rolle, aktiv og flaggene bor på medlemskap, profilfeltene på profiles —
+  // RPC-en skriver begge i én transaksjon (migrasjon 163, #868). Invarianten
+  // «en sittende GS får aldri rollen skrevet her» håndheves under `for update`
+  // i RPC-en, ikke ved et løst forhåndsoppslag her (TOCTOU: en annen admin kan
+  // demotere GS mellom oppslag og skriving).
+  const { data: rolleSkrevet, error } = await supabase.rpc('oppdater_medlem_admin', {
+    p_klubb_id: aktivKlubbId(),
+    p_profil_id: id,
+    p_navn: navn,
+    p_visningsnavn: visningsnavn,
+    // as string: genererte RPC-typer kjenner ikke null i argumenter; funksjonen tar null (tomt felt).
+    p_telefon: normaliserTelefon(data.telefon) as string,
+    p_fodselsdato: (data.fodselsdato || null) as string,
+    p_stikkord: normaliserFritekst(data.stikkord, STIKKORD_MAKS_LENGDE) as string,
+    p_matallergier: normaliserFritekst(data.matallergier, MATALLERGIER_MAKS_LENGDE) as string,
+    p_rolle: data.rolle,
+    p_aktiv: data.aktiv,
     // To uavhengige varsel-brytere, begge admin-styrt per medlem:
     // faar_issue_varsler = nye innspill (migrasjon 104), faar_feilvarsler =
     // døgnalarmen om feil (migrasjon 123) — bevisst delt, se migrasjonen.
-    faar_issue_varsler: data.faar_issue_varsler,
-    faar_feilvarsler: data.faar_feilvarsler,
-    oppdatert: naa(),
-  }
-  // Fail-safe: rør rolle KUN hvis vi har bekreftet at gjeldende rolle ikke
-  // er 'generalsekretaer'. Manglende oppslag (RLS-skjult inaktiv profil,
-  // nettverksfeil osv.) → ikke rør rolle. Klienten må kalle
-  // fjernGeneralsekretaer() først hvis demotering av GS er ønsket.
-  const skalRoreRolle = !gjeldendeFeil && gjeldende != null && gjeldende.rolle !== 'generalsekretaer'
-  if (!skalRoreRolle) {
-    // Warn (ikke feil) — typisk scenario er at GS-demotering håndteres av
-    // fjernGeneralsekretaer() i RedigerMedlemSkjema.handleLagre() før denne actionen.
-    logg.warn('profil.rolle.hoppet', {
-      profil_id: id,
-      code: gjeldendeFeil?.code,
-    })
-  }
-  const oppdatering: Record<string, unknown> = skalRoreRolle
-    ? { ...baseOppdatering, rolle: data.rolle }
-    : baseOppdatering
-  // Lagt til ETTER baseOppdatering/rolle-invarianten er avgjort — stikkord
-  // har ingenting med generalsekretær-logikken å gjøre.
-  if (data.stikkord !== undefined) oppdatering.stikkord = normaliserFritekst(data.stikkord, STIKKORD_MAKS_LENGDE)
-  if (data.matallergier !== undefined) {
-    oppdatering.matallergier = normaliserFritekst(data.matallergier, MATALLERGIER_MAKS_LENGDE)
-  }
-
-  const { error } = await supabase
-    .from('profiles')
-    .update(oppdatering)
-    .eq('id', id)
+    p_faar_issue_varsler: data.faar_issue_varsler,
+    p_faar_feilvarsler: data.faar_feilvarsler,
+  })
 
   if (error) throw new Error(error.message)
+  // false = medlemmet er sittende GS, og rollen ble ikke rørt. Warn (ikke
+  // feil): typisk fordi GS-demotering håndteres av fjernGeneralsekretaer().
+  if (rolleSkrevet === false) {
+    logg.warn('profil.rolle.hoppet', { profil_id: id })
+  }
   revalidatePath('/klubbinfo/medlemmer')
   revalidatePath(`/klubbinfo/medlemmer/${id}`)
 }
@@ -155,8 +125,8 @@ export async function settGeneralsekretaer(nyProfilId: string): Promise<SettGene
     .rpc('sett_generalsekretaer', { ny_profil: nyProfilId })
 
   if (error) {
-    // 23505 = unique_violation: partial index profiles_unik_generalsekretaer
-    // blokkerte INSERT/UPDATE fordi en annen GS ble satt i mellomtiden.
+    // 23505 = unique_violation: partial index medlemskap_unik_generalsekretaer
+    // (speilet profiles_unik_generalsekretaer står til PR C) blokkerte INSERT/UPDATE fordi en annen GS ble satt i mellomtiden.
     if (error.code === '23505') {
       // Slå opp sittende GS for å vise reaktiv confirm i klienten. Fail-open
       // med logging: feiler oppslaget, faller vi bare gjennom til den

@@ -59,6 +59,40 @@ describe('lib/auth.ts — fail closed på feilet profil-oppslag', () => {
   })
 })
 
+describe('lib/auth.ts — rolle leses fra medlemskap i aktiv klubb (#868)', () => {
+  it('ensureAdmin() spør medlemskap med klubb_id, profil_id og aktiv', async () => {
+    vi.resetModules()
+    const chain = lagChain({ rolle: 'admin' })
+    const from = vi.fn(() => chain)
+    vi.doMock('@/lib/supabase/server', () => ({
+      createServerClient: vi.fn().mockResolvedValue({
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
+        from,
+      }),
+    }))
+    const { ensureAdmin } = await import('@/lib/auth')
+
+    await expect(ensureAdmin()).resolves.toMatchObject({ profil: { rolle: 'admin' } })
+    expect(from).toHaveBeenCalledWith('medlemskap')
+    expect(chain.eq).toHaveBeenCalledWith('klubb_id', '00000000-0000-4000-a000-000000000001')
+    expect(chain.eq).toHaveBeenCalledWith('profil_id', 'bruker-1')
+    expect(chain.eq).toHaveBeenCalledWith('aktiv', true)
+  })
+
+  it('ensureAdmin() sier «Ikke admin» når medlemskapet mangler (inaktiv eller ikke medlem)', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/supabase/server', () => ({
+      createServerClient: vi.fn().mockResolvedValue({
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'bruker-1' } }, error: null }) },
+        from: vi.fn(() => lagChain(null)),
+      }),
+    }))
+    const { ensureAdmin } = await import('@/lib/auth')
+
+    await expect(ensureAdmin()).rejects.toThrow('Ikke admin')
+  })
+})
+
 describe('lib/auth-cache.ts getProfil() — fail closed på feilet profil-oppslag', () => {
   it('kaster når profiles-spørringen feiler (brukes til rolle-sjekker i hele appen)', async () => {
     vi.resetModules()
@@ -77,5 +111,48 @@ describe('lib/auth-cache.ts getProfil() — fail closed på feilet profil-oppsla
     const { getProfil } = await import('@/lib/auth-cache')
 
     await expect(getProfil()).rejects.toThrow('Kunne ikke hente profil')
+  })
+
+  function mockMedData(data: unknown) {
+    return {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'bruker-1' } } } }),
+      },
+      from: vi.fn(() => lagChain(data)),
+    }
+  }
+
+  it('returnerer flat form fra medlemskap-raden med profiles-embed', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/supabase/server', () => ({
+      createServerClient: vi.fn().mockResolvedValue(
+        mockMedData({ rolle: 'admin', profiles: { navn: 'Ola', bilde_url: null, chat_sist_sett: '2026-01-01T00:00:00Z' } }),
+      ),
+    }))
+    const { getProfil } = await import('@/lib/auth-cache')
+
+    await expect(getProfil()).resolves.toEqual({
+      rolle: 'admin', navn: 'Ola', bilde_url: null, chat_sist_sett: '2026-01-01T00:00:00Z',
+    })
+  })
+
+  it('returnerer null (degradert header, ikke utlogging) når profiles-embedden er null', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/supabase/server', () => ({
+      createServerClient: vi.fn().mockResolvedValue(mockMedData({ rolle: 'admin', profiles: null })),
+    }))
+    const { getProfil } = await import('@/lib/auth-cache')
+
+    await expect(getProfil()).resolves.toBeNull()
+  })
+
+  it('spør medlemskap med klubb_id og aktiv', async () => {
+    vi.resetModules()
+    const klient = mockMedData(null)
+    vi.doMock('@/lib/supabase/server', () => ({ createServerClient: vi.fn().mockResolvedValue(klient) }))
+    const { getProfil } = await import('@/lib/auth-cache')
+
+    await expect(getProfil()).resolves.toBeNull()
+    expect(klient.from).toHaveBeenCalledWith('medlemskap')
   })
 })

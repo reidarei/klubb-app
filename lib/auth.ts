@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server'
+import { aktivKlubbId } from '@/lib/klubb-kontekst'
 import { kanAdministrere, loeserTiebreak, godkjennerPassTilgang } from '@/lib/roller'
 
 /**
@@ -26,6 +27,9 @@ export class IkkeInnloggetFeil extends Error {
 // Bruk denne i stedet for å duplisere "hent user → hent profil → sjekk
 // rolle"-flyten i hver action. Kaster ved manglende auth eller rolle.
 //
+// Rolle leses fra medlemskap i aktiv klubb (#868); `aktiv` speiler er_admin() og
+// gjør oppslaget uavhengig av at select-policyen strammes i 2.3.
+//
 // Returnerer den samme supabase-klienten som ble brukt til auth-sjekken,
 // slik at videre spørringer går mot brukerens RLS-kontekst og ikke krever
 // en ny createServerClient()-runde.
@@ -41,9 +45,11 @@ export async function ensureAdmin() {
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
-    .from('profiles')
+    .from('medlemskap')
     .select('rolle')
-    .eq('id', user.id)
+    .eq('klubb_id', aktivKlubbId())
+    .eq('profil_id', user.id)
+    .eq('aktiv', true)
     .maybeSingle()
 
   // Fail closed: er vi i tvil om hvem brukeren er eller hva han har lov
@@ -67,9 +73,11 @@ export async function ensureLoeserTiebreak() {
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
-    .from('profiles')
+    .from('medlemskap')
     .select('rolle')
-    .eq('id', user.id)
+    .eq('klubb_id', aktivKlubbId())
+    .eq('profil_id', user.id)
+    .eq('aktiv', true)
     .maybeSingle()
 
   // Fail closed — se begrunnelse i ensureAdmin() over.
@@ -93,9 +101,11 @@ export async function ensureGodkjennerPassTilgang() {
   if (!user) throw new IkkeInnloggetFeil()
 
   const { data: profil, error: profilFeil } = await supabase
-    .from('profiles')
+    .from('medlemskap')
     .select('rolle')
-    .eq('id', user.id)
+    .eq('klubb_id', aktivKlubbId())
+    .eq('profil_id', user.id)
+    .eq('aktiv', true)
     .maybeSingle()
 
   // Fail closed — se begrunnelse i ensureAdmin() over.

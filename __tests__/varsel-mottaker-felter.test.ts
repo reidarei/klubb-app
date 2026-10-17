@@ -60,12 +60,17 @@ const {
   mockCreateAdmin,
   mockTellAlarmverdigeFeil,
   mockHentToppEventRader,
+  mockSjekkMedlemskapSpeil,
 } = vi.hoisted(() => ({
   mockSendVarsel: vi.fn(),
   mockCreateAdmin: vi.fn(),
   mockTellAlarmverdigeFeil: vi.fn(),
   mockHentToppEventRader: vi.fn(),
+  mockSjekkMedlemskapSpeil: vi.fn(),
 }))
+
+// Prod-vakten (#868) kaller admin.rpc, som admin-mocken under ikke har.
+vi.mock('@/lib/medlemskap-speilvakt', () => ({ sjekkMedlemskapSpeil: mockSjekkMedlemskapSpeil }))
 
 vi.mock('@/lib/varsler', () => ({ sendVarsel: mockSendVarsel }))
 vi.mock('@/lib/logg', () => ({
@@ -118,6 +123,11 @@ describe('/api/cron/sjekk-klientfeil – mottakere filtreres på faar_feilvarsle
       ['faar_feilvarsler', true],
       ['aktiv', true],
     ])
+    // Speilvakten (#868) kjører FØR tellingen, så et avvik teller i samme alarmkjøring.
+    expect(mockSjekkMedlemskapSpeil).toHaveBeenCalledTimes(1)
+    expect(mockSjekkMedlemskapSpeil.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTellAlarmverdigeFeil.mock.invocationCallOrder[0],
+    )
     expect(mockSendVarsel).toHaveBeenCalledWith(
       expect.objectContaining({ mottakere: ['p1'] }),
     )

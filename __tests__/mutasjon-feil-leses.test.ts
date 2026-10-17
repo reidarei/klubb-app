@@ -4,15 +4,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { lagChain } from './helpers/supabase-mock'
 
-const { mockFrom, mockSupabase, mockDeleteUser, mockRevalidatePath } = vi.hoisted(() => {
+const { mockFrom, mockRpc, mockSupabase, mockDeleteUser, mockRevalidatePath } = vi.hoisted(() => {
   const mockFrom = vi.fn<(tabell: string) => unknown>()
+  const mockRpc = vi.fn()
   const mockDeleteUser = vi.fn()
   const mockSupabase = {
     from: mockFrom,
+    rpc: mockRpc,
     auth: { admin: { deleteUser: mockDeleteUser } },
   }
   const mockRevalidatePath = vi.fn()
-  return { mockFrom, mockSupabase, mockDeleteUser, mockRevalidatePath }
+  return { mockFrom, mockRpc, mockSupabase, mockDeleteUser, mockRevalidatePath }
 })
 
 vi.mock('@/lib/auth', () => ({
@@ -52,7 +54,7 @@ vi.mock('@/lib/varsler-kaaringspoll', () => ({
 vi.mock('@/lib/logg', () => ({ logg: { warn: vi.fn(), feil: vi.fn() } }))
 vi.mock('@/lib/r2', () => ({ r2StiFraUrl: vi.fn(), slettR2: vi.fn() }))
 
-import { slettMedlem } from '@/lib/actions/profil'
+import { slettMedlem, oppdaterMedlemAdmin } from '@/lib/actions/profil'
 import { oppdaterVedtekt } from '@/lib/actions/vedtekter'
 import { oppdaterBursdagsgratulasjon } from '@/app/(app)/innstillinger/actions'
 import { opprettPoll } from '@/lib/actions/poll'
@@ -137,7 +139,7 @@ describe('oppdaterVedtekt — insert/update-feil', () => {
 // ─── oppdaterBursdagsgratulasjon (app/(app)/innstillinger/actions.ts) ───────
 
 describe('oppdaterBursdagsgratulasjon', () => {
-  it('kaster når profiles-oppdateringen feiler', async () => {
+  it('kaster når medlemskap-oppdateringen feiler', async () => {
     mockFrom.mockImplementation(() => lagChain(null, { message: 'DB nede' }))
 
     await expect(oppdaterBursdagsgratulasjon(true)).rejects.toThrow(
@@ -152,9 +154,10 @@ describe('oppdaterBursdagsgratulasjon', () => {
 
     await expect(oppdaterBursdagsgratulasjon(true)).resolves.toBeUndefined()
     expect(ensureAdmin).toHaveBeenCalledTimes(1)
-    expect(mockFrom).toHaveBeenCalledWith('profiles')
-    expect(chain.update).toHaveBeenCalledWith({ bursdagsgratulasjon_aktiv: true })
-    expect(chain.eq).toHaveBeenCalledWith('id', 'admin-1')
+    expect(mockFrom).toHaveBeenCalledWith('medlemskap')
+    expect(chain.update).toHaveBeenCalledWith({ bursdagsgratulasjon_aktiv: true, oppdatert: expect.any(String) })
+    expect(chain.eq).toHaveBeenCalledWith('klubb_id', '00000000-0000-4000-a000-000000000001')
+    expect(chain.eq).toHaveBeenCalledWith('profil_id', 'admin-1')
     expect(mockRevalidatePath).toHaveBeenCalledWith('/profil')
   })
 
@@ -164,6 +167,42 @@ describe('oppdaterBursdagsgratulasjon', () => {
     await expect(oppdaterBursdagsgratulasjon(true)).rejects.toThrow('Ikke admin')
     expect(mockFrom).not.toHaveBeenCalled()
     expect(mockRevalidatePath).not.toHaveBeenCalled()
+  })
+})
+
+// ─── oppdaterMedlemAdmin (lib/actions/profil.ts) — RPC oppdater_medlem_admin (#868) ───
+
+describe('oppdaterMedlemAdmin', () => {
+  const data = {
+    navn: 'Petter Prøve', visningsnavn: 'Petter', telefon: '', rolle: 'admin', aktiv: true,
+    faar_issue_varsler: false, faar_feilvarsler: false, stikkord: '', matallergier: '',
+  }
+
+  it('kaster RPC-feilen og revaliderer ikke', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Ikke admin', code: '42501' } })
+
+    await expect(oppdaterMedlemAdmin('medlem-1', data)).rejects.toThrow('Ikke admin')
+    expect(mockRevalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('logger profil.rolle.hoppet når RPC-en svarer false (sittende generalsekretær)', async () => {
+    mockRpc.mockResolvedValue({ data: false, error: null })
+
+    await oppdaterMedlemAdmin('medlem-1', data)
+    expect(mockRpc).toHaveBeenCalledWith('oppdater_medlem_admin', expect.objectContaining({
+      p_klubb_id: '00000000-0000-4000-a000-000000000001',
+      p_profil_id: 'medlem-1',
+      p_rolle: 'admin',
+    }))
+    expect(logg.warn).toHaveBeenCalledWith('profil.rolle.hoppet', { profil_id: 'medlem-1' })
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/klubbinfo/medlemmer/medlem-1')
+  })
+
+  it('logger ikke når rollen ble skrevet (true)', async () => {
+    mockRpc.mockResolvedValue({ data: true, error: null })
+
+    await oppdaterMedlemAdmin('medlem-1', data)
+    expect(logg.warn).not.toHaveBeenCalled()
   })
 })
 

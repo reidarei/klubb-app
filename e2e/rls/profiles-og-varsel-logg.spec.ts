@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
 import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
 import { STIKKORD_MAKS_LENGDE } from '../../lib/konstanter'
+import { FOERSTE_KLUBB_ID } from '../helpers/klubb'
 
-// Kolonnevern på profiles (mig. 105/123) og oppdateringsgrensen på
+// Kolonnevern på profiles (mig. 105/123, fra 163 et verdivern mot medlemskap, #868) og oppdateringsgrensen på
 // varsel_logg (mig. 121, IKKE 123 slik issue #533 opprinnelig antok — 123
 // gjelder faar_feilvarsler-kolonnen på profiles, ikke varsel_logg).
 //
@@ -20,13 +21,16 @@ const VARSEL_OLA_ID = '00000000-0000-4000-9900-000000000021'
 
 // Kolonnene testene i denne fila kan komme til å endre hvis en RLS-policy
 // eller triggeren faktisk har et hull. Snapshottes før og skrives ubetinget
-// tilbake etter — se afterAll-kommentaren.
-const PROFIL_KOLONNER = 'rolle, aktiv, faar_issue_varsler, faar_feilvarsler, visningsnavn, stikkord'
+// tilbake etter — se afterAll-kommentaren. De fem rolle/flagg-kolonnene bor på
+// medlemskap (mig. 163); profiles bærer bare et vernet speil av dem.
+const PROFIL_KOLONNER = 'visningsnavn, stikkord'
+const MEDLEMSKAP_KOLONNER = 'rolle, aktiv, faar_issue_varsler, faar_feilvarsler, bursdagsgratulasjon_aktiv'
 
 test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
   test.skip(!harRlsMiljo(), 'E2E_SUPABASE_* mangler — se docs/test-instans.md')
 
   let petterFoer: Record<string, unknown> | null = null
+  let petterMedlemskapFoer: Record<string, unknown> | null = null
   let olaNavnFoer: string | null = null
 
   test.beforeAll(async () => {
@@ -35,6 +39,15 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     const { data, error } = await service.from('profiles').select(PROFIL_KOLONNER).eq('id', PETTER.id).single()
     if (error) throw new Error(`Kunne ikke snapshotte Petters profil: ${error.message}`)
     petterFoer = data as Record<string, unknown>
+
+    const { data: medlemskap, error: medlemskapFeil } = await service
+      .from('medlemskap')
+      .select(MEDLEMSKAP_KOLONNER)
+      .eq('klubb_id', FOERSTE_KLUBB_ID)
+      .eq('profil_id', PETTER.id)
+      .single()
+    if (medlemskapFeil) throw new Error(`Kunne ikke snapshotte Petters medlemskap: ${medlemskapFeil.message}`)
+    petterMedlemskapFoer = medlemskap as Record<string, unknown>
 
     const { data: ola, error: olaFeil } = await service.from('profiles').select('visningsnavn').eq('id', OLA.id).single()
     if (olaFeil) throw new Error(`Kunne ikke snapshotte Olas visningsnavn: ${olaFeil.message}`)
@@ -49,6 +62,16 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
   test.afterAll(async () => {
     const service = adminKlient('profiles-restore')
     if (!service || !petterFoer) return
+    // Medlemskap først: speilet fører verdiene videre til profiles (vernet
+    // gjelder også service_role, så profiles kan ikke gjenopprettes direkte).
+    if (petterMedlemskapFoer) {
+      const { error: medlemskapFeil } = await service
+        .from('medlemskap')
+        .update(petterMedlemskapFoer)
+        .eq('klubb_id', FOERSTE_KLUBB_ID)
+        .eq('profil_id', PETTER.id)
+      if (medlemskapFeil) console.warn(`[profiles-restore] kunne ikke gjenopprette Petters medlemskap: ${medlemskapFeil.message}`)
+    }
     const { error } = await service.from('profiles').update(petterFoer).eq('id', PETTER.id)
     if (error) console.warn(`[profiles-restore] kunne ikke gjenopprette Petters profil: ${error.message}`)
     if (olaNavnFoer !== null) {
@@ -74,6 +97,8 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
     { kolonne: 'aktiv', nyVerdi: n => !n },
     { kolonne: 'faar_issue_varsler', nyVerdi: n => !n },
     { kolonne: 'faar_feilvarsler', nyVerdi: n => !n },
+    // Tidligere uvernet (bare de fire over var i triggeren); lukket av 163 (#868).
+    { kolonne: 'bursdagsgratulasjon_aktiv', nyVerdi: n => !n },
   ]
 
   for (const { kolonne, nyVerdi } of beskyttedeKolonner) {
@@ -92,7 +117,7 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
       expect(error?.code, `forventet P0001 (triggerens raise exception), fikk ${JSON.stringify(error)}`).toBe(
         'P0001',
       )
-      expect(error?.message).toContain('Bare admin kan endre')
+      expect(error?.message).toContain('medlemskap.speil.vern')
 
       const { data: etterFeil, error: etterFeilFeil } = await service.from('profiles').select(kolonne).eq('id', PETTER.id).single()
       expect(etterFeilFeil).toBeNull()
@@ -104,6 +129,53 @@ test.describe('profiles — kolonnevern (mig. 105/123, #533)', () => {
       expect(etterRad?.[kolonne]).toEqual(forRad?.[kolonne])
     })
   }
+
+  // Vernet gjelder ALLE (#868): grenen «auth.uid() is null or er_admin()» er borte,
+  // så heller ikke service_role kan skrive rolle direkte på profiles.
+  test('service_role kan heller ikke sette profiles.rolle direkte (verdivernet gjelder alle)', async () => {
+    const service = adminKlient('profiles-vern-service')
+    if (!service) throw new Error('adminKlient ga null selv om harRlsMiljo() er sann')
+    const { error } = await service.from('profiles').update({ rolle: 'admin' }).eq('id', PETTER.id)
+    expect(error?.code).toBe('P0001')
+    expect(error?.message).toContain('medlemskap.speil.vern')
+  })
+
+  // Rad-RLS på medlemskap: Petter ser raden (aktiv, standardklubben), men
+  // update-policyen krever er_admin(klubb_id) — 0 rader og ingen feil, ikke P0001.
+  test('Petter kan ikke endre egen rolle på medlemskap (update-policyen filtrerer raden bort)', async () => {
+    const petter = await loggInnKlient(PETTER.epost)
+    const { data, error } = await petter
+      .from('medlemskap')
+      .update({ rolle: 'admin' })
+      .eq('klubb_id', FOERSTE_KLUBB_ID)
+      .eq('profil_id', PETTER.id)
+      .select('rolle')
+    expect(error).toBeNull()
+    expect(data).toEqual([])
+
+    const service = adminKlient('medlemskap-kryssjekk')
+    if (!service) throw new Error('adminKlient ga null selv om harRlsMiljo() er sann')
+    const { data: etter, error: etterFeil } = await service
+      .from('medlemskap')
+      .select('rolle')
+      .eq('klubb_id', FOERSTE_KLUBB_ID)
+      .eq('profil_id', PETTER.id)
+      .single()
+    expect(etterFeil).toBeNull()
+    expect(etter?.rolle).toBe(petterMedlemskapFoer?.rolle)
+  })
+
+  // Kolonne-grant (ikke policy): ingen — heller ikke admin — kan flytte et
+  // medlemskap til en annen klubb. 42501, ikke stille 0 rader.
+  test('admin kan ikke endre klubb_id på medlemskap (kolonne-grant)', async () => {
+    const admin = await loggInnKlient(ADMIN.epost)
+    const { error } = await admin
+      .from('medlemskap')
+      .update({ klubb_id: FOERSTE_KLUBB_ID })
+      .eq('klubb_id', FOERSTE_KLUBB_ID)
+      .eq('profil_id', PETTER.id)
+    expect(error?.code).toBe('42501')
+  })
 
   // Positiv kontroll i SAMME fil som kolonnevern-testene over: uten den
   // kunne alle fire nektelsene over skyldes en manglende UPDATE-grant på

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { ensureAdmin } from '@/lib/auth'
 import { BASE_URL } from '@/lib/config'
 import { KLUBB_NAVN } from '@/lib/klubb-config'
+import { aktivKlubbId } from '@/lib/klubb-kontekst'
 import { logg } from '@/lib/logg'
 
 function genererPassord() {
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
     email: epost,
     password: passord,
     email_confirm: true,
+    // handle_ny_bruker leser klubb_id herfra og oppretter medlemskapet (#868).
+    app_metadata: { klubb_id: aktivKlubbId() },
   })
 
   if (error) return NextResponse.json({ feil: error.message }, { status: 400 })

@@ -11,7 +11,7 @@ export type UnntaksKlasse = 'rot' | 'global' | 'venter_2_1'
 // i .github/workflows/pr-check.yml (vaktet av migrasjon-klubb-id.test.ts).
 export const KLUBB_ID_UNNTAK = [
   { tabell: 'klubb', klasse: 'rot', begrunnelse: 'Roten selv.' },
-  { tabell: 'profiles', klasse: 'global', begrunnelse: 'Personen er global; rolle og faar_* flyttes til medlemskap i 2.1.', issue: 868 },
+  { tabell: 'profiles', klasse: 'global', begrunnelse: 'Personen er global. rolle/aktiv/faar_*/bursdagsgratulasjon_aktiv er et skrivebeskyttet speil av medlemskap til PR C (#868).', issue: 868 },
   { tabell: 'push_subscriptions', klasse: 'global', begrunnelse: 'Per enhet: samme telefon skal få varsler fra alle klubbene.', issue: 868 },
   { tabell: 'pass_info', klasse: 'global', begrunnelse: 'Passet tilhører personen; klubbkonteksten bor i pass_tilgang_forespørsel.', issue: 868 },
   { tabell: 'varsel_preferanser', klasse: 'venter_2_1', begrunnelse: 'Tilhører medlemskapet; PK byttes i 2.1.', issue: 868 },

@@ -88,7 +88,7 @@ where u.email like '%@klubb.test';
 -- Matallergi-teksten er bevisst en frase med mellomrom, ikke ett ord: den
 -- skal wrappe over to linjer på 390 px og bevise at verdien ikke kappes.
 update public.profiles set
-  navn = 'E2E Admin', visningsnavn = 'E2E-admin', rolle = 'admin',
+  navn = 'E2E Admin', visningsnavn = 'E2E-admin',
   fodselsdato = '1980-03-15',
   telefon = '99 88 77 66',
   matallergier = 'Tåler ikke rå løk, og er allergisk mot skalldyr',
@@ -96,19 +96,26 @@ update public.profiles set
 where id = '00000000-0000-4000-8000-000000000001';
 
 update public.profiles set
-  navn = 'Petter Prøve', visningsnavn = 'Petter', rolle = 'medlem',
+  navn = 'Petter Prøve', visningsnavn = 'Petter',
   fodselsdato = '1985-07-20'
 where id = '00000000-0000-4000-8000-000000000002';
 
 update public.profiles set
-  navn = 'Ola Testesen', visningsnavn = 'Ola', rolle = 'medlem',
+  navn = 'Ola Testesen', visningsnavn = 'Ola',
   fodselsdato = '1990-11-05'
 where id = '00000000-0000-4000-8000-000000000003';
 
 update public.profiles set
-  navn = 'Gunnar General', visningsnavn = 'Gunnar', rolle = 'generalsekretaer',
+  navn = 'Gunnar General', visningsnavn = 'Gunnar',
   fodselsdato = '1978-01-30'
 where id = '00000000-0000-4000-8000-000000000004';
+
+-- Rolle bor på medlemskap (#868); profiles.rolle er et vernet speil og kan
+-- ikke settes direkte. Speilet fører verdien videre til profiles.
+update public.medlemskap set rolle = 'admin'
+where klubb_id = public.standard_klubb_id() and profil_id = '00000000-0000-4000-8000-000000000001';
+update public.medlemskap set rolle = 'generalsekretaer'
+where klubb_id = public.standard_klubb_id() and profil_id = '00000000-0000-4000-8000-000000000004';
 
 -- ─── Arrangementer ───────────────────────────────────────────────────────────
 -- Golden-path trenger minst ett KOMMENDE arrangement på agendaen. Relative
@@ -642,18 +649,27 @@ begin
   select count(*) into antall
   from auth.users u
   join public.profiles p on p.id = u.id
-  where u.email = 'e2e-admin@klubb.test' and p.rolle = 'admin';
+  join public.medlemskap m on m.profil_id = u.id and m.klubb_id = public.standard_klubb_id()
+  where u.email = 'e2e-admin@klubb.test' and m.rolle = 'admin' and m.aktiv;
   if antall <> 1 then
     raise exception 'Seed-verifisering: e2e-admin@klubb.test mangler i auth.users/profiles, eller har ikke admin-rolle.';
   end if;
 
   -- Nøyaktig én generalsekretær (#533-testbrukeren Gunnar). Partial unique
-  -- index profiles_unik_generalsekretaer (mig. 094) ville uansett feilet
-  -- HARDT ved et duplikat — denne sjekken fanger i stedet det MOTSATTE
-  -- feilmodus: at oppdateringen aldri traff (feil id, kolonne omdøpt).
-  select count(*) into antall from public.profiles where rolle = 'generalsekretaer';
+  -- index profiles_unik_generalsekretaer (mig. 094) og medlemskap_unik_generalsekretaer
+  -- (mig. 163) ville uansett feilet HARDT ved et duplikat — denne sjekken fanger
+  -- i stedet det MOTSATTE feilmodus: at oppdateringen aldri traff (feil id,
+  -- kolonne omdøpt).
+  select count(*) into antall from public.medlemskap
+  where klubb_id = public.standard_klubb_id() and rolle = 'generalsekretaer';
   if antall <> 1 then
-    raise exception 'Seed-verifisering: forventet nøyaktig 1 profil med rolle=generalsekretaer (Gunnar General), fant %.', antall;
+    raise exception 'Seed-verifisering: forventet nøyaktig 1 medlemskap med rolle=generalsekretaer (Gunnar General), fant %.', antall;
+  end if;
+
+  -- Speilet profiles <-> medlemskap (#868) må stemme etter seed.
+  select avvik into antall from public.medlemskap_speil_avvik();
+  if antall <> 0 then
+    raise exception 'Seed-verifisering: % profiler avviker fra medlemskap-speilet.', antall;
   end if;
 
   -- Røyktest-fixturene (prefiks 9800): detaljsidene i e2e/sider-laster.spec.ts

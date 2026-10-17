@@ -26,6 +26,7 @@ import {
   lagToppEventTekst,
 } from '@/lib/feil-alarm'
 import { logg } from '@/lib/logg'
+import { sjekkMedlemskapSpeil } from '@/lib/medlemskap-speilvakt'
 
 async function handle(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -34,6 +35,10 @@ async function handle(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+
+  // Speilvakten (#868) FØR tellingen: avviket logges som feil og teller dermed
+  // med i samme alarmkjøring. Kaster aldri, så retention under kjører uansett.
+  await sjekkMedlemskapSpeil(admin)
   const graense24t = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   // ── Tell feil siste 24 timer ──────────────────────────────────────────────

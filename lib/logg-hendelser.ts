@@ -353,10 +353,14 @@ export interface LoggHendelser {
   'kaaringspoll.ukjent_status': true
   /** avslutt_kaaringspoll ga en status koden ikke kjenner i cron; pollen prøves igjen neste kjøring (#521) */
   'cron.paaminne.kaaring.ukjent_status': true
-  /** warn: rolleendring hoppet over fordi gjeldende rolle er generalsekretær eller ikke kunne leses; demotering skjer via fjernGeneralsekretaer() */
+  /** warn: rolleendring hoppet over fordi medlemmet er sittende generalsekretær (RPC oppdater_medlem_admin svarte false); demotering skjer via fjernGeneralsekretaer() */
   'profil.rolle.hoppet': true
   /** warn: oppslaget av nåværende generalsekretær feilet; RPC-ens egen feilmelding vises i stedet */
   'profil.generalsekretaer.oppslag.feilet': true
+  /** speilet profiles <-> medlemskap avviker, eller en 2. klubb har fått medlemskap (fristen for PR C) — fra sjekk-klientfeil (#868) */
+  'medlemskap.speil.avvik': true
+  /** oppslaget av speilvakten (medlemskap_speil_avvik) feilet — vakten er blind (#868) */
+  'medlemskap.speil.oppslag.feilet': true
   /** oppslaget av kompiser til bursdagsbildet feilet; bildet genereres uten medgjester (#641) */
   'bursdagsbilde.medgjester.oppslag_feilet': true
   /** profilbildet til én medgjest kunne ikke hentes; de andre brukes fortsatt (#641) */

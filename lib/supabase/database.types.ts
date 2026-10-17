@@ -1374,6 +1374,57 @@ export type Database = {
           },
         ]
       }
+      medlemskap: {
+        Row: {
+          aktiv: boolean
+          bursdagsgratulasjon_aktiv: boolean
+          faar_feilvarsler: boolean
+          faar_issue_varsler: boolean
+          klubb_id: string
+          oppdatert: string
+          opprettet: string
+          profil_id: string
+          rolle: string
+        }
+        Insert: {
+          aktiv?: boolean
+          bursdagsgratulasjon_aktiv?: boolean
+          faar_feilvarsler?: boolean
+          faar_issue_varsler?: boolean
+          klubb_id?: string
+          oppdatert?: string
+          opprettet?: string
+          profil_id: string
+          rolle?: string
+        }
+        Update: {
+          aktiv?: boolean
+          bursdagsgratulasjon_aktiv?: boolean
+          faar_feilvarsler?: boolean
+          faar_issue_varsler?: boolean
+          klubb_id?: string
+          oppdatert?: string
+          opprettet?: string
+          profil_id?: string
+          rolle?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medlemskap_klubb_id_fkey"
+            columns: ["klubb_id"]
+            isOneToOne: false
+            referencedRelation: "klubb"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medlemskap_profil_id_fkey"
+            columns: ["profil_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       melding_bilder: {
         Row: {
           bilde_url: string
@@ -2634,8 +2685,12 @@ export type Database = {
           vinner_profil_id: string
         }[]
       }
-      er_admin: { Args: never; Returns: boolean }
-      er_generalsekretaer: { Args: never; Returns: boolean }
+      er_admin:
+        | { Args: never; Returns: boolean }
+        | { Args: { p_klubb_id: string }; Returns: boolean }
+      er_generalsekretaer:
+        | { Args: never; Returns: boolean }
+        | { Args: { p_klubb_id: string }; Returns: boolean }
       feil_logg_bucket: { Args: { ts: string }; Returns: string }
       fjern_generalsekretaer: {
         Args: { forventet_profil?: string }
@@ -2684,6 +2739,30 @@ export type Database = {
         }[]
       }
       marker_chat_sett: { Args: never; Returns: undefined }
+      medlemskap_speil_avvik: {
+        Args: never
+        Returns: {
+          avvik: number
+          klubber: number
+        }[]
+      }
+      oppdater_medlem_admin: {
+        Args: {
+          p_aktiv: boolean
+          p_faar_feilvarsler: boolean
+          p_faar_issue_varsler: boolean
+          p_fodselsdato: string
+          p_klubb_id: string
+          p_matallergier: string
+          p_navn: string
+          p_profil_id: string
+          p_rolle: string
+          p_stikkord: string
+          p_telefon: string
+          p_visningsnavn: string
+        }
+        Returns: boolean
+      }
       sett_generalsekretaer: {
         Args: { ny_profil: string }
         Returns: {

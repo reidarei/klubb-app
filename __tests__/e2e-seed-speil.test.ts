@@ -30,10 +30,11 @@ describe('TESTBRUKERE (e2e/helpers/rls-klienter.ts) ↔ seed.sql', () => {
     )?.[1]
     expect(epost).toBe(bruker.epost)
 
-    // Profil-oppdateringen som setter rollen for denne id-en.
+    // Rollen bor på medlemskap (#868): oppdateringen som setter den for denne
+    // id-en. Uten en slik oppdatering står medlemskapets default, 'medlem'.
     const rolle = SEED.split(';')
-      .find(s => /update\s+public\.profiles\s+set/i.test(s) && s.includes(`where id = '${bruker.id}'`))
-      ?.match(/rolle\s*=\s*'(\w+)'/)?.[1]
+      .find(s => /update\s+public\.medlemskap\s+set/i.test(s) && s.includes(`profil_id = '${bruker.id}'`))
+      ?.match(/rolle\s*=\s*'(\w+)'/)?.[1] ?? 'medlem'
     expect(rolle).toBe(bruker.rolle)
   })
 })

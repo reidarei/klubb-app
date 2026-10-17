@@ -727,6 +727,199 @@ jobs:
             exit 1
           fi
 
+      - name: Verifiser medlemskap per klubb
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+
+          -- 1) Speilet stemmer rett etter seed, og bare standardklubben har medlemskap.
+          do $$
+          declare
+            a bigint;
+            k bigint;
+          begin
+            select avvik, klubber into a, k from public.medlemskap_speil_avvik();
+            if a <> 0 or k <> 1 then
+              raise exception 'speil-avvik rett etter seed: avvik=% klubber=%', a, k;
+            end if;
+          end
+          $$;
+
+          -- 2) Paritet mellom kroppene: er_admin()/er_generalsekretaer() og overlasten
+          --    med standard_klubb_id() skal gi samme svar for hver profil.
+          do $$
+          declare
+            ider uuid[];
+            i uuid;
+          begin
+            select array_agg(id) into ider from public.profiles;
+            foreach i in array ider loop
+              perform set_config('request.jwt.claims', json_build_object('sub', i, 'role', 'authenticated')::text, true);
+              set local role authenticated;
+              if public.er_admin() is distinct from public.er_admin(public.standard_klubb_id()) then
+                reset role;
+                raise exception 'er_admin() og er_admin(standard_klubb_id()) er ulike for %', i;
+              end if;
+              if public.er_generalsekretaer() is distinct from public.er_generalsekretaer(public.standard_klubb_id()) then
+                reset role;
+                raise exception 'er_generalsekretaer() og er_generalsekretaer(standard_klubb_id()) er ulike for %', i;
+              end if;
+              reset role;
+            end loop;
+          end
+          $$;
+
+          -- 3) Paritetsbrudd fanges ved commit: trigger slått av, rolle skrevet rett på
+          --    profiles, og de utsatte triggerne tvinges til å kjøre. Gjøres FØR det
+          --    står utsatte hendelser på profiles (alter table feiler da).
+          do $$
+          declare
+            melding text;
+          begin
+            begin
+              alter table public.profiles disable trigger beskytt_profil_kolonner;
+              update public.profiles set rolle = 'admin' where id = '00000000-0000-4000-8000-000000000002';
+              execute 'set constraints all immediate';
+              melding := 'ingen feil';
+            exception when others then
+              melding := sqlerrm;
+            end;
+            if melding not like 'medlemskap.speil.paritet:%' then
+              raise exception 'forventet paritetsbrudd, fikk: %', melding;
+            end if;
+          end
+          $$;
+
+          -- 3b) Flytting av et medlemskap mellom profiler med speiltriggeren av: den
+          --     GAMLE profilen står igjen med foreldet speil og skal fanges (review
+          --     av #868). Y og X er to vanlige medlemmer; X gis først Y sine verdier
+          --     (speilet på), så den nye profilen er i paritet og bare den gamle
+          --     kan utløse bruddet.
+          do $$
+          declare
+            y uuid;
+            x uuid;
+            melding text;
+          begin
+            select profil_id into y from public.medlemskap
+             where klubb_id = '00000000-0000-4000-a000-000000000001' and rolle = 'medlem'
+             order by profil_id limit 1;
+            select profil_id into x from public.medlemskap
+             where klubb_id = '00000000-0000-4000-a000-000000000001' and rolle = 'medlem' and profil_id <> y
+             order by profil_id limit 1;
+            if y is null or x is null then
+              raise exception 'fant ikke to vanlige medlemmer i standardklubben';
+            end if;
+            begin
+              update public.medlemskap m
+                 set (rolle, aktiv, faar_issue_varsler, faar_feilvarsler, bursdagsgratulasjon_aktiv) =
+                     (select rolle, aktiv, faar_issue_varsler, faar_feilvarsler, bursdagsgratulasjon_aktiv
+                        from public.medlemskap
+                       where klubb_id = '00000000-0000-4000-a000-000000000001' and profil_id = y)
+               where m.klubb_id = '00000000-0000-4000-a000-000000000001' and m.profil_id = x;
+              -- Tøm køen av utsatte hendelser, ellers nekter alter table.
+              execute 'set constraints all immediate';
+              alter table public.medlemskap disable trigger medlemskap_speil_til_profiles;
+              execute 'set constraints all deferred';
+              delete from public.medlemskap
+               where klubb_id = '00000000-0000-4000-a000-000000000001' and profil_id = x;
+              update public.medlemskap set profil_id = x
+               where klubb_id = '00000000-0000-4000-a000-000000000001' and profil_id = y;
+              execute 'set constraints all immediate';
+              melding := 'ingen feil';
+            exception when others then
+              melding := sqlerrm;
+            end;
+            execute 'set constraints all deferred';
+            if melding not like 'medlemskap.speil.paritet: profil=' || y || '%' then
+              raise exception 'forventet paritetsbrudd for gammel profil %, fikk: %', y, melding;
+            end if;
+          end
+          $$;
+
+          -- 4) Klubb 2: Petter er admin og Ola generalsekretær der.
+          insert into public.klubb (id, slug, navn)
+            values ('00000000-0000-4000-a000-000000000002', 'proeve', 'Prøveklubben');
+          insert into public.medlemskap (klubb_id, profil_id, rolle) values
+            ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002', 'admin'),
+            ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000003', 'generalsekretaer');
+
+          -- 5) Som Petter: admin bare i klubb 2, og profiles.rolle er urørt.
+          do $$
+          declare
+            rolle_p text;
+          begin
+            perform set_config('request.jwt.claims',
+              json_build_object('sub', '00000000-0000-4000-8000-000000000002', 'role', 'authenticated')::text, true);
+            set local role authenticated;
+            if not public.er_admin('00000000-0000-4000-a000-000000000002') then
+              reset role;
+              raise exception 'Petter skulle vært admin i klubb 2';
+            end if;
+            if public.er_admin() or public.er_admin('00000000-0000-4000-a000-000000000001') then
+              reset role;
+              raise exception 'Petter skal ikke være admin i standardklubben';
+            end if;
+            reset role;
+            select rolle into rolle_p from public.profiles where id = '00000000-0000-4000-8000-000000000002';
+            if rolle_p <> 'medlem' then
+              raise exception 'profiles.rolle for Petter skulle vært medlem, er %', rolle_p;
+            end if;
+          end
+          $$;
+
+          -- 6) GS nr. 2 i standardklubben avvises av den partielle unike indeksen.
+          do $$
+          begin
+            begin
+              update public.medlemskap set rolle = 'generalsekretaer'
+               where klubb_id = '00000000-0000-4000-a000-000000000001'
+                 and profil_id = '00000000-0000-4000-8000-000000000002';
+              raise exception 'forventet 23505, men oppdateringen gikk gjennom';
+            exception when unique_violation then
+              null;
+            end;
+          end
+          $$;
+
+          -- 7) Vernet gjelder også postgres/service_role: direkte skriving av rolle på profiles.
+          do $$
+          declare
+            melding text;
+          begin
+            begin
+              update public.profiles set rolle = 'admin' where id = '00000000-0000-4000-8000-000000000002';
+              melding := 'ingen feil';
+            exception when others then
+              melding := sqlerrm;
+            end;
+            if melding not like 'medlemskap.speil.vern%' then
+              raise exception 'forventet medlemskap.speil.vern, fikk: %', melding;
+            end if;
+          end
+          $$;
+
+          -- 8) Prod-vakten ser den andre klubben.
+          do $$
+          declare
+            k bigint;
+          begin
+            select klubber into k from public.medlemskap_speil_avvik();
+            if k <> 2 then
+              raise exception 'medlemskap_speil_avvik() skulle sett 2 klubber, så %', k;
+            end if;
+          end
+          $$;
+
+          rollback;
+          SQL
+          then
+            echo "::error::Verifiseringen av medlemskap per klubb feilet — se psql-utskriften over."
+            exit 1
+          fi
+
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av
