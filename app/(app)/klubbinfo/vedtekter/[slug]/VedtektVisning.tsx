@@ -41,7 +41,17 @@ export default function VedtektVisning({
     }
     setFeil('')
     startTransition(async () => {
-      await oppdaterVedtekt({ slug: vedtekt.slug, nyttInnhold: innhold, vedtaksdato, endringsnotat })
+      try {
+        await oppdaterVedtekt({ slug: vedtekt.slug, nyttInnhold: innhold, vedtaksdato, endringsnotat })
+      } catch (err) {
+        // redirect() kaster NEXT_REDIRECT; det skal Next få håndtere.
+        const digest = typeof err === 'object' && err !== null && 'digest' in err ? (err as { digest?: unknown }).digest : undefined
+        if (typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT')) throw err
+        // Siden 2.1b (#895) kan databasen avvise lagringen med 23503 (vedtekten hører til en annen klubb).
+        // Vi blir i redigeringsmodus så teksten ikke går tapt.
+        setFeil('Noe gikk galt. Prøv igjen.')
+        return
+      }
       setRedigerer(false)
       setVedtaksdato('')
       setEndringsnotat('')

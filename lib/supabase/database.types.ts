@@ -103,17 +103,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "album_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "album_cover_fk"
-            columns: ["cover_bilde_id"]
+            columns: ["klubb_id", "cover_bilde_id"]
             isOneToOne: false
             referencedRelation: "album_bilde"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "album_klubb_id_fkey"
@@ -128,6 +128,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -171,10 +178,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "album_bilde_album_id_fkey"
-            columns: ["album_id"]
+            columns: ["klubb_id", "album_id"]
             isOneToOne: false
             referencedRelation: "album"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "album_bilde_klubb_id_fkey"
@@ -189,6 +196,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_lastet_opp_av_medlemskap_fkey"
+            columns: ["klubb_id", "lastet_opp_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -226,10 +240,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "album_bilde_chat_album_bilde_id_fkey"
-            columns: ["album_bilde_id"]
+            columns: ["klubb_id", "album_bilde_id"]
             isOneToOne: false
             referencedRelation: "album_bilde"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "album_bilde_chat_klubb_id_fkey"
@@ -244,6 +258,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -272,10 +293,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "album_bilde_reaksjon_bilde_id_fkey"
-            columns: ["bilde_id"]
+            columns: ["klubb_id", "bilde_id"]
             isOneToOne: false
             referencedRelation: "album_bilde"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "album_bilde_reaksjon_klubb_id_fkey"
@@ -290,6 +311,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "album_bilde_reaksjon_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -359,10 +387,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "arrangement_chat_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "arrangement_chat_klubb_id_fkey"
@@ -377,6 +405,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrangement_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -455,6 +490,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrangementer_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -539,11 +581,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "arrangoransvar_ansvarlig_id_medlemskap_fkey"
+            columns: ["klubb_id", "ansvarlig_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "arrangoransvar_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "arrangoransvar_klubb_id_fkey"
@@ -616,6 +665,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bursdagsbilde_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "bursdagsbilde_slettet_av_fkey"
             columns: ["slettet_av"]
             isOneToOne: false
@@ -660,6 +716,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_reaksjoner_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -754,6 +817,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fond_bevegelse_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
         ]
       }
       fond_eiendom: {
@@ -843,6 +913,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fond_innskudd_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
         ]
       }
       fond_kontant: {
@@ -929,6 +1006,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fond_navn_alias_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1055,6 +1139,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "innspill_kobling_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
         ]
       }
       kaaring_vinnere: {
@@ -1100,10 +1191,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "kaaring_vinnere_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "kaaring_vinnere_klubb_id_fkey"
@@ -1114,10 +1205,10 @@ export type Database = {
           },
           {
             foreignKeyName: "kaaring_vinnere_mal_id_fkey"
-            columns: ["mal_id"]
+            columns: ["klubb_id", "mal_id"]
             isOneToOne: false
             referencedRelation: "kaaringmaler"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "kaaring_vinnere_opprettet_av_fkey"
@@ -1127,11 +1218,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "kaaring_vinnere_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "kaaring_vinnere_poll_id_fkey"
-            columns: ["poll_id"]
+            columns: ["klubb_id", "poll_id"]
             isOneToOne: false
             referencedRelation: "poll"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "kaaring_vinnere_profil_id_fkey"
@@ -1139,6 +1237,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kaaring_vinnere_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1217,10 +1322,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "kart_markering_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "kart_markering_klubb_id_fkey"
@@ -1235,6 +1340,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kart_markering_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1339,6 +1451,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "klubb_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1460,10 +1579,10 @@ export type Database = {
           },
           {
             foreignKeyName: "melding_bilder_melding_id_fkey"
-            columns: ["melding_id"]
+            columns: ["klubb_id", "melding_id"]
             isOneToOne: false
             referencedRelation: "meldinger"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
         ]
       }
@@ -1514,10 +1633,10 @@ export type Database = {
           },
           {
             foreignKeyName: "melding_chat_melding_id_fkey"
-            columns: ["melding_id"]
+            columns: ["klubb_id", "melding_id"]
             isOneToOne: false
             referencedRelation: "meldinger"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "melding_chat_profil_id_fkey"
@@ -1525,6 +1644,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "melding_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1560,10 +1686,10 @@ export type Database = {
           },
           {
             foreignKeyName: "melding_reaksjon_melding_id_fkey"
-            columns: ["melding_id"]
+            columns: ["klubb_id", "melding_id"]
             isOneToOne: false
             referencedRelation: "meldinger"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "melding_reaksjon_profil_id_fkey"
@@ -1571,6 +1697,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "melding_reaksjon_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1620,10 +1753,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meldinger_album_id_fkey"
-            columns: ["album_id"]
+            columns: ["klubb_id", "album_id"]
             isOneToOne: false
             referencedRelation: "album"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "meldinger_klubb_id_fkey"
@@ -1638,6 +1771,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meldinger_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1666,10 +1806,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "paameldinger_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "paameldinger_klubb_id_fkey"
@@ -1684,6 +1824,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paameldinger_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1759,10 +1906,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pass_tilgang_forespørsel_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "pass_tilgang_forespørsel_besluttet_av_fkey"
@@ -1779,6 +1926,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pass_tilgang_forespørsel_eier_id_medlemskap_fkey"
+            columns: ["klubb_id", "eier_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "pass_tilgang_forespørsel_klubb_id_fkey"
             columns: ["klubb_id"]
             isOneToOne: false
@@ -1791,6 +1945,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pass_tilgang_forespørsel_soker_id_medlemskap_fkey"
+            columns: ["klubb_id", "soker_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1852,17 +2013,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "poll_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_kaaring_mal_id_fkey"
-            columns: ["kaaring_mal_id"]
+            columns: ["klubb_id", "kaaring_mal_id"]
             isOneToOne: false
             referencedRelation: "kaaringmaler"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_klubb_id_fkey"
@@ -1877,6 +2038,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1921,10 +2089,10 @@ export type Database = {
           },
           {
             foreignKeyName: "poll_chat_poll_id_fkey"
-            columns: ["poll_id"]
+            columns: ["klubb_id", "poll_id"]
             isOneToOne: false
             referencedRelation: "poll"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_chat_profil_id_fkey"
@@ -1932,6 +2100,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -1967,10 +2142,10 @@ export type Database = {
           },
           {
             foreignKeyName: "poll_stemme_poll_id_fkey"
-            columns: ["poll_id"]
+            columns: ["klubb_id", "poll_id"]
             isOneToOne: false
             referencedRelation: "poll"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_stemme_profil_id_fkey"
@@ -1980,11 +2155,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "poll_stemme_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "poll_stemme_valg_id_fkey"
-            columns: ["valg_id"]
+            columns: ["klubb_id", "valg_id"]
             isOneToOne: false
             referencedRelation: "poll_valg"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
         ]
       }
@@ -2029,17 +2211,17 @@ export type Database = {
           },
           {
             foreignKeyName: "poll_valg_poll_id_fkey"
-            columns: ["poll_id"]
+            columns: ["klubb_id", "poll_id"]
             isOneToOne: false
             referencedRelation: "poll"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_valg_referanse_arrangement_id_fkey"
-            columns: ["referanse_arrangement_id"]
+            columns: ["klubb_id", "referanse_arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "poll_valg_referanse_profil_id_fkey"
@@ -2047,6 +2229,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_valg_referanse_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "referanse_profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -2127,10 +2316,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "posisjon_punkt_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "posisjon_punkt_klubb_id_fkey"
@@ -2291,11 +2480,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "samtale_profil_a_medlemskap_fkey"
+            columns: ["klubb_id", "profil_a"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "samtale_profil_b_fkey"
             columns: ["profil_b"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "samtale_profil_b_medlemskap_fkey"
+            columns: ["klubb_id", "profil_b"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -2349,11 +2552,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "samtale_chat_profil_id_medlemskap_fkey"
+            columns: ["klubb_id", "profil_id"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
+          },
+          {
             foreignKeyName: "samtale_chat_samtale_id_fkey"
-            columns: ["samtale_id"]
+            columns: ["klubb_id", "samtale_id"]
             isOneToOne: false
             referencedRelation: "samtale"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
         ]
       }
@@ -2397,10 +2607,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "timeplan_post_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "timeplan_post_klubb_id_fkey"
@@ -2415,6 +2625,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timeplan_post_opprettet_av_medlemskap_fkey"
+            columns: ["klubb_id", "opprettet_av"]
+            isOneToOne: false
+            referencedRelation: "medlemskap"
+            referencedColumns: ["klubb_id", "profil_id"]
           },
         ]
       }
@@ -2515,10 +2732,10 @@ export type Database = {
           },
           {
             foreignKeyName: "varsel_logg_arrangement_id_fkey"
-            columns: ["arrangement_id"]
+            columns: ["klubb_id", "arrangement_id"]
             isOneToOne: false
             referencedRelation: "arrangementer"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
           {
             foreignKeyName: "varsel_logg_klubb_id_fkey"
@@ -2529,10 +2746,10 @@ export type Database = {
           },
           {
             foreignKeyName: "varsel_logg_poll_id_fkey"
-            columns: ["poll_id"]
+            columns: ["klubb_id", "poll_id"]
             isOneToOne: false
             referencedRelation: "poll"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
         ]
       }
@@ -2668,10 +2885,10 @@ export type Database = {
           },
           {
             foreignKeyName: "vedtekter_versjoner_vedtekt_id_fkey"
-            columns: ["vedtekt_id"]
+            columns: ["klubb_id", "vedtekt_id"]
             isOneToOne: false
             referencedRelation: "vedtekter"
-            referencedColumns: ["id"]
+            referencedColumns: ["klubb_id", "id"]
           },
         ]
       }

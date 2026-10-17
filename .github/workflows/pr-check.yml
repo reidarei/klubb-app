@@ -663,8 +663,10 @@ jobs:
       # ikke parsbare for dette (nøkler kan lages i do $$), så vakten leser
       # pg_index. Hver unik indeks (PK, unique, unique index) på en tabell med
       # klubb_id må enten (a) ha klubb_id som FØRSTE nøkkelkolonne, (b) være
-      # surrogat (én kolonne som heter id), eller (c) ha en enkeltkolonne som er
-      # FK til en klubbeid forelder (klubben følger forelderen). Ingen
+      # surrogat (én kolonne som heter id), eller (c) ha en kolonne som er FK til
+      # en klubbeid forelder (klubben følger forelderen): enten en enkeltkolonne,
+      # eller — etter 2.1b (#895) — en sammensatt FK (klubb_id, kol) mot
+      # forelder(klubb_id, id), der kolonnen inngår sammen med klubb_id. Ingen
       # unntaksliste. klubb_id lenger ut i nøkkelen eller som INCLUDE-kolonne er
       # rødt: kun nøkkelkolonnene (indkey[0 .. indnkeyatts-1]) telles.
       - name: Verifiser unike nøkler per klubb
@@ -705,9 +707,19 @@ jobs:
                 n_surrogat := n_surrogat + 1;
               elsif exists (
                 select 1 from unnest(r.kolonner) as k(attnum)
-                join pg_constraint fk on fk.contype = 'f' and fk.conrelid = r.indrelid and fk.conkey = array[k.attnum]
+                join pg_constraint fk on fk.contype = 'f' and fk.conrelid = r.indrelid
                 join pg_attribute fa on fa.attrelid = fk.confrelid and fa.attname = 'klubb_id' and not fa.attisdropped
                 where k.attnum > 0
+                  and (fk.conkey = array[k.attnum]
+                       -- Sammensatt FK: sammenlign de ORDNEDE kolonneparene (barn → forelder),
+                       -- ikke mengdene — (k, klubb_id) → (klubb_id, id) er koblet feil og skal
+                       -- ikke telle (review av #895). Krever klubb_id → klubb_id og k → en
+                       -- annen forelderkolonne enn klubb_id.
+                       or (cardinality(fk.conkey) = 2
+                           and exists (select 1 from unnest(fk.conkey, fk.confkey) as p(barn, forelder)
+                                        where p.barn = r.klubb_attnum and p.forelder = fa.attnum)
+                           and exists (select 1 from unnest(fk.conkey, fk.confkey) as p(barn, forelder)
+                                        where p.barn = k.attnum and p.forelder <> fa.attnum)))
               ) then
                 n_forelder := n_forelder + 1;
               else
@@ -794,24 +806,22 @@ jobs:
 
           -- 3b) Flytting av et medlemskap mellom profiler med speiltriggeren av: den
           --     GAMLE profilen står igjen med foreldet speil og skal fanges (review
-          --     av #868). Y og X er to vanlige medlemmer; X gis først Y sine verdier
-          --     (speilet på), så den nye profilen er i paritet og bare den gamle
-          --     kan utløse bruddet.
+          --     av #868). Y og X er to midlertidige brukere UTEN innhold (siden 2.1b,
+          --     #895, ville sletting av et medlemskap med innhold gitt 23503 i
+          --     stedet for paritetsmeldingen); handle_ny_bruker gir dem profil +
+          --     medlemskap. X gis først Y sine verdier (speilet på), så den nye
+          --     profilen er i paritet og bare den gamle kan utløse bruddet.
           do $$
           declare
             y uuid;
             x uuid;
             melding text;
           begin
-            select profil_id into y from public.medlemskap
-             where klubb_id = '00000000-0000-4000-a000-000000000001' and rolle = 'medlem'
-             order by profil_id limit 1;
-            select profil_id into x from public.medlemskap
-             where klubb_id = '00000000-0000-4000-a000-000000000001' and rolle = 'medlem' and profil_id <> y
-             order by profil_id limit 1;
-            if y is null or x is null then
-              raise exception 'fant ikke to vanlige medlemmer i standardklubben';
-            end if;
+            y := '00000000-0000-4000-8000-00000000fb01';
+            x := '00000000-0000-4000-8000-00000000fb02';
+            insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+            values (y, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'speil-y@x.test', '{}', '{}', now(), now()),
+                   (x, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'speil-x@x.test', '{}', '{}', now(), now());
             begin
               update public.medlemskap m
                  set (rolle, aktiv, faar_issue_varsler, faar_feilvarsler, bursdagsgratulasjon_aktiv) =
@@ -931,6 +941,233 @@ jobs:
           SQL
           then
             echo "::error::Verifiseringen av medlemskap per klubb feilet — se psql-utskriften over."
+            exit 1
+          fi
+
+      # Multi-tenant 2.1b (#895): sammensatte fremmednøkler. Katalogsjekken er
+      # vakten mot at en ny FK mellom klubbeide tabeller glemmer klubb_id, eller
+      # at en ny profilkolonne glemmer medlemskap-FK-en; resten beviser at
+      # databasen faktisk gjør det migrasjon 165 lover (avvisning, set null med
+      # kolonneliste, omnummerering, profilsletting). Alt i én transaksjon som
+      # rulles tilbake. Unntakslista «bare personen» speiler PROFIL_FK_BARE_PERSON
+      # i __tests__/helpers/klubb-tabeller.ts (vaktet av migrasjon-165.test.ts).
+      - name: Verifiser sammensatte fremmednøkler
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+
+          -- 1) Katalogsjekk.
+          do $$
+          declare
+            r record;
+            avvik text[] := '{}';
+            bare_person constant text[] := array[
+              'pass_tilgang_forespørsel.besluttet_av', 'bursdagsbilde.slettet_av', 'feil_logg.profil_id',
+              'fond_navn_alias.opprettet_av', 'fond_verdi_historikk.endret_av', 'vedtekter_versjoner.endret_av',
+              'varsel_logg.profil_id', 'push_subscriptions.profil_id', 'pass_info.profil_id', 'medlemskap.profil_id'
+            ];
+          begin
+            -- a) Hver FK mellom to tabeller med klubb_id (unntatt mot klubb selv) kobler barnets
+            --    klubb_id til forelderens klubb_id i samme posisjon, og ingen annen kolonne
+            --    kobles til eller fra klubb_id. Kolonneparene sammenlignes ordnet — å bare
+            --    sjekke at klubb_id står et sted i conkey og confkey slapp gjennom
+            --    (forelder_id, klubb_id) → (klubb_id, id) (review av #895).
+            for r in
+              select c.conname::text as navn, (select relname::text from pg_class where oid = c.conrelid) as barn
+              from pg_constraint c
+              join pg_attribute ba on ba.attrelid = c.conrelid and ba.attname = 'klubb_id' and not ba.attisdropped
+              join pg_attribute fa on fa.attrelid = c.confrelid and fa.attname = 'klubb_id' and not fa.attisdropped
+              where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+                and c.confrelid <> 'public.klubb'::regclass
+                and (
+                  not exists (select 1 from unnest(c.conkey, c.confkey) as p(barn, forelder)
+                               where p.barn = ba.attnum and p.forelder = fa.attnum)
+                  or exists (select 1 from unnest(c.conkey, c.confkey) as p(barn, forelder)
+                              where (p.barn = ba.attnum) <> (p.forelder = fa.attnum))
+                )
+              order by 2, 1
+            loop
+              avvik := avvik || (r.barn || '.' || r.navn || ': FK mellom klubbeide tabeller kobler ikke klubb_id → klubb_id (sjekk kolonnerekkefølgen)');
+            end loop;
+
+            -- b) Hver FK fra en klubbeid tabell til profiles har en medlemskap-FK på samme kolonne, med mindre kolonnen er «bare personen».
+            for r in
+              select (select relname::text from pg_class where oid = c.conrelid) as barn, a.attname::text as kol,
+                     ba.attnum as klubb_attnum, a.attnum as kol_attnum, c.conrelid
+              from pg_constraint c
+              join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+              join pg_attribute ba on ba.attrelid = c.conrelid and ba.attname = 'klubb_id' and not ba.attisdropped
+              where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+                and c.confrelid = 'public.profiles'::regclass and cardinality(c.conkey) = 1
+              order by 1, 2
+            loop
+              if (r.barn || '.' || r.kol) = any (bare_person) then
+                continue;
+              end if;
+              if not exists (
+                select 1 from pg_constraint m
+                where m.contype = 'f' and m.conrelid = r.conrelid
+                  and m.confrelid = 'public.medlemskap'::regclass
+                  -- Ordnede par, ikke bare conkey: klubb_id → medlemskap.klubb_id og
+                  -- kolonnen → medlemskap.profil_id (review av #895).
+                  and cardinality(m.conkey) = 2
+                  and exists (select 1 from unnest(m.conkey, m.confkey) as p(barn, forelder)
+                               where p.barn = r.klubb_attnum
+                                 and p.forelder = (select attnum from pg_attribute where attrelid = 'public.medlemskap'::regclass and attname = 'klubb_id'))
+                  and exists (select 1 from unnest(m.conkey, m.confkey) as p(barn, forelder)
+                               where p.barn = r.kol_attnum
+                                 and p.forelder = (select attnum from pg_attribute where attrelid = 'public.medlemskap'::regclass and attname = 'profil_id'))
+              ) then
+                avvik := avvik || (r.barn || '.' || r.kol || ': FK mot profiles uten medlemskap-FK (legg til, eller før kolonnen på PROFIL_FK_BARE_PERSON)');
+              end if;
+            end loop;
+
+            -- Unntakslista skal ikke inneholde kolonner som ikke finnes (foreldet unntak).
+            for r in
+              select u.navn from unnest(bare_person) as u(navn)
+              where not exists (
+                select 1 from pg_constraint c
+                join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+                where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+                  and c.confrelid = 'public.profiles'::regclass and cardinality(c.conkey) = 1
+                  and (select relname::text from pg_class where oid = c.conrelid) || '.' || a.attname = u.navn
+              )
+            loop
+              avvik := avvik || (r.navn || ': står på «bare personen»-lista, men er ikke en FK mot profiles');
+            end loop;
+
+            if cardinality(avvik) > 0 then
+              raise exception 'FK-avvik: %', array_to_string(avvik, E'\n  ');
+            end if;
+          end
+          $$;
+
+          -- 2) Klubb 2 med Petter som medlem. Barn i klubb 2 mot forelder i klubb 1 avvises av riktig FK.
+          insert into public.klubb (id, slug, navn)
+            values ('00000000-0000-4000-a000-000000000002', 'fk-prove', 'FK-prøveklubben');
+          insert into public.medlemskap (klubb_id, profil_id)
+            values ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002');
+
+          do $$
+          declare
+            arr uuid;
+            navn text;
+          begin
+            select id into arr from public.arrangementer
+             where klubb_id = '00000000-0000-4000-a000-000000000001' limit 1;
+            if arr is null then
+              raise exception 'fant ingen arrangement i standardklubben';
+            end if;
+
+            -- Forelder i annen klubb.
+            begin
+              insert into public.arrangement_chat (klubb_id, arrangement_id, profil_id, innhold)
+              values ('00000000-0000-4000-a000-000000000002', arr, '00000000-0000-4000-8000-000000000002', 'hei');
+              raise exception 'forventet 23503 for chatmelding i klubb 2 mot arrangement i klubb 1';
+            exception when foreign_key_violation then
+              get stacked diagnostics navn = constraint_name;
+              if navn <> 'arrangement_chat_arrangement_id_fkey' then
+                raise exception 'feil FK avviste kryssklubb-chatmeldingen: %', navn;
+              end if;
+            end;
+
+            -- Profil uten medlemskap i klubben (Ola har bare medlemskap i klubb 1).
+            begin
+              insert into public.klubb_chat (klubb_id, profil_id, innhold)
+              values ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000003', 'hei');
+              raise exception 'forventet 23503 for klubb_chat uten medlemskap i klubben';
+            exception when foreign_key_violation then
+              get stacked diagnostics navn = constraint_name;
+              if navn <> 'klubb_chat_profil_id_medlemskap_fkey' then
+                raise exception 'feil FK avviste raden uten medlemskap: %', navn;
+              end if;
+            end;
+
+            -- Kontroll: samme slags rad i riktig klubb går gjennom.
+            insert into public.klubb_chat (klubb_id, profil_id, innhold)
+            values ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002', 'hei');
+          end
+          $$;
+
+          -- 3) on delete set null med kolonneliste: forelderen slettes, klubb_id står.
+          do $$
+          declare
+            arr uuid;
+            pid uuid;
+            ark uuid;
+            k_id uuid;
+          begin
+            insert into public.arrangementer (tittel, type, start_tidspunkt, opprettet_av)
+            values ('fk-prøve', 'moete', now(), '00000000-0000-4000-8000-000000000002')
+            returning id into arr;
+            insert into public.poll (spoersmaal, svarfrist, opprettet_av, arrangement_id)
+            values ('fk-prøve?', now() + interval '1 day', '00000000-0000-4000-8000-000000000002', arr)
+            returning id into pid;
+            delete from public.arrangementer where id = arr;
+            select arrangement_id, klubb_id into ark, k_id from public.poll where id = pid;
+            if ark is not null then
+              raise exception 'poll.arrangement_id skulle vært null etter sletting av arrangementet';
+            end if;
+            if k_id is distinct from '00000000-0000-4000-a000-000000000001'::uuid then
+              raise exception 'poll.klubb_id skulle stått urørt, er %', k_id;
+            end if;
+          end
+          $$;
+
+          -- 4) Omnummerering av klubben går gjennom alle FK-ene (on update cascade).
+          savepoint omnummerering;
+          update public.klubb set id = gen_random_uuid() where id = '00000000-0000-4000-a000-000000000001';
+          rollback to savepoint omnummerering;
+
+          -- 5) Profilsletting: en auth-bruker med innhold i klubben forsvinner uten feil.
+          insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+          values ('00000000-0000-4000-8000-00000000fa01', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+                  'fk-prove-1@x.test', '{}', '{}', now(), now());
+          do $$
+          declare
+            arr uuid;
+            u constant uuid := '00000000-0000-4000-8000-00000000fa01';
+          begin
+            select id into arr from public.arrangementer
+             where klubb_id = '00000000-0000-4000-a000-000000000001' limit 1;
+            insert into public.arrangementer (tittel, type, start_tidspunkt, opprettet_av)
+              values ('fk-prøve 2', 'moete', now(), u);
+            -- Skaperen påmeldes av en trigger på arrangementer; på conflict gjør raden uavhengig av det.
+            insert into public.paameldinger (arrangement_id, profil_id, status) values (arr, u, 'ja') on conflict do nothing;
+            insert into public.klubb_chat (profil_id, innhold) values (u, 'hei');
+            insert into public.arrangement_chat (arrangement_id, profil_id, innhold) values (arr, u, 'hei');
+            delete from auth.users where id = u;
+            if exists (select 1 from public.profiles where id = u)
+               or exists (select 1 from public.medlemskap where profil_id = u)
+               or exists (select 1 from public.paameldinger where profil_id = u)
+               or exists (select 1 from public.klubb_chat where profil_id = u) then
+              raise exception 'sletting av auth-brukeren skulle fjernet profil, medlemskap og innhold';
+            end if;
+          end
+          $$;
+
+          -- 6) Medlemskapet kan ikke slettes alene mens personen har innhold i klubben.
+          insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+          values ('00000000-0000-4000-8000-00000000fa02', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+                  'fk-prove-2@x.test', '{}', '{}', now(), now());
+          insert into public.klubb_chat (profil_id, innhold) values ('00000000-0000-4000-8000-00000000fa02', 'hei');
+          do $$
+          begin
+            begin
+              delete from public.medlemskap where profil_id = '00000000-0000-4000-8000-00000000fa02';
+              raise exception 'forventet 23503 ved sletting av medlemskap med innhold';
+            exception when foreign_key_violation then
+              null;
+            end;
+          end
+          $$;
+
+          rollback;
+          SQL
+          then
+            echo "::error::Verifiseringen av sammensatte fremmednøkler feilet — se psql-utskriften over."
             exit 1
           fi
 

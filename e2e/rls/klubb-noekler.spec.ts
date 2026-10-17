@@ -8,8 +8,11 @@ import { FOERSTE_KLUBB_ID } from '../helpers/klubb'
 // nøkkel i klubb A (den første) og klubb B skal gå gjennom for begge; innenfor
 // én klubb skal den fortsatt gi 23505 (dedup-doktrinen i CLAUDE.md § Policy: Varsler).
 //
-// Alt går via service_role: klubb B har ingen medlemmer før 2.1, og RLS er ikke
-// tema her — nøklene er. Klientene er utypede, så klubb_id typesjekker uansett typer.
+// Alt går via service_role: RLS er ikke tema her — nøklene er. Klientene er utypede,
+// så klubb_id typesjekker uansett typer.
+//
+// Siden 2.1b (#895) krever hver profilkolonne et medlemskap i radens klubb (sammensatt
+// FK mot medlemskap), så PETTER, OLA og GUNNAR gis medlemskap i klubb B i beforeAll.
 
 test.describe('unike nøkler per klubb (#867)', () => {
   test.skip(!harRlsMiljo(), 'E2E_SUPABASE_* mangler — se docs/test-instans.md')
@@ -28,11 +31,15 @@ test.describe('unike nøkler per klubb (#867)', () => {
     const { data, error } = await service.from('klubb').insert({ slug: merke, navn: 'E2E B' }).select('id').single()
     if (error) throw new Error(`Kunne ikke opprette klubb B: ${error.message}`)
     klubbB = data.id
+    const medlemskap = await service.from('medlemskap').insert(
+      [TESTBRUKERE.PETTER, TESTBRUKERE.OLA, TESTBRUKERE.GUNNAR].map(b => ({ klubb_id: klubbB, profil_id: b.id })),
+    )
+    if (medlemskap.error) throw new Error(`Kunne ikke gi medlemskap i klubb B: ${medlemskap.error.message}`)
   })
 
   test.afterAll(async () => {
     if (!service) return
-    // Ryddes i rekkefølge: først radene med merke (begge klubber), så klubb B.
+    // Ryddes i rekkefølge: først radene med merke (begge klubber), så medlemskapene i B, så klubb B.
     const slett = async (tabell: string, kolonne: string, verdi: string, like = false) => {
       const q = service.from(tabell).delete()
       const { error } = await (like ? q.like(kolonne, verdi) : q.eq(kolonne, verdi))
@@ -47,6 +54,8 @@ test.describe('unike nøkler per klubb (#867)', () => {
     await slett('samtale', 'klubb_id', klubbB)
     await slett('klubb_info', 'klubb_id', klubbB)
     await slett('fond_kontant', 'klubb_id', klubbB)
+    // Medlemskapene til slutt (varselvalg følger med via cascade), etter alle rader som peker på dem.
+    await slett('medlemskap', 'klubb_id', klubbB)
     if (klubbB) {
       const { error } = await service.from('klubb').delete().eq('id', klubbB)
       expect(error, 'sletting av klubb B').toBeNull()

@@ -95,10 +95,9 @@ export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = [
   'vitals_logg',
 ]
 
-// FK mot klubb uten indeks med klubb_id først. Barne-indekser kommer i 2.1b (#895),
-// 2.3 og 6.2 (#886). Nye tabeller FÅR legges hit (synlig, kjent liste).
+// FK mot klubb uten indeks med klubb_id først. 2.1b (#895) ga album_bilde, kaaringmaler og
+// poll_valg en (klubb_id, id)-nøkkel; resten venter på 2.3 og 6.2 (#886). Nye tabeller FÅR legges hit (synlig, kjent liste).
 export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
-  'album_bilde',
   'album_bilde_chat',
   'album_bilde_reaksjon',
   'arrangement_chat',
@@ -108,7 +107,6 @@ export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
   'fond_innskudd',
   'fond_verdi_historikk',
   'fond_verdipapir',
-  'kaaringmaler',
   'melding_bilder',
   'melding_chat',
   'melding_reaksjon',
@@ -116,10 +114,40 @@ export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
   'pass_tilgang_forespørsel',
   'poll_chat',
   'poll_stemme',
-  'poll_valg',
   'posisjon_punkt',
   'samtale_chat',
   'timeplan_post',
   'varsel_logg',
   'vedtekter_versjoner',
 ]
+
+// Forelder-tabellene som fikk unique (klubb_id, id) i mig. 165 (#895): mål for de 30
+// sammensatte FK-ene (klubb_id, x) → forelder(klubb_id, id).
+export const FORELDRE_MED_KLUBB_NOEKKEL = [
+  'arrangementer',
+  'poll',
+  'album_bilde',
+  'meldinger',
+  'kaaringmaler',
+  'album',
+  'samtale',
+  'poll_valg',
+  'vedtekter',
+] as const
+
+// Profilkolonner på klubbeide tabeller som BEVISST ikke har FK mot medlemskap(klubb_id, profil_id):
+// de peker på personen (hvem som handlet), ikke på medlemskapet raden tilhører.
+// Speilet i unntakslista i steget «Verifiser sammensatte fremmednøkler» i pr-check.yml (vaktet av migrasjon-165.test.ts).
+// En NY profilkolonne der personen deltar i klubben skal ha medlemskap-FK; ellers føres den hit.
+export const PROFIL_FK_BARE_PERSON = [
+  { kolonne: 'pass_tilgang_forespørsel.besluttet_av', begrunnelse: 'Hvem som avgjorde forespørselen; kan ha forlatt klubben.' },
+  { kolonne: 'bursdagsbilde.slettet_av', begrunnelse: 'Hvem som slettet bildet; en historikkmarkør.' },
+  { kolonne: 'feil_logg.profil_id', begrunnelse: 'Drifts-logg; klubb_id er nullable og raden skal overleve medlemskapet.' },
+  { kolonne: 'fond_navn_alias.opprettet_av', begrunnelse: 'Hvem som la inn aliaset; en historikkmarkør.' },
+  { kolonne: 'fond_verdi_historikk.endret_av', begrunnelse: 'Hvem som endret verdien; en historikkmarkør.' },
+  { kolonne: 'vedtekter_versjoner.endret_av', begrunnelse: 'Hvem som endret vedtekten; en historikkmarkør.' },
+  { kolonne: 'varsel_logg.profil_id', begrunnelse: 'Innboksen: raden skal overleve at medlemskapet avsluttes.' },
+  { kolonne: 'push_subscriptions.profil_id', begrunnelse: 'Per enhet, ikke per klubb (global tabell).' },
+  { kolonne: 'pass_info.profil_id', begrunnelse: 'Passet tilhører personen (global tabell).' },
+  { kolonne: 'medlemskap.profil_id', begrunnelse: 'Selve medlemskapet; FK mot profiles er rota.' },
+] as const
