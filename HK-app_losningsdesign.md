@@ -48,7 +48,9 @@ create table profiles (
 
 **Trigger:** `on auth.users insert` → opprett rad i `profiles` med `id`, `epost` fra auth-bruker, og `rolle = 'medlem'`.
 
-**Merknad:** `aktiv = false` brukes for dævve medlemmer (UC-2.2). De kan ikke logge inn, men historiske data beholdes.
+**Merknad:** `aktiv = false` brukes for inaktive medlemmer. De kan ikke logge inn, men historiske data beholdes.
+
+**Fra migrasjon 163 er `rolle`, `aktiv`, `faar_issue_varsler`, `faar_feilvarsler` og `bursdagsgratulasjon_aktiv` et enveis speil av `medlemskap`** (§ 2.12): vernet på verdi, paritetssjekket ved commit og skrivbart kun via `medlemskap`. Speilet fjernes når flere klubber blir aktive.
 
 ### 2.2 arrangementer
 
@@ -293,6 +295,22 @@ Ingen unntaksliste: en nøkkel som ikke passer a–c er rød. `chat_reaksjoner` 
 
 **Dedup-doktrinen** i CLAUDE.md § Policy: Varsler gjelder uendret innenfor én klubb: indeksen er `(klubb_id, dedup_noekkel, profil_id)`, så navnerom-prefikset skal ikke bære klubben.
 
+### 2.12 medlemskap
+
+Multi-tenant steg 2.1a. Migrasjon 163.
+
+**Skjema:** `medlemskap (klubb_id, profil_id)` er primærnøkkel; `rolle` (`medlem`/`admin`/`generalsekretaer`), `aktiv` og de tre admin-styrte flaggene `faar_issue_varsler`, `faar_feilvarsler`, `bursdagsgratulasjon_aktiv` bor her, per klubb. FK til `profiles` heter `medlemskap_profil_id_fkey`. Partial unik indeks `medlemskap_unik_generalsekretaer (klubb_id) where rolle = 'generalsekretaer'`: maks én generalsekretær per klubb.
+
+**RLS og grants:** `authenticated` har `select` og en KOLONNE-grant på `update` (de fem kolonnene + `oppdatert`), aldri tabellnivå, så `klubb_id`/`profil_id` kan ikke flyttes fra klienten. Select: egen klubb og `aktiv`, men admin ser også inaktive (en UPDATE må la den nye raden passere select-policyen, ellers feiler deaktivering). Update: admin-sjekk. Ingen insert/delete-policy: rader opprettes av en trigger når nye brukere registreres.
+
+**Speil, vern, paritet** (mens én klubb er aktiv): En trigger skriver de fem kolonnene til `profiles` for én klubb. En avvisnings-constraint avviser enhver direkte endring av dem på `profiles` som ikke er lik medlemskapet. Constraint triggers sjekker ved commit at begge sider stemmer.
+
+**Rollefunksjoner:** `er_admin()` / `er_admin(klubb_id)` og `er_generalsekretaer()` / `er_generalsekretaer(klubb_id)` leser `medlemskap` og krever `aktiv`.
+
+**Admin-redigering:** RPC-er for oppdatering av medlemskapet skriver profilfeltene og medlemskapet i én transaksjon.
+
+**Kode:** `aktivKlubbId()` i `lib/klubb-kontekst.ts` er kontrakten for innloggede forespørsler. `ensure*()` og `getProfil()` leser rolle fra `medlemskap`.
+
 ---
 
 ## 3. RLS-policyer
@@ -314,6 +332,7 @@ $$ language sql security definer stable;
 | Tabell | SELECT | INSERT | UPDATE | DELETE |
 |--------|--------|--------|--------|--------|
 | **profiles** | Alle aktive brukere | Ingen (trigger) | Egen profil ELLER admin | Ingen (bruk `aktiv = false`) |
+| **medlemskap** | Egen klubb og `aktiv` (admin ser også inaktive) | Ingen (trigger) | Admin | Ingen |
 | **arrangementer** | Alle | Alle | Eier ELLER admin | Eier ELLER admin |
 | **paameldinger** | Alle | Egen rad | Egen rad | Egen rad |
 | **arrangoransvar** | Alle | Admin | Admin | Admin |

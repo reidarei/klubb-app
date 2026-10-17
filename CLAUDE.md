@@ -213,9 +213,15 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 
 **Pass-tilgang er generalsekretær-only, ikke admin.** Appen lover medlemmene at «generalsekretæren må godkjenne» dagstilgang til sensitive data — varselet om ny forespørsel går kun til ham, og avslagsteksten navngir ham. Regelen som er etablert: **når appen gir medlemmene et løfte om hvem som håndterer sensitive data, følger koden løftet — vi skriver ikke om løftet for å matche en implementasjon som har glidd.** `ensureGodkjennerPassTilgang()` i `lib/auth.ts` + `er_generalsekretaer()` i RLS.
 
-**Innspill-varsler og feilvarsler er IKKE rollestyrt:** hvem som mottar hvilket varsel styres av to uavhengige kolonner, begge admin-styrt per medlem via RedigerMedlemSkjema — `profiles.faar_issue_varsler` for varsel om nye innspill (migrasjon 104) og `profiles.faar_feilvarsler` for den daglige klientfeil-alarmen (migrasjon 123). De to formålene delte opprinnelig én kolonne; skilt fordi innspill er dialog med medlemmene og feilalarmen er drift. Mottaker-spørringer filtrerer på riktig kolonne (`.eq('faar_issue_varsler', true)` hhv. `.eq('faar_feilvarsler', true)`) — aldri på rolle.
+**Innspill-varsler og feilvarsler er IKKE rollestyrt:** hvem som mottar hvilket varsel styres av to uavhengige kolonner, begge admin-styrt per medlem via RedigerMedlemSkjema — `faar_issue_varsler` for varsel om nye innspill og `faar_feilvarsler` for den daglige klientfeil-alarmen. De to formålene delte opprinnelig én kolonne; skilt fordi innspill er dialog med medlemmene og feilalarmen er drift. Mottaker-spørringer filtrerer på riktig kolonne (`.eq('faar_issue_varsler', true)` hhv. `.eq('faar_feilvarsler', true)`) — aldri på rolle. Fra migrasjon 163 skrives disse kolonnene på `medlemskap` (se under).
 
 **Koblingen mellom et innspill-issue og medlemmet som sendte det inn bor i `innspill_kobling`, ikke i issue-teksten.** Den lå tidligere kun som en HTML-kommentar i bodyen, og forsvant sporløst hver gang teksten ble redigert — noe som skjer rutinemessig når et ønske utvides. Utfallet var at medlemmet verken fikk varsel om at ønsket var levert eller så det på innspill-listen, mens systemet svarte 200 og tegnet grønn hake. **Enhver ny sti som oppretter et innspill-issue MÅ skrive en rad i `innspill_kobling`.** Markøren i body er nå *fallback* for issues opprettet før tabellen introdusert, ikke sannhet — ikke bygg ny logikk på den. Et issue uten rad som er opprettet etter at tabellen ble introdusert regnes som ikke-fra-appen; dato-grensen brukes bevisst i stedet for å tolke overskriften i teksten, fordi den overskriften også skrives for hånd.
+
+**Medlemskap (#868, migrasjon 163):** rolle, `aktiv` og flaggene `faar_issue_varsler`/`faar_feilvarsler`/`bursdagsgratulasjon_aktiv` bor på `medlemskap (klubb_id, profil_id)` og skrives KUN der. De samme kolonnene på `profiles` er et vernet, enveis speil for én klubb når den er aktiv (verdivern + paritetssjekk ved commit). `lib/klubb-kontekst.ts` → `aktivKlubbId()` er hvilken klubb en innlogget forespørsel gjelder. **Database-siden:** Funksjonene `er_admin()` / `er_admin(klubb_id)` leser `medlemskap`, krever `aktiv` og returnerer true for både admin og generalsekretær; de brukes i alle RLS-policies. Hvis matrisen endres slik at en ny rolle skal ha admin-rettigheter, må `er_admin()` oppdateres i en ny migrasjon — dette er duplisering vi lever med fordi RLS må kjøre i DB.
+
+**Når nye RLS-policies skrives:** Bruk `er_admin()`, ikke inline `rolle = 'admin'`. Sistnevnte glipper unna når nye roller med admin-rettigheter kommer.
+
+**Setting av generalsekretær-rollen:** Via SQL (`update medlemskap set rolle = 'generalsekretaer' where klubb_id = … and profil_id = …`) eller GS-RPC-ene (`sett_generalsekretaer`/`fjern_generalsekretaer`). `update profiles set rolle …` avvises av verdivernet. UI-et til medlemsredigering kan ikke sette denne rollen — bare bevare den hvis den allerede er satt.
 
 **Bruk disse hjelperne:**
 - `kanAdministrere(rolle)` — admin-sjekk i UI, server actions, API-ruter
@@ -225,11 +231,6 @@ Sentral rettighetsmatrise i `lib/roller.ts` definerer de tre rollene og hva hver
 - `rollerMed(rettighet)` — liste over roller som har en gitt rettighet (for `.in('rolle', …)`-filtre)
 - `VALGBARE_ROLLER` — roller som kan velges fra admin-UI (generalsekretær settes manuelt via SQL)
 
-**Database-siden:** Funksjonen `er_admin()` returnerer true for både admin og generalsekretær og brukes i alle RLS-policies. Hvis matrisen endres slik at en ny rolle skal ha admin-rettigheter, må `er_admin()` oppdateres i en ny migrasjon — dette er duplisering vi lever med fordi RLS må kjøre i DB.
-
-**Når nye RLS-policies skrives:** Bruk `er_admin()`, ikke inline `rolle = 'admin'`. Sistnevnte glipper unna når nye roller med admin-rettigheter kommer.
-
-**Setting av generalsekretær-rollen:** Via SQL (`update profiles set rolle = 'generalsekretaer' where …`). UI-et til medlemsredigering kan ikke sette denne rollen — bare bevare den hvis den allerede er satt.
 
 **Testing:** `__tests__/roller.test.ts` verifiserer at matrisen og hjelperne holder seg i synk. Oppdater testen hvis du legger til ny rolle eller rettighet.
 
