@@ -347,6 +347,42 @@ Multi-tenant steg 2.1b (#861, #895). Migrasjon 165.
 
 **Kjent og uløst:** `album.opprettet_av` og `album_bilde.lastet_opp_av` er `not null` med `on delete set null` mot `profiles`, så sletting av en profil med album gir 23502. Selvmotsigelsen finnes før og etter 2.1b og er ikke løst her.
 
+### 2.14 Klubb i innloggings-tokenet
+
+Multi-tenant steg 2.2 (#861, #869). Migrasjon 166.
+
+**Hooken:** `public.custom_access_token_hook(event jsonb)` kjøres av GoTrue (som `supabase_auth_admin`) hver gang et token utstedes eller fornyes, og legger tre claims på tokenet: `klubb_status`, `klubb_id` og `rolle`. Den er `security invoker` med `search_path = ''`, leser `medlemskap` via en kolonne-grant (`profil_id, klubb_id, rolle, aktiv, opprettet`) og en egen, VARIG policy («Auth-hooken leser medlemskap på tvers av klubber») — hooken må se alle klubbers medlemskap for å velge. 2.3 (#870) skal la policyen stå; psql-steget «Verifiser JWT-hook» går rødt for alle seed-profiler hvis den droppes.
+
+**Valgregel:** eldste aktive medlemskap, `order by opprettet, klubb_id limit 1`. Før 2.4 finnes det bare ett.
+
+**`klubb_status`:** `aktiv` (da følger `klubb_id` og `rolle`), `ingen_medlemskap` (ingen aktivt medlemskap; ingen `klubb_id`/`rolle` i tokenet) eller `feil` (hooken fanget en feil; samme utseende uten `klubb_id`/`rolle`). Hooken kaster aldri og skriver aldri: en kastende hook ville fått GoTrue til å avvise innloggingen for alle, og innloggingssiden ville da meldt «feil passord» (derfor mapper `lib/innlogging-feil.ts` bare `invalid_credentials` til den teksten). `feil`-grenen bygger kun jsonb fra eventet, aldri et nytt tabelloppslag. Innplantede `klubb_id`/`rolle`/`klubb_status` i eventet strippes først.
+
+**`rolle`-claimen er ren informasjon.** Et token er opptil en time gammelt og kan ikke trekkes tilbake, så `rolle` brukes ALDRI til autorisasjon — rolle leses ferskt fra `medlemskap` (`er_admin()`, `ensure*()`). Det finnes derfor med vilje ingen `jwt_rolle()`. `jwt_klubb_id()` (regex før uuid-cast, ugyldig claim gir null) er til RLS-policyer i 2.3/2.4.
+
+**Aktivering per instans:** migrasjonen legger bare funksjonen ut; hooken må slås på i Dashboard (Authentication → Hooks → Custom Access Token), lokalt via `[auth.hook.custom_access_token]` i `supabase/config.toml`. Se `docs/drift.md` § 4. Til den er slått på mangler claimene; ingen kode leser dem før `aktivKlubbId()` bytter til tokenet (2.2 PR 2, fallback til standardklubben) og 2.4b (#896) gjør fraværet fail-closed.
+
+**`aktivKlubbId()` leser claimen (fase 1, fallback; 2.2 PR 2).** Funksjonen er `cache(async …)` og dekoder payloaden til access-tokenet fra `getSession()` (lest én gang per request via `hentSesjon()` i `lib/sesjon.ts`, delt med `getInnloggetBruker()`) — uten signaturverifisering, fordi middleware har verifisert signatur og `exp` på samme cookie (vaktet av `__tests__/klubb-kontekst-middleware.test.ts`: rutene som når fram uten verifisert sesjon utledes fra `middleware.ts` — matcher, tidlig-retur og `erOffentlig` — og ingen av dem, eller omslagene deres, når `lib/klubb-kontekst`). Ingen `getClaims()`, `getUser()` eller JWKS. I fase 1 returnerer den ALLTID standardklubben; claimen er bare en observasjon som logges med `logg.feil` ved avvik (`warn` persisteres ikke): `klubb.claim.mangler` (ingen markør), `.hookfeil` (`klubb_status = 'feil'`), `.avvik` (`aktiv` med annen klubb enn standard) og `.inkonsistent` (uleselig payload, ukjent status eller `aktiv` uten gyldig uuid). `klubb_status`/`klubb_id` følger med i `ctx` (stdout og Sentry); `feil_logg`-raden bærer bare event-navnet. `ingen_medlemskap` og manglende sesjon er stille. `ensure*()` henter klubb-id-en parallelt med `getUser()` og returnerer den som `klubbId`. Fallbacken fjernes i 2.4b (#896).
+
+### 2.15 Klubb i RLS: aktiv_klubb()
+
+Multi-tenant steg 2.3 (#861, #870). Migrasjon 167. Down-SQL: `supabase/sjekk/167_ned.sql`.
+
+**Klubbleddet.** Hver policy på en klubbeid tabell (151 `alter policy`, navnene beholdt) har `klubb_id = (select public.aktiv_klubb())` i både `using` og `with check`: rader i en annen klubb er usynlige, og en rad kan verken settes inn i eller flyttes til en annen klubb (42501). `klubb` har `id = (select public.aktiv_klubb())`. `push_subscriptions` og `pass_info` er globale og røres ikke; hook-policyen på `medlemskap` (`to supabase_auth_admin using (true)`, #869) er varig.
+
+**`aktiv_klubb()`** = tokenets klubb (`jwt_klubb_id()`) hvis `auth.uid()` har et AKTIVT medlemskap der, ellers null. `security definer` med `search_path = ''` (medlemskap-policyen bruker selv funksjonen, så invoker ville gitt rekursjon). En definer-funksjon inlines aldri, så `(select public.aktiv_klubb())` er OBLIGATORISK i policyer — uten select-pakken kalles den per rad. Samme form for `(select public.er_admin((select public.aktiv_klubb())))` og `(select auth.uid())`. Vaktet av EXPLAIN i CI-steget «Verifiser klubb-RLS (#870)» (krever `InitPlan`, ingen policyfunksjon i et `Filter:`) og av `__tests__/skjemavakt-klubb.test.ts`.
+
+**Fallback (variant B, beslutning 17.10.2026).** `coalesce(jwt_klubb_id(), standard_klubb_id())`: uten klubb-claim (hooken av/feilet) gjelder standardklubben. Mildt: en claim vinner alltid, og kravet om aktivt medlemskap består, så ingenting lekker. Fjernes i 2.4b (#896) sammen med fallbacken i `aktivKlubbId()`, da blir aktiv_klubb() feile-lukket uten claim.
+
+**Deaktivering virker uten nytt token.** Tokenet bærer klubben, ikke aktiv-status: `aktiv_klubb()` slår opp medlemskapet hver gang, så et deaktivert medlem mister alt umiddelbart. Rolle leses fortsatt aldri fra tokenet.
+
+**Inaktive.** `medlemskap` SELECT: `klubb_id = aktiv_klubb() and (aktiv or er_admin(aktiv_klubb()))`. `profiles` SELECT: personer med medlemskap i klubben (inaktive kun for admin) — erstatter `aktiv = true`. Admin ser og kan reaktivere inaktive (`oppdater_medlem_admin`). `exists(… profiles.aktiv)` i 21 policyer er borte; samtale-INSERT krever aktivt medlemskap for begge parter i samtalens klubb.
+
+**Ikke medlem.** Innlogget uten aktivt medlemskap: `getProfil()` gir null, og `(app)/layout.tsx` rendrer `IkkeMedGjengen` med teksten «Du er ikke medlem i en klubb.» og Logg ut i stedet for faner og innhold. Ingen redirect — `/login` sender innloggede til `/`.
+
+**Utenfor.** Seks `security definer`-RPC-er omgår RLS (`get_statistikk`, `tell_poll_stemmer`, `lukk_kaaringspoll_naa` m.fl.): eget issue 2.3b (#907). Overflødige enkeltindekser droppes etter EXPLAIN mot prod (egen migrasjon). Storage-policyer: 2.6/4.2.
+
+---
+
 ---
 
 ## 3. RLS-policyer
