@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
+import { anonKlient, harRlsMiljo, loggInnKlient, TESTBRUKERE, adminKlient } from '../helpers/rls-klienter'
 import { FOERSTE_KLUBB_ID } from '../helpers/klubb'
 
 // Medlemskap per klubb (mig. 163, #868): rolle og aktiv-status bor på
@@ -20,6 +20,7 @@ test.describe('medlemskap — speil, rollefunksjoner og admin-RPC (mig. 163, #86
   test.describe.configure({ mode: 'serial' })
 
   let midlertidigId: string | null = null
+  let midlertidigEpost: string | null = null
 
   test.afterAll(async () => {
     const service = adminKlient('medlemskap-opprydding')
@@ -84,6 +85,7 @@ test.describe('medlemskap — speil, rollefunksjoner og admin-RPC (mig. 163, #86
     })
     expect(error).toBeNull()
     midlertidigId = data.user?.id ?? null
+    midlertidigEpost = epost
     expect(midlertidigId).not.toBeNull()
 
     const { data: m, error: mFeil } = await service
@@ -149,6 +151,64 @@ test.describe('medlemskap — speil, rollefunksjoner og admin-RPC (mig. 163, #86
       .single()
     expect(pFeil).toBeNull()
     expect(p).toEqual({ navn: 'Midlertidig Medlem', aktiv: false, faar_issue_varsler: true })
+  })
+
+  test('deaktivert medlem: admin ser og reaktiverer, andre ser ikke, og det deaktiverte mister alt uten nytt token (#870)', async () => {
+    expect(midlertidigId, 'tidligere test skal ha opprettet og deaktivert brukeren').not.toBeNull()
+    const admin = await loggInnKlient(ADMIN.epost)
+    const petter = await loggInnKlient(PETTER.epost)
+    const id = midlertidigId!
+
+    const oppdater = (aktiv: boolean) =>
+      admin.rpc('oppdater_medlem_admin', {
+        p_klubb_id: FOERSTE_KLUBB_ID,
+        p_profil_id: id,
+        p_navn: 'Midlertidig Medlem',
+        p_visningsnavn: 'Midlertidig',
+        p_telefon: null,
+        p_fodselsdato: null,
+        p_stikkord: null,
+        p_matallergier: null,
+        p_rolle: 'medlem',
+        p_aktiv: aktiv,
+        p_faar_issue_varsler: true,
+        p_faar_feilvarsler: false,
+      })
+
+    // Deaktivert (forrige test): admin ser raden i medlemskap og profiles, vanlig medlem gjør ikke.
+    const adminM = await admin.from('medlemskap').select('aktiv').eq('klubb_id', FOERSTE_KLUBB_ID).eq('profil_id', id)
+    expect(adminM.error).toBeNull()
+    expect(adminM.data).toEqual([{ aktiv: false }])
+    const adminP = await admin.from('profiles').select('id').eq('id', id)
+    expect(adminP.error).toBeNull()
+    expect(adminP.data).toHaveLength(1)
+    const petterM = await petter.from('medlemskap').select('aktiv').eq('profil_id', id)
+    expect(petterM.error).toBeNull()
+    expect(petterM.data).toHaveLength(0)
+    const petterP = await petter.from('profiles').select('id').eq('id', id)
+    expect(petterP.error).toBeNull()
+    expect(petterP.data).toHaveLength(0)
+
+    // Reaktivering virker (var umulig før 167: inaktive var usynlige også for admin).
+    const paa = await oppdater(true)
+    expect(paa.error).toBeNull()
+    expect(paa.data).toBe(true)
+
+    // Det reaktiverte medlemmet logger inn og ser klubbens arrangementer ...
+    const medlem = anonKlient()
+    const inn = await medlem.auth.signInWithPassword({ email: midlertidigEpost!, password: 'Midlertidig-passord-123' })
+    expect(inn.error).toBeNull()
+    const foer = await medlem.from('arrangementer').select('id').limit(1)
+    expect(foer.error).toBeNull()
+    expect(foer.data?.length).toBe(1)
+
+    // ... og mister dem straks ved deaktivering, uten nytt token (klienten beholder det gamle).
+    const av = await oppdater(false)
+    expect(av.error).toBeNull()
+    expect(av.data).toBe(true)
+    const etter = await medlem.from('arrangementer').select('id').limit(1)
+    expect(etter.error).toBeNull()
+    expect(etter.data).toHaveLength(0)
   })
 
   test('et vanlig medlem avvises av oppdater_medlem_admin (42501)', async () => {

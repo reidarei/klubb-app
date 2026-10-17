@@ -5,6 +5,7 @@ import ServiceWorkerRegistrering from '@/components/ServiceWorkerRegistrering'
 import AktivitetTeller from '@/components/AktivitetTeller'
 import DraNedForOppdater from '@/components/DraNedForOppdater'
 import DeployInfo from '@/components/DeployInfo'
+import IkkeMedGjengen from '@/components/IkkeMedGjengen'
 import InstallVeiledning from '@/components/InstallVeiledning'
 import { getInnloggetBruker, getProfil } from '@/lib/auth-cache'
 import { redirect } from 'next/navigation'
@@ -61,11 +62,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // fullskjermkartet ved hver kaldstart mens HeaderMedProfil fortsatt laster
   // (nøyaktig #707-symptomet), fordi Suspense-fallbacken da ikke kunne vite
   // om reisemodus/møtemodus var på (#723/#780).
-  const [user, kartmodus] = await Promise.all([
+  const [user, kartmodus, profil] = await Promise.all([
     getInnloggetBruker(),
     hentKartmodus(),
+    // cache()-et: HeaderMedProfil under får samme svar uten ny spørring. undefined = feilet
+    // (degradert header, som før); null = gyldig innlogging uten aktivt medlemskap (#870).
+    getProfil().catch(() => undefined),
   ])
   if (!user) redirect('/login')
+
+  // Ingen redirect: /login sender innloggede til /, så en omdirigering hit ville gitt en evig
+  // løkke. Siden rendres i stedet for faner og innhold; RLS gir ham uansett ingenting
+  // (aktiv_klubb() er null), så skjermen skjuler ikke noe han ellers ville fått.
+  if (profil === null) return <IkkeMedGjengen />
 
   return (
     <div className="flex flex-col min-h-screen relative">

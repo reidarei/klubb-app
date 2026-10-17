@@ -2,7 +2,17 @@
 // policy-/indekskravene innføres trinnvis via pinnede lister som bare kan krympe.
 // Leser migrasjonsfilene direkte, ingen database; kjører i kjerneporten.
 import { describe, it, expect } from 'vitest'
-import { byggSkjema, lesMigrasjoner, refererKlubbId, type Skjema } from './helpers/migrasjon-skjema'
+import {
+  brukerArgumentlosRolleSjekk,
+  byggSkjema,
+  effektiveKlausuler,
+  harKlubbledd,
+  lesMigrasjoner,
+  refererAktivKlubb,
+  refererKlubbId,
+  type PolicyTilstand,
+  type Skjema,
+} from './helpers/migrasjon-skjema'
 import {
   KLUBB_FK_UTEN_STOETTEINDEKS,
   KLUBB_ID_NULLABLE,
@@ -12,6 +22,18 @@ import {
 } from './helpers/klubb-tabeller'
 
 const skjema = byggSkjema(lesMigrasjoner())
+
+// Kontrakten fra 167 (#870), per klausul: klubbleddet står i using for SELECT/UPDATE/DELETE og i
+// with check for INSERT/UPDATE (effektivt — uten with check gjenbruker Postgres using). Ett treff
+// et sted i teksten er ikke nok: en UPDATE med riktig using og `with check (true)` lar raden flyttes.
+function klubbleddAvvik(p: PolicyTilstand): string[] {
+  const e = effektiveKlausuler(p)
+  const avvik: string[] = []
+  if (e.using !== undefined && !harKlubbledd(e.using)) avvik.push(`using mangler klubbleddet (${p.kommando})`)
+  if (e.withCheck !== undefined && !harKlubbledd(e.withCheck)) avvik.push(`with check mangler klubbleddet (${p.kommando})`)
+  if (p.roller !== 'authenticated') avvik.push(`er ikke to authenticated (${p.roller ?? 'public'})`)
+  return avvik
+}
 const unntakSet = new Set<string>(KLUBB_ID_UNNTAK.map(u => u.tabell))
 const klubbeide = [...skjema.tabeller].filter(([navn]) => !unntakSet.has(navn))
 
@@ -58,6 +80,16 @@ describe('parseren (fixtures)', () => {
     expect(stille.policyAdvarsler).toEqual([])
     const hoeylytt = bygg('create table public.x (id int); drop policy "p" on public.x;')
     expect(hoeylytt.policyAdvarsler).toHaveLength(1)
+  })
+
+  it('refererAktivKlubb krever select-pakken; argumentløs rolle-sjekk flagges', () => {
+    expect(refererAktivKlubb('using (klubb_id = (select public.aktiv_klubb()))')).toBe(true)
+    expect(refererAktivKlubb('using (klubb_id = public.aktiv_klubb())')).toBe(false)
+    expect(refererAktivKlubb('using (klubb_id = standard_klubb_id())')).toBe(false)
+    expect(brukerArgumentlosRolleSjekk('using (public.er_admin())')).toBe(true)
+    expect(brukerArgumentlosRolleSjekk('using ( er_generalsekretaer( ) )')).toBe(true)
+    expect(brukerArgumentlosRolleSjekk('using ((select public.er_admin((select public.aktiv_klubb()))))')).toBe(false)
+    expect(brukerArgumentlosRolleSjekk('using (er_admin(klubb_id))')).toBe(false)
   })
 
   it('policy på annet schema enn public ignoreres', () => {
@@ -132,6 +164,51 @@ describe('parseren (fixtures)', () => {
     expect(s.tabeller.get('x')!.klubbId).toEqual({ nullable: true, fil: '0.sql' })
   })
 
+  const KT = 'create table public.x (klubb_id uuid not null references public.klubb(id), id int);'
+  const LEDD = 'klubb_id = (select public.aktiv_klubb())'
+  const avvikFor = (...sql: string[]) => klubbleddAvvik(bygg(KT, ...sql).tabeller.get('x')!.policyer.get('p')!)
+
+  it('klubbledd: korrekt UPDATE, INSERT, SELECT og DELETE er grønne', () => {
+    expect(avvikFor(`create policy "p" on public.x for update to authenticated using (${LEDD} and id = 1) with check (${LEDD});`)).toEqual([])
+    expect(avvikFor(`create policy "p" on public.x for insert to authenticated with check (${LEDD} and ((id = 1)));`)).toEqual([])
+    expect(avvikFor(`create policy "p" on public.x for select to authenticated using (${LEDD});`)).toEqual([])
+    expect(avvikFor(`create policy "p" on public.x for delete to authenticated using ((${LEDD}) and (id = 1));`)).toEqual([])
+    // UPDATE uten with check: Postgres gjenbruker using, og den har leddet.
+    expect(avvikFor(`create policy "p" on public.x for update to authenticated using (${LEDD});`)).toEqual([])
+  })
+
+  it('klubbledd: UPDATE med riktig using men with check (true) er rød', () => {
+    expect(avvikFor(`create policy "p" on public.x for update to authenticated using (${LEDD}) with check (true);`)).toEqual([
+      'with check mangler klubbleddet (update)',
+    ])
+  })
+
+  it('klubbledd: alter policy som bare setter using beholder den gamle with check (true) og er rød', () => {
+    expect(
+      avvikFor(
+        'create policy "p" on public.x for update to authenticated using (true) with check (true);',
+        `alter policy "p" on public.x to authenticated using (${LEDD});`,
+      ),
+    ).toEqual(['with check mangler klubbleddet (update)'])
+    // Kommandoen kommer fra create: en alter uten `for` gjør ikke INSERT til noe annet.
+    expect(
+      avvikFor('create policy "p" on public.x for insert with check (true);', `alter policy "p" on public.x using (${LEDD});`),
+    ).toEqual(['with check mangler klubbleddet (insert)', 'er ikke to authenticated (public)'])
+  })
+
+  it('klubbledd: leddet i feil klausul, bak et or, bare i en underspørring eller uten select-pakken er rødt', () => {
+    expect(avvikFor(`create policy "p" on public.x for insert to authenticated using (${LEDD}) with check (true);`)).toHaveLength(1)
+    expect(avvikFor(`create policy "p" on public.x for select to authenticated using (${LEDD} or true);`)).toHaveLength(1)
+    expect(avvikFor(`create policy "p" on public.x for select to authenticated using (${LEDD} and id = 1 or true);`)).toHaveLength(1)
+    expect(avvikFor(`create policy "p" on public.x for select to authenticated using (id in (select y.id from y where y.${LEDD}));`)).toHaveLength(1)
+    expect(avvikFor('create policy "p" on public.x for select to authenticated using (klubb_id = public.aktiv_klubb());')).toHaveLength(1)
+    // FOR ALL uten with check: using gjelder begge veier.
+    expect(avvikFor('create policy "p" on public.x to authenticated using (true);')).toEqual([
+      'using mangler klubbleddet (all)',
+      'with check mangler klubbleddet (all)',
+    ])
+  })
+
   it('create index med klubb_id først registreres, drop index fjerner den', () => {
     const s = bygg('create table public.x (id int); create index x_idx on public.x (klubb_id, id);')
     expect(s.tabeller.get('x')!.klubbIdIndekser.size).toBe(1)
@@ -193,6 +270,69 @@ describe('skjemavakt: policyer', () => {
 
   it('tabeller uten klubb-policy er nøyaktig de pinnede (lista kan bare krympe)', () => {
     expect(policyListeAvvik(skjema, KLUBB_UTEN_KLUBB_POLICY)).toEqual([])
+  })
+
+  // Hook-policyen er varig (#869): GoTrue må se medlemskap på tvers av klubber.
+  const HOOK_POLICY = ['medlemskap', 'auth-hooken leser medlemskap på tvers av klubber'] as const // parseren lowercaser navn
+  const erHookPolicy = (tabell: string, navn: string) => tabell === HOOK_POLICY[0] && navn === HOOK_POLICY[1]
+
+  it('hver policy på en klubbeid tabell har klubbleddet i riktige klausuler og er to authenticated (#870)', () => {
+    const avvik: string[] = []
+    for (const [tabell, t] of klubbMedKolonne) {
+      for (const [navn, p] of t.policyer) {
+        if (erHookPolicy(tabell, navn)) continue
+        for (const a of klubbleddAvvik(p)) avvik.push(`${tabell}: "${navn}" ${a} (${p.fil})`)
+      }
+    }
+    expect(avvik, 'Hver klausul skal ha `klubb_id = (select public.aktiv_klubb()) and …` på toppnivå (se 167)').toEqual([])
+  })
+
+  // profiles (global) og klubb (roten) har ikke klubb_id, så klubbleddet har en egen form der.
+  // De er pinnet eksakt per klausul: en ny eller endret policy her skal være et bevisst valg, og
+  // atferden vaktes av CI-steget «Verifiser klubb-RLS» (deaktivering, admin ser inaktive, ingen B fra A).
+  const PROFIL_KLAUSUL =
+    '((id = (select auth.uid()) and (select public.aktiv_klubb()) is not null) or (id in (select m.profil_id from public.medlemskap m where m.klubb_id = (select public.aktiv_klubb())) and (select public.er_admin((select public.aktiv_klubb())))))'
+  const SAERPOLICYER: Record<string, Record<string, { kommando: string; using?: string; withCheck?: string }>> = {
+    klubb: {
+      'innloggede kan lese klubber': { kommando: 'select', using: 'id = (select public.aktiv_klubb())' },
+    },
+    profiles: {
+      'alle aktive kan lese profiler': {
+        kommando: 'select',
+        using:
+          'id in (select m.profil_id from public.medlemskap m where m.klubb_id = (select public.aktiv_klubb()) and (m.aktiv or (select public.er_admin((select public.aktiv_klubb())))))',
+      },
+      'kan oppdatere egen profil eller admin': { kommando: 'update', using: PROFIL_KLAUSUL, withCheck: PROFIL_KLAUSUL },
+    },
+  }
+
+  it('særpolicyene på profiles og klubb er nøyaktig de pinnede, per klausul (#870)', () => {
+    for (const [tabell, forventet] of Object.entries(SAERPOLICYER)) {
+      const faktisk = Object.fromEntries(
+        [...skjema.tabeller.get(tabell)!.policyer].map(([navn, p]) => {
+          const e = effektiveKlausuler(p)
+          expect(p.roller, `${tabell}: "${navn}"`).toBe('authenticated')
+          return [navn, { kommando: p.kommando, ...(e.using != null && { using: e.using }), ...(e.withCheck != null && { withCheck: e.withCheck }) }]
+        }),
+      )
+      expect(faktisk, `${tabell}: policyene avviker fra SAERPOLICYER — endre bevisst, og dekk atferden i pr-check.yml`).toEqual(forventet)
+    }
+  })
+
+  it('ingen policy på en klubbeid tabell bruker er_admin()/er_generalsekretaer() uten klubb-argument', () => {
+    const avvik: string[] = []
+    for (const [tabell, t] of klubbMedKolonne) {
+      for (const [navn, p] of t.policyer) {
+        if (brukerArgumentlosRolleSjekk(p.tekst)) avvik.push(`${tabell}: "${navn}" (${p.fil})`)
+      }
+    }
+    expect(avvik).toEqual([])
+  })
+
+  it('hook-policyen på medlemskap er urørt (varig, #869)', () => {
+    const p = skjema.tabeller.get('medlemskap')!.policyer.get(HOOK_POLICY[1])
+    expect(p?.tekst).toContain('to supabase_auth_admin')
+    expect(p?.tekst).toContain('using (true)')
   })
 
   it('alle på policylista fantes allerede i migrasjon 161 (nye tabeller får ikke føres hit)', () => {

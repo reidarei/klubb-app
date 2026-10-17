@@ -40,63 +40,12 @@ export function klubbeideTabeller(): string[] {
 export const KLUBB_ID_NULLABLE: readonly { tabell: string; begrunnelse: string; issue: number }[] = []
 
 // Klubbeide tabeller som ennå ikke har en RLS-policy som refererer klubb_id.
-// 2.3 (#870) tømmer lista. Nye tabeller får aldri legges hit.
-// posisjon_deling, posisjon_punkt og varsel_preferanser er ikke nye: de sto på unntakslista
-// (venter_2_1) til mig. 164 ga dem klubb_id. 2.3 (#870) skriver policyene.
-export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = [
-  'aktivitet_dag',
-  'aktivitet_uke',
-  'album',
-  'album_bilde',
-  'album_bilde_chat',
-  'album_bilde_reaksjon',
-  'app_innstillinger',
-  'arrangement_chat',
-  'arrangementer',
-  'arrangementmaler',
-  'arrangoransvar',
-  'bursdagsbilde',
-  'chat_reaksjoner',
-  'feil_logg',
-  'fond_bevegelse',
-  'fond_eiendom',
-  'fond_innskudd',
-  'fond_kontant',
-  'fond_navn_alias',
-  'fond_verdi_historikk',
-  'fond_verdipapir',
-  'innspill_kobling',
-  'kaaring_vinnere',
-  'kaaringmaler',
-  'kart_markering',
-  'kart_symbol_tilpasning',
-  'klubb_chat',
-  'klubb_info',
-  'melding_bilder',
-  'melding_chat',
-  'melding_reaksjon',
-  'meldinger',
-  'paameldinger',
-  'pass_tilgang_forespørsel',
-  'poll',
-  'poll_chat',
-  'poll_stemme',
-  'poll_valg',
-  'posisjon_deling',
-  'posisjon_punkt',
-  'samtale',
-  'samtale_chat',
-  'timeplan_post',
-  'varsel_innstillinger',
-  'varsel_logg',
-  'varsel_preferanser',
-  'vedtekter',
-  'vedtekter_versjoner',
-  'vitals_logg',
-]
+// Tom siden 2.3 (#870) (mig. 167). Lista kan bare krympe: nye tabeller får aldri legges her,
+// og en tabell som noen gang har hatt en klubb-policy kan ikke føres tilbake.
+export const KLUBB_UTEN_KLUBB_POLICY: readonly string[] = []
 
 // FK mot klubb uten indeks med klubb_id først. 2.1b (#895) ga album_bilde, kaaringmaler og
-// poll_valg en (klubb_id, id)-nøkkel; resten venter på 2.3 og 6.2 (#886). Nye tabeller FÅR legges hit (synlig, kjent liste).
+// poll_valg en (klubb_id, id)-nøkkel; resten venter på 6.2 (#886). Nye tabeller FÅR legges hit (synlig, kjent liste).
 export const KLUBB_FK_UTEN_STOETTEINDEKS: readonly string[] = [
   'album_bilde_chat',
   'album_bilde_reaksjon',

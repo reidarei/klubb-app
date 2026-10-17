@@ -12,7 +12,9 @@
 //  (b) `--` strippes uten hensyn til strengliteraler; en `--` inni en tekst-literal
 //      kutter resten av linja. Ingen migrasjon har det i dag.
 //  (c) «Policyen refererer klubb_id» er et ordtreff, ikke en semantisk sjekk: den
-//      beviser ikke at policyen faktisk avgrenser til riktig klubb.
+//      beviser ikke at policyen faktisk avgrenser til riktig klubb. Det gjør
+//      `harKlubbledd()` per klausul (using/with check hver for seg, #870), men heller ikke
+//      den ser hva resten av uttrykket gjør; atferden vaktes av CI-steget «Verifiser klubb-RLS».
 //  (d) Kun én navngitt tabell per setning; `alter policy` og `rename` av tabell og
 //      policy følges, men ikke `alter table … rename column`.
 import { readdirSync, readFileSync } from 'node:fs'
@@ -20,10 +22,22 @@ import path from 'node:path'
 
 export type MigrasjonsFil = { fil: string; sql: string }
 
+// Policyens effektive tilstand etter alle create/alter. `alter policy` endrer bare klausulene
+// den nevner (Postgres beholder resten), så kommandoen kommer alltid fra `create policy`.
+export type PolicyKommando = 'all' | 'select' | 'insert' | 'update' | 'delete'
+export type PolicyTilstand = {
+  fil: string
+  tekst: string // siste setning som rørte policyen (create eller alter)
+  kommando: PolicyKommando
+  roller: string | null // `to …`, null = ikke oppgitt (public)
+  using: string | null // innholdet i using (…), uten ytterste parentes
+  withCheck: string | null
+}
+
 export type TabellTilstand = {
   opprettetI: string
   klubbId: null | { nullable: boolean; fil: string }
-  policyer: Map<string, { fil: string; tekst: string }>
+  policyer: Map<string, PolicyTilstand>
   klubbIdIndekser: Set<string>
 }
 
@@ -51,6 +65,110 @@ export function lesMigrasjoner(tilOgMed?: number): MigrasjonsFil[] {
 
 export function refererKlubbId(tekst: string): boolean {
   return /\bklubb_id\b/.test(tekst)
+}
+
+// Policyer på klubbeide tabeller skal bruke initplan-formen (#870): aktiv_klubb() er security
+// definer og inlines aldri, så uten select-pakken kalles den per rad.
+export function refererAktivKlubb(tekst: string): boolean {
+  return /\(select public\.aktiv_klubb\(\)\)/.test(tekst)
+}
+
+// Finner `<nøkkelord> (` på parentesnivå 0 (utenfor strenger) og returnerer innholdet i den
+// balanserte parentesen. null = klausulen finnes ikke i setningen.
+function klausul(s: string, noekkelord: string): string | null {
+  let dybde = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === "'") {
+      const slutt = s.indexOf("'", i + 1)
+      i = slutt < 0 ? s.length : slutt
+    } else if (c === '(') dybde++
+    else if (c === ')') dybde--
+    else if (dybde === 0 && s.startsWith(` ${noekkelord} (`, i)) {
+      const start = i + noekkelord.length + 3
+      let d = 1
+      for (let j = start; j < s.length; j++) {
+        if (s[j] === "'") {
+          const slutt = s.indexOf("'", j + 1)
+          j = slutt < 0 ? s.length : slutt
+        } else if (s[j] === '(') d++
+        else if (s[j] === ')' && --d === 0) return s.slice(start, j).trim()
+      }
+      return null
+    }
+  }
+  return null
+}
+
+// Deler et uttrykk på `operator` på parentesnivå 0 (utenfor strenger).
+function delToppnivaa(uttrykk: string, operator: 'and' | 'or'): string[] {
+  const deler: string[] = []
+  let dybde = 0
+  let start = 0
+  for (let i = 0; i < uttrykk.length; i++) {
+    const c = uttrykk[i]
+    if (c === "'") {
+      const slutt = uttrykk.indexOf("'", i + 1)
+      i = slutt < 0 ? uttrykk.length : slutt
+    } else if (c === '(') dybde++
+    else if (c === ')') dybde--
+    else if (dybde === 0 && uttrykk.startsWith(` ${operator} `, i)) {
+      deler.push(uttrykk.slice(start, i))
+      start = i + operator.length + 2
+    }
+  }
+  deler.push(uttrykk.slice(start))
+  return deler.map(d => d.trim())
+}
+
+// Fjerner parenteser som omslutter HELE uttrykket: `((a and b))` → `a and b`.
+function utenYtrePar(uttrykk: string): string {
+  let u = uttrykk.trim()
+  while (u.startsWith('(') && u.endsWith(')')) {
+    let d = 0
+    let omslutter = true
+    for (let i = 0; i < u.length - 1; i++) {
+      if (u[i] === '(') d++
+      else if (u[i] === ')') d--
+      if (d === 0) { omslutter = false; break }
+    }
+    if (!omslutter) break
+    u = u.slice(1, -1).trim()
+  }
+  return u
+}
+
+const KLUBBLEDD = 'klubb_id = (select public.aktiv_klubb())'
+
+// Klubbleddet (#870) som obligatorisk konjunkt på toppnivå: `klubb_id = (select public.aktiv_klubb())
+// and …`. Et `or` på toppnivå gjør leddet valgfritt (and binder sterkere), så det er rødt.
+export function harKlubbledd(uttrykk: string | null): boolean {
+  if (uttrykk === null) return false
+  const u = utenYtrePar(uttrykk)
+  if (delToppnivaa(u, 'or').length > 1) return false
+  return delToppnivaa(u, 'and').some(d => utenYtrePar(d) === KLUBBLEDD)
+}
+
+// Hvilke klausuler Postgres faktisk bruker for kommandoen. Uten `with check` på ALL/UPDATE
+// gjenbrukes `using` som with check; INSERT har ingen using, SELECT/DELETE ingen with check.
+export function effektiveKlausuler(p: PolicyTilstand): { using: string | null | undefined; withCheck: string | null | undefined } {
+  const brukerUsing = p.kommando !== 'insert'
+  const brukerCheck = p.kommando === 'all' || p.kommando === 'insert' || p.kommando === 'update'
+  return {
+    using: brukerUsing ? p.using : undefined,
+    withCheck: brukerCheck ? (p.withCheck ?? (p.kommando === 'insert' ? null : p.using)) : undefined,
+  }
+}
+
+function roller(s: string): string | null {
+  const m = / to (.+?)(?= using \(| with check \(|$)/.exec(s.replace(/^\S+ policy "[^"]+" on \S+/, ''))
+  return m ? m[1].trim() : null
+}
+
+// er_admin()/er_generalsekretaer() UTEN argument er standardklubben-overlasten (2.4b fjerner den
+// fra policyer): policyer skal bruke versjonen med klubb-argument.
+export function brukerArgumentlosRolleSjekk(tekst: string): boolean {
+  return /\ber_(?:admin|generalsekretaer)\(\s*\)/.test(tekst)
 }
 
 // Alle former for tabellopprettelse, også de parseren ikke forstår. Telles i råteksten
@@ -152,7 +270,8 @@ export function byggSkjema(filer: MigrasjonsFil[]): Skjema {
       } else if ((m = R_CREATE_POLICY.exec(s))) {
         const t = tabellFor(m[2], m[3])
         if (!t) continue
-        t.policyer.set(m[1], { fil, tekst: s })
+        const kommando = (/ for (all|select|insert|update|delete)\b/.exec(s)?.[1] ?? 'all') as PolicyKommando
+        t.policyer.set(m[1], { fil, tekst: s, kommando, roller: roller(s), using: klausul(s, 'using'), withCheck: klausul(s, 'with check') })
         if (refererKlubbId(s)) nogensinneKlubbPolicy.add(m[3])
       } else if ((m = R_ALTER_POLICY.exec(s))) {
         const t = tabellFor(m[2], m[3])
@@ -166,7 +285,15 @@ export function byggSkjema(filer: MigrasjonsFil[]): Skjema {
           t.policyer.delete(m[1])
           t.policyer.set(m[4], gammel)
         } else {
-          t.policyer.set(m[1], { fil, tekst: s })
+          // Klausuler som alter ikke nevner, beholder Postgres uendret.
+          t.policyer.set(m[1], {
+            ...gammel,
+            fil,
+            tekst: s,
+            roller: roller(s) ?? gammel.roller,
+            using: klausul(s, 'using') ?? gammel.using,
+            withCheck: klausul(s, 'with check') ?? gammel.withCheck,
+          })
           if (refererKlubbId(s)) nogensinneKlubbPolicy.add(m[3])
         }
       } else if ((m = R_DROP_POLICY.exec(s))) {

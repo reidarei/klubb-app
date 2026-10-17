@@ -1445,6 +1445,270 @@ jobs:
             exit 1
           fi
 
+      # Multi-tenant 2.3 (#870): RLS per klubb (mig. 167). Alt i én transaksjon som rulles
+      # tilbake. (2) er EXPLAIN-vakten: aktiv_klubb()/er_admin() er security definer og inlines
+      # aldri, så i et Filter: kalles de per rad. Uten InitPlan = rød. (3)–(7) er atferd uten
+      # nytt token: deaktivert medlem mister alt, forfalsket claim gir ingenting, klubb B er
+      # usynlig og uskrivbar fra A. (8) kjører Down-SQL (167_ned.sql) i et savepoint.
+      - name: Verifiser klubb-RLS (#870)
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          # Down-SQL har egen begin/commit; i vår transaksjon må de bort.
+          sed -e '/^begin;$/d' -e '/^commit;$/d' supabase/sjekk/167_ned.sql > "$RUNNER_TEMP/ned.sql"
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 -v ned="$RUNNER_TEMP/ned.sql" <<'SQL'
+          begin;
+
+          -- Hjelper: tell rader i en tabell SOM en gitt bruker i en gitt klubb-claim, uten nytt token.
+          -- Setter rolle og claims, teller, og går tilbake. klubb_id null = ingen klubb-claim.
+          create function pg_temp.tell_som(bruker uuid, claim_klubb uuid, tabell text, vilkaar text default 'true') returns bigint
+          language plpgsql as $f$
+          declare
+            n bigint;
+          begin
+            perform set_config('request.jwt.claims',
+              json_strip_nulls(json_build_object('sub', bruker, 'role', 'authenticated', 'klubb_id', claim_klubb))::text, true);
+            set local role authenticated;
+            execute format('select count(*) from public.%I where %s', tabell, vilkaar) into n;
+            reset role;
+            return n;
+          end
+          $f$;
+
+          -- 1) Alle tabeller med klubb_id (pluss profiles og klubb) som authenticated kan lese.
+          create temp table klubb_rls_tabeller on commit drop as
+            select c.relname::text as tabell
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+              join pg_attribute a on a.attrelid = c.oid and a.attname = 'klubb_id' and not a.attisdropped
+             where c.relkind = 'r'
+               and has_table_privilege('authenticated', c.oid, 'select')
+            union
+            select unnest(array['profiles', 'klubb']);
+          grant select on klubb_rls_tabeller to public;
+
+          -- 2) EXPLAIN-vakt: aktiv_klubb()/er_admin()/er_generalsekretaer() skal stå i en InitPlan, aldri
+          --    i et Filter: (da kalles de per rad). Samme som utsagnet «initplan-form» i 167.
+          do $$
+          declare
+            t record;
+            linje text;
+            plan text;
+            antall integer := 0;
+          begin
+            perform set_config('request.jwt.claims',
+              json_build_object('sub', '00000000-0000-4000-8000-000000000001', 'role', 'authenticated',
+                                'klubb_id', '00000000-0000-4000-a000-000000000001')::text, true);
+            set local role authenticated;
+            for t in select tabell from klubb_rls_tabeller order by 1 loop
+              plan := '';
+              for linje in execute format('explain (costs off) select * from public.%I', t.tabell) loop
+                plan := plan || linje || E'\n';
+              end loop;
+              if plan !~ 'InitPlan' then
+                reset role;
+                raise exception 'EXPLAIN for % har ingen InitPlan: %', t.tabell, plan;
+              end if;
+              if plan ~* 'Filter:[^\n]*(aktiv_klubb\(|er_admin\(|er_generalsekretaer\()' then
+                reset role;
+                raise exception 'EXPLAIN for % har policyfunksjon i Filter: %', t.tabell, plan;
+              end if;
+              antall := antall + 1;
+            end loop;
+            reset role;
+            if antall < 50 then
+              raise exception 'EXPLAIN-vakten dekket bare % tabeller', antall;
+            end if;
+          end
+          $$;
+
+          -- 3) Atferd: medlemmet ser sin klubb.
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            a uuid := '00000000-0000-4000-a000-000000000001';
+          begin
+            if pg_temp.tell_som(petter, a, 'arrangementer') = 0 then raise exception 'medlem skulle sett arrangementer'; end if;
+            if pg_temp.tell_som(petter, a, 'profiles') = 0 then raise exception 'medlem skulle sett profiler'; end if;
+            if pg_temp.tell_som(petter, a, 'klubb') <> 1 then raise exception 'medlem skulle sett akkurat sin klubb'; end if;
+            if pg_temp.tell_som(petter, a, 'medlemskap') = 0 then raise exception 'medlem skulle sett medlemskap'; end if;
+            -- Uten claim faller aktiv_klubb() tilbake til standardklubben (fjernes i 2.4b, #896).
+            if pg_temp.tell_som(petter, null, 'arrangementer') = 0 then raise exception 'fallback uten claim skulle gitt standardklubben'; end if;
+          end
+          $$;
+
+          -- 4) Forfalsket claim: klubb B uten medlemskap der gir 0 rader overalt.
+          insert into public.klubb (id, slug, navn) values ('00000000-0000-4000-a000-000000000002', 'proeve', 'Prøveklubben');
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            b uuid := '00000000-0000-4000-a000-000000000002';
+            t record;
+            n bigint;
+          begin
+            for t in select tabell from klubb_rls_tabeller order by 1 loop
+              n := pg_temp.tell_som(petter, b, t.tabell);
+              if n <> 0 then raise exception 'forfalsket claim B ga % rader i %', n, t.tabell; end if;
+            end loop;
+            -- Tull i claimen gir fallback til standardklubben, ikke tilgang til noe annet.
+            perform set_config('request.jwt.claims', json_build_object('sub', petter, 'role', 'authenticated', 'klubb_id', 'tull')::text, true);
+            set local role authenticated;
+            if (select public.aktiv_klubb()) is distinct from public.standard_klubb_id() then
+              reset role;
+              raise exception 'tull-claim skulle falt tilbake til standardklubben';
+            end if;
+            reset role;
+          end
+          $$;
+
+          -- 5) Klubb B med innhold, og Petter som medlem i begge.
+          insert into public.medlemskap (klubb_id, profil_id, rolle) values
+            ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002', 'medlem');
+          insert into public.arrangementer (klubb_id, type, tittel, start_tidspunkt, opprettet_av)
+            values ('00000000-0000-4000-a000-000000000002', 'moete', 'Klubb B-møte', now() + interval '10 days', '00000000-0000-4000-8000-000000000002');
+          insert into public.klubb_chat (klubb_id, profil_id, innhold)
+            values ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-8000-000000000002', 'Hei fra B');
+          insert into public.varsel_innstillinger (klubb_id, noekkel) values ('00000000-0000-4000-a000-000000000002', 'klubb-rls-test');
+          insert into public.arrangoransvar (klubb_id, aar, arrangement_navn)
+            values ('00000000-0000-4000-a000-000000000002', 2099, 'Klubb B-ansvar');
+
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            admin uuid := '00000000-0000-4000-8000-000000000001';
+            a uuid := '00000000-0000-4000-a000-000000000001';
+            b uuid := '00000000-0000-4000-a000-000000000002';
+            t record;
+            n bigint;
+            mitt_arr uuid;
+          begin
+            -- 5a) Rader i B er usynlige under claim A, i alle tabeller.
+            for t in select tabell from klubb_rls_tabeller where tabell not in ('profiles', 'klubb') order by 1 loop
+              n := pg_temp.tell_som(petter, a, t.tabell, format('klubb_id <> %L', a));
+              if n <> 0 then raise exception 'claim A ser % rader fra en annen klubb i %', n, t.tabell; end if;
+            end loop;
+            -- ...og synlige under claim B (medlemskapet der er ekte), så foregående ikke er tomt.
+            if pg_temp.tell_som(petter, b, 'arrangementer', format('klubb_id = %L', b)) <> 1 then raise exception 'claim B skulle sett møtet i B'; end if;
+            if pg_temp.tell_som(petter, b, 'klubb_chat') <> 1 then raise exception 'claim B skulle sett chatten i B'; end if;
+            if pg_temp.tell_som(petter, b, 'klubb') <> 1 then raise exception 'claim B skulle sett klubben B'; end if;
+            if pg_temp.tell_som(petter, b, 'arrangementer', format('klubb_id <> %L', b)) <> 0 then raise exception 'claim B skulle ikke sett A'; end if;
+
+            -- 5b) INSERT med klubb_id = B under claim A avvises av RLS (42501).
+            perform set_config('request.jwt.claims', json_build_object('sub', petter, 'role', 'authenticated', 'klubb_id', a)::text, true);
+            set local role authenticated;
+            begin
+              insert into public.arrangementer (klubb_id, type, tittel, start_tidspunkt, opprettet_av)
+                values (b, 'moete', 'Skal avvises', now(), petter);
+              reset role;
+              raise exception 'INSERT i klubb B under claim A gikk gjennom';
+            exception when insufficient_privilege then
+              reset role;
+            end;
+
+            -- 5c) UPDATE som flytter en egen rad til B avvises (with check).
+            insert into public.arrangementer (klubb_id, type, tittel, start_tidspunkt, opprettet_av)
+              values (a, 'moete', 'Flyttetest', now() + interval '20 days', petter) returning id into mitt_arr;
+            perform set_config('request.jwt.claims', json_build_object('sub', petter, 'role', 'authenticated', 'klubb_id', a)::text, true);
+            set local role authenticated;
+            begin
+              update public.arrangementer set klubb_id = b where id = mitt_arr;
+              reset role;
+              raise exception 'UPDATE som flytter raden til klubb B gikk gjennom';
+            exception when insufficient_privilege then
+              reset role;
+            end;
+
+            -- 5d) Admin i A med claim B uten medlemskap i B: ikke admin, og kan ikke røre B.
+            perform set_config('request.jwt.claims', json_build_object('sub', admin, 'role', 'authenticated', 'klubb_id', b)::text, true);
+            set local role authenticated;
+            if public.er_admin((select public.aktiv_klubb())) then
+              reset role;
+              raise exception 'admin i A skal ikke være admin via claim B';
+            end if;
+            update public.arrangoransvar set arrangement_navn = 'kapret' where klubb_id = b;
+            get diagnostics n = row_count;
+            if n <> 0 then reset role; raise exception 'admin i A endret % arrangøransvar i B', n; end if;
+            update public.varsel_innstillinger set noekkel = 'kapret' where klubb_id = b;
+            get diagnostics n = row_count;
+            if n <> 0 then reset role; raise exception 'admin i A endret % varselinnstillinger i B', n; end if;
+            reset role;
+            -- Samme admin med claim A rører heller ikke B.
+            perform set_config('request.jwt.claims', json_build_object('sub', admin, 'role', 'authenticated', 'klubb_id', a)::text, true);
+            set local role authenticated;
+            update public.arrangoransvar set arrangement_navn = 'kapret' where klubb_id = b;
+            get diagnostics n = row_count;
+            if n <> 0 then reset role; raise exception 'admin med claim A endret % arrangøransvar i B', n; end if;
+            reset role;
+          end
+          $$;
+
+          -- 6) Deaktivering virker uten nytt token: Petter beholder claimen, men aktiv_klubb() blir null.
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            admin uuid := '00000000-0000-4000-8000-000000000001';
+            ola uuid := '00000000-0000-4000-8000-000000000003';
+            a uuid := '00000000-0000-4000-a000-000000000001';
+            t record;
+            n bigint;
+          begin
+            update public.medlemskap set aktiv = false where klubb_id = a and profil_id = petter;
+
+            for t in select tabell from klubb_rls_tabeller order by 1 loop
+              n := pg_temp.tell_som(petter, a, t.tabell);
+              if n <> 0 then raise exception 'deaktivert Petter ser fortsatt % rader i %', n, t.tabell; end if;
+            end loop;
+
+            -- 7) Admin ser den inaktive i medlemskap og profiles; vanlig medlem gjør ikke.
+            if pg_temp.tell_som(admin, a, 'medlemskap', format('profil_id = %L and not aktiv', petter)) <> 1 then
+              raise exception 'admin skulle sett det inaktive medlemskapet';
+            end if;
+            if pg_temp.tell_som(admin, a, 'profiles', format('id = %L', petter)) <> 1 then
+              raise exception 'admin skulle sett profilen til den inaktive';
+            end if;
+            if pg_temp.tell_som(ola, a, 'medlemskap', format('profil_id = %L', petter)) <> 0 then
+              raise exception 'medlem skulle ikke sett det inaktive medlemskapet';
+            end if;
+            if pg_temp.tell_som(ola, a, 'profiles', format('id = %L', petter)) <> 0 then
+              raise exception 'medlem skulle ikke sett profilen til den inaktive';
+            end if;
+
+            -- ...og admin kan reaktivere (medlemskap-update og profiles-update treffer raden).
+            perform set_config('request.jwt.claims', json_build_object('sub', admin, 'role', 'authenticated', 'klubb_id', a)::text, true);
+            set local role authenticated;
+            update public.medlemskap set aktiv = true where klubb_id = a and profil_id = petter;
+            get diagnostics n = row_count;
+            if n <> 1 then reset role; raise exception 'admin fikk ikke reaktivert (medlemskap): % rader', n; end if;
+            update public.profiles set aktiv = aktiv where id = petter;
+            get diagnostics n = row_count;
+            if n <> 1 then reset role; raise exception 'admin traff ikke profilen til medlemmet: % rader', n; end if;
+            reset role;
+            if pg_temp.tell_som(petter, a, 'arrangementer') = 0 then raise exception 'reaktivert Petter skulle sett arrangementer igjen'; end if;
+          end
+          $$;
+
+          -- 8) Down-SQL (supabase/sjekk/167_ned.sql, uten begin/commit) er kjørbar og fjerner alt 167 la til.
+          savepoint ned;
+          \i :ned
+          do $$
+          declare
+            n bigint;
+          begin
+            select count(*) into n from pg_policies
+             where schemaname = 'public' and (qual like '%aktiv_klubb%' or with_check like '%aktiv_klubb%');
+            if n <> 0 then raise exception 'ned.sql lot % policyer referere aktiv_klubb()', n; end if;
+            if to_regprocedure('public.aktiv_klubb()') is not null then raise exception 'ned.sql droppet ikke aktiv_klubb()'; end if;
+          end
+          $$;
+          rollback to savepoint ned;
+
+          rollback;
+          SQL
+          then
+            echo "::error::Verifiseringen av klubb-RLS feilet — se psql-utskriften over."
+            exit 1
+          fi
+
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av

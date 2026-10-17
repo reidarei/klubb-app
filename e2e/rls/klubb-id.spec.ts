@@ -74,6 +74,10 @@ test.describe('klubb_id — default på insert (#865)', () => {
   // radene, og manglende verdier sendes som null (defaultToNull). Alle rader må
   // derfor ha nøkkelen klubb_id, eller kallet må bruke { defaultToNull: false }.
   // En oppgradering som endrer standarden gjør testene røde — det er ønsket.
+  //
+  // Feilkoden er 42501, ikke 23502: Postgres evaluerer RLS sin `with check`
+  // før not-null-constrainten, og klubbleddet `klubb_id = aktiv_klubb()` (#870)
+  // er usant for null. Fram til mig. 167 var det not-null som slo til først.
 
   test('array uten klubb_id på noen rad: begge får første klubb', async () => {
     const petter = await loggInnKlient(TESTBRUKERE.PETTER.epost)
@@ -84,19 +88,19 @@ test.describe('klubb_id — default på insert (#865)', () => {
     expect(data!.map(r => r.klubb_id)).toEqual([FOERSTE_KLUBB_ID, FOERSTE_KLUBB_ID])
   })
 
-  test('array der bare én rad har klubb_id: 23502 og ingenting skrives', async () => {
+  test('array der bare én rad har klubb_id: 42501 og ingenting skrives', async () => {
     const petter = await loggInnKlient(TESTBRUKERE.PETTER.epost)
     const { data, error } = await petter
       .from('klubb_chat')
       .insert([chatRad('4a', { klubb_id: FOERSTE_KLUBB_ID }), chatRad('4b')])
       .select('id')
-    expect(error?.code).toBe('23502')
-    expect(error?.message).toMatch(/klubb_id/)
+    expect(error?.code).toBe('42501')
+    expect(error?.message).toMatch(/row-level security/)
     expect(data).toBeNull()
     await ingenRaderMedMerke('4')
   })
 
-  test('array med klubb_id: undefined på én rad gir samme 23502', async () => {
+  test('array med klubb_id: undefined på én rad gir samme 42501', async () => {
     // Object.keys tar med nøkkelen mens JSON.stringify dropper verdien, så
     // kolonnelisten har klubb_id men den andre raden får null.
     const petter = await loggInnKlient(TESTBRUKERE.PETTER.epost)
@@ -104,8 +108,8 @@ test.describe('klubb_id — default på insert (#865)', () => {
       .from('klubb_chat')
       .insert([chatRad('5a', { klubb_id: FOERSTE_KLUBB_ID }), chatRad('5b', { klubb_id: undefined })])
       .select('id')
-    expect(error?.code).toBe('23502')
-    expect(error?.message).toMatch(/klubb_id/)
+    expect(error?.code).toBe('42501')
+    expect(error?.message).toMatch(/row-level security/)
     expect(data).toBeNull()
     await ingenRaderMedMerke('5')
   })
