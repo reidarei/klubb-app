@@ -2953,6 +2953,7 @@ export type Database = {
           vinner_profil_id: string
         }[]
       }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       er_admin:
         | { Args: never; Returns: boolean }
         | { Args: { p_klubb_id: string }; Returns: boolean }
@@ -2969,6 +2970,7 @@ export type Database = {
       }
       get_statistikk: { Args: never; Returns: Json }
       har_pass_tilgang: { Args: { eier: string }; Returns: boolean }
+      jwt_klubb_id: { Args: never; Returns: string }
       krev_bursdagsbilde: {
         Args: {
           p_feiringsdato: string

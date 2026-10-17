@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button'
 import { KLUBB_NAVN, KLUBB_KORTNAVN } from '@/lib/klubb-config'
 import { PUSH_KLIKK_LOGIN_VINDU_MS } from '@/lib/konstanter'
 import { sendFeilBeacon } from '@/lib/klient-logg'
+import { innloggingsFeil } from '@/lib/innlogging-feil'
 import { lesPendingNav, slettPendingNav, lokalSti } from '@/lib/pending-nav'
 
 const inputStil: React.CSSProperties = {
@@ -119,7 +120,11 @@ export default function LoginSide() {
     setFeil('')
     const { error } = await supabase.auth.signInWithPassword({ email: epost, password: passord })
     if (error) {
-      setFeil('Feil e-post eller passord.')
+      const { tekst, beacon } = innloggingsFeil(error)
+      setFeil(tekst)
+      if (beacon) {
+        sendFeilBeacon('klient.innlogging.feilet', error.message, undefined, { code: error.code, status: error.status }, beacon.nivaa)
+      }
       setLaster(false)
     } else {
       const maal = ventendeRef.current

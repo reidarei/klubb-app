@@ -158,6 +158,44 @@ Denne migrasjonen legger til `klubb_id` (fremmednøkkel til `public.klubb`) på 
 
 5. **Rollback** (kun hvis migrasjonen feilet): `alter table public.<t> drop column klubb_id;` for alle tabeller som fikk den, så `drop function public.standard_klubb_id();`, så `delete from supabase_migrations.schema_migrations where version = '161';`. Revert deretter migrasjonsfila og typene i repoet.
 
+### Migrasjon 166: aktiver Custom Access Token-hooken (obligatorisk per instans)
+
+Migrasjonen legger ut funksjonen `public.custom_access_token_hook`, men ingenting kjører den før du slår den på. Uten aktivering mangler `klubb_id`/`rolle`/`klubb_status` i tokenet; instansen kjører da på fallback (standardklubben) til du aktiverer. Fra versjon 2.4b er aktivering et krav: først etter 7 døgn uten `klubb.claim.mangler` i feil-loggen.
+
+**Hva som kan bevises før aktivering, og hva som ikke kan.** Hooken er `security invoker`: databasen kaller den som `supabase_auth_admin`, og det er den rollens grants og RLS-policyen på `medlemskap` som avgjør om oppslaget virker. På Supabase kan du ikke kjøre den stien selv: SQL-editoren kjører som `postgres`, som ikke kan `set role supabase_auth_admin` (gir `42501 permission denied to set role`), og `supabase_auth_admin` sitt passord er ikke tilgjengelig. Bevisene er derfor fordelt slik:
+
+| Hva | Hvor det bevises |
+|---|---|
+| Hooken virker kalt som `supabase_auth_admin` med migrasjonens grants og policy | CI, steget «Verifiser JWT-hook» (`.github/workflows/pr-check.yml`), som kjører som `supabase_admin` og bytter rolle per kall, mot nøyaktig samme migrasjon |
+| De samme grantene, policyen og RLS-innstillingene finnes i denne instansen | Blokk 1 under, som `postgres` |
+| Funksjonskroppen og valgregelen gir riktig svar for din bruker | Blokk 2 under, som `postgres`. Dette sier **ingenting** om rettighetsstien, fordi `postgres` eier `medlemskap` og ikke berøres av kolonnegrantene eller policyen |
+| Invoker-stien virker i denne instansen, gjennom GoTrue | Først ved aktivering (steg 2). Aktiveringen er den første ekte kjøringen |
+
+1. **Tørrkjøring** i SQL-editoren som `postgres`.
+
+   *Blokk 1 (rettighetene):* kopier [hele `supabase/sjekk/166_toerrkjoering.sql`](../supabase/sjekk/166_toerrkjoering.sql) og kjør den. Alle 17 rader skal ha `ok = true`. CI kjører den samme fila som `postgres` («Tørrkjøring fra runbooken») og krever det samme, så fila og migrasjonen kan ikke komme i utakt uten at CI blir rød. Den kontrollerer at hooken er invoker med tomt `search_path`, at bare `supabase_auth_admin` kan kalle den, at rollen har `usage` på `public` og `select` på nøyaktig de fem kolonnene hooken leser, at policyen finnes, at RLS er på for `medlemskap` (ellers betyr policyen ingenting) og ikke tvunget på eieren, og at rollen **ikke** har noe mer: ingen tabell-select, ingen andre kolonner, ingen skriverett, ingen annen policy. En rad med `false` betyr at noe er annerledes enn det CI testet. Ikke aktiver før alle er `true`.
+
+   *Blokk 2 (funksjonskroppen for din bruker):* skal gi `klubb_status: aktiv`, standardklubbens uuid og din rolle (bytt inn din e-post):
+
+   ```sql
+   with u as (select id from auth.users where email = '<din e-post>')
+   select public.custom_access_token_hook(jsonb_build_object(
+     'user_id', u.id,
+     'claims', jsonb_build_object('sub',u.id,'role','authenticated','aud','authenticated','aal','aal1','session_id',gen_random_uuid()),
+     'authentication_method','password')) -> 'claims' from u;
+   ```
+
+   `set role supabase_auth_admin` foran blokk 2 virker ikke her (42501). Det er grunnen til at invoker-stien bevises i CI og ved aktivering, ikke i SQL-editoren.
+
+2. **Aktiver, og test selv med en gang.** Fordi dette er første gang hooken kjøres som `supabase_auth_admin` i denne instansen:
+   - Velg et tidspunkt der du har en time til rådighet.
+   - Supabase Dashboard → Authentication → Hooks → Custom Access Token → Postgres → schema `public`, funksjon `custom_access_token_hook` → Enable. Godta grantene Dashboard eventuelt foreslår (forenlige med migrasjonen); kjør blokk 1 på nytt etterpå hvis du godtok noe.
+   - Logg ut og inn igjen selv **umiddelbart**.
+   - **Feiler innloggingen, slå hooken av igjen i samme panel** (ett klikk). Bare den som logger inn eller får tokenet fornyet mens hooken står på, rammes. Tokenet fornyes omtrent én gang i timen, så slår du den av innen få minutter, merker i praksis ingen andre noe.
+
+3. **Verifiser:** innloggingen virker; Dashboard → Logs → Postgres har ingen `custom_access_token_hook feilet`; dekod `sb-*-auth-token`-cookien (nyttelasten er del 2 av `access_token`) og se `klubb_status: "aktiv"`.
+4. **Rollback:** slå av hooken i samme panel. Funksjonen kan stå. Skal den fjernes, deaktiver FØRST hooken i Dashboard (ellers blokkerer GoTrue all innlogging), og drop deretter policyen «Auth-hooken leser medlemskap på tvers av klubber», kolonne-grantet, `custom_access_token_hook(jsonb)` og `jwt_klubb_id()`.
+
 ---
 
 ## 7. Backup

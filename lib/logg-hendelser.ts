@@ -193,6 +193,8 @@ export interface LoggHendelser {
   'klient.sw.registrering.feilet': true
   /** warn: sjekkPendingNav() avviste (typisk serviceWorker.ready i fallback-stien); push-klikk-overleveringen ble ikke lest denne runden (#626-review) */
   'klient.sw.pendingnav.feilet': true
+  /** warn/error: innloggingen feilet av annen grunn enn feil passord (#869) — 429, nettverk (status 0) eller en server-/hookfeil. Feil passord (invalid_credentials) logges ikke. Bærer code og status. */
+  'klient.innlogging.feilet': true
   /** warn: klienten bar et push-klikk-mål GJENNOM /login (#688) — sesjonen var utløpt da varselet ble trykket, brukeren logget inn, og målet ble bevart i stedet for å falle til agendaen. Bærer klikk_id og maal (den lokale stien). */
   'push.klikk.innlogging': true
   /** warn: push-klikk-målet ble forsøkt PUSH_KLIKK_MAKS_FORSOK ganger uten at klienten landet der — oppføringen forkastes for å bryte en potensiell løkke (#688). Bærer klikk_id, maal og forsok. */

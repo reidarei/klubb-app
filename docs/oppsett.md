@@ -56,6 +56,13 @@ npm install
    npx supabase gen types typescript --project-id <prosjekt-id> > lib/supabase/database.types.ts
    ```
 
+5. **Aktivér Custom Access Token-hooken** (migrasjon 166):
+   - Gå til Supabase Dashboard → **Authentication** → **Hooks** → **Custom Access Token**.
+   - Velg **Postgres** → schema `public`, funksjon `custom_access_token_hook`.
+   - Klikk **Enable**.
+   
+   Hooken legger `klubb_id`, `rolle` og `klubb_status` inn i JWT-tokenet ved innlogging, og er obligatorisk fra versjon 2.4b. Uten aktivering kjører instansen på fallback (standardklubben). Se [docs/drift.md § 4](drift.md#migrasjon-166-aktiver-custom-access-token-hooken-obligatorisk-per-instans) for tørrkjøring før aktivering og feilsøking.
+
 **Storage-buckets:** Opprettes automatisk av migrasjon 017 (`arrangement_bilder`) og 037 (`profilbilder`). Du trenger ikke opprette dem manuelt.
 
 ---

@@ -1171,6 +1171,280 @@ jobs:
             exit 1
           fi
 
+      # Multi-tenant 2.2 (#869): hooken som legger klubb og rolle i tokenet må (a) aldri
+      # få GoTrue til å svare «feil passord» når den kaster, og (b) gjøre det migrasjon
+      # 166 lover. Steget under er (a): hooken byttes midlertidig mot en som kaster, ÉN
+      # innlogging gjøres, og originalen gjenopprettes via trap — også ved feil. Koster én
+      # av de 30 innloggingene per 5 min GoTrue tillater (e2e/rls bruker ~26).
+      - name: Kastende hook gir ikke «feil passord» (#869)
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          set -euo pipefail
+          export PGPASSWORD=postgres
+          PSQL="psql -h 127.0.0.1 -p $LOKAL_DB_PORT -U postgres -d postgres -X -q -v ON_ERROR_STOP=1"
+          $PSQL -tAc "select pg_get_functiondef('public.custom_access_token_hook(jsonb)'::regprocedure)" > "$RUNNER_TEMP/hook.sql"
+          echo ';' >> "$RUNNER_TEMP/hook.sql"   # pg_get_functiondef gir ingen avsluttende ;
+          gjenopprett() { $PSQL -f "$RUNNER_TEMP/hook.sql" && echo "Hook gjenopprettet."; }
+          trap gjenopprett EXIT
+          $PSQL <<'KASTER'
+          create or replace function public.custom_access_token_hook(event jsonb)
+          returns jsonb language plpgsql security invoker set search_path = '' as $$
+          begin raise exception 'CI: kastende hook (#869)'; end $$;
+          KASTER
+          kode=$(curl -sS -o "$RUNNER_TEMP/svar.json" -w '%{http_code}' -X POST "$E2E_SUPABASE_URL/auth/v1/token?grant_type=password" -H "apikey: $E2E_SUPABASE_ANON_KEY" -H 'Content-Type: application/json' -d '{"email":"e2e-admin@klubb.test","password":"e2e-lokal-hemmelighet"}')
+          echo "GoTrue svarte $kode: $(cat "$RUNNER_TEMP/svar.json")"
+          [ "$kode" != 200 ] || { echo "::error::Kastende hook ga likevel token."; exit 1; }
+          if grep -q '"error_code":"invalid_credentials"' "$RUNNER_TEMP/svar.json"; then
+            echo "::error::Hookfeil rapporteres som invalid_credentials — innloggingssiden ville sagt «feil passord»."; exit 1
+          fi
+
+      # Multi-tenant 2.2 (#869): runbookens tørrkjøring (docs/drift.md § 4) kjørt ordrett,
+      # som postgres — samme rolle SQL-editoren kjører som i prod. Fila er delt, så en
+      # runbook som avviker fra det CI beviser, blir rød her. Steget pinner også premisset
+      # runbooken hviler på: postgres er ikke superbruker og kan ikke bli supabase_auth_admin,
+      # så invoker-stien kan bare bevises i «Verifiser JWT-hook» under (som supabase_admin).
+      - name: Tørrkjøring fra runbooken (som postgres)
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          fil=supabase/sjekk/166_toerrkjoering.sql
+          pg() { psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 -t -A "$@"; }
+
+          ut=$(pg -F '|' -f "$fil") || { echo "::error::$fil feilet som postgres."; exit 1; }
+          echo "$ut"
+          # Radtallet sammenlignes med antall kontroller i fila, så tom utskrift aldri er grønt.
+          # «|| true»: grep -c gir exit 1 ved 0 treff, og run-skallet går med -e.
+          forventet=$(grep -cE "^  \('[0-9]{2} " "$fil" || true)
+          antall=$(printf '%s\n' "$ut" | grep -c '|' || true)
+          [ "$antall" -eq "$forventet" ] || { echo "::error::$fil ga $antall rader, forventet $forventet."; exit 1; }
+          if printf '%s\n' "$ut" | grep -v '|t$' | grep -q .; then
+            echo "::error::Tørrkjøringen har kontroller som ikke er true — runbooken og migrasjonen er i utakt."; exit 1
+          fi
+
+          [ "$(pg -c "select rolsuper from pg_roles where rolname = current_user")" = f ] \
+            || { echo "::error::postgres er superbruker i CI — tørrkjøringen speiler ikke prod lenger."; exit 1; }
+          if pg -c "begin; set local role supabase_auth_admin; rollback;" 2> "$RUNNER_TEMP/setrole.txt"; then
+            echo "::error::postgres kan bli supabase_auth_admin — da kan runbooken bevise invoker-stien direkte; oppdater docs/drift.md § 4."; exit 1
+          fi
+          grep -q 'permission denied to set role' "$RUNNER_TEMP/setrole.txt" \
+            || { echo "::error::Uventet feil fra set role: $(cat "$RUNNER_TEMP/setrole.txt")"; exit 1; }
+
+      # Multi-tenant 2.2 (#869): JWT-hooken (mig. 166). Kjøres som supabase_admin fordi
+      # postgres ikke kan «set role supabase_auth_admin» (rollen GoTrue kaller hooken som);
+      # superbrukeren kan. Alt i én transaksjon som rulles tilbake. Per-profil-kontrollen
+      # (4) er vakten mot at 2.3 (#870) dropper policyen hooken trenger: faller den, blir
+      # alle fire røde her, før innloggingen dør i produksjon.
+      - name: Verifiser JWT-hook
+        if: steps.omfang.outputs.e2e == 'true'
+        run: |
+          export PGPASSWORD=postgres
+          if ! psql -h 127.0.0.1 -p "$LOKAL_DB_PORT" -U supabase_admin -d postgres -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+
+          -- Hjelper: kall hooken SOM supabase_auth_admin (rollen GoTrue bruker), og gå tilbake.
+          -- Forventede verdier leses i kallerens rolle FØR rollebyttet, så kontrollene ikke
+          -- avhenger av hva supabase_auth_admin selv får lese.
+          create function pg_temp.kall_hook(ev jsonb) returns jsonb language plpgsql as $f$
+          declare
+            r jsonb;
+          begin
+            set local role supabase_auth_admin;
+            r := public.custom_access_token_hook(ev);
+            reset role;
+            return r;
+          end
+          $f$;
+
+          -- 1) Katalog: rettigheter og form.
+          do $$
+          declare
+            hook regprocedure := 'public.custom_access_token_hook(jsonb)'::regprocedure;
+            k text;
+          begin
+            if (select prosecdef from pg_proc where oid = hook) then
+              raise exception 'hooken er security definer';
+            end if;
+            if not exists (select 1 from pg_proc where oid = hook and proconfig @> array['search_path=""']) then
+              raise exception 'hooken mangler tomt search_path';
+            end if;
+            if not has_function_privilege('supabase_auth_admin', hook, 'execute') then
+              raise exception 'supabase_auth_admin kan ikke kjøre hooken';
+            end if;
+            if has_function_privilege('anon', hook, 'execute') or has_function_privilege('authenticated', hook, 'execute') then
+              raise exception 'anon/authenticated kan kjøre hooken';
+            end if;
+            if not has_schema_privilege('supabase_auth_admin', 'public', 'usage') then
+              raise exception 'supabase_auth_admin mangler usage på public';
+            end if;
+            foreach k in array array['profil_id', 'klubb_id', 'rolle', 'aktiv', 'opprettet'] loop
+              if not has_column_privilege('supabase_auth_admin', 'public.medlemskap', k, 'select') then
+                raise exception 'supabase_auth_admin mangler select på medlemskap.%', k;
+              end if;
+            end loop;
+            if has_column_privilege('supabase_auth_admin', 'public.medlemskap', 'faar_feilvarsler', 'select') then
+              raise exception 'supabase_auth_admin kan lese medlemskap.faar_feilvarsler — kolonnegrantet er for bredt';
+            end if;
+            if not exists (
+              select 1 from pg_policies
+               where schemaname = 'public' and tablename = 'medlemskap'
+                 and policyname = 'Auth-hooken leser medlemskap på tvers av klubber'
+                 and roles = array['supabase_auth_admin']::name[] and cmd = 'SELECT'
+            ) then
+              raise exception 'policyen for supabase_auth_admin på medlemskap mangler (dropper 2.3 den, brekker innloggingen)';
+            end if;
+            if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                        where n.nspname = 'public' and p.proname = 'jwt_rolle') then
+              raise exception 'public.jwt_rolle() finnes — rolle-claimen skal aldri brukes til autorisasjon';
+            end if;
+          end
+          $$;
+
+          -- 2) Hver seed-profil: riktig klubb og rolle, innplantede markører overstyres,
+          --    resten av tokenet er byte-likt. Faller 2.3 policyen, blir dette rødt for alle fire.
+          do $$
+          declare
+            p record;
+            inn jsonb;
+            ut jsonb;
+            std uuid := public.standard_klubb_id();
+          begin
+            if (select count(*) from public.profiles) <> 4 then
+              raise exception 'forventet 4 seed-profiler';
+            end if;
+            for p in select pr.id, m.rolle from public.profiles pr
+                       join public.medlemskap m on m.profil_id = pr.id and m.klubb_id = std and m.aktiv
+            loop
+              inn := jsonb_build_object(
+                'user_id', p.id,
+                'claims', jsonb_build_object(
+                  'sub', p.id, 'role', 'authenticated', 'aud', 'authenticated', 'aal', 'aal1',
+                  'session_id', gen_random_uuid(),
+                  'klubb_id', gen_random_uuid(), 'rolle', 'admin', 'klubb_status', 'aktiv'),
+                'authentication_method', 'password');
+              ut := pg_temp.kall_hook(inn);
+              if ut #>> '{claims,klubb_status}' is distinct from 'aktiv' then
+                raise exception 'profil %: klubb_status = %', p.id, ut #>> '{claims,klubb_status}';
+              end if;
+              if (ut #>> '{claims,klubb_id}')::uuid is distinct from std then
+                raise exception 'profil %: klubb_id = %', p.id, ut #>> '{claims,klubb_id}';
+              end if;
+              if ut #>> '{claims,rolle}' is distinct from p.rolle then
+                raise exception 'profil %: rolle = % (forventet %)', p.id, ut #>> '{claims,rolle}', p.rolle;
+              end if;
+              if (ut -> 'claims') - 'klubb_id' - 'rolle' - 'klubb_status' is distinct from (inn -> 'claims') - 'klubb_id' - 'rolle' - 'klubb_status' then
+                raise exception 'profil %: øvrige claims er endret: %', p.id, ut -> 'claims';
+              end if;
+              if (ut - 'claims') is distinct from (inn - 'claims') then
+                raise exception 'profil %: eventet utenfor claims er endret', p.id;
+              end if;
+              raise notice 'profil % ok: rolle=%', p.id, p.rolle;
+            end loop;
+          end
+          $$;
+
+          -- 3) Ukjent bruker og inaktivt medlemskap → ingen_medlemskap, uten klubb_id/rolle
+          --    (også når de er innplantet i eventet).
+          do $$
+          declare
+            ut jsonb;
+            ola uuid := '00000000-0000-4000-8000-000000000003';
+          begin
+            ut := pg_temp.kall_hook(jsonb_build_object('user_id', gen_random_uuid(),
+                    'claims', jsonb_build_object('sub', 'x', 'role', 'authenticated', 'klubb_id', gen_random_uuid(), 'rolle', 'admin')));
+            if ut #>> '{claims,klubb_status}' is distinct from 'ingen_medlemskap'
+               or ut -> 'claims' ? 'klubb_id' or ut -> 'claims' ? 'rolle' then
+              raise exception 'ukjent bruker: %', ut -> 'claims';
+            end if;
+
+            update public.medlemskap set aktiv = false where profil_id = ola;
+            ut := pg_temp.kall_hook(jsonb_build_object('user_id', ola, 'claims', jsonb_build_object('sub', ola, 'role', 'authenticated')));
+            if ut #>> '{claims,klubb_status}' is distinct from 'ingen_medlemskap'
+               or ut -> 'claims' ? 'klubb_id' or ut -> 'claims' ? 'rolle' then
+              raise exception 'inaktivt medlemskap: %', ut -> 'claims';
+            end if;
+          end
+          $$;
+
+          -- 4) Klubbvalg: eldste aktive medlemskap vinner, deterministisk.
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            std uuid := public.standard_klubb_id();
+            b uuid;
+            ut jsonb;
+            ev jsonb := jsonb_build_object('user_id', petter, 'claims', jsonb_build_object('sub', petter, 'role', 'authenticated'));
+          begin
+            insert into public.klubb (slug, navn) values ('ci-hook-b', 'CI hook B') returning id into b;
+            insert into public.medlemskap (klubb_id, profil_id, rolle, opprettet) values (b, petter, 'admin', '2000-01-01');
+            ut := pg_temp.kall_hook(ev);
+            if (ut #>> '{claims,klubb_id}')::uuid is distinct from b or ut #>> '{claims,rolle}' is distinct from 'admin' then
+              raise exception 'eldste medlemskap (klubb B) skulle vinne: %', ut -> 'claims';
+            end if;
+            update public.medlemskap set opprettet = now() + interval '1 day' where klubb_id = b and profil_id = petter;
+            ut := pg_temp.kall_hook(ev);
+            if (ut #>> '{claims,klubb_id}')::uuid is distinct from std or ut #>> '{claims,rolle}' is distinct from 'medlem' then
+              raise exception 'standardklubben skulle vinne når B er nyere: %', ut -> 'claims';
+            end if;
+          end
+          $$;
+
+          -- 5) jwt_klubb_id() som authenticated: gyldig → uuid, tull og manglende → null.
+          do $$
+          declare
+            std uuid := public.standard_klubb_id();
+            v uuid;
+          begin
+            set local role authenticated;
+            perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated', 'klubb_id', std)::text, true);
+            v := public.jwt_klubb_id();
+            if v is distinct from std then reset role; raise exception 'jwt_klubb_id() gyldig: %', v; end if;
+            perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated', 'klubb_id', 'tull')::text, true);
+            v := public.jwt_klubb_id();
+            if v is not null then reset role; raise exception 'jwt_klubb_id() tull: %', v; end if;
+            perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated')::text, true);
+            v := public.jwt_klubb_id();
+            if v is not null then reset role; raise exception 'jwt_klubb_id() manglende: %', v; end if;
+            reset role;
+            if has_function_privilege('anon', 'public.jwt_klubb_id()', 'execute') then
+              raise exception 'anon kan kjøre jwt_klubb_id()';
+            end if;
+          end
+          $$;
+
+          -- 6) 'feil'-grenen: hooken kan ikke lese rolle → ingen throw, klubb_status = feil,
+          --    innplantede markører borte, sub/role intakt. Sist, fordi revoke gjelder resten
+          --    av transaksjonen. Ugyldig user_id gir samme utfall.
+          do $$
+          declare
+            petter uuid := '00000000-0000-4000-8000-000000000002';
+            ut jsonb;
+          begin
+            ut := pg_temp.kall_hook(jsonb_build_object('user_id', 'ikke-uuid',
+                    'claims', jsonb_build_object('sub', 's', 'role', 'authenticated', 'klubb_id', gen_random_uuid(), 'rolle', 'admin')));
+            if ut #>> '{claims,klubb_status}' is distinct from 'feil'
+               or ut -> 'claims' ? 'klubb_id' or ut -> 'claims' ? 'rolle'
+               or ut #>> '{claims,sub}' is distinct from 's' or ut #>> '{claims,role}' is distinct from 'authenticated' then
+              raise exception 'ugyldig user_id: %', ut -> 'claims';
+            end if;
+
+            revoke select (rolle) on public.medlemskap from supabase_auth_admin;
+            ut := pg_temp.kall_hook(jsonb_build_object('user_id', petter,
+                    'claims', jsonb_build_object('sub', petter, 'role', 'authenticated', 'klubb_id', gen_random_uuid(), 'rolle', 'admin', 'klubb_status', 'aktiv')));
+            if ut #>> '{claims,klubb_status}' is distinct from 'feil'
+               or ut -> 'claims' ? 'klubb_id' or ut -> 'claims' ? 'rolle'
+               or ut #>> '{claims,sub}' is distinct from petter::text or ut #>> '{claims,role}' is distinct from 'authenticated' then
+              raise exception 'manglende leserett: %', ut -> 'claims';
+            end if;
+          end
+          $$;
+
+          rollback;
+          SQL
+          then
+            echo "::error::Verifiseringen av JWT-hooken feilet — se psql-utskriften over."
+            exit 1
+          fi
+
       # process.env.CI settes automatisk til 'true' av GitHub Actions-runneren —
       # ingen egen env-linje trengs for at playwright.config.ts sine
       # CI-betingede justeringer (retries, forbidOnly, testIgnore av
