@@ -50,7 +50,7 @@ If you fork this template to run on a **private repository**, the watcher will a
 
 If your repository is private and the quota keeps cutting e2e, the cheapest fix is a [self-hosted runner](https://docs.github.com/en/actions/hosting-your-own-runners) — minutes on your own machine are free and unlimited. The workflow is ready for it:
 
-- `sjekk` (build + Playwright) runs on `${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}`. Set the repository variable `SJEKK_RUNNER` to `self-hosted` (`gh variable set SJEKK_RUNNER --body self-hosted`) once your runner is online; delete it to fall back to GitHub-hosted. `kjerne` (lint, typecheck, vitest) stays on GitHub — it is cheap and runs in parallel.
+- `sjekk` (build + Playwright) and `kjerne` (lint, typecheck, vitest) both run on `${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}`. Set the repository variable `SJEKK_RUNNER` to `self-hosted` (`gh variable set SJEKK_RUNNER --body self-hosted`) once your runner is online; delete it to fall back to GitHub-hosted. When unset, both jobs run on GitHub-hosted runners in parallel.
 - On a self-hosted runner the budget guard still runs and prints its table, but its cut is ignored (`SELVHOSTET` in the "Avgjør e2e-omfang" step) — there is no quota to protect. The risk-based skip (#663) still applies; it saves time, not minutes.
 - The job gives its throwaway Supabase stack a separate `project_id` (`hk-ci`) and ports `553xx`, so it can share a Docker host with a long-lived local Supabase on the default `543xx` ports, and stops it afterwards (also after a red run).
 - Jobs whose labels include `self-hosted` are not counted by the guard (`erFakturert()`), so they never push the month over budget.
