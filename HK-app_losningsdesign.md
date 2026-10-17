@@ -285,7 +285,7 @@ Multi-tenant steg 1.4 (#861, #867). Migrasjon 162.
 
 - (a) `klubb_id` er første nøkkelkolonne (`INCLUDE`-kolonner telles ikke).
 - (b) Surrogatnøkkel: én kolonne som heter `id`.
-- (c) En enkeltkolonne i nøkkelen er FK til en klubbeid forelder (`paameldinger (arrangement_id, profil_id)`). Klubben følger forelderen; å legge til `klubb_id` ville gjort nøkkelen romsligere, ikke strengere. Krysskobling stoppes av sammensatte FK-er i 2.1b (#895).
+- (c) En kolonne i nøkkelen er FK til en klubbeid forelder (`paameldinger (arrangement_id, profil_id)`): enten en enkeltkolonne-FK, eller — siden 2.1b (#895, § 2.13) — en sammensatt FK `(klubb_id, kol)` mot `forelder (klubb_id, id)` der kolonnen inngår sammen med `klubb_id`. «Enkeltkolonne» betyr altså at nøkkelen ikke trenger `klubb_id` fordi klubben følger forelderen. Å legge til `klubb_id` ville gjort nøkkelen romsligere, ikke strengere. Krysskobling stoppes av de sammensatte FK-ene.
 
 Ingen unntaksliste: en nøkkel som ikke passer a–c er rød. `chat_reaksjoner` har en polymorf `melding_id` uten FK, så klubben kan ikke følge en forelder — derfor fikk begge nøklene `klubb_id` først som alle andre.
 
@@ -309,17 +309,43 @@ Multi-tenant steg 2.1a (#861, #868). Migrasjon 163.
 
 **Admin-redigering:** RPC `oppdater_medlem_admin(...)` (security invoker) skriver profilfeltene og medlemskapet i én transaksjon, med `for update`-låsen som håndhever at en sittende generalsekretær aldri får rollen skrevet der.
 
-### 2.12b Medlemskapets data (164)
+### Medlemskapets data (164)
 
-Multi-tenant steg 2.1b (#868). Migrasjon 164.
+Multi-tenant steg 2.1 PR B (#868). Migrasjon 164.
 
-**Skjema:** `varsel_preferanser`, `posisjon_deling` og `posisjon_punkt` flyttes fra å være global til medlem-scope under medlemskapet (sammensatt FK `(klubb_id, profil_id)`). Varsel-preferansene (`push_aktiv`, `epost_aktiv`, `varsel_nivaa`) og posisjondeling-flagget (`aktiv`) som var global innan blir nå per medlem per klubb — hver bruker kan ha ulike instillinger i ulike klubber. `posisjon_punkt` har samme data struktur som før, men bor no på medlemskapet.
+`varsel_preferanser`, `posisjon_deling` og `posisjon_punkt` tilhører medlemskapet og har `klubb_id` med sammensatt FK `(klubb_id, profil_id)` mot `medlemskap (klubb_id, profil_id)`, `on update cascade on delete cascade` (`*_medlemskap_fkey`). Slettes et medlemskap, går varselvalg og posisjonsdata med. FK-ene mot `profiles` beholdes.
 
-**Trigger:** når en ny `medlemskap`-rad opprettes, lager en trigger en default `varsel_preferanser`-rad (med defaults fra `varsel_innstillinger` hvis de finnes, ellers `push_aktiv=true, epost_aktiv=false, varsel_nivaa='alle'`) og en `posisjon_deling`-rad (`aktiv=false`).
+PK på `varsel_preferanser` og `posisjon_deling` er `(klubb_id, profil_id)`; `posisjon_punkt` beholder `id`. `on conflict`/`onConflict` MÅ ha samme kolonnesett som nøkkelen (ellers 42P10), så koden bruker `'klubb_id,profil_id'`; `klubb_id` fylles av defaulten til 2.4.
 
-**RLS og grants:** `authenticated` har `select` og `update` per medlem, `service_role` har full tilgang. Select: kun egen medlemskap. Update: egen medlem (varsel_preferanser og posisjon_deling kun selv, admin kan også redigere andres).
+Triggeren som oppretter varselvalg ligger på `medlemskap` (`ved_nytt_medlemskap_varsel_preferanser`), ikke på `profiles`: `handle_ny_bruker()` setter inn profilen FØR medlemskapet, så en profil-trigger ville brutt den sammensatte FK-en.
 
-**Indekser:** `posisjon_punkt` får `(klubb_id, arrangement_id)` forFK-oppslag ved arrangement-utvidinger. `varsel_logg` får `(klubb_id, dedup_noekkel, profil_id)` for dedup-sjekk per klub.
+**PostgREST:** `medlemskap` er nå koblingstabell mellom `profiles` og `klubb`, og `profiles` har flere stier til `varsel_preferanser`/`posisjon_*`. Nye embeds oppgir FK-hint (`profiles!posisjon_deling_profil_id_fkey`, `medlemskap_profil_id_fkey`) for å unngå PGRST201.
+
+Policyene på de tre tabellene er uendret og skrives om i 2.3 (#870); sammensatte FK-er mot `arrangementer` kom i 2.1b (#895, § 2.13).
+
+### Medlemskap-FK-er på innholdstabellene (165)
+
+Multi-tenant steg 2.1b (#895). Migrasjon 165. Ved siden av FK-ene mot `profiles` har 31 profilkolonner på klubbeide tabeller en sammensatt FK `(klubb_id, kol)` → `medlemskap (klubb_id, profil_id)`, `on update cascade`, NO ACTION ved sletting (`<tabell>_<kol>_medlemskap_fkey`): personen må være medlem av klubben raden tilhører. NO ACTION og ikke RESTRICT fordi sletting av en auth-bruker cascader til både `profiles` og barneradene, og NO ACTION sjekkes først ved slutten av setningen, så begge stiene rekker å fullføre. Omvendt kan et medlemskap ikke slettes alene mens personen har innhold i klubben (23503) — innholdet flyttes eller slettes først.
+
+Ti profilkolonner har bevisst ingen slik FK («bare personen» — historikkmarkører som `besluttet_av`, `endret_av`, `slettet_av`, innboksen `varsel_logg.profil_id`, `feil_logg.profil_id` og de globale tabellene), listet med begrunnelse i `PROFIL_FK_BARE_PERSON` (`__tests__/helpers/klubb-tabeller.ts`) og speilet i psql-steget «Verifiser sammensatte fremmednøkler». `kaaring_vinnere.opprettet_av` er klassifisert «mot medlemskap» sammen med `kaaring_vinnere.profil_id`.
+
+**PostgREST:** `paameldinger`, `poll_stemme`, `melding_reaksjon` og `album_bilde_reaksjon` er ikke lenger koblingstabeller (profiles↔forelder), mens `bursdagsbilde` og `chat_reaksjoner` er blitt nye koblingstabeller mellom `profiles` og `medlemskap`. Ingen embed i koden bruker disse som m2m-sti i dag; nye embeds mot dem oppgir FK-hint.
+
+### 2.13 Sammensatte fremmednøkler
+
+Multi-tenant steg 2.1b (#861, #895). Migrasjon 165.
+
+**Regelen:** en FK mellom to klubbeide tabeller er sammensatt, `(klubb_id, forelder_id)` → `forelder (klubb_id, id)`, så databasen avviser en barnerad som peker på en forelder i en annen klubb (23503), uavhengig av appkode og RLS. Forelderne har `unique (klubb_id, id)` (`<forelder>_klubb_id_id_key`; `klubb_id` først jf. § 2.11, så `(id, klubb_id)` ville vært rødt). Det er 9 foreldre — `arrangementer`, `poll`, `album_bilde`, `meldinger`, `kaaringmaler`, `album`, `samtale`, `poll_valg`, `vedtekter` (`arrangementmaler` er ikke FK-mål) — og 30 FK-er. De er vaktet av psql-steget «Verifiser sammensatte fremmednøkler» (katalogsjekk) og `e2e/rls/klubb-fk.spec.ts`.
+
+**Navn beholdes.** Hver sammensatt FK har NØYAKTIG det gamle constraint-navnet (den gamle droppes i samme migrasjon): koden bruker navnene som PostgREST-hint (`album_bilde!album_bilde_album_id_fkey`, `album_bilde!album_cover_fk`, `album!meldinger_album_id_fkey`), og ligger både en gammel og en ny FK mellom to tabeller, svarer PostgREST PGRST201.
+
+**Sletteoppførsel er uendret:** 19 cascade, 10 set null, 1 restrict (`poll.kaaring_mal_id`). `set null` får kolonneliste (`on delete set null (<kol>)`, PostgreSQL ≥ 15): uten den ville sletting av forelderen også nullet `klubb_id`, som er not null. Alle har `on update cascade`, så omnummerering av en klubb går gjennom. Barnesiden får en støtteindeks `<barn>_<kol>_klubb_id_idx (kol, klubb_id)`; de gamle enkeltindeksene beholdes til 2.3.
+
+**Medlemskap-FK-er** (31 profilkolonner) beskrives under § 2.12.
+
+**Appfeil:** 23503 vises som feilmelding kun i skjemaer med lagreknapp (SkjemaBar/LagreKnapp); `VedtektVisning` fikk try/catch av den grunn.
+
+**Kjent og uløst:** `album.opprettet_av` og `album_bilde.lastet_opp_av` er `not null` med `on delete set null` mot `profiles`, så sletting av en profil med album gir 23502. Selvmotsigelsen finnes før og etter 2.1b og er ikke løst her.
 
 ---
 
