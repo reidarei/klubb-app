@@ -101,7 +101,10 @@ jobs:
   # Agentic venter på BEGGE jobbene før merge (se .claude/commands/agentic.md
   # steg 10) — et eget job er ikke lenger usynlig for vente-loopen.
   kjerne:
-    runs-on: ubuntu-latest
+    # Samme runner-variabel som `sjekk` under (17.10.2026): kvoten på GitHub-
+    # hosted var brukt opp midt i #861-køen, og en jobb som ikke får starte er
+    # verre enn ~3 min serielt på én runner hjemme. Tom variabel ⇒ GitHub igjen.
+    runs-on: ${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

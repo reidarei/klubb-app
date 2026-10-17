@@ -36,7 +36,10 @@ concurrency:
 
 jobs:
   migrer:
-    runs-on: ubuntu-latest
+    # Egen runner hjemme når repo-variabelen SJEKK_RUNNER er satt (#891, utvidet
+    # til alle jobber 17.10.2026), GitHub-hosted ellers. Se docs/ci-minuttbudsjett.md
+    # § Egen runner.
+    runs-on: ${{ vars.SJEKK_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
 
     steps:
